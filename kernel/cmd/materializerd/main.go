@@ -5,15 +5,15 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
+	"as/kernel/internal/config"
+	"as/kernel/internal/http/server"
 	"as/kernel/internal/materializer"
-	"as/kernel/internal/realizations"
 )
 
 func main() {
-	repoRoot, err := repoRootFromEnvOrWD()
+	repoRoot, err := config.RepoRootFromEnvOrWD()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,41 +56,20 @@ func main() {
 		respondJSON(w, http.StatusOK, result)
 	})
 
-	addr := envOrDefault("AS_MATERIALIZER_ADDR", ":8091")
+	addr := config.EnvOrDefault("AS_MATERIALIZER_ADDR", ":8091")
 	log.Printf("materializerd listening on %s (repo root %s)", addr, repoRoot)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func repoRootFromEnvOrWD() (string, error) {
-	if root := strings.TrimSpace(os.Getenv("AS_REPO_ROOT")); root != "" {
-		return root, nil
-	}
-
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	return realizations.FindRepoRoot(wd)
-}
-
 func remoteClient() *materializer.RemoteRegistryClient {
-	baseURL := strings.TrimSpace(os.Getenv("AS_REMOTE_REGISTRY_URL"))
+	baseURL := strings.TrimSpace(config.EnvOrDefault("AS_REMOTE_REGISTRY_URL", ""))
 	if baseURL == "" {
 		return nil
 	}
 
 	return &materializer.RemoteRegistryClient{BaseURL: baseURL}
-}
-
-func envOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-
-	return fallback
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {

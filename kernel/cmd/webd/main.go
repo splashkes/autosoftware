@@ -2,19 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"as/kernel/internal/boot"
+	"as/kernel/internal/config"
 	feedbackloop "as/kernel/internal/feedback_loop"
 	jsontransport "as/kernel/internal/http/json"
 	"as/kernel/internal/http/server"
+	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
-	"as/kernel/internal/realizations"
+	runtimedb "as/kernel/internal/runtime"
 )
 
 var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
@@ -23,8 +25,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AS Kernel Loader</title>
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  <style>
+  <style nonce="{{.CSPNonce}}">
     :root {
       --bg: #0b0d12;
       --panel: #11141b;
@@ -197,11 +198,8 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
             {{end}}
           </select>
           <button
-            type="button"
-            hx-get="/partials/materialization"
-            hx-target="#materialization"
-            hx-include="#loader-form"
-            hx-indicator="#loader-indicator"
+            id="boot-button"
+            type="submit"
           >Boot</button>
         </div>
         <div class="meta">
@@ -218,7 +216,8 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
       <p class="footer">Materialization persists into <code>materialized/</code> after boot.</p>
     </section>
   </main>
-  <script>{{.FeedbackScript}}</script>
+  <script nonce="{{.CSPNonce}}">{{.LoaderScript}}</script>
+  <script nonce="{{.CSPNonce}}">{{.FeedbackScript}}</script>
 </body>
 </html>`))
 
@@ -288,6 +287,8 @@ type pageView struct {
 	Options          []materializer.RealizationOption
 	DefaultReference string
 	RemoteConfigured bool
+	CSPNonce         string
+	LoaderScript     template.JS
 	FeedbackScript   template.JS
 }
 
@@ -298,7 +299,7 @@ type partialView struct {
 }
 
 func main() {
-	repoRoot, err := repoRootFromEnvOrWD()
+	repoRoot, err := config.RepoRootFromEnvOrWD()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -307,6 +308,22 @@ func main() {
 	service, err := materializer.NewService(repoRoot, remoteClient())
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	var runtimeService *interactions.RuntimeService
+	runtimeConfig := config.LoadRuntimeConfigFromEnv()
+	if runtimeConfig.Enabled() {
+		pool, err := runtimedb.OpenPool(context.Background(), runtimeConfig.DatabaseURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer pool.Close()
+		if runtimeConfig.AutoMigrate {
+			if err := runtimedb.RunMigrations(context.Background(), pool, repoRoot); err != nil {
+				log.Fatal(err)
+			}
+		}
+		runtimeService = interactions.NewRuntimeService(pool)
 	}
 
 	mux := http.NewServeMux()
@@ -323,6 +340,8 @@ func main() {
 			Options:          options,
 			DefaultReference: defaultReference(options),
 			RemoteConfigured: service.Remote != nil,
+			CSPNonce:         server.CSPNonceFromContext(r.Context()),
+			LoaderScript:     template.JS(loaderScript()),
 			FeedbackScript: template.JS(boot.ClientFeedbackLoopScript(boot.FeedbackLoopScriptConfig{
 				EndpointPath: "/feedback/incidents",
 				Request:      requestMeta,
@@ -364,9 +383,14 @@ func main() {
 		}
 	})
 
-	addr := envOrDefault("AS_WEBD_ADDR", ":8090")
+	handler := http.Handler(mux)
+	if runtimeService != nil {
+		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
+	}
+
+	addr := config.EnvOrDefault("AS_WEBD_ADDR", ":8090")
 	log.Printf("webd listening on %s (repo root %s)", addr, repoRoot)
-	if err := http.ListenAndServe(addr, server.CorrelationMiddleware(mux)); err != nil {
+	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(handler)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -378,21 +402,8 @@ func defaultReference(options []materializer.RealizationOption) string {
 	return options[0].Reference
 }
 
-func repoRootFromEnvOrWD() (string, error) {
-	if root := strings.TrimSpace(os.Getenv("AS_REPO_ROOT")); root != "" {
-		return root, nil
-	}
-
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	return realizations.FindRepoRoot(wd)
-}
-
 func remoteClient() *materializer.RemoteRegistryClient {
-	baseURL := strings.TrimSpace(os.Getenv("AS_REMOTE_REGISTRY_URL"))
+	baseURL := strings.TrimSpace(config.EnvOrDefault("AS_REMOTE_REGISTRY_URL", ""))
 	if baseURL == "" {
 		return nil
 	}
@@ -400,9 +411,68 @@ func remoteClient() *materializer.RemoteRegistryClient {
 	return &materializer.RemoteRegistryClient{BaseURL: baseURL}
 }
 
-func envOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
+func loaderScript() string {
+	return `(function () {
+  var form = document.getElementById("loader-form");
+  var button = document.getElementById("boot-button");
+  var target = document.getElementById("materialization");
+  var indicator = document.getElementById("loader-indicator");
+  if (!form || !button || !target || !indicator) {
+    return;
+  }
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"]/g, function (char) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;"
+      }[char];
+    });
+  }
+
+  function setLoading() {
+    indicator.innerHTML = [
+      '<div class="eyebrow">Booting</div>',
+      '<p class="empty">Materializing the selected realization.</p>'
+    ].join("");
+    target.replaceChildren(indicator);
+  }
+
+  async function boot() {
+    var params = new URLSearchParams(new FormData(form));
+    button.disabled = true;
+    setLoading();
+
+    try {
+      var response = await fetch("/partials/materialization?" + params.toString(), {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "text/html" }
+      });
+      var html = await response.text();
+      if (!response.ok) {
+        throw new Error(html || ("Boot failed with status " + response.status));
+      }
+      target.innerHTML = html;
+    } catch (err) {
+      target.innerHTML = [
+        '<div class="stack">',
+        '  <div class="eyebrow">Boot Failed</div>',
+        '  <p class="empty">The kernel could not materialize that realization.</p>',
+        '  <pre>' + escapeHTML(err && err.message ? err.message : err) + '</pre>',
+        '</div>'
+      ].join("\n");
+      console.error(err);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    boot();
+  });
+})();`
 }

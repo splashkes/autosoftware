@@ -1,7 +1,18 @@
 .DS_Store
+.claude/
+
+# Local docs/packages
+/plans/*.zip
 
 # Local binaries
 /kernel/bin/
+/kernel/asvalidate
+/kernel/materializerd
+/kernel/webd
+/seeds/**/artifacts/**/shared-notepad
 
 # Local hydrated/materialized state
 /materialized/
+
+# Local Postgres overrides
+/.env.postgres

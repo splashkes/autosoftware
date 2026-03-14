@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -14,9 +15,19 @@ const (
 	HeaderSessionID     = "X-AS-Session-ID"
 	HeaderSeedID        = "X-AS-Seed-ID"
 	HeaderRealizationID = "X-AS-Realization-ID"
+
+	DefaultSessionCookieName = "__Host-as_session"
+	LegacySessionCookieName  = "as_session_id"
 )
 
 type requestMetadataKey struct{}
+
+type RequestMetadataOptions struct {
+	TrustRequestIDHeader  bool
+	TrustSessionHeader    bool
+	TrustSelectionHeaders bool
+	SessionCookieNames    []string
+}
 
 type RequestMetadata struct {
 	RequestID     string
@@ -48,15 +59,36 @@ func RequestMetadataFromContext(ctx context.Context) RequestMetadata {
 }
 
 func CorrelationMiddleware(next http.Handler) http.Handler {
+	return CorrelationMiddlewareWithOptions(RequestMetadataOptions{}, next)
+}
+
+func CorrelationMiddlewareWithOptions(options RequestMetadataOptions, next http.Handler) http.Handler {
+	cookieNames := options.SessionCookieNames
+	if len(cookieNames) == 0 {
+		cookieNames = []string{DefaultSessionCookieName, LegacySessionCookieName}
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := newOpaqueID("req")
+		if options.TrustRequestIDHeader {
+			requestID = firstNonEmpty(sanitizedOpaqueHeader(r, HeaderRequestID), requestID)
+		}
+
+		sessionID := sessionFromCookie(r, cookieNames...)
+		if options.TrustSessionHeader {
+			sessionID = firstNonEmpty(sanitizedOpaqueHeader(r, HeaderSessionID), sessionID)
+		}
+
 		metadata := RequestMetadata{
-			RequestID:     firstNonEmpty(trimmedHeader(r, HeaderRequestID), newOpaqueID("req")),
-			SessionID:     firstNonEmpty(trimmedHeader(r, HeaderSessionID), sessionFromCookie(r)),
-			SeedID:        trimmedHeader(r, HeaderSeedID),
-			RealizationID: trimmedHeader(r, HeaderRealizationID),
-			Route:         r.URL.Path,
-			Method:        r.Method,
-			UserAgent:     r.UserAgent(),
+			RequestID: requestID,
+			SessionID: sessionID,
+			Route:     r.URL.Path,
+			Method:    r.Method,
+			UserAgent: r.UserAgent(),
+		}
+		if options.TrustSelectionHeaders {
+			metadata.SeedID = sanitizedOpaqueHeader(r, HeaderSeedID)
+			metadata.RealizationID = sanitizedOpaqueHeader(r, HeaderRealizationID)
 		}
 
 		w.Header().Set(HeaderRequestID, metadata.RequestID)
@@ -72,13 +104,35 @@ func trimmedHeader(r *http.Request, key string) string {
 	return strings.TrimSpace(r.Header.Get(key))
 }
 
-func sessionFromCookie(r *http.Request) string {
-	cookie, err := r.Cookie("as_session_id")
-	if err != nil {
+var opaqueHeaderPattern = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,200}$`)
+
+func sanitizedOpaqueHeader(r *http.Request, key string) string {
+	value := trimmedHeader(r, key)
+	if value == "" || !opaqueHeaderPattern.MatchString(value) {
 		return ""
 	}
 
-	return strings.TrimSpace(cookie.Value)
+	return value
+}
+
+func sessionFromCookie(r *http.Request, cookieNames ...string) string {
+	for _, name := range cookieNames {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+
+		cookie, err := r.Cookie(name)
+		if err != nil {
+			continue
+		}
+
+		value := strings.TrimSpace(cookie.Value)
+		if opaqueHeaderPattern.MatchString(value) {
+			return value
+		}
+	}
+
+	return ""
 }
 
 func firstNonEmpty(values ...string) string {
