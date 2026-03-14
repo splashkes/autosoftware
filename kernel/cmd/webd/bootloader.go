@@ -326,7 +326,8 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       <div class="sprout-logo-shell" data-sprout-logo aria-hidden="true"></div>
       <div class="wordmark">AS</div>
       <div class="tagline">Kernel Bootloader</div>
-      <p class="lede">Grow one realization into the running experience. The sprout is the boot surface again.</p>
+      <p class="lede">Software that evolves from within.</p>
+      <p class="lede">Built to scale securely, share data across apps, and give agents and humans a common surface to use, inspect, and build.</p>
     </section>
 
     <div class="boot-meta">
