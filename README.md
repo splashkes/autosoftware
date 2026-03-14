@@ -37,8 +37,7 @@ verification, replay/materialization determinism, or interface plumbing.
 
 - [seeds/README.md](seeds/README.md) for the seed model and authoring structure
 - [kernel/public_object_registry.md](kernel/public_object_registry.md) for the
-  registry and materialization model, including shared access to common data
-  and structures across interfaces
+  registry and materialization model
 - [kernel/public_claim_registry.md](kernel/public_claim_registry.md) for the
   claim-focused view of the same registry
 - [kernel/public_schema_object_registry.md](kernel/public_schema_object_registry.md)
