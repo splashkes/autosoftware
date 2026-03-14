@@ -1,0 +1,112 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0004-event-listings
+realization_id: a-web-mvp
+summary: First web MVP operational contract for organizer publishing and public event discovery.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+  - session
+  - service_token
+capabilities:
+  - name: activity_events
+    summary: Auditable event lifecycle activity for organizer actions.
+  - name: handles
+    summary: Stable public addressing so event URLs do not change when details are edited.
+  - name: publications
+    summary: Public visibility and timing for event discovery surfaces.
+  - name: search_documents
+    summary: Searchable event read models for list and detail discovery.
+  - name: search_facets
+    summary: Filterable category, date, and location dimensions for event discovery.
+  - name: state_transitions
+    summary: Auditable draft, published, canceled, and archived lifecycle changes.
+domain_objects:
+  - kind: event
+    summary: Organizer-managed event shown through list, calendar, search, and detail pages.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - handles
+      - publications
+      - search_documents
+      - search_facets
+      - state_transitions
+commands:
+  - name: events.create
+    summary: Create an event draft in the organizer workspace.
+    path: /v1/commands/0004-event-listings/events.create
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - handles
+      - state_transitions
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.publish
+    summary: Publish an event into public list, calendar, and search surfaces.
+    path: /v1/commands/0004-event-listings/events.publish
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - search_facets
+      - state_transitions
+    projection: events.detail
+    consistency: read_your_writes
+projections:
+  - name: events.detail
+    summary: Canonical event detail projection used by both the first-party UI and third-party clients.
+    path: /v1/projections/0004-event-listings/events/{event_id}
+    object_kinds:
+      - event
+    capabilities:
+      - activity_events
+      - handles
+      - publications
+      - search_documents
+      - state_transitions
+    freshness: materialized
+  - name: events.directory
+    summary: Public upcoming-events list projection with shared search and filter semantics.
+    path: /v1/projections/0004-event-listings/events
+    object_kinds:
+      - event
+    capabilities:
+      - publications
+      - search_documents
+      - search_facets
+      - state_transitions
+    freshness: materialized
+  - name: events.calendar
+    summary: Month-calendar projection covering single-day and simple multi-day event rendering.
+    path: /v1/projections/0004-event-listings/calendar
+    object_kinds:
+      - event
+    capabilities:
+      - publications
+      - search_facets
+      - state_transitions
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized

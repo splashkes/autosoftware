@@ -1,0 +1,164 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0003-customer-service-app
+realization_id: a-web-mvp
+summary: First web MVP operational contract for customer tickets, chat intake, and knowledge base workflows.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+  - access_link
+  - session
+  - service_token
+capabilities:
+  - name: access_links
+    summary: Signed customer access to ticket threads without requiring a full account.
+  - name: assignments
+    summary: Agent assignment state for tickets and chat sessions.
+  - name: activity_events
+    summary: Auditable visible activity across ticket, chat, and article workflows.
+  - name: messages
+    summary: Conversation messages exchanged between customers and agents.
+  - name: outbox
+    summary: Transactional notification delivery for ticket links and status updates.
+  - name: publications
+    summary: Publication status for public knowledge base articles.
+  - name: search_documents
+    summary: Searchable read models for articles and help discovery.
+  - name: sessions
+    summary: Authenticated operator and service sessions for support staff actions.
+  - name: state_transitions
+    summary: Auditable lifecycle changes for tickets, chats, and articles.
+  - name: threads
+    summary: Subject-anchored conversations for tickets and chat sessions.
+domain_objects:
+  - kind: support_ticket
+    summary: Customer-visible support request with secure threaded follow-up.
+    schema_ref: ../../design.md
+    capabilities:
+      - access_links
+      - assignments
+      - activity_events
+      - messages
+      - outbox
+      - state_transitions
+      - threads
+  - kind: chat_session
+    summary: Live or near-live customer chat session that can fall back into a ticket.
+    schema_ref: ../../design.md
+    capabilities:
+      - assignments
+      - activity_events
+      - messages
+      - state_transitions
+      - threads
+  - kind: knowledge_article
+    summary: Draft or published help article surfaced through the public help center.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - state_transitions
+commands:
+  - name: tickets.create
+    summary: Create a support ticket from the public help surface and issue secure follow-up access.
+    path: /v1/commands/0003-customer-service-app/tickets.create
+    object_kinds:
+      - support_ticket
+    auth_modes:
+      - anonymous
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - access_links
+      - activity_events
+      - messages
+      - outbox
+      - state_transitions
+      - threads
+    projection: support_tickets.detail
+    consistency: read_your_writes
+  - name: tickets.reply
+    summary: Append a customer or agent reply to an existing ticket conversation.
+    path: /v1/commands/0003-customer-service-app/tickets.reply
+    object_kinds:
+      - support_ticket
+    auth_modes:
+      - access_link
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - messages
+      - state_transitions
+      - threads
+    projection: support_tickets.detail
+    consistency: read_your_writes
+  - name: knowledge_articles.publish
+    summary: Publish a knowledge base article to the public help center.
+    path: /v1/commands/0003-customer-service-app/knowledge_articles.publish
+    object_kinds:
+      - knowledge_article
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - state_transitions
+    projection: knowledge_articles.detail
+    consistency: read_your_writes
+projections:
+  - name: support_tickets.detail
+    summary: Canonical ticket detail and conversation thread consumed by both the UI and machine clients.
+    path: /v1/projections/0003-customer-service-app/tickets/{ticket_id}
+    object_kinds:
+      - support_ticket
+    capabilities:
+      - access_links
+      - assignments
+      - activity_events
+      - messages
+      - state_transitions
+      - threads
+    freshness: materialized
+  - name: support_workspace.inbox
+    summary: Operator inbox projection for open tickets and active or waiting chats.
+    path: /v1/projections/0003-customer-service-app/support-workspace/inbox
+    object_kinds:
+      - support_ticket
+      - chat_session
+    capabilities:
+      - assignments
+      - activity_events
+      - messages
+      - state_transitions
+      - threads
+    freshness: materialized
+  - name: knowledge_articles.detail
+    summary: Public knowledge base article detail projection.
+    path: /v1/projections/0003-customer-service-app/knowledge-base/articles/{article_id}
+    object_kinds:
+      - knowledge_article
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - state_transitions
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized

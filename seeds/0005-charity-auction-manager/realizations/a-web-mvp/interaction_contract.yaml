@@ -1,0 +1,150 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0005-charity-auction-manager
+realization_id: a-web-mvp
+summary: First web MVP operational contract for auction publishing, bidding, and closeout workflows.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+  - session
+  - service_token
+capabilities:
+  - name: activity_events
+    summary: Bid, closeout, and audit activity across auctions, lots, and winners.
+  - name: guard_decisions
+    summary: Deterministic bid validation and rejection reasoning.
+  - name: jobs
+    summary: Scheduled close authority for auctions reaching their authoritative end time.
+  - name: principals
+    summary: Bidder and operator identities participating in auction workflows.
+  - name: publications
+    summary: Public visibility for auctions and lots before and during bidding.
+  - name: search_documents
+    summary: Searchable auction and lot discovery models.
+  - name: sessions
+    summary: Authenticated bidder and operator sessions.
+  - name: state_transitions
+    summary: Auditable auction and lot lifecycle changes.
+domain_objects:
+  - kind: auction
+    summary: Top-level auction container with authoritative opening and closing behavior.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - jobs
+      - publications
+      - state_transitions
+  - kind: lot
+    summary: Publicly browsable lot offered within an auction.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - state_transitions
+  - kind: bid
+    summary: Immutable accepted bid attempt tied to a bidder and lot.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - guard_decisions
+      - principals
+      - sessions
+      - state_transitions
+commands:
+  - name: auctions.create
+    summary: Create an auction draft with a configured schedule and close behavior.
+    path: /v1/commands/0005-charity-auction-manager/auctions.create
+    object_kinds:
+      - auction
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - jobs
+      - publications
+      - state_transitions
+    projection: auctions.detail
+    consistency: read_your_writes
+  - name: bids.place
+    summary: Place a bid through the same normalized command used by the UI and machine clients.
+    path: /v1/commands/0005-charity-auction-manager/bids.place
+    object_kinds:
+      - bid
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - guard_decisions
+      - principals
+      - sessions
+      - state_transitions
+    projection: lots.detail
+    consistency: read_your_writes
+  - name: auctions.close
+    summary: Close an auction early or at schedule time using the authoritative close path.
+    path: /v1/commands/0005-charity-auction-manager/auctions.close
+    object_kinds:
+      - auction
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - jobs
+      - state_transitions
+    projection: auctions.detail
+    consistency: read_your_writes
+projections:
+  - name: auctions.detail
+    summary: Canonical auction detail and schedule projection for operators and third-party clients.
+    path: /v1/projections/0005-charity-auction-manager/auctions/{auction_id}
+    object_kinds:
+      - auction
+    capabilities:
+      - activity_events
+      - jobs
+      - publications
+      - state_transitions
+    freshness: materialized
+  - name: auctions.catalog
+    summary: Public auction and lot catalog projection for browsing active campaigns.
+    path: /v1/projections/0005-charity-auction-manager/auctions
+    object_kinds:
+      - auction
+      - lot
+    capabilities:
+      - publications
+      - search_documents
+      - state_transitions
+    freshness: materialized
+  - name: lots.detail
+    summary: Lot detail projection exposing the current state of bidding and closeout context.
+    path: /v1/projections/0005-charity-auction-manager/lots/{lot_id}
+    object_kinds:
+      - lot
+      - bid
+    capabilities:
+      - activity_events
+      - publications
+      - search_documents
+      - state_transitions
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized

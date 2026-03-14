@@ -1,0 +1,11 @@
+approach_id: a-go-htmx-room
+summary: Build the notepad as a small Go server with HTMX-driven shared edits.
+status: proposed
+strategy:
+  implementation_style: server-rendered-htmx
+  state_model: in-memory-shared-room
+  review_style: seed-lab-review
+realizer:
+  model: codex-gpt5
+  prompt_profile: realization-first
+  coding_ruleset: keep-app-in-seed

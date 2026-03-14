@@ -1,0 +1,11 @@
+approach_id: a-web-mvp
+summary: Conservative web MVP with fast public pages and simple organizer tooling.
+status: active
+strategy:
+  implementation_style: conservative
+  review_style: human-validated-first
+  interface_bias: server-rendered-web
+realizer:
+  model: codex-gpt-5
+  prompt_profile: seed-first-product-build
+  coding_ruleset: go-html-htmx-mvp

@@ -1,0 +1,17 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/notepad-app/main.go
+working_directory: artifacts/notepad-app
+run:
+  command: go
+  args:
+    - run
+    - .
+environment:
+  AS_ADDR: 127.0.0.1:8094
+  AS_SEEDS_DIR: ""
+notes:
+  - Manual boot only for now.
+  - Set AS_SEEDS_DIR to the repo seeds/ directory to enable seed creation from the sprout modal.
+  - This artifact is intended to become input to later kernel-managed boot.
