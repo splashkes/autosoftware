@@ -74,6 +74,9 @@ The runtime target is still the realization, not the unresolved seed.
 Concrete files and artifact payloads belong under `realizations/<id>/artifacts/`,
 not at the seed root.
 Each realization should point back to one approach.
+Every realization intended to run as an app must also declare
+`interaction_contract.yaml` beside `realization.yaml` so its operational API is
+traceable from seed docs to shared kernel capabilities.
 
 The founding seed is special:
 

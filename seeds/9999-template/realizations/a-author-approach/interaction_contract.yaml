@@ -1,0 +1,94 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 9999-template
+realization_id: a-author-approach
+summary: Template operational contract showing how a realized seed exposes the same commands and projections to the UI and machine clients.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - session
+  - service_token
+capabilities:
+  - name: handles
+    summary: Stable human-readable addressing for the example item.
+  - name: publications
+    summary: Publication windows and visibility for the example item.
+  - name: state_transitions
+    summary: Auditable lifecycle changes for the example item.
+  - name: activity_events
+    summary: User-visible activity history tied to important commands.
+  - name: search_documents
+    summary: Searchable read models for the example item.
+domain_objects:
+  - kind: example_item
+    summary: Placeholder domain object representing the thing this seed changes.
+    schema_ref: ../../design.md#data-and-claim-changes
+    capabilities:
+      - handles
+      - publications
+      - state_transitions
+      - activity_events
+      - search_documents
+commands:
+  - name: example_items.create
+    summary: Create an example item through the same normalized command used by the UI and machine clients.
+    path: /v1/commands/9999-template/example_items.create
+    object_kinds:
+      - example_item
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#interface-changes
+    result_schema_ref: README.md#realization-template
+    capabilities:
+      - handles
+      - state_transitions
+      - activity_events
+    projection: example_items.detail
+    consistency: read_your_writes
+  - name: example_items.publish
+    summary: Publish an example item for public reads after validating its lifecycle state.
+    path: /v1/commands/9999-template/example_items.publish
+    object_kinds:
+      - example_item
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#interface-changes
+    result_schema_ref: README.md#realization-template
+    capabilities:
+      - publications
+      - state_transitions
+      - activity_events
+    projection: example_items.detail
+    consistency: read_your_writes
+projections:
+  - name: example_items.detail
+    summary: Canonical detail view consumed by both the first-party UI and third-party clients.
+    path: /v1/projections/9999-template/example-items/{item_id}
+    object_kinds:
+      - example_item
+    capabilities:
+      - handles
+      - publications
+      - state_transitions
+      - activity_events
+      - search_documents
+    freshness: materialized
+  - name: example_items.search
+    summary: Search projection for listing example items by the shared operational API.
+    path: /v1/projections/9999-template/example-items
+    object_kinds:
+      - example_item
+    capabilities:
+      - publications
+      - search_documents
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized

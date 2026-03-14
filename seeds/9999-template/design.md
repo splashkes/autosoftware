@@ -13,6 +13,8 @@ Boundary:
 - explain what this seed is changing
 - explain what remains outside the scope of this seed
 - describe affected objects, claims, artifacts, interfaces, and projections
+- make the intended command and projection surface clear enough to encode in
+  `realizations/<id>/interaction_contract.yaml`
 - make the early design checkpoint explicit so time is not wasted on the wrong
   implementation path
 - identify the named approaches that deserve realization

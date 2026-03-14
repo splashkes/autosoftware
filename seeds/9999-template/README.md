@@ -31,6 +31,8 @@ Do not duplicate kernel architecture, kernel decisions, or kernel runbook
 content here. A seed should only explain the change it carries.
 Concrete artifacts should live under `realizations/<id>/artifacts/`, not beside
 the seed documents.
+Every runnable realization must also define `interaction_contract.yaml` so the
+same commands and projections can serve the UI and machine clients.
 
 The normal collaboration path is:
 
@@ -41,4 +43,5 @@ The normal collaboration path is:
 5. record durable choices in `decision_log.md`
 6. record end-state success criteria in `acceptance.md`
 7. keep iteration detail in `notes.md`
-8. place concrete outputs under `realizations/`
+8. define the realization interaction contract under `realizations/<id>/`
+9. place concrete outputs under `realizations/`

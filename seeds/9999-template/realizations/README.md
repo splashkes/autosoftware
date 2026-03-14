@@ -16,3 +16,9 @@ the old one.
 At runtime, the system should pin one realization.
 If a seed is selected instead, resolve it to a realization before boot or
 materialization.
+
+Every realization intended to run must include:
+
+- `realization.yaml` for machine-readable realization metadata
+- `interaction_contract.yaml` for the normalized command/projection contract
+- `artifacts/` for concrete outputs

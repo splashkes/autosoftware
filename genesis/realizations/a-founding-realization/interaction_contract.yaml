@@ -1,0 +1,37 @@
+contract_version: v1
+surface_kind: bootstrap_only
+seed_id: 0000-genesis
+realization_id: a-founding-realization
+summary: Founding bootstrap contract for inspecting the initial accepted system state.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  realization_readme: README.md
+auth_modes:
+  - service_token
+capabilities:
+  - name: principals
+    summary: Founding principal identities created by the bootstrap artifacts.
+  - name: state_transitions
+    summary: Activation and replay checkpoints for the founding runtime state.
+domain_objects:
+  - kind: founding_state
+    summary: The accepted bootstrap state created by the founding realization artifacts.
+    schema_ref: ../../design.md#initial-objects-and-claims
+    capabilities:
+      - principals
+      - state_transitions
+commands: []
+projections:
+  - name: founding.bootstrap_status
+    summary: Read-only bootstrap status view for the founding runtime state.
+    path: /v1/projections/0000-genesis/bootstrap-status
+    object_kinds:
+      - founding_state
+    capabilities:
+      - principals
+      - state_transitions
+    freshness: materialized
+consistency:
+  write_visibility: eventual
+  projection_freshness: materialized

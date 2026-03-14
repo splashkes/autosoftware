@@ -40,8 +40,10 @@ func main() {
 	api := jsontransport.NewRuntimeAPI(service, func(ctx context.Context) ([]string, error) {
 		return runtimedb.AppliedMigrations(ctx, pool)
 	})
+	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 
 	mux := http.NewServeMux()
+	contractsAPI.Register(mux)
 	api.Register(mux)
 
 	handler := server.DefaultMiddlewareStack(
