@@ -52,7 +52,7 @@ func main() {
 		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service}, mux),
 	)
 
-	addr := config.EnvOrDefault("AS_APID_ADDR", ":8092")
+	addr := config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092")
 	log.Printf("apid listening on %s (repo root %s)", addr, repoRoot)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)

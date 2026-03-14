@@ -2,6 +2,7 @@ package interactions
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"strings"
@@ -246,7 +247,7 @@ func (s *RuntimeService) ConsumeAuthChallenge(ctx context.Context, challengeID, 
 	if status != "pending" || usedAt != nil || (expiresAt != nil && !expiresAt.After(now)) {
 		return AuthChallenge{}, ErrNotFound
 	}
-	if verifierHash != hashToken(verifier) {
+	if subtle.ConstantTimeCompare([]byte(verifierHash), []byte(hashToken(verifier))) != 1 {
 		return AuthChallenge{}, ErrNotFound
 	}
 

@@ -278,6 +278,9 @@ func (s *Service) localSource(entry realizations.LocalRealization) (LocalSource,
 
 	for _, artifact := range entry.Artifacts {
 		artifactPath := filepath.Join(entry.RootDir, filepath.FromSlash(artifact))
+		if !pathContained(s.RepoRoot, artifactPath) {
+			continue
+		}
 		preview, err := readPreview(s.RepoRoot, artifactPath, "artifact", "repo")
 		if err != nil {
 			return LocalSource{}, err
@@ -290,11 +293,15 @@ func (s *Service) localSource(entry realizations.LocalRealization) (LocalSource,
 }
 
 func (s *Service) persist(materialization Materialization) (string, error) {
-	if err := os.MkdirAll(filepath.Join(s.OutputRoot, materialization.SeedID, materialization.RealizationID), 0o755); err != nil {
+	dir := filepath.Join(s.OutputRoot, materialization.SeedID, materialization.RealizationID)
+	if !pathContained(s.OutputRoot, dir) {
+		return "", fmt.Errorf("materialization path escapes output root")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create materialized directory: %w", err)
 	}
 
-	target := filepath.Join(s.OutputRoot, materialization.SeedID, materialization.RealizationID, "materialization.json")
+	target := filepath.Join(dir, "materialization.json")
 	payload, err := json.MarshalIndent(materialization, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal materialization: %w", err)
@@ -503,6 +510,18 @@ func adoptRemoteSummary(result *Materialization, source RemoteSource) {
 	if result.Status == "" {
 		result.Status = source.Status
 	}
+}
+
+func pathContained(root, target string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	return absTarget == absRoot || strings.HasPrefix(absTarget, absRoot+string(filepath.Separator))
 }
 
 func relativeOrOriginal(root, path string) string {

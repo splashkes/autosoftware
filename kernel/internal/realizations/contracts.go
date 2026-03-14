@@ -117,7 +117,7 @@ func LoadInteractionContract(repoRoot string, entry LocalRealization) (LoadedInt
 	if err := yaml.Unmarshal(raw, &contract); err != nil {
 		return LoadedInteractionContract{}, fmt.Errorf("parse %s: %w", contractPath, err)
 	}
-	if err := validateInteractionContract(entry, contractPath, &contract); err != nil {
+	if err := validateInteractionContract(repoRoot, entry, contractPath, &contract); err != nil {
 		return LoadedInteractionContract{}, fmt.Errorf("validate %s: %w", contractPath, err)
 	}
 
@@ -128,7 +128,7 @@ func LoadInteractionContract(repoRoot string, entry LocalRealization) (LoadedInt
 	}, nil
 }
 
-func validateInteractionContract(entry LocalRealization, contractPath string, contract *InteractionContract) error {
+func validateInteractionContract(repoRoot string, entry LocalRealization, contractPath string, contract *InteractionContract) error {
 	if strings.TrimSpace(contract.ContractVersion) != "v1" {
 		return fmt.Errorf("contract_version must be v1")
 	}
@@ -147,22 +147,22 @@ func validateInteractionContract(entry LocalRealization, contractPath string, co
 	if strings.TrimSpace(contract.Links.SeedDesign) == "" {
 		return fmt.Errorf("links.seed_design is required")
 	}
-	if err := validateContractRef(contractPath, contract.Links.SeedDesign); err != nil {
+	if err := validateContractRef(repoRoot, contractPath, contract.Links.SeedDesign); err != nil {
 		return fmt.Errorf("links.seed_design: %w", err)
 	}
 	if strings.TrimSpace(contract.Links.RealizationReadme) == "" {
 		return fmt.Errorf("links.realization_readme is required")
 	}
-	if err := validateContractRef(contractPath, contract.Links.RealizationReadme); err != nil {
+	if err := validateContractRef(repoRoot, contractPath, contract.Links.RealizationReadme); err != nil {
 		return fmt.Errorf("links.realization_readme: %w", err)
 	}
 	if strings.TrimSpace(contract.Links.SeedBrief) != "" {
-		if err := validateContractRef(contractPath, contract.Links.SeedBrief); err != nil {
+		if err := validateContractRef(repoRoot, contractPath, contract.Links.SeedBrief); err != nil {
 			return fmt.Errorf("links.seed_brief: %w", err)
 		}
 	}
 	if strings.TrimSpace(contract.Links.SeedAcceptance) != "" {
-		if err := validateContractRef(contractPath, contract.Links.SeedAcceptance); err != nil {
+		if err := validateContractRef(repoRoot, contractPath, contract.Links.SeedAcceptance); err != nil {
 			return fmt.Errorf("links.seed_acceptance: %w", err)
 		}
 	}
@@ -177,7 +177,7 @@ func validateInteractionContract(entry LocalRealization, contractPath string, co
 		return err
 	}
 
-	objectKinds, err := validateObjects(contractPath, contract.DomainObjects, capabilities)
+	objectKinds, err := validateObjects(repoRoot, contractPath, contract.DomainObjects, capabilities)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func validateInteractionContract(entry LocalRealization, contractPath string, co
 		return fmt.Errorf("interactive realizations must declare at least one command")
 	}
 
-	if err := validateCommands(entry.SeedID, contractPath, contract.Commands, objectKinds, projections, capabilities, authModes); err != nil {
+	if err := validateCommands(entry.SeedID, repoRoot, contractPath, contract.Commands, objectKinds, projections, capabilities, authModes); err != nil {
 		return err
 	}
 
@@ -227,7 +227,7 @@ func validateCapabilities(items []InteractionCapability) (map[string]struct{}, e
 	return out, nil
 }
 
-func validateObjects(contractPath string, items []InteractionObject, capabilities map[string]struct{}) (map[string]struct{}, error) {
+func validateObjects(repoRoot, contractPath string, items []InteractionObject, capabilities map[string]struct{}) (map[string]struct{}, error) {
 	if len(items) == 0 {
 		return nil, fmt.Errorf("domain_objects must declare at least one domain object")
 	}
@@ -247,7 +247,7 @@ func validateObjects(contractPath string, items []InteractionObject, capabilitie
 		if strings.TrimSpace(item.SchemaRef) == "" {
 			return nil, fmt.Errorf("domain_objects[%d].schema_ref is required", i)
 		}
-		if err := validateContractRef(contractPath, item.SchemaRef); err != nil {
+		if err := validateContractRef(repoRoot, contractPath, item.SchemaRef); err != nil {
 			return nil, fmt.Errorf("domain_objects[%d].schema_ref: %w", i, err)
 		}
 		if err := validateSubset(fmt.Sprintf("domain_objects[%d].capabilities", i), item.Capabilities, capabilities); err != nil {
@@ -312,7 +312,7 @@ func validateProjections(seedID string, items []InteractionProjection, objectKin
 	return out, nil
 }
 
-func validateCommands(seedID, contractPath string, items []InteractionCommand, objectKinds, projections, capabilities, authModes map[string]struct{}) error {
+func validateCommands(seedID, repoRoot, contractPath string, items []InteractionCommand, objectKinds, projections, capabilities, authModes map[string]struct{}) error {
 	names := make(map[string]struct{}, len(items))
 	paths := make(map[string]struct{}, len(items))
 	prefix := "/v1/commands/" + seedID + "/"
@@ -349,13 +349,13 @@ func validateCommands(seedID, contractPath string, items []InteractionCommand, o
 		if strings.TrimSpace(item.InputSchemaRef) == "" {
 			return fmt.Errorf("commands[%d].input_schema_ref is required", i)
 		}
-		if err := validateContractRef(contractPath, item.InputSchemaRef); err != nil {
+		if err := validateContractRef(repoRoot, contractPath, item.InputSchemaRef); err != nil {
 			return fmt.Errorf("commands[%d].input_schema_ref: %w", i, err)
 		}
 		if strings.TrimSpace(item.ResultSchemaRef) == "" {
 			return fmt.Errorf("commands[%d].result_schema_ref is required", i)
 		}
-		if err := validateContractRef(contractPath, item.ResultSchemaRef); err != nil {
+		if err := validateContractRef(repoRoot, contractPath, item.ResultSchemaRef); err != nil {
 			return fmt.Errorf("commands[%d].result_schema_ref: %w", i, err)
 		}
 		if err := validateSubset(fmt.Sprintf("commands[%d].capabilities", i), item.Capabilities, capabilities); err != nil {
@@ -417,7 +417,7 @@ func validateSubset(field string, items []string, allowed map[string]struct{}) e
 	return nil
 }
 
-func validateContractRef(contractPath, ref string) error {
+func validateContractRef(repoRoot, contractPath, ref string) error {
 	path := strings.TrimSpace(strings.Split(ref, "#")[0])
 	if path == "" {
 		return fmt.Errorf("reference must include a file path")
@@ -426,6 +426,9 @@ func validateContractRef(contractPath, ref string) error {
 	target := path
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(filepath.Dir(contractPath), filepath.FromSlash(target))
+	}
+	if !PathContained(repoRoot, target) {
+		return fmt.Errorf("reference %q escapes repository root", ref)
 	}
 	if _, err := os.Stat(target); err != nil {
 		return fmt.Errorf("resolve %q: %w", ref, err)

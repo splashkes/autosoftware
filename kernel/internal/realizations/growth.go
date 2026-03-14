@@ -97,6 +97,9 @@ func LoadGrowthContext(repoRoot, reference string) (GrowthContext, error) {
 			continue
 		}
 		fullPath := filepath.Join(realizationDir, filepath.FromSlash(artifact))
+		if !PathContained(repoRoot, fullPath) {
+			continue
+		}
 		if filepath.Base(fullPath) == "runtime.yaml" || filepath.Base(fullPath) == "runtime.yml" {
 			continue
 		}
@@ -108,6 +111,9 @@ func LoadGrowthContext(repoRoot, reference string) (GrowthContext, error) {
 }
 
 func previewContextFile(repoRoot, path, kind string) ContextFile {
+	if !PathContained(repoRoot, path) {
+		return ContextFile{}
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return ContextFile{}

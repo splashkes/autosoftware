@@ -82,7 +82,7 @@ func main() {
 	}
 	handler = server.DefaultMiddlewareStack(handler)
 
-	addr := config.EnvOrDefault("AS_REGISTRYD_ADDR", ":8093")
+	addr := config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093")
 	log.Printf("registryd listening on %s (repo root %s, runtime %t)", addr, repoRoot, runtimeService != nil)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)

@@ -185,6 +185,20 @@ func candidateRelativePath(repoRoot, path string) string {
 	return filepath.ToSlash(rel)
 }
 
+// PathContained reports whether target is contained within root after resolving
+// both to absolute paths. It returns false if either path cannot be resolved.
+func PathContained(root, target string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	return absTarget == absRoot || strings.HasPrefix(absTarget, absRoot+string(filepath.Separator))
+}
+
 func isRepoRoot(path string) bool {
 	required := []string{"genesis", "kernel", "seeds"}
 	for _, name := range required {

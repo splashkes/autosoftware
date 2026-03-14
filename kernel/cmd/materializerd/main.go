@@ -56,7 +56,7 @@ func main() {
 		respondJSON(w, http.StatusOK, result)
 	})
 
-	addr := config.EnvOrDefault("AS_MATERIALIZER_ADDR", ":8091")
+	addr := config.EnvOrDefault("AS_MATERIALIZER_ADDR", "127.0.0.1:8091")
 	log.Printf("materializerd listening on %s (repo root %s)", addr, repoRoot)
 	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(mux)); err != nil {
 		log.Fatal(err)

@@ -364,7 +364,7 @@ func main() {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
 	}
 
-	addr := config.EnvOrDefault("AS_WEBD_ADDR", ":8090")
+	addr := config.EnvOrDefault("AS_WEBD_ADDR", "127.0.0.1:8090")
 	log.Printf("webd listening on %s (repo root %s)", addr, repoRoot)
 	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(handler)); err != nil {
 		log.Fatal(err)
