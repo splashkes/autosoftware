@@ -33,6 +33,34 @@ Most change should happen in `seeds/`. Changes to `kernel/` should be rarer and
 should tighten registry correctness, permission validation, artifact
 verification, replay/materialization determinism, or interface plumbing.
 
+## Local Postgres For Testing
+
+AS now includes a local Postgres dev environment for kernel/runtime testing.
+
+1. Copy `.env.postgres.example` to `.env.postgres` if you want non-default
+   credentials or a different port.
+2. Start and bootstrap the database with `./scripts/as-postgres-up.sh`.
+3. Connect with `./scripts/as-postgres-psql.sh`.
+4. Stop it with `./scripts/as-postgres-down.sh`.
+5. Reset the database volume with `./scripts/as-postgres-reset.sh`.
+6. Enable login-time autostart with `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.splash.as-postgres.plist`.
+
+Defaults:
+
+- host: `localhost`
+- port: `54329`
+- database: `as_local`
+- user: `postgres`
+- password: `postgres`
+
+The bootstrap script reapplies every SQL file in `kernel/db/runtime/`, so the
+runtime feedback-loop tables are created automatically and future runtime SQL
+can be added there without changing the startup flow.
+
+For persistence across machine restarts, the Postgres data lives in the Docker
+volume `as_as-postgres-data`. The included LaunchAgent starts Docker Desktop if
+needed and then starts the `postgres` service automatically at login.
+
 ## Read Next
 
 - [seeds/README.md](seeds/README.md) for the seed model and authoring structure

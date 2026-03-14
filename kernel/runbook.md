@@ -22,6 +22,30 @@ The runbook should answer operational questions such as:
 - how to inspect registry and materializer state
 - how to inspect browser and request incidents for one realization
 
+## Local Postgres Bootstrap
+
+The local kernel runtime expects a Postgres instance for runtime tables.
+
+Bootstrap flow:
+
+1. Optionally copy `.env.postgres.example` to `.env.postgres` and override
+   database name, user, password, or port.
+2. Run `./scripts/as-postgres-up.sh` from the repo root.
+3. Verify access with `./scripts/as-postgres-psql.sh -c '\\dt runtime_*'`.
+4. Stop the service with `./scripts/as-postgres-down.sh`.
+5. If local state becomes disposable, recreate it with
+   `./scripts/as-postgres-reset.sh`.
+6. For login-time autostart on macOS, bootstrap the LaunchAgent in
+   `~/Library/LaunchAgents/com.splash.as-postgres.plist`.
+
+Notes:
+
+- the service runs via `compose.yaml`
+- the container listens on `localhost:${AS_POSTGRES_PORT:-54329}`
+- every `kernel/db/runtime/*.sql` file is applied during bootstrap
+- runtime data persists in the Docker volume `as_as-postgres-data`
+- the autostart helper is `scripts/as-postgres-autostart.sh`
+
 ## Planned Operational Flow
 
 1. Prepare the founding seed and kernel configuration.

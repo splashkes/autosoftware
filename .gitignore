@@ -6,6 +6,7 @@
 
 # Local binaries
 /kernel/bin/
+/kernel/kernel/
 /kernel/asvalidate
 /kernel/materializerd
 /kernel/webd
