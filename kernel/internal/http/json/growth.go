@@ -185,29 +185,32 @@ func (api *GrowthAPI) nowUTC() time.Time {
 }
 
 func normalizedOperation(value string) string {
-	switch strings.TrimSpace(value) {
+	v := strings.TrimSpace(value)
+	switch v {
 	case "tweak", "validate":
-		return strings.TrimSpace(value)
+		return v
 	default:
 		return "grow"
 	}
 }
 
 func normalizedProfile(value string) string {
-	switch strings.TrimSpace(value) {
+	v := strings.TrimSpace(value)
+	switch v {
 	case "minimal", "ornate", "custom":
-		return strings.TrimSpace(value)
+		return v
 	default:
 		return "balanced"
 	}
 }
 
 func normalizedTarget(value, operation string) string {
-	switch strings.TrimSpace(value) {
+	v := strings.TrimSpace(value)
+	switch v {
 	case "api_first", "ux_surface", "validation_only":
-		return strings.TrimSpace(value)
+		return v
 	case "runnable_mvp":
-		return "runnable_mvp"
+		return v
 	default:
 		if operation == "validate" {
 			return "validation_only"
