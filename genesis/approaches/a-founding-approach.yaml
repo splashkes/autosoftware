@@ -1,0 +1,10 @@
+approach_id: a-founding-approach
+summary: Founding implementation approach for the initial accepted system state.
+status: accepted
+strategy:
+  implementation_style: bootstrap-minimal
+  review_style: founding-approval
+realizer:
+  model: founding-realizer
+  prompt_profile: founding-profile
+  coding_ruleset: founding-ruleset

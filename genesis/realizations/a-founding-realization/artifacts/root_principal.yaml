@@ -1,0 +1,5 @@
+kind: principal
+version: 1
+principal_id: root
+notes: Placeholder for the root principal definition.
+

@@ -1,0 +1,6 @@
+realization_id: a-author-approach
+seed_id: 9999-template
+approach_id: a-author-approach
+summary: Replace with a short description of this realization.
+status: draft
+# Add compiler, model, prompt, base, artifact, and validation metadata here.

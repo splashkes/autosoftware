@@ -1,0 +1,7 @@
+.DS_Store
+
+# Local binaries
+/kernel/bin/
+
+# Local hydrated/materialized state
+/materialized/

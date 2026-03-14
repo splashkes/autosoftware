@@ -1,0 +1,11 @@
+approach_id: a-author-approach
+summary: Default author-guided implementation approach for this seed.
+status: active
+strategy:
+  implementation_style: conservative
+  review_style: human-validated-first
+  interface_bias: htmx-first
+realizer:
+  model: record-actual-model-here
+  prompt_profile: record-actual-prompt-profile-here
+  coding_ruleset: record-actual-coding-ruleset-here

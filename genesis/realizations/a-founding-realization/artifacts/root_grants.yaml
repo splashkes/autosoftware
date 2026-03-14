@@ -1,0 +1,7 @@
+kind: grants
+version: 1
+grants:
+  - principal_id: root
+    scope: registry.admin
+notes: Placeholder for initial kernel grant state.
+

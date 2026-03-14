@@ -1,0 +1,4 @@
+kind: registry_init
+version: 1
+notes: Placeholder for initial registry bootstrap configuration.
+

@@ -1,0 +1,9 @@
+realization_id: a-founding-realization
+seed_id: 0000-genesis
+approach_id: a-founding-approach
+summary: Founding realization of the initial system state.
+status: accepted
+artifacts:
+  - artifacts/registry_init.yaml
+  - artifacts/root_principal.yaml
+  - artifacts/root_grants.yaml
