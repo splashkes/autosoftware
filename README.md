@@ -61,6 +61,24 @@ For persistence across machine restarts, the Postgres data lives in the Docker
 volume `as_as-postgres-data`. The included LaunchAgent starts Docker Desktop if
 needed and then starts the `postgres` service automatically at login.
 
+## Local Run
+
+To run the local kernel stack end to end, use:
+
+`./scripts/local-run.sh`
+
+The script:
+
+- bootstraps and verifies Postgres
+- prints recent Postgres container output
+- runs `go test ./...` in `kernel/`
+- starts `apid`, `registryd`, `materializerd`, and `webd`
+- streams Postgres and Go service logs to the console with service prefixes
+- verifies the main health, contract, and materialization endpoints
+
+When you stop the script with `Ctrl-C`, it stops the Go services and leaves
+Postgres running for the next local session.
+
 ## Read Next
 
 - [seeds/README.md](seeds/README.md) for the seed model and authoring structure

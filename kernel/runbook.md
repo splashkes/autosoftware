@@ -46,6 +46,26 @@ Notes:
 - runtime data persists in the Docker volume `as_as-postgres-data`
 - the autostart helper is `scripts/as-postgres-autostart.sh`
 
+## Local Run Script
+
+The fastest way to validate the local kernel stack is:
+
+`./scripts/local-run.sh`
+
+This script:
+
+1. bootstraps Postgres
+2. shows recent Postgres output
+3. verifies runtime tables
+4. runs `go test ./...` in `kernel/`
+5. starts `apid`, `registryd`, `materializerd`, and `webd`
+6. streams prefixed Postgres and Go service logs to the console
+7. checks the runtime health, contract, registry, realization, and
+   materialization endpoints
+
+The script keeps running until interrupted.
+On exit it stops the Go services and leaves Postgres up.
+
 ## Planned Operational Flow
 
 1. Prepare the founding seed and kernel configuration.

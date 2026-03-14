@@ -14,4 +14,4 @@ db_name=${AS_POSTGRES_DB:-as_local}
 db_user=${AS_POSTGRES_USER:-postgres}
 
 cd "$repo_root"
-docker compose exec postgres psql -U "$db_user" -d "$db_name" "$@"
+docker compose exec -T postgres psql -U "$db_user" -d "$db_name" "$@"
