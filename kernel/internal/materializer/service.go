@@ -25,13 +25,20 @@ type SourceFlags struct {
 }
 
 type RealizationOption struct {
-	Reference     string      `json:"reference"`
-	SeedID        string      `json:"seed_id"`
-	RealizationID string      `json:"realization_id"`
-	ApproachID    string      `json:"approach_id,omitempty"`
-	Summary       string      `json:"summary"`
-	Status        string      `json:"status"`
-	Sources       SourceFlags `json:"sources"`
+	Reference       string                     `json:"reference"`
+	SeedID          string                     `json:"seed_id"`
+	SeedSummary     string                     `json:"seed_summary,omitempty"`
+	SeedStatus      string                     `json:"seed_status,omitempty"`
+	RealizationID   string                     `json:"realization_id"`
+	ApproachID      string                     `json:"approach_id,omitempty"`
+	Summary         string                     `json:"summary"`
+	Status          string                     `json:"status"`
+	SurfaceKind     string                     `json:"surface_kind,omitempty"`
+	ContractSummary string                     `json:"contract_summary,omitempty"`
+	ContractFile    string                     `json:"contract_file,omitempty"`
+	RuntimeArtifact string                     `json:"runtime_artifact,omitempty"`
+	Readiness       realizations.ReadinessInfo `json:"readiness"`
+	Sources         SourceFlags                `json:"sources"`
 }
 
 type FilePreview struct {
@@ -44,14 +51,21 @@ type FilePreview struct {
 }
 
 type LocalSource struct {
-	Reference     string        `json:"reference"`
-	SeedID        string        `json:"seed_id"`
-	RealizationID string        `json:"realization_id"`
-	ApproachID    string        `json:"approach_id,omitempty"`
-	Summary       string        `json:"summary"`
-	Status        string        `json:"status"`
-	RootDir       string        `json:"root_dir"`
-	Files         []FilePreview `json:"files"`
+	Reference       string                     `json:"reference"`
+	SeedID          string                     `json:"seed_id"`
+	SeedSummary     string                     `json:"seed_summary,omitempty"`
+	SeedStatus      string                     `json:"seed_status,omitempty"`
+	RealizationID   string                     `json:"realization_id"`
+	ApproachID      string                     `json:"approach_id,omitempty"`
+	Summary         string                     `json:"summary"`
+	Status          string                     `json:"status"`
+	SurfaceKind     string                     `json:"surface_kind,omitempty"`
+	ContractSummary string                     `json:"contract_summary,omitempty"`
+	ContractFile    string                     `json:"contract_file,omitempty"`
+	RuntimeArtifact string                     `json:"runtime_artifact,omitempty"`
+	Readiness       realizations.ReadinessInfo `json:"readiness"`
+	RootDir         string                     `json:"root_dir"`
+	Files           []FilePreview              `json:"files"`
 }
 
 type RemoteSource struct {
@@ -113,14 +127,25 @@ func (s *Service) ListRealizations(ctx context.Context) ([]RealizationOption, er
 
 	merged := make(map[string]RealizationOption, len(localEntries))
 	for _, entry := range localEntries {
+		meta, err := realizations.LoadRealizationMeta(s.RepoRoot, entry)
+		if err != nil {
+			return nil, err
+		}
 		merged[entry.Reference] = RealizationOption{
-			Reference:     entry.Reference,
-			SeedID:        entry.SeedID,
-			RealizationID: entry.RealizationID,
-			ApproachID:    entry.ApproachID,
-			Summary:       entry.Summary,
-			Status:        entry.Status,
-			Sources:       SourceFlags{Local: true},
+			Reference:       entry.Reference,
+			SeedID:          entry.SeedID,
+			SeedSummary:     meta.SeedSummary,
+			SeedStatus:      meta.SeedStatus,
+			RealizationID:   entry.RealizationID,
+			ApproachID:      entry.ApproachID,
+			Summary:         entry.Summary,
+			Status:          entry.Status,
+			SurfaceKind:     meta.SurfaceKind,
+			ContractSummary: meta.ContractSummary,
+			ContractFile:    meta.ContractFile,
+			RuntimeArtifact: meta.RuntimeArtifact,
+			Readiness:       meta.Readiness,
+			Sources:         SourceFlags{Local: true},
 		}
 	}
 
@@ -235,6 +260,18 @@ func (s *Service) localSource(entry realizations.LocalRealization) (LocalSource,
 		Status:        entry.Status,
 		RootDir:       relativeOrOriginal(s.RepoRoot, entry.RootDir),
 	}
+
+	meta, err := realizations.LoadRealizationMeta(s.RepoRoot, entry)
+	if err != nil {
+		return LocalSource{}, err
+	}
+	source.SeedSummary = meta.SeedSummary
+	source.SeedStatus = meta.SeedStatus
+	source.SurfaceKind = meta.SurfaceKind
+	source.ContractSummary = meta.ContractSummary
+	source.ContractFile = meta.ContractFile
+	source.RuntimeArtifact = meta.RuntimeArtifact
+	source.Readiness = meta.Readiness
 
 	source.Files = append(source.Files, collectDocPreview(s.RepoRoot, entry.Readme, "readme"))
 	source.Files = append(source.Files, collectDocPreview(s.RepoRoot, entry.Notes, "notes"))

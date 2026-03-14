@@ -74,7 +74,24 @@ The script:
 - runs `go test ./...` in `kernel/`
 - starts `apid`, `registryd`, `materializerd`, and `webd`
 - streams Postgres and Go service logs to the console with service prefixes
-- verifies the main health, contract, and materialization endpoints
+- verifies the main health, contract, growth, and materialization endpoints
+
+At `http://127.0.0.1:8090/`, `webd` now exposes the kernel growth console.
+That surface is intentionally not a generic "boot" screen for every draft.
+Instead it distinguishes:
+
+- `Inspect` for current materialized realization state
+- `Grow` for seed-packet review plus queued growth, tweak, or validate work
+- `Run` only when a realization already carries a runtime artifact
+
+Current readiness stages:
+
+- `Designed`: seed docs exist, but the realization is not yet normalized
+- `Defined`: docs plus `interaction_contract.yaml` exist, but there is no
+  runtime artifact yet
+- `Runnable`: a runtime manifest exists and the realization can be launched
+- `Accepted`: a runnable realization marked as accepted
+- `Bootstrap`: a special inspection-only foundational realization
 
 When you stop the script with `Ctrl-C`, it stops the Go services and leaves
 Postgres running for the next local session.
@@ -92,6 +109,8 @@ Postgres running for the next local session.
   responsibilities
 - [kernel/protocol/v1/](kernel/protocol/v1/) for the deeper registry, object,
   claim, and materialization model
+- [kernel/protocol/v1/growth.md](kernel/protocol/v1/growth.md) for the seed
+  packet and growth-job contract used by the kernel growth console
 - [kernel/philosophy.md](kernel/philosophy.md) for deeper concepts such as
   runtime selection and the feedback loop
 - [genesis/](genesis/) for the founding seed

@@ -60,8 +60,11 @@ This script:
 4. runs `go test ./...` in `kernel/`
 5. starts `apid`, `registryd`, `materializerd`, and `webd`
 6. streams prefixed Postgres and Go service logs to the console
-7. checks the runtime health, contract, registry, realization, and
-   materialization endpoints
+7. checks the runtime health, contract, registry, realization, growth seed
+   packet, growth job, and materialization endpoints
+
+The script also prints the kernel growth console markers from `webd` so a local
+run proves the draft-seed workflow, not just the health endpoints.
 
 The script keeps running until interrupted.
 On exit it stops the Go services and leaves Postgres up.

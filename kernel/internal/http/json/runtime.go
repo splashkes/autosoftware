@@ -43,6 +43,7 @@ func (api *RuntimeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/runtime/state-transitions", api.handleRecordStateTransition)
 	mux.HandleFunc("POST /v1/runtime/activity-events", api.handleRecordActivityEvent)
 	mux.HandleFunc("POST /v1/runtime/jobs", api.handleEnqueueJob)
+	mux.HandleFunc("GET /v1/runtime/jobs/{job_id}", api.handleGetJob)
 	mux.HandleFunc("POST /v1/runtime/jobs/claim", api.handleClaimJobs)
 	mux.HandleFunc("POST /v1/runtime/jobs/{job_id}/complete", api.handleCompleteJob)
 	mux.HandleFunc("POST /v1/runtime/jobs/{job_id}/fail", api.handleFailJob)
@@ -208,6 +209,11 @@ func (api *RuntimeAPI) handleEnqueueJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	item, err := api.Service.EnqueueJob(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleGetJob(w http.ResponseWriter, r *http.Request) {
+	item, err := api.Service.GetJob(r.Context(), r.PathValue("job_id"))
 	writeRuntimeResult(w, item, err)
 }
 

@@ -41,10 +41,12 @@ func main() {
 		return runtimedb.AppliedMigrations(ctx, pool)
 	})
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
+	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
 
 	mux := http.NewServeMux()
 	contractsAPI.Register(mux)
 	api.Register(mux)
+	growthAPI.Register(mux)
 
 	handler := server.DefaultMiddlewareStack(
 		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service}, mux),

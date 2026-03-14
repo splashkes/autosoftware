@@ -206,3 +206,17 @@ process is:
 
 The critical rule is that a realized seed is not complete until this linkage is
 defined and testable.
+
+## Relationship To Growth
+
+This document covers normal use of a realized seed once it exposes an
+operational app surface.
+
+The kernel growth console is a separate contract layer:
+
+- it inspects a selected realization's current seed packet
+- it queues `grow`, `tweak`, or `validate` work into `runtime_jobs`
+- it exists so drafts can still be visible, inspectable, and agent-ready before
+  they are runnable
+
+That growth workflow is defined in [growth.md](growth.md).

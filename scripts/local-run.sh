@@ -86,6 +86,16 @@ show_http_json() {
   printf '\n'
 }
 
+show_http_match() {
+  local label=$1
+  local url=$2
+  local pattern=$3
+
+  printf '\n==> %s\n' "$label"
+  curl -fsS "$url" | rg -n "$pattern"
+  printf '\n'
+}
+
 start_log_tail() {
   local name=$1
   local log_file=$2
@@ -119,6 +129,8 @@ start_go_service() {
 require_command docker
 require_command curl
 require_command go
+require_command python3
+require_command rg
 
 printf '==> Local run log directory: %s\n' "$log_dir"
 printf '==> Runtime database URL: %s\n' "$runtime_database_url"
@@ -172,6 +184,18 @@ show_http_json "API runtime health" "http://$apid_addr/v1/runtime/health"
 show_http_json "API contracts" "http://$apid_addr/v1/contracts"
 show_http_json "Registry status" "http://$registryd_addr/v1/registry/status"
 show_http_json "Materializer realizations" "http://$materializerd_addr/v1/realizations"
+show_http_match "Web growth console markers" "http://$webd_addr/" "Growth Console|Inspect|Grow|Run|Defined|Runnable"
+show_http_json "Growth seed packet" "http://$apid_addr/v1/projections/realization-growth/seed-packet?reference=0003-customer-service-app/a-web-mvp"
+
+printf '\n==> Queue growth job\n'
+growth_response=$(curl -fsS -X POST "http://$apid_addr/v1/commands/realizations.grow" \
+  -H 'Accept: application/json' \
+  -H 'Content-Type: application/json' \
+  --data "{\"reference\":\"0003-customer-service-app/a-web-mvp\",\"operation\":\"grow\",\"profile\":\"minimal\",\"target\":\"runnable_mvp\",\"developer_instructions\":\"Smoke test the normalized growth contract from the local run script.\",\"idempotency_key\":\"local-run-smoke-$(date +%s)\"}")
+printf '%s\n' "$growth_response"
+
+growth_job_id=$(printf '%s' "$growth_response" | python3 -c 'import json, sys; print(json.load(sys.stdin)["job"]["job_id"])')
+show_http_json "Growth job projection" "http://$apid_addr/v1/projections/realization-growth/jobs/$growth_job_id"
 show_http_json "Materialize template realization" "http://$materializerd_addr/v1/materializations?reference=9999-template/a-author-approach"
 
 printf '\n==> Local stack is live\n'

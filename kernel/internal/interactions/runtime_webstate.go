@@ -315,6 +315,23 @@ func (s *RuntimeService) EnqueueJob(ctx context.Context, input EnqueueJobInput) 
 	return item, wrapErr("enqueue job", err)
 }
 
+func (s *RuntimeService) GetJob(ctx context.Context, jobID string) (Job, error) {
+	pool, err := expectReady(s)
+	if err != nil {
+		return Job{}, err
+	}
+
+	row := pool.QueryRow(ctx, `
+		select job_id, queue, kind, dedupe_key, status, priority, run_at, locked_at,
+		       locked_by, attempts, max_attempts, payload::text, last_error, created_at, finished_at
+		from runtime_jobs
+		where job_id = $1
+	`, strings.TrimSpace(jobID))
+
+	item, err := scanJob(row)
+	return item, wrapErr("get job", err)
+}
+
 func (s *RuntimeService) ClaimJobs(ctx context.Context, input JobClaimInput) ([]Job, error) {
 	pool, err := expectReady(s)
 	if err != nil {

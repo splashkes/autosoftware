@@ -19,3 +19,5 @@ Current protocol focus:
 - `schemas.md` defines schema identity, versioning, and interpretation rules
 - `interactions.md` defines the normalized operational API contract that every
   runnable realization must expose for both UI and machine clients
+- `growth.md` defines the kernel growth-console contract from seed docs to
+  growth jobs and readiness states

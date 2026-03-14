@@ -38,6 +38,14 @@ Runtime should still target realizations directly.
 If a user or tool selects a seed, that seed must resolve to a realization by
 explicit policy.
 
+The kernel growth console makes this explicit:
+
+- seeds can be visible before they are runnable
+- realizations can exist in `Designed`, `Defined`, `Runnable`, `Accepted`, or
+  `Bootstrap` states
+- `Grow` should operate on a selected realization definition, not on an
+  unresolved seed in the abstract
+
 ## Seed Model
 
 A seed is source intent.
@@ -77,6 +85,17 @@ Each realization should point back to one approach.
 Every realization intended to run as an app must also declare
 `interaction_contract.yaml` beside `realization.yaml` so its operational API is
 traceable from seed docs to shared kernel capabilities.
+
+For draft realizations that are not yet runnable, the intended process is:
+
+1. read the seed docs and selected approach
+2. inspect the realization contract and current readiness
+3. queue a growth, tweak, or validate job against that realization
+4. let an agent or developer produce the next coherent realization pass
+
+If a seed needs multiple variants such as `minimal`, `balanced`, or `ornate`,
+those should become distinct realization directories or clearly declared
+realization-specific growth targets, not hidden prompt differences.
 
 The founding seed is special:
 
