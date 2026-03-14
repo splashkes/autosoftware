@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  background: #eef0f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #2a2d35;
+}
+
+.page {
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 18px 0 40px;
+  transform: translateY(-26px);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+}
+
+.wordmark {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 9px;
+  color: #1a1d24;
+  margin-top: 12px;
+  padding-left: 9px;
+  position: relative;
+  z-index: 2;
+}
+
+.tagline {
+  font-size: 12px;
+  color: #8a8e99;
+  letter-spacing: 3.8px;
+  margin-top: 6px;
+  padding-left: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.desc {
+  font-size: 12px;
+  color: #6b7080;
+  line-height: 1.6;
+  margin-top: 16px;
+  max-width: 240px;
+  position: relative;
+  z-index: 2;
+}
+
+.divider {
+  width: 32px;
+  height: 1px;
+  background: #d0d4dc;
+  margin: 28px auto;
+}
+
+.seed {
+  border-bottom: 1px solid #d0d4dc;
+}
+
+.seed:first-child {
+  border-top: 1px solid #d0d4dc;
+}
+
+.seed-head {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  cursor: pointer;
+  gap: 14px;
+}
+
+.seed-pop {
+  font-size: 11px;
+  color: #8a8e99;
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.seed-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.seed-head:hover .seed-name {
+  color: #000;
+}
+
+.seed-name {
+  font-size: 13px;
+  color: #2a2d35;
+  transition: color .15s;
+}
+
+.seed-brief {
+  font-size: 11px;
+  color: #8a8e99;
+  margin-top: 3px;
+}
+
+.arrow {
+  color: #b0b4bd;
+  font-size: 16px;
+  transition: transform .15s;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.seed.open .arrow {
+  transform: rotate(90deg);
+}
+
+.seed-body {
+  display: none;
+  padding: 0 0 14px 0;
+}
+
+.seed.open .seed-body {
+  display: block;
+}
+
+.real {
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  gap: 14px;
+}
+
+.real-pop {
+  font-size: 10px;
+  color: #b0b4bd;
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.real-mid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.real-label {
+  font-size: 12px;
+  color: #5a5e6a;
+}
+
+.real-status {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.real-status.draft { color: #a16207; }
+.real-status.proposed { color: #2563eb; }
+.real-status.accepted { color: #16a34a; }
+
+.real-boot {
+  font: inherit;
+  font-size: 10px;
+  background: none;
+  border: 1px solid #c0c4cc;
+  color: #6b7080;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.real-boot:hover {
+  color: #16a34a;
+  border-color: #16a34a;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8a8e99;
+  padding: 10px 0 2px;
+}
+
+.act-btn {
+  font: inherit;
+  font-size: 10px;
+  background: none;
+  border: 1px solid #c0c4cc;
+  color: #6b7080;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+.act-btn:hover {
+  color: #16a34a;
+  border-color: #16a34a;
+}
+
+.bare-earth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 0;
+  font-size: 12px;
+  color: #8a8e99;
+  border: none;
+  border-top: 1px solid #d0d4dc;
+  background: none;
+}
+
+#boot-status {
+  font-size: 11px;
+  color: #8a8e99;
+  text-align: center;
+  margin-top: 20px;
+  line-height: 1.5;
+}
+
+.sprout-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: #b0b4bd;
+  cursor: pointer;
+  padding: 4px;
+  transition: color .2s;
+}
+
+.sprout-btn:hover {
+  color: #16a34a;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.15);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.overlay.open { display: flex; }
+
+.modal {
+  width: min(24rem, calc(100vw - 2rem));
+  background: #f5f6f8;
+  border: 1px solid #c0c4cc;
+  padding: 20px;
+}
+
+.modal h2 {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6b7080;
+  margin-bottom: 16px;
+}
+
+.modal input,
+.modal textarea {
+  width: 100%;
+  background: #fff;
+  border: 1px solid #c0c4cc;
+  color: #2a2d35;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  margin-bottom: 10px;
+  outline: none;
+}
+
+.modal input:focus,
+.modal textarea:focus {
+  border-color: #8a8e99;
+}
+
+.modal textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.modal-actions button {
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid #c0c4cc;
+  background: none;
+  color: #6b7080;
+}
+
+.modal-actions button:hover {
+  color: #2a2d35;
+  border-color: #8a8e99;
+}
+
+.modal-actions .go {
+  color: #16a34a;
+  border-color: #86d89b;
+}
+
+.modal-actions .go:hover {
+  border-color: #16a34a;
+}
+
+.toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: #fff;
+  border: 1px solid #c0c4cc;
+  padding: 6px 14px;
+  font-size: 11px;
+  color: #16a34a;
+  opacity: 0;
+  transition: all .2s;
+  pointer-events: none;
+  z-index: 200;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+</style>
+<link rel="stylesheet" href="./assets/sprout-logo.css">
+</head>
+<body>
+
+<div class="page">
+  <div class="brand">
+    <div class="sprout-logo-shell" data-sprout-logo aria-hidden="true"></div>
+    <div class="wordmark">AS</div>
+    <div class="tagline">autosoftware</div>
+    <div class="desc">Software that evolves from within.</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="seeds">
+    <div class="seed" onclick="toggleSeed(this)">
+      <div class="seed-head">
+        <span class="seed-pop">142</span>
+        <div class="seed-mid">
+          <div class="seed-name">Customer Service App</div>
+          <div class="seed-brief">Handle support tickets, live chat, and knowledge base</div>
+        </div>
+        <span class="arrow">&#x203A;</span>
+      </div>
+      <div class="seed-body">
+        <div class="real">
+          <span class="real-pop">98</span>
+          <div class="real-mid">
+            <span class="real-label">Lightweight ticket queue</span>
+            <span class="real-status draft">draft</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Lightweight ticket queue" data-seed="Customer Service App">LOAD</button>
+        </div>
+        <div class="real">
+          <span class="real-pop">44</span>
+          <div class="real-mid">
+            <span class="real-label">Full helpdesk with live chat</span>
+            <span class="real-status proposed">proposed</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Full helpdesk with live chat" data-seed="Customer Service App">LOAD</button>
+        </div>
+        <div class="action-row" onclick="event.stopPropagation()">sprout new <button class="act-btn" onclick="sproutFrom('Customer Service App')">BRANCH</button></div>
+      </div>
+    </div>
+
+    <div class="seed" onclick="toggleSeed(this)">
+      <div class="seed-head">
+        <span class="seed-pop">89</span>
+        <div class="seed-mid">
+          <div class="seed-name">Event Listings</div>
+          <div class="seed-brief">Create and manage public event calendars</div>
+        </div>
+        <span class="arrow">&#x203A;</span>
+      </div>
+      <div class="seed-body">
+        <div class="real">
+          <span class="real-pop">89</span>
+          <div class="real-mid">
+            <span class="real-label">Simple calendar with RSVP</span>
+            <span class="real-status draft">draft</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Simple calendar with RSVP" data-seed="Event Listings">LOAD</button>
+        </div>
+        <div class="action-row" onclick="event.stopPropagation()">sprout new <button class="act-btn" onclick="sproutFrom('Event Listings')">BRANCH</button></div>
+      </div>
+    </div>
+
+    <div class="seed" onclick="toggleSeed(this)">
+      <div class="seed-head">
+        <span class="seed-pop">57</span>
+        <div class="seed-mid">
+          <div class="seed-name">Charity Auction Manager</div>
+          <div class="seed-brief">Run online auctions for charitable causes</div>
+        </div>
+        <span class="arrow">&#x203A;</span>
+      </div>
+      <div class="seed-body">
+        <div class="real">
+          <span class="real-pop">31</span>
+          <div class="real-mid">
+            <span class="real-label">Timed bidding with live updates</span>
+            <span class="real-status proposed">proposed</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Timed bidding with live updates" data-seed="Charity Auction Manager">LOAD</button>
+        </div>
+        <div class="real">
+          <span class="real-pop">19</span>
+          <div class="real-mid">
+            <span class="real-label">Silent auction with sealed bids</span>
+            <span class="real-status proposed">proposed</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Silent auction with sealed bids" data-seed="Charity Auction Manager">LOAD</button>
+        </div>
+        <div class="real">
+          <span class="real-pop">7</span>
+          <div class="real-mid">
+            <span class="real-label">Hybrid gala event runner</span>
+            <span class="real-status draft">draft</span>
+          </div>
+          <button class="real-boot" onclick="event.stopPropagation(); bootReal(this)" data-label="Hybrid gala event runner" data-seed="Charity Auction Manager">LOAD</button>
+        </div>
+        <div class="action-row" onclick="event.stopPropagation()">sprout new <button class="act-btn" onclick="sproutFrom('Charity Auction Manager')">BRANCH</button></div>
+      </div>
+    </div>
+
+    <div class="bare-earth">create your own from bare earth <button class="act-btn" onclick="openSprout()">CREATE</button></div>
+  </div>
+
+  <div id="boot-status">standalone preserved homepage mock</div>
+</div>
+
+<button class="sprout-btn" onclick="openSprout()" title="Plant a seed">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+       stroke="currentColor" stroke-width="1.5"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 22v-8"/>
+    <path d="M12 14c-4 0-8-4-8-8 4 0 8 4 8 8z"/>
+    <path d="M12 14c4 0 8-4 8-8-4 0-8 4-8 8z"/>
+  </svg>
+</button>
+
+<div class="overlay" id="sprout-modal" onclick="closeSprout(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>What should change?</h2>
+    <input type="text" id="sprout-summary" placeholder="Summary" maxlength="120">
+    <textarea id="sprout-detail" placeholder="Describe what you want to see"></textarea>
+    <div class="modal-actions">
+      <button type="button" onclick="closeSprout()">Cancel</button>
+      <button type="button" class="go" onclick="submitSprout()">Plant</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="./assets/sprout-logo.js" defer></script>
+<script>
+function toggleSeed(el) {
+  var wasOpen = el.classList.contains("open");
+  var all = document.querySelectorAll(".seed.open");
+  for (var i = 0; i < all.length; i++) all[i].classList.remove("open");
+  if (!wasOpen) el.classList.add("open");
+}
+
+function bootReal(el) {
+  var label = el.dataset.label;
+  var seed = el.dataset.seed;
+  document.getElementById("boot-status").textContent = "previewing " + seed + " (" + label + ")...";
+  toast("Loading " + label);
+}
+
+function sproutFrom(seedName) {
+  document.getElementById("sprout-modal").classList.add("open");
+  var s = document.getElementById("sprout-summary");
+  s.value = seedName + " - ";
+  s.focus();
+}
+
+function openSprout() {
+  document.getElementById("sprout-modal").classList.add("open");
+  document.getElementById("sprout-summary").focus();
+}
+
+function closeSprout(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById("sprout-modal").classList.remove("open");
+  document.getElementById("sprout-summary").value = "";
+  document.getElementById("sprout-detail").value = "";
+}
+
+function submitSprout() {
+  var s = document.getElementById("sprout-summary").value.trim();
+  if (!s) {
+    document.getElementById("sprout-summary").focus();
+    return;
+  }
+  closeSprout();
+  document.getElementById("boot-status").textContent = "captured homepage direction: " + s;
+  toast("Captured");
+}
+
+function toast(msg) {
+  var el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(function() { el.classList.remove("show"); }, 2200);
+}
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") closeSprout();
+});
+</script>
+</body>
+</html>
