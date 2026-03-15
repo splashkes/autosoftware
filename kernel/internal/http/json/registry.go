@@ -10,11 +10,15 @@ import (
 )
 
 type RegistryAPI struct {
-	RepoRoot string
+	Reader registry.CatalogReader
 }
 
 func NewRegistryAPI(repoRoot string) *RegistryAPI {
-	return &RegistryAPI{RepoRoot: repoRoot}
+	return NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
+}
+
+func NewRegistryCatalogAPI(reader registry.CatalogReader) *RegistryAPI {
+	return &RegistryAPI{Reader: reader}
 }
 
 func (api *RegistryAPI) Register(mux *http.ServeMux) {
@@ -26,7 +30,7 @@ func (api *RegistryAPI) Register(mux *http.ServeMux) {
 }
 
 func (api *RegistryAPI) handleCatalog(w http.ResponseWriter, r *http.Request) {
-	catalog, err := registry.LoadCatalog(api.RepoRoot)
+	catalog, err := api.Reader.Catalog()
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -42,7 +46,11 @@ func (api *RegistryAPI) handleCatalog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *RegistryAPI) handleObjects(w http.ResponseWriter, r *http.Request) {
-	catalog, err := registry.LoadCatalog(api.RepoRoot)
+	items, err := api.Reader.ListObjects(
+		strings.TrimSpace(r.URL.Query().Get("seed_id")),
+		strings.TrimSpace(r.URL.Query().Get("schema_ref")),
+		strings.TrimSpace(r.URL.Query().Get("q")),
+	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -51,7 +59,6 @@ func (api *RegistryAPI) handleObjects(w http.ResponseWriter, r *http.Request) {
 	seedID := strings.TrimSpace(r.URL.Query().Get("seed_id"))
 	schemaRef := strings.TrimSpace(r.URL.Query().Get("schema_ref"))
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	items := registry.FilterObjects(catalog.Objects, seedID, schemaRef, query)
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"mode":    "catalog_projection",
@@ -61,12 +68,6 @@ func (api *RegistryAPI) handleObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *RegistryAPI) handleObject(w http.ResponseWriter, r *http.Request) {
-	catalog, err := registry.LoadCatalog(api.RepoRoot)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, err)
-		return
-	}
-
 	seedID := strings.TrimSpace(r.URL.Query().Get("seed_id"))
 	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
 	if seedID == "" || kind == "" {
@@ -74,9 +75,13 @@ func (api *RegistryAPI) handleObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, ok := registry.GetObject(catalog, seedID, kind)
-	if !ok {
-		respondError(w, http.StatusNotFound, errors.New("object not found"))
+	item, err := api.Reader.GetObject(seedID, kind)
+	if err != nil {
+		if errors.Is(err, registry.ErrCatalogObjectNotFound) {
+			respondError(w, http.StatusNotFound, errors.New("object not found"))
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -88,15 +93,13 @@ func (api *RegistryAPI) handleObject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *RegistryAPI) handleSchemas(w http.ResponseWriter, r *http.Request) {
-	catalog, err := registry.LoadCatalog(api.RepoRoot)
+	seedID := strings.TrimSpace(r.URL.Query().Get("seed_id"))
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	items, err := api.Reader.ListSchemas(seedID, query)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
-
-	seedID := strings.TrimSpace(r.URL.Query().Get("seed_id"))
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	items := registry.FilterSchemas(catalog.Schemas, seedID, query)
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"mode":    "catalog_projection",
@@ -106,21 +109,19 @@ func (api *RegistryAPI) handleSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *RegistryAPI) handleSchema(w http.ResponseWriter, r *http.Request) {
-	catalog, err := registry.LoadCatalog(api.RepoRoot)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, err)
-		return
-	}
-
 	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
 	if ref == "" {
 		respondError(w, http.StatusBadRequest, errors.New("ref is required"))
 		return
 	}
 
-	item, ok := registry.GetSchema(catalog, ref)
-	if !ok {
-		respondError(w, http.StatusNotFound, errors.New("schema not found"))
+	item, err := api.Reader.GetSchema(ref)
+	if err != nil {
+		if errors.Is(err, registry.ErrCatalogSchemaNotFound) {
+			respondError(w, http.StatusNotFound, errors.New("schema not found"))
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
 

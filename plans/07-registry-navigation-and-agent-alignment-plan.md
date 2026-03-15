@@ -114,6 +114,10 @@ state.
 The browser should then shift from contract-derived structure to accepted
 ledger state.
 
+The strict Phase 2 read contract is now defined in:
+
+- `kernel/protocol/v1/registry_query_api.md`
+
 ### Phase 2 Data Model
 
 Implement real registry storage and query support for:
@@ -127,12 +131,16 @@ Implement real registry storage and query support for:
 
 ### Phase 2 APIs
 
+The Phase 2 API should follow the stricter resource contract in
+`kernel/protocol/v1/registry_query_api.md`.
+
 At minimum, the true registry should expose:
 
 - `GET /v1/registry/status`
 - `GET /v1/registry/change-sets`
 - `GET /v1/registry/change-sets/{change_set_id}`
 - `GET /v1/registry/rows?after=...&limit=...`
+- `GET /v1/registry/rows/{row_id}`
 - `GET /v1/registry/objects`
 - `GET /v1/registry/objects/{object_id}`
 - `GET /v1/registry/claims`
@@ -163,6 +171,8 @@ The web explorer should add:
 - agents can traverse accepted objects, claims, schemas, and rows directly
 - human and agent surfaces still share one read model
 - replay and cursor semantics are visible enough for debugging
+- identifier and pagination semantics are strict enough that clients do not
+  need to reverse-engineer behavior from implementation details
 
 ## Execution Order
 

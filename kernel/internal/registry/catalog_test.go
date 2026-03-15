@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -149,6 +150,21 @@ func TestFilterHelpers(t *testing.T) {
 	}
 	if got := FilterSchemas(catalog.Schemas, "1234-demo", "ticket"); len(got) != 1 {
 		t.Fatalf("expected schema query match, got %d", len(got))
+	}
+}
+
+func TestCatalogReaderReturnsNotFoundErrors(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	reader := NewCatalogReader(repoRoot)
+	if _, err := reader.GetObject("missing-seed", "missing-kind"); !errors.Is(err, ErrCatalogObjectNotFound) {
+		t.Fatalf("expected ErrCatalogObjectNotFound, got %v", err)
+	}
+	if _, err := reader.GetSchema("missing-ref"); !errors.Is(err, ErrCatalogSchemaNotFound) {
+		t.Fatalf("expected ErrCatalogSchemaNotFound, got %v", err)
 	}
 }
 

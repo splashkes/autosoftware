@@ -9,6 +9,7 @@ import (
 	jsontransport "as/kernel/internal/http/json"
 	"as/kernel/internal/http/server"
 	"as/kernel/internal/interactions"
+	"as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
 )
 
@@ -42,7 +43,7 @@ func main() {
 	})
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
-	registryAPI := jsontransport.NewRegistryAPI(repoRoot)
+	registryAPI := jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
 
 	mux := http.NewServeMux()
 	contractsAPI.Register(mux)

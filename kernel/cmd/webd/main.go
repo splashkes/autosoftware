@@ -494,6 +494,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	registryReader := registrycatalog.NewCatalogReader(repoRoot)
 
 	var runtimeService *interactions.RuntimeService
 	runtimeConfig := config.LoadRuntimeConfigFromEnv()
@@ -517,7 +518,7 @@ func main() {
 	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
-	jsontransport.NewRegistryAPI(repoRoot).Register(mux)
+	jsontransport.NewRegistryCatalogAPI(registryReader).Register(mux)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		options, err := service.ListRealizations(r.Context())
 		if err != nil {
@@ -612,7 +613,7 @@ func main() {
 		}
 	})
 	mux.HandleFunc("GET /partials/registry", func(w http.ResponseWriter, r *http.Request) {
-		catalog, err := registrycatalog.LoadCatalog(repoRoot)
+		catalog, err := registryReader.Catalog()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
