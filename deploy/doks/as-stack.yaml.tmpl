@@ -85,7 +85,7 @@ metadata:
   name: as-apid
   namespace: ${AS_NAMESPACE}
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: as-apid
   ports:
@@ -152,7 +152,7 @@ metadata:
   name: as-registryd
   namespace: ${AS_NAMESPACE}
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: as-registryd
   ports:
@@ -219,7 +219,7 @@ metadata:
   name: as-webd
   namespace: ${AS_NAMESPACE}
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: as-webd
   ports:

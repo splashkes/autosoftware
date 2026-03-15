@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: as-edge
+  namespace: ${AS_NAMESPACE}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-tls-secret: "${AS_NAMESPACE}/cloudflare-origin-pull-ca"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
+    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ${AS_WEB_HOST}
+        - ${AS_REGISTRY_HOST}
+        - ${AS_API_HOST}
+      secretName: ${AS_EDGE_TLS_SECRET}
+  rules:
+    - host: ${AS_WEB_HOST}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: as-webd
+                port:
+                  number: 80
+    - host: ${AS_REGISTRY_HOST}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: as-registryd
+                port:
+                  number: 80
+    - host: ${AS_API_HOST}
+      http:
+        paths:
+          - path: /v1/contracts
+            pathType: Exact
+            backend:
+              service:
+                name: as-apid
+                port:
+                  number: 80
+          - path: /v1/contracts/
+            pathType: Prefix
+            backend:
+              service:
+                name: as-apid
+                port:
+                  number: 80
