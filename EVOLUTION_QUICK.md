@@ -3,8 +3,14 @@
 > **Boundary rule.** Work in `seeds/` only. Do not modify `kernel/`, `compose.yaml`, or root config files.
 > All code and artifacts go in `seeds/<seed_id>/realizations/<realization_id>/artifacts/`.
 
-> **Port assignments.** Use your seed's assigned port in `runtime.yaml` (`AS_ADDR`):
-> 0001 → `127.0.0.1:8094` · 0003 → `127.0.0.1:8095` · 0004 → `127.0.0.1:8096` · 0005 → `127.0.0.1:8097`
+> **Port assignments.** Use your seed's assigned port in `runtime.yaml`:
+>
+> | Seed | `AS_ADDR` |
+> |------|-----------|
+> | 0001 | `127.0.0.1:8094` |
+> | 0003 | `127.0.0.1:8095` |
+> | 0004 | `127.0.0.1:8096` |
+> | 0005 | `127.0.0.1:8097` |
 
 One-page companion to [EVOLUTION_INSTRUCTIONS.md](EVOLUTION_INSTRUCTIONS.md).
 
@@ -12,12 +18,12 @@ One-page companion to [EVOLUTION_INSTRUCTIONS.md](EVOLUTION_INSTRUCTIONS.md).
 
 | Section | Line |
 |---------|------|
-| **Context Sequence:** The ordered reading list that produces better realizations | 24 |
-| **Readiness Transitions:** What you need to advance a realization to the next stage | 35 |
-| **Operations:** The three types of evolution passes and when to use each | 43 |
-| **One Pass Should:** The minimum bar every evolution pass must clear | 51 |
-| **Growth API:** HTTP endpoints for triggering and monitoring realization growth | 58 |
-| **File Structure:** Canonical layout of a seed directory and its realizations | 66 |
+| **Context Sequence:** The ordered reading list that produces better realizations | 30 |
+| **Readiness Transitions:** What you need to advance a realization to the next stage | 41 |
+| **Operations:** The three types of evolution passes and when to use each | 49 |
+| **One Pass Should:** The minimum bar every evolution pass must clear | 57 |
+| **Growth API:** HTTP endpoints for triggering and monitoring realization growth | 64 |
+| **File Structure:** Canonical layout of a seed directory and its realizations | 72 |
 
 ---
 
