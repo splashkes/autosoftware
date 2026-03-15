@@ -37,6 +37,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: kernel/go.mod
+          cache-dependency-path: kernel/go.sum
 
       - name: Run seed Go tests
         run: ./scripts/ci-seed-go-tests.sh
