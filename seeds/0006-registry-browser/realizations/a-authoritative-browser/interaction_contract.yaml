@@ -15,8 +15,6 @@ capabilities:
     summary: Searchable registry browse views for realizations, commands, projections, objects, and schemas.
   - name: search_facets
     summary: Facet filters for narrowing current registry catalog resources.
-  - name: cross_references
-    summary: Links between related registry resources visible in the current catalog.
 domain_objects:
   - kind: registry_realization
     summary: Realization contract exposed through the current registry catalog.
@@ -24,28 +22,24 @@ domain_objects:
     capabilities:
       - search_documents
       - search_facets
-      - cross_references
   - kind: registry_command
     summary: Command contract exposed through the current registry catalog.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - cross_references
   - kind: registry_projection
     summary: Projection contract exposed through the current registry catalog.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - cross_references
   - kind: registry_object
     summary: Stable object identity exposed through the current registry catalog.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - cross_references
   - kind: registry_schema
     summary: Schema reference exposed through the current registry catalog.
     schema_ref: ../../design.md
@@ -85,7 +79,6 @@ projections:
       - registry_object
     capabilities:
       - search_documents
-      - cross_references
     freshness: materialized
   - name: registry.commands
     summary: Searchable list of commands built directly on the current registry catalog route.
@@ -105,7 +98,6 @@ projections:
       - registry_object
     capabilities:
       - search_documents
-      - cross_references
     freshness: materialized
   - name: registry.projections
     summary: Searchable list of projections built directly on the current registry catalog route.
@@ -125,7 +117,6 @@ projections:
       - registry_object
     capabilities:
       - search_documents
-      - cross_references
     freshness: materialized
   - name: registry.objects
     summary: Searchable and faceted list of registry objects for human browsing.
@@ -146,7 +137,6 @@ projections:
       - registry_projection
     capabilities:
       - search_documents
-      - cross_references
     freshness: materialized
   - name: registry.schemas
     summary: Searchable list of schema references built directly on the current registry catalog route.
@@ -166,7 +156,7 @@ projections:
       - registry_command
     capabilities:
       - search_documents
-      - cross_references
     freshness: materialized
 consistency:
+  write_visibility: eventual
   projection_freshness: materialized

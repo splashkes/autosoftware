@@ -24,3 +24,6 @@
 
 # Local Postgres overrides
 /.env.postgres
+
+# Local deployment config and rendered manifests
+/.deployment_config/

@@ -1,0 +1,12 @@
+.git
+.deployment_config
+.claude
+.DS_Store
+materialized
+kernel/bin
+kernel/kernel
+kernel/asvalidate
+kernel/materializerd
+kernel/webd
+plans/*.zip
+seeds/**/artifacts/**/[!.]?*[!.]*
