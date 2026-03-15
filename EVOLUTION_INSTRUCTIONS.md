@@ -354,7 +354,8 @@ A good pass is coherent and reviewable. It should:
   meaningfully improve it within a stage
 - Not leave the realization in a broken intermediate state
 - Include validation evidence for what was built
-- Update `notes.md` with decisions made during the pass
+- Record durable decisions in `decision_log.md`; use `notes.md` for
+  transient working context only
 
 ---
 

@@ -97,6 +97,9 @@ func (s *PostgresStore) RecordTestRun(ctx context.Context, run TestRun) error {
 
 func (s *PostgresStore) RecordAgentReview(ctx context.Context, rev AgentReview) error {
 	findings := jsonBytes(rev.Findings)
+	if rev.Findings == nil {
+		findings = []byte("[]")
+	}
 
 	_, err := s.pool.Exec(ctx, `
 		insert into runtime_agent_reviews (
@@ -118,11 +121,11 @@ func (s *PostgresStore) RecordAgentReview(ctx context.Context, rev AgentReview) 
 
 func jsonBytes(v any) []byte {
 	if v == nil {
-		return []byte("null")
+		return []byte("{}")
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
-		return []byte("null")
+		return []byte("{}")
 	}
 	return b
 }
