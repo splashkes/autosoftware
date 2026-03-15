@@ -1,11 +1,67 @@
 name: PR Validate
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  placeholder:
+  kernel-go-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Placeholder
-        run: echo "Seed validation workflow scaffolded."
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: kernel/go.mod
+          cache-dependency-path: kernel/go.sum
+
+      - name: Run kernel Go tests
+        working-directory: kernel
+        run: go test ./...
+
+  seed-go-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: kernel/go.mod
+
+      - name: Run seed Go tests
+        run: ./scripts/ci-seed-go-tests.sh
+
+  kernel-stack-smoke:
+    runs-on: ubuntu-latest
+    env:
+      AS_CI_LOG_DIR: ${{ runner.temp }}/kernel-stack-logs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: kernel/go.mod
+          cache-dependency-path: kernel/go.sum
+
+      - name: Run kernel stack smoke
+        run: ./scripts/ci-kernel-stack-smoke.sh
+
+      - name: Upload kernel smoke logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-stack-logs
+          path: ${{ runner.temp }}/kernel-stack-logs
+          if-no-files-found: ignore

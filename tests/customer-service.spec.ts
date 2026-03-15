@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// App listens on unix socket; tests run through webd with /support/ prefix.
-const BASE = 'http://127.0.0.1:8090';
+// Playwright boots the customer-service realization in local and CI runs.
 
 // ── AC-09: Public help center and knowledge base ──
 
@@ -112,11 +111,13 @@ test('agent can login', async ({ page }) => {
 });
 
 test('AC-01, AC-04: full ticket lifecycle', async ({ page, context }) => {
+  const subject = `Lifecycle Test ${Date.now()}`;
+
   // 1. Customer creates a ticket
   await page.goto('/help/tickets/new');
   await page.fill('#name', 'Lifecycle Customer');
   await page.fill('#email', 'lifecycle@test.com');
-  await page.fill('#subject', 'Lifecycle Test');
+  await page.fill('#subject', subject);
   await page.fill('#description', 'Testing full lifecycle');
   await page.click('button[type="submit"]');
   await expect(page.locator('h1')).toContainText('Request Submitted');
@@ -130,8 +131,9 @@ test('AC-01, AC-04: full ticket lifecycle', async ({ page, context }) => {
   await expect(agentPage).toHaveURL(/\/agent\/inbox/);
 
   // Find the ticket in inbox
-  await expect(agentPage.locator('text=Lifecycle Test')).toBeVisible();
-  await agentPage.click('text=Lifecycle Test');
+  const ticketLink = agentPage.getByRole('link', { name: subject }).first();
+  await expect(ticketLink).toBeVisible();
+  await ticketLink.click();
 
   // 3. Verify ticket is in "new" state
   await expect(agentPage.locator('.badge:has-text("New")')).toBeVisible();
