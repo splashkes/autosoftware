@@ -12,3 +12,4 @@ artifacts:
   - artifacts/event-listings-app/main_test.go
   - artifacts/event-listings-app/README.md
   - artifacts/event-listings-app/assets/app.css
+  - artifacts/event-listings-app/assets/app.js

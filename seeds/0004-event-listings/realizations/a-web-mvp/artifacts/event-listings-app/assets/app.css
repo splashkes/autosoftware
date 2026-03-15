@@ -407,6 +407,12 @@ button.alt {
   color: var(--muted);
 }
 
+.host-line {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .feature-facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -463,6 +469,11 @@ button.alt {
   gap: 10px;
   align-items: center;
   color: rgba(255, 255, 255, 0.9);
+}
+
+.spotlight-card .text-link,
+.detail-story .text-link {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .panel {
@@ -739,10 +750,42 @@ textarea {
   line-height: 1.62;
 }
 
+.detail-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 12px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .detail-sidebar {
   display: grid;
   align-content: start;
   gap: 14px;
+}
+
+.detail-sidebar code {
+  word-break: break-all;
 }
 
 .detail-sidebar h2 {

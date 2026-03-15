@@ -42,3 +42,20 @@ Current local validation target:
   - published the event from the organizer table
   - opened the public detail page and confirmed the fixed URL note and event facts
   - opened the month calendar and confirmed the event rendered on March 30, 2026
+
+## Expanded validation on March 15, 2026
+
+- `go test ./...` still passes after:
+  - file-backed event persistence
+  - richer organizer authoring fields
+  - social/share data in projections
+  - public discovery redesign
+- browser and HTTP checks confirmed:
+  - homepage modules render featured pick, quick picks, organizer identity, and save/share signals
+  - detail pages render organizer label, venue note, crowd fit, tags, related events, and copy-link control
+  - organizer create form exposes neighborhood, organizer, cover image, tags, crowd label, and editorial blurb fields
+- persistence validation:
+  - created draft `Signals and Scenes Night` with organizer and cover-image metadata
+  - restarted the app against the same `AS_DATA_FILE`
+  - confirmed the draft still appeared in `/admin`
+  - published it and confirmed the public detail page rendered persisted organizer/share metadata

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,120 +36,195 @@ const (
 )
 
 type eventRecord struct {
-	ID          string
-	Slug        string
-	Title       string
-	Summary     string
-	Description string
-	Venue       string
-	Location    string
-	Category    string
-	ExternalURL string
-	Timezone    string
-	AllDay      bool
-	Status      eventStatus
-	Start       time.Time
-	End         time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID            string
+	Slug          string
+	Title         string
+	Summary       string
+	Description   string
+	Venue         string
+	VenueNote     string
+	Neighborhood  string
+	Location      string
+	Category      string
+	OrganizerName string
+	OrganizerRole string
+	OrganizerURL  string
+	CoverImageURL string
+	FeaturedBlurb string
+	ExternalURL   string
+	Timezone      string
+	Tags          []string
+	ShareCount    int
+	SaveCount     int
+	CrowdLabel    string
+	AllDay        bool
+	Status        eventStatus
+	Start         time.Time
+	End           time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type eventInput struct {
-	Title       string
-	Summary     string
-	Description string
-	Venue       string
-	Location    string
-	Category    string
-	ExternalURL string
-	Timezone    string
-	AllDay      bool
-	StartDate   string
-	EndDate     string
-	StartTime   string
-	EndTime     string
+	Title         string
+	Summary       string
+	Description   string
+	Venue         string
+	VenueNote     string
+	Neighborhood  string
+	Location      string
+	Category      string
+	OrganizerName string
+	OrganizerRole string
+	OrganizerURL  string
+	CoverImageURL string
+	FeaturedBlurb string
+	Tags          string
+	CrowdLabel    string
+	ExternalURL   string
+	Timezone      string
+	AllDay        bool
+	StartDate     string
+	EndDate       string
+	StartTime     string
+	EndTime       string
 }
 
 type eventStore struct {
-	mu     sync.RWMutex
-	nextID int
-	order  []string
-	events map[string]*eventRecord
+	mu       sync.RWMutex
+	nextID   int
+	order    []string
+	events   map[string]*eventRecord
+	dataFile string
 }
 
-func newEventStore() *eventStore {
+type eventStoreState struct {
+	NextID int            `json:"next_id"`
+	Order  []string       `json:"order"`
+	Events []*eventRecord `json:"events"`
+}
+
+func newEventStore(dataFile string) *eventStore {
 	s := &eventStore{
-		nextID: 1,
-		events: make(map[string]*eventRecord),
+		nextID:   1,
+		events:   make(map[string]*eventRecord),
+		dataFile: dataFile,
+	}
+	if err := s.load(); err == nil {
+		return s
 	}
 
 	now := time.Now()
 	s.mustSeed(eventInput{
-		Title:       "Harbour Lights Night Market",
-		Summary:     "An evening market with local food, craft stalls, and live jazz.",
-		Description: "Browse independent makers, snack at harbour-side food stands, and stay for an outdoor jazz set after sunset.",
-		Venue:       "Pier Warehouse",
-		Location:    "Toronto",
-		Category:    "Community",
-		ExternalURL: "https://example.com/night-market",
-		Timezone:    "America/Toronto",
-		StartDate:   now.AddDate(0, 0, 3).Format("2006-01-02"),
-		EndDate:     now.AddDate(0, 0, 3).Format("2006-01-02"),
-		StartTime:   "18:30",
-		EndTime:     "22:00",
+		Title:         "Harbour Lights Night Market",
+		Summary:       "An evening market with local food, craft stalls, and live jazz.",
+		Description:   "Browse independent makers, snack at harbour-side food stands, and stay for an outdoor jazz set after sunset.",
+		Venue:         "Pier Warehouse",
+		VenueNote:     "Covered indoor-outdoor market hall with plenty of room to wander and snack between sets.",
+		Neighborhood:  "Queens Quay",
+		Location:      "Toronto",
+		Category:      "Community",
+		OrganizerName: "Harbour Collective",
+		OrganizerRole: "Independent local organizer",
+		OrganizerURL:  "https://example.com/harbour-collective",
+		CoverImageURL: "https://picsum.photos/seed/harbour-night-market/1200/900",
+		FeaturedBlurb: "Go for the easy social energy, the food lineups, and the kind of event that turns into a low-effort group plan.",
+		Tags:          "night market, live music, food, makers",
+		CrowdLabel:    "Best with 2-4 friends",
+		ExternalURL:   "https://example.com/night-market",
+		Timezone:      "America/Toronto",
+		StartDate:     now.AddDate(0, 0, 3).Format("2006-01-02"),
+		EndDate:       now.AddDate(0, 0, 3).Format("2006-01-02"),
+		StartTime:     "18:30",
+		EndTime:       "22:00",
 	}, statusPublished)
 	s.mustSeed(eventInput{
-		Title:       "Design Systems Field Day",
-		Summary:     "A two-day workshop on documentation, component audits, and accessibility reviews.",
-		Description: "Small-team sessions on component inventory, naming conventions, content patterns, and documentation debt remediation.",
-		Venue:       "Foundry Hall",
-		Location:    "Ottawa",
-		Category:    "Workshop",
-		ExternalURL: "https://example.com/design-field-day",
-		Timezone:    "America/Toronto",
-		StartDate:   now.AddDate(0, 0, 7).Format("2006-01-02"),
-		EndDate:     now.AddDate(0, 0, 8).Format("2006-01-02"),
-		AllDay:      true,
+		Title:         "Design Systems Field Day",
+		Summary:       "A two-day workshop on documentation, component audits, and accessibility reviews.",
+		Description:   "Small-team sessions on component inventory, naming conventions, content patterns, and documentation debt remediation.",
+		Venue:         "Foundry Hall",
+		VenueNote:     "A bright former industrial space with breakout rooms and long shared tables.",
+		Neighborhood:  "Downtown Ottawa",
+		Location:      "Ottawa",
+		Category:      "Workshop",
+		OrganizerName: "Systems Practice",
+		OrganizerRole: "Product design studio",
+		OrganizerURL:  "https://example.com/systems-practice",
+		CoverImageURL: "https://picsum.photos/seed/design-systems-field-day/1200/900",
+		FeaturedBlurb: "This is for people who want useful notes, sharper thinking, and the right kind of post-session conversations.",
+		Tags:          "design systems, ux, accessibility, workshop",
+		CrowdLabel:    "Best solo or with one teammate",
+		ExternalURL:   "https://example.com/design-field-day",
+		Timezone:      "America/Toronto",
+		StartDate:     now.AddDate(0, 0, 7).Format("2006-01-02"),
+		EndDate:       now.AddDate(0, 0, 8).Format("2006-01-02"),
+		AllDay:        true,
 	}, statusPublished)
 	s.mustSeed(eventInput{
-		Title:       "Riverfront Cleanup Rally",
-		Summary:     "Volunteer-led cleanup with loaner gloves, coffee, and route captains.",
-		Description: "Meet at the south gate, collect supplies, and move in teams along the riverfront trail before lunch.",
-		Venue:       "South Gate Plaza",
-		Location:    "Hamilton",
-		Category:    "Volunteer",
-		Timezone:    "America/Toronto",
-		StartDate:   now.AddDate(0, 0, 10).Format("2006-01-02"),
-		EndDate:     now.AddDate(0, 0, 10).Format("2006-01-02"),
-		StartTime:   "09:00",
-		EndTime:     "12:30",
+		Title:         "Riverfront Cleanup Rally",
+		Summary:       "Volunteer-led cleanup with loaner gloves, coffee, and route captains.",
+		Description:   "Meet at the south gate, collect supplies, and move in teams along the riverfront trail before lunch.",
+		Venue:         "South Gate Plaza",
+		VenueNote:     "Meet at the volunteer tent for gloves, route maps, and coffee before heading out.",
+		Neighborhood:  "Bayfront",
+		Location:      "Hamilton",
+		Category:      "Volunteer",
+		OrganizerName: "Friends of the Waterfront",
+		OrganizerRole: "Community nonprofit",
+		CoverImageURL: "https://picsum.photos/seed/riverfront-cleanup/1200/900",
+		FeaturedBlurb: "Worth forwarding when your group wants a clear plan, a useful morning, and low friction.",
+		Tags:          "cleanup, volunteer, outdoors, community",
+		CrowdLabel:    "Easy to join last-minute",
+		Timezone:      "America/Toronto",
+		StartDate:     now.AddDate(0, 0, 10).Format("2006-01-02"),
+		EndDate:       now.AddDate(0, 0, 10).Format("2006-01-02"),
+		StartTime:     "09:00",
+		EndTime:       "12:30",
 	}, statusCanceled)
 	s.mustSeed(eventInput{
-		Title:       "Autumn Venue Crawl",
-		Summary:     "Draft route for venue managers comparing neighborhood spaces.",
-		Description: "Internal draft itinerary used to compare capacity, transit access, and accessibility notes across partner venues.",
-		Venue:       "Multiple venues",
-		Location:    "Toronto",
-		Category:    "Industry",
-		Timezone:    "America/Toronto",
-		StartDate:   now.AddDate(0, 0, 14).Format("2006-01-02"),
-		EndDate:     now.AddDate(0, 0, 14).Format("2006-01-02"),
-		StartTime:   "13:00",
-		EndTime:     "17:00",
+		Title:         "Autumn Venue Crawl",
+		Summary:       "Draft route for venue managers comparing neighborhood spaces.",
+		Description:   "Internal draft itinerary used to compare capacity, transit access, and accessibility notes across partner venues.",
+		Venue:         "Multiple venues",
+		Neighborhood:  "West End",
+		Location:      "Toronto",
+		Category:      "Industry",
+		OrganizerName: "Venue Operators Circle",
+		OrganizerRole: "Industry roundtable",
+		CoverImageURL: "https://picsum.photos/seed/venue-crawl/1200/900",
+		FeaturedBlurb: "Draft internal walk-through for comparing room feel, logistics, and accessibility.",
+		Tags:          "venues, operations, industry",
+		CrowdLabel:    "Invite-only working session",
+		Timezone:      "America/Toronto",
+		StartDate:     now.AddDate(0, 0, 14).Format("2006-01-02"),
+		EndDate:       now.AddDate(0, 0, 14).Format("2006-01-02"),
+		StartTime:     "13:00",
+		EndTime:       "17:00",
 	}, statusDraft)
 	s.mustSeed(eventInput{
-		Title:       "Last Season Recap Gala",
-		Summary:     "Archived gala page kept reachable for direct links and retrospectives.",
-		Description: "An archived page preserving the event record and venue notes after the live season wrapped.",
-		Venue:       "Civic Exchange",
-		Location:    "Kingston",
-		Category:    "Celebration",
-		Timezone:    "America/Toronto",
-		StartDate:   now.AddDate(0, -1, -4).Format("2006-01-02"),
-		EndDate:     now.AddDate(0, -1, -4).Format("2006-01-02"),
-		StartTime:   "19:00",
-		EndTime:     "22:00",
+		Title:         "Last Season Recap Gala",
+		Summary:       "Archived gala page kept reachable for direct links and retrospectives.",
+		Description:   "An archived page preserving the event record and venue notes after the live season wrapped.",
+		Venue:         "Civic Exchange",
+		VenueNote:     "Formal seated room used for end-of-season speeches, donor tables, and live music.",
+		Neighborhood:  "Market District",
+		Location:      "Kingston",
+		Category:      "Celebration",
+		OrganizerName: "Civic Exchange Society",
+		OrganizerRole: "Arts fundraiser team",
+		CoverImageURL: "https://picsum.photos/seed/recap-gala/1200/900",
+		FeaturedBlurb: "Archived so direct links and sponsor recaps still have a stable home.",
+		Tags:          "gala, archive, fundraiser",
+		CrowdLabel:    "Archived season wrap-up",
+		Timezone:      "America/Toronto",
+		StartDate:     now.AddDate(0, -1, -4).Format("2006-01-02"),
+		EndDate:       now.AddDate(0, -1, -4).Format("2006-01-02"),
+		StartTime:     "19:00",
+		EndTime:       "22:00",
 	}, statusArchived)
+	if err := s.save(); err != nil {
+		log.Printf("seed store save failed: %v", err)
+	}
 	return s
 }
 
@@ -175,25 +251,39 @@ func (s *eventStore) create(input eventInput) (*eventRecord, error) {
 	s.nextID++
 	now := time.Now()
 	event := &eventRecord{
-		ID:          id,
-		Slug:        uniqueSlug(slugify(input.Title), id),
-		Title:       strings.TrimSpace(input.Title),
-		Summary:     strings.TrimSpace(input.Summary),
-		Description: strings.TrimSpace(input.Description),
-		Venue:       strings.TrimSpace(input.Venue),
-		Location:    strings.TrimSpace(input.Location),
-		Category:    strings.TrimSpace(input.Category),
-		ExternalURL: strings.TrimSpace(input.ExternalURL),
-		Timezone:    strings.TrimSpace(input.Timezone),
-		AllDay:      input.AllDay,
-		Status:      statusDraft,
-		Start:       start,
-		End:         end,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            id,
+		Slug:          uniqueSlug(slugify(input.Title), id),
+		Title:         strings.TrimSpace(input.Title),
+		Summary:       strings.TrimSpace(input.Summary),
+		Description:   strings.TrimSpace(input.Description),
+		Venue:         strings.TrimSpace(input.Venue),
+		VenueNote:     strings.TrimSpace(input.VenueNote),
+		Neighborhood:  strings.TrimSpace(input.Neighborhood),
+		Location:      strings.TrimSpace(input.Location),
+		Category:      strings.TrimSpace(input.Category),
+		OrganizerName: strings.TrimSpace(input.OrganizerName),
+		OrganizerRole: strings.TrimSpace(input.OrganizerRole),
+		OrganizerURL:  strings.TrimSpace(input.OrganizerURL),
+		CoverImageURL: strings.TrimSpace(input.CoverImageURL),
+		FeaturedBlurb: strings.TrimSpace(input.FeaturedBlurb),
+		ExternalURL:   strings.TrimSpace(input.ExternalURL),
+		Timezone:      strings.TrimSpace(input.Timezone),
+		Tags:          normalizeTags(input.Tags),
+		ShareCount:    seededShareCount(id, input.Category),
+		SaveCount:     seededSaveCount(id, input.Category),
+		CrowdLabel:    strings.TrimSpace(input.CrowdLabel),
+		AllDay:        input.AllDay,
+		Status:        statusDraft,
+		Start:         start,
+		End:           end,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 	s.events[id] = event
 	s.order = append(s.order, id)
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
 	return cloneEvent(event), nil
 }
 
@@ -214,14 +304,26 @@ func (s *eventStore) update(id string, input eventInput) (*eventRecord, error) {
 	event.Summary = strings.TrimSpace(input.Summary)
 	event.Description = strings.TrimSpace(input.Description)
 	event.Venue = strings.TrimSpace(input.Venue)
+	event.VenueNote = strings.TrimSpace(input.VenueNote)
+	event.Neighborhood = strings.TrimSpace(input.Neighborhood)
 	event.Location = strings.TrimSpace(input.Location)
 	event.Category = strings.TrimSpace(input.Category)
+	event.OrganizerName = strings.TrimSpace(input.OrganizerName)
+	event.OrganizerRole = strings.TrimSpace(input.OrganizerRole)
+	event.OrganizerURL = strings.TrimSpace(input.OrganizerURL)
+	event.CoverImageURL = strings.TrimSpace(input.CoverImageURL)
+	event.FeaturedBlurb = strings.TrimSpace(input.FeaturedBlurb)
 	event.ExternalURL = strings.TrimSpace(input.ExternalURL)
 	event.Timezone = strings.TrimSpace(input.Timezone)
+	event.Tags = normalizeTags(input.Tags)
+	event.CrowdLabel = strings.TrimSpace(input.CrowdLabel)
 	event.AllDay = input.AllDay
 	event.Start = start
 	event.End = end
 	event.UpdatedAt = time.Now()
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
 	return cloneEvent(event), nil
 }
 
@@ -235,7 +337,96 @@ func (s *eventStore) setStatus(id string, status eventStatus) (*eventRecord, err
 	}
 	event.Status = status
 	event.UpdatedAt = time.Now()
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
 	return cloneEvent(event), nil
+}
+
+func (s *eventStore) load() error {
+	if strings.TrimSpace(s.dataFile) == "" {
+		return errors.New("no data file configured")
+	}
+	body, err := os.ReadFile(s.dataFile)
+	if err != nil {
+		return err
+	}
+	var state eventStoreState
+	if err := json.Unmarshal(body, &state); err != nil {
+		return err
+	}
+	s.nextID = state.NextID
+	s.order = append([]string(nil), state.Order...)
+	s.events = make(map[string]*eventRecord, len(state.Events))
+	for _, event := range state.Events {
+		if event == nil {
+			continue
+		}
+		hydrateEventDefaults(event)
+		s.events[event.ID] = event
+	}
+	if s.nextID == 0 {
+		s.nextID = len(s.events) + 1
+	}
+	return nil
+}
+
+func (s *eventStore) save() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.persist()
+}
+
+func (s *eventStore) saveLocked() error {
+	return s.persist()
+}
+
+func (s *eventStore) persist() error {
+	if strings.TrimSpace(s.dataFile) == "" {
+		return nil
+	}
+	state := eventStoreState{
+		NextID: s.nextID,
+		Order:  append([]string(nil), s.order...),
+		Events: make([]*eventRecord, 0, len(s.order)),
+	}
+	for _, id := range s.order {
+		if event, ok := s.events[id]; ok {
+			state.Events = append(state.Events, cloneEvent(event))
+		}
+	}
+	body, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(s.dataFile), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(s.dataFile, body, 0o644)
+}
+
+func hydrateEventDefaults(event *eventRecord) {
+	if strings.TrimSpace(event.OrganizerName) == "" {
+		event.OrganizerName = "Field Guide Team"
+	}
+	if strings.TrimSpace(event.OrganizerRole) == "" {
+		event.OrganizerRole = "Local organizer"
+	}
+	if strings.TrimSpace(event.CrowdLabel) == "" {
+		event.CrowdLabel = "Easy to share"
+	}
+	if len(event.Tags) == 0 {
+		event.Tags = normalizeTags(strings.Join([]string{event.Category, event.Location}, ","))
+	}
+	if event.ShareCount == 0 {
+		event.ShareCount = seededShareCount(event.ID, event.Category)
+	}
+	if event.SaveCount == 0 {
+		event.SaveCount = seededSaveCount(event.ID, event.Category)
+	}
+	if strings.TrimSpace(event.FeaturedBlurb) == "" {
+		event.FeaturedBlurb = eventDiscoveryNote(event)
+	}
 }
 
 func (s *eventStore) byID(id string) (*eventRecord, bool) {
@@ -293,8 +484,9 @@ type app struct {
 
 func main() {
 	addr := envOrDefault("AS_ADDR", "127.0.0.1:8096")
+	dataFile := envOrDefault("AS_DATA_FILE", "data/events.json")
 	a := &app{
-		store:         newEventStore(),
+		store:         newEventStore(dataFile),
 		templates:     parseTemplates(),
 		adminPassword: envOrDefault("AS_ADMIN_PASSWORD", "admin"),
 	}
@@ -360,31 +552,46 @@ type homePageData struct {
 }
 
 type eventView struct {
-	ID            string `json:"id"`
-	Slug          string `json:"slug"`
-	Title         string `json:"title"`
-	Summary       string `json:"summary"`
-	Description   string `json:"description"`
-	Venue         string `json:"venue"`
-	Location      string `json:"location"`
-	Category      string `json:"category"`
-	ExternalURL   string `json:"external_url,omitempty"`
-	Timezone      string `json:"timezone"`
-	AllDay        bool   `json:"all_day"`
-	Status        string `json:"status"`
-	PublicURL     string `json:"public_url"`
-	StartISO      string `json:"start"`
-	EndISO        string `json:"end"`
-	RangeLabel    string `json:"range_label"`
-	StatusLabel   string `json:"status_label"`
-	LocationLabel string `json:"location_label"`
-	ThemeClass    string `json:"theme_class"`
-	DayName       string `json:"day_name"`
-	MonthShort    string `json:"month_short"`
-	DayNumber     string `json:"day_number"`
-	TimeBadge     string `json:"time_badge"`
-	DiscoveryNote string `json:"discovery_note"`
-	Atmosphere    string `json:"atmosphere"`
+	ID             string   `json:"id"`
+	Slug           string   `json:"slug"`
+	Title          string   `json:"title"`
+	Summary        string   `json:"summary"`
+	Description    string   `json:"description"`
+	Venue          string   `json:"venue"`
+	VenueNote      string   `json:"venue_note"`
+	Neighborhood   string   `json:"neighborhood"`
+	Location       string   `json:"location"`
+	Category       string   `json:"category"`
+	OrganizerName  string   `json:"organizer_name"`
+	OrganizerRole  string   `json:"organizer_role"`
+	OrganizerURL   string   `json:"organizer_url,omitempty"`
+	CoverImageURL  string   `json:"cover_image_url,omitempty"`
+	FeaturedBlurb  string   `json:"featured_blurb,omitempty"`
+	ExternalURL    string   `json:"external_url,omitempty"`
+	Timezone       string   `json:"timezone"`
+	Tags           []string `json:"tags,omitempty"`
+	ShareCount     int      `json:"share_count"`
+	SaveCount      int      `json:"save_count"`
+	CrowdLabel     string   `json:"crowd_label,omitempty"`
+	AllDay         bool     `json:"all_day"`
+	Status         string   `json:"status"`
+	PublicURL      string   `json:"public_url"`
+	AbsoluteURL    string   `json:"absolute_url"`
+	StartISO       string   `json:"start"`
+	EndISO         string   `json:"end"`
+	RangeLabel     string   `json:"range_label"`
+	StatusLabel    string   `json:"status_label"`
+	LocationLabel  string   `json:"location_label"`
+	ThemeClass     string   `json:"theme_class"`
+	DayName        string   `json:"day_name"`
+	MonthShort     string   `json:"month_short"`
+	DayNumber      string   `json:"day_number"`
+	TimeBadge      string   `json:"time_badge"`
+	DiscoveryNote  string   `json:"discovery_note"`
+	Atmosphere     string   `json:"atmosphere"`
+	ShareLabel     string   `json:"share_label"`
+	SaveLabel      string   `json:"save_label"`
+	OrganizerLabel string   `json:"organizer_label"`
 }
 
 type statsView struct {
@@ -530,31 +737,41 @@ type adminFormData struct {
 }
 
 type eventFormView struct {
-	ID          string
-	Slug        string
-	Title       string
-	Summary     string
-	Description string
-	Venue       string
-	Location    string
-	Category    string
-	ExternalURL string
-	Timezone    string
-	AllDay      bool
-	StartDate   string
-	EndDate     string
-	StartTime   string
-	EndTime     string
-	Status      string
+	ID            string
+	Slug          string
+	Title         string
+	Summary       string
+	Description   string
+	Venue         string
+	VenueNote     string
+	Neighborhood  string
+	Location      string
+	Category      string
+	OrganizerName string
+	OrganizerRole string
+	OrganizerURL  string
+	CoverImageURL string
+	FeaturedBlurb string
+	Tags          string
+	CrowdLabel    string
+	ExternalURL   string
+	Timezone      string
+	AllDay        bool
+	StartDate     string
+	EndDate       string
+	StartTime     string
+	EndTime       string
+	Status        string
 }
 
 func blankEventForm() eventFormView {
 	return eventFormView{
-		Timezone:  "America/Toronto",
-		StartDate: time.Now().Format("2006-01-02"),
-		EndDate:   time.Now().Format("2006-01-02"),
-		StartTime: "18:00",
-		EndTime:   "20:00",
+		Timezone:      "America/Toronto",
+		OrganizerRole: "Independent organizer",
+		StartDate:     time.Now().Format("2006-01-02"),
+		EndDate:       time.Now().Format("2006-01-02"),
+		StartTime:     "18:00",
+		EndTime:       "20:00",
 	}
 }
 
@@ -563,22 +780,31 @@ func formFromEvent(event *eventRecord) eventFormView {
 	start := event.Start.In(loc)
 	end := event.End.In(loc)
 	view := eventFormView{
-		ID:          event.ID,
-		Slug:        event.Slug,
-		Title:       event.Title,
-		Summary:     event.Summary,
-		Description: event.Description,
-		Venue:       event.Venue,
-		Location:    event.Location,
-		Category:    event.Category,
-		ExternalURL: event.ExternalURL,
-		Timezone:    event.Timezone,
-		AllDay:      event.AllDay,
-		StartDate:   start.Format("2006-01-02"),
-		EndDate:     end.Format("2006-01-02"),
-		StartTime:   start.Format("15:04"),
-		EndTime:     end.Format("15:04"),
-		Status:      string(event.Status),
+		ID:            event.ID,
+		Slug:          event.Slug,
+		Title:         event.Title,
+		Summary:       event.Summary,
+		Description:   event.Description,
+		Venue:         event.Venue,
+		VenueNote:     event.VenueNote,
+		Neighborhood:  event.Neighborhood,
+		Location:      event.Location,
+		Category:      event.Category,
+		OrganizerName: event.OrganizerName,
+		OrganizerRole: event.OrganizerRole,
+		OrganizerURL:  event.OrganizerURL,
+		CoverImageURL: event.CoverImageURL,
+		FeaturedBlurb: event.FeaturedBlurb,
+		Tags:          strings.Join(event.Tags, ", "),
+		CrowdLabel:    event.CrowdLabel,
+		ExternalURL:   event.ExternalURL,
+		Timezone:      event.Timezone,
+		AllDay:        event.AllDay,
+		StartDate:     start.Format("2006-01-02"),
+		EndDate:       end.Format("2006-01-02"),
+		StartTime:     start.Format("15:04"),
+		EndTime:       end.Format("15:04"),
+		Status:        string(event.Status),
 	}
 	if event.AllDay {
 		view.StartTime = ""
@@ -1013,36 +1239,54 @@ func (a *app) lookupEvent(id, slug string) (*eventRecord, bool) {
 }
 
 type eventCommandPayload struct {
-	Title       string `json:"title"`
-	Summary     string `json:"summary"`
-	Description string `json:"description"`
-	Venue       string `json:"venue"`
-	Location    string `json:"location"`
-	Category    string `json:"category"`
-	ExternalURL string `json:"external_url"`
-	Timezone    string `json:"timezone"`
-	AllDay      bool   `json:"all_day"`
-	StartDate   string `json:"start_date"`
-	EndDate     string `json:"end_date"`
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
+	Title         string `json:"title"`
+	Summary       string `json:"summary"`
+	Description   string `json:"description"`
+	Venue         string `json:"venue"`
+	VenueNote     string `json:"venue_note"`
+	Neighborhood  string `json:"neighborhood"`
+	Location      string `json:"location"`
+	Category      string `json:"category"`
+	OrganizerName string `json:"organizer_name"`
+	OrganizerRole string `json:"organizer_role"`
+	OrganizerURL  string `json:"organizer_url"`
+	CoverImageURL string `json:"cover_image_url"`
+	FeaturedBlurb string `json:"featured_blurb"`
+	Tags          string `json:"tags"`
+	CrowdLabel    string `json:"crowd_label"`
+	ExternalURL   string `json:"external_url"`
+	Timezone      string `json:"timezone"`
+	AllDay        bool   `json:"all_day"`
+	StartDate     string `json:"start_date"`
+	EndDate       string `json:"end_date"`
+	StartTime     string `json:"start_time"`
+	EndTime       string `json:"end_time"`
 }
 
 func (p eventCommandPayload) toInput() eventInput {
 	return eventInput{
-		Title:       p.Title,
-		Summary:     p.Summary,
-		Description: p.Description,
-		Venue:       p.Venue,
-		Location:    p.Location,
-		Category:    p.Category,
-		ExternalURL: p.ExternalURL,
-		Timezone:    p.Timezone,
-		AllDay:      p.AllDay,
-		StartDate:   p.StartDate,
-		EndDate:     p.EndDate,
-		StartTime:   p.StartTime,
-		EndTime:     p.EndTime,
+		Title:         p.Title,
+		Summary:       p.Summary,
+		Description:   p.Description,
+		Venue:         p.Venue,
+		VenueNote:     p.VenueNote,
+		Neighborhood:  p.Neighborhood,
+		Location:      p.Location,
+		Category:      p.Category,
+		OrganizerName: p.OrganizerName,
+		OrganizerRole: p.OrganizerRole,
+		OrganizerURL:  p.OrganizerURL,
+		CoverImageURL: p.CoverImageURL,
+		FeaturedBlurb: p.FeaturedBlurb,
+		Tags:          p.Tags,
+		CrowdLabel:    p.CrowdLabel,
+		ExternalURL:   p.ExternalURL,
+		Timezone:      p.Timezone,
+		AllDay:        p.AllDay,
+		StartDate:     p.StartDate,
+		EndDate:       p.EndDate,
+		StartTime:     p.StartTime,
+		EndTime:       p.EndTime,
 	}
 }
 
@@ -1051,19 +1295,28 @@ func parseEventInput(r *http.Request) (eventInput, error) {
 		return eventInput{}, errors.New("could not parse form")
 	}
 	input := eventInput{
-		Title:       r.FormValue("title"),
-		Summary:     r.FormValue("summary"),
-		Description: r.FormValue("description"),
-		Venue:       r.FormValue("venue"),
-		Location:    r.FormValue("location"),
-		Category:    r.FormValue("category"),
-		ExternalURL: r.FormValue("external_url"),
-		Timezone:    r.FormValue("timezone"),
-		AllDay:      r.FormValue("all_day") == "on",
-		StartDate:   r.FormValue("start_date"),
-		EndDate:     r.FormValue("end_date"),
-		StartTime:   r.FormValue("start_time"),
-		EndTime:     r.FormValue("end_time"),
+		Title:         r.FormValue("title"),
+		Summary:       r.FormValue("summary"),
+		Description:   r.FormValue("description"),
+		Venue:         r.FormValue("venue"),
+		VenueNote:     r.FormValue("venue_note"),
+		Neighborhood:  r.FormValue("neighborhood"),
+		Location:      r.FormValue("location"),
+		Category:      r.FormValue("category"),
+		OrganizerName: r.FormValue("organizer_name"),
+		OrganizerRole: r.FormValue("organizer_role"),
+		OrganizerURL:  r.FormValue("organizer_url"),
+		CoverImageURL: r.FormValue("cover_image_url"),
+		FeaturedBlurb: r.FormValue("featured_blurb"),
+		Tags:          r.FormValue("tags"),
+		CrowdLabel:    r.FormValue("crowd_label"),
+		ExternalURL:   r.FormValue("external_url"),
+		Timezone:      r.FormValue("timezone"),
+		AllDay:        r.FormValue("all_day") == "on",
+		StartDate:     r.FormValue("start_date"),
+		EndDate:       r.FormValue("end_date"),
+		StartTime:     r.FormValue("start_time"),
+		EndTime:       r.FormValue("end_time"),
 	}
 	if strings.TrimSpace(input.Title) == "" {
 		return input, errors.New("title is required")
@@ -1077,6 +1330,9 @@ func parseEventInput(r *http.Request) (eventInput, error) {
 	if strings.TrimSpace(input.Category) == "" {
 		return input, errors.New("category is required")
 	}
+	if strings.TrimSpace(input.OrganizerName) == "" {
+		return input, errors.New("organizer name is required")
+	}
 	if strings.TrimSpace(input.Location) == "" {
 		return input, errors.New("location is required")
 	}
@@ -1086,6 +1342,16 @@ func parseEventInput(r *http.Request) (eventInput, error) {
 	if input.ExternalURL != "" {
 		if _, err := url.ParseRequestURI(input.ExternalURL); err != nil {
 			return input, errors.New("external URL must be a valid absolute URL")
+		}
+	}
+	if input.OrganizerURL != "" {
+		if _, err := url.ParseRequestURI(input.OrganizerURL); err != nil {
+			return input, errors.New("organizer URL must be a valid absolute URL")
+		}
+	}
+	if input.CoverImageURL != "" {
+		if _, err := url.ParseRequestURI(input.CoverImageURL); err != nil {
+			return input, errors.New("cover image URL must be a valid absolute URL")
 		}
 	}
 	if _, _, err := parseSchedule(input); err != nil {
@@ -1225,31 +1491,46 @@ func toEventView(event *eventRecord) *eventView {
 	start := event.Start.In(loc)
 	end := event.End.In(loc)
 	return &eventView{
-		ID:            event.ID,
-		Slug:          event.Slug,
-		Title:         event.Title,
-		Summary:       event.Summary,
-		Description:   event.Description,
-		Venue:         event.Venue,
-		Location:      event.Location,
-		Category:      event.Category,
-		ExternalURL:   event.ExternalURL,
-		Timezone:      event.Timezone,
-		AllDay:        event.AllDay,
-		Status:        string(event.Status),
-		PublicURL:     "/events/" + event.Slug,
-		StartISO:      event.Start.Format(time.RFC3339),
-		EndISO:        event.End.Format(time.RFC3339),
-		RangeLabel:    formatRange(start, end, event.AllDay, event.Timezone),
-		StatusLabel:   strings.Title(string(event.Status)),
-		LocationLabel: joinNonEmpty(" · ", event.Venue, event.Location),
-		ThemeClass:    eventThemeClass(event),
-		DayName:       strings.ToUpper(start.Format("Mon")),
-		MonthShort:    strings.ToUpper(start.Format("Jan")),
-		DayNumber:     start.Format("2"),
-		TimeBadge:     eventTimeBadge(start, end, event.AllDay),
-		DiscoveryNote: eventDiscoveryNote(event),
-		Atmosphere:    eventAtmosphere(event),
+		ID:             event.ID,
+		Slug:           event.Slug,
+		Title:          event.Title,
+		Summary:        event.Summary,
+		Description:    event.Description,
+		Venue:          event.Venue,
+		VenueNote:      event.VenueNote,
+		Neighborhood:   event.Neighborhood,
+		Location:       event.Location,
+		Category:       event.Category,
+		OrganizerName:  event.OrganizerName,
+		OrganizerRole:  event.OrganizerRole,
+		OrganizerURL:   event.OrganizerURL,
+		CoverImageURL:  event.CoverImageURL,
+		FeaturedBlurb:  event.FeaturedBlurb,
+		ExternalURL:    event.ExternalURL,
+		Timezone:       event.Timezone,
+		Tags:           append([]string(nil), event.Tags...),
+		ShareCount:     event.ShareCount,
+		SaveCount:      event.SaveCount,
+		CrowdLabel:     event.CrowdLabel,
+		AllDay:         event.AllDay,
+		Status:         string(event.Status),
+		PublicURL:      "/events/" + event.Slug,
+		AbsoluteURL:    "http://127.0.0.1:8096/events/" + event.Slug,
+		StartISO:       event.Start.Format(time.RFC3339),
+		EndISO:         event.End.Format(time.RFC3339),
+		RangeLabel:     formatRange(start, end, event.AllDay, event.Timezone),
+		StatusLabel:    strings.Title(string(event.Status)),
+		LocationLabel:  joinNonEmpty(" · ", event.Venue, event.Location),
+		ThemeClass:     eventThemeClass(event),
+		DayName:        strings.ToUpper(start.Format("Mon")),
+		MonthShort:     strings.ToUpper(start.Format("Jan")),
+		DayNumber:      start.Format("2"),
+		TimeBadge:      eventTimeBadge(start, end, event.AllDay),
+		DiscoveryNote:  eventDiscoveryNote(event),
+		Atmosphere:     eventAtmosphere(event),
+		ShareLabel:     formatMetricLabel(event.ShareCount, "share"),
+		SaveLabel:      formatMetricLabel(event.SaveCount, "save"),
+		OrganizerLabel: joinNonEmpty(" · ", event.OrganizerName, event.OrganizerRole),
 	}
 }
 
@@ -1272,19 +1553,28 @@ func takeEvents(events []*eventView, limit int) []*eventView {
 
 func formFromInput(input eventInput) eventFormView {
 	return eventFormView{
-		Title:       input.Title,
-		Summary:     input.Summary,
-		Description: input.Description,
-		Venue:       input.Venue,
-		Location:    input.Location,
-		Category:    input.Category,
-		ExternalURL: input.ExternalURL,
-		Timezone:    input.Timezone,
-		AllDay:      input.AllDay,
-		StartDate:   input.StartDate,
-		EndDate:     input.EndDate,
-		StartTime:   input.StartTime,
-		EndTime:     input.EndTime,
+		Title:         input.Title,
+		Summary:       input.Summary,
+		Description:   input.Description,
+		Venue:         input.Venue,
+		VenueNote:     input.VenueNote,
+		Neighborhood:  input.Neighborhood,
+		Location:      input.Location,
+		Category:      input.Category,
+		OrganizerName: input.OrganizerName,
+		OrganizerRole: input.OrganizerRole,
+		OrganizerURL:  input.OrganizerURL,
+		CoverImageURL: input.CoverImageURL,
+		FeaturedBlurb: input.FeaturedBlurb,
+		Tags:          input.Tags,
+		CrowdLabel:    input.CrowdLabel,
+		ExternalURL:   input.ExternalURL,
+		Timezone:      input.Timezone,
+		AllDay:        input.AllDay,
+		StartDate:     input.StartDate,
+		EndDate:       input.EndDate,
+		StartTime:     input.StartTime,
+		EndTime:       input.EndTime,
 	}
 }
 
@@ -1356,6 +1646,9 @@ func eventThemeClass(event *eventRecord) string {
 }
 
 func eventDiscoveryNote(event *eventRecord) string {
+	if strings.TrimSpace(event.FeaturedBlurb) != "" {
+		return event.FeaturedBlurb
+	}
 	switch {
 	case strings.EqualFold(event.Category, "Community"):
 		return "Good pick for a group text: social, local, and easy to say yes to after work."
@@ -1381,6 +1674,65 @@ func eventAtmosphere(event *eventRecord) string {
 	default:
 		return "Local scene pick"
 	}
+}
+
+func normalizeTags(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n'
+	})
+	seen := map[string]struct{}{}
+	tags := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.TrimSpace(part)
+		if tag == "" {
+			continue
+		}
+		lower := strings.ToLower(tag)
+		if _, ok := seen[lower]; ok {
+			continue
+		}
+		seen[lower] = struct{}{}
+		tags = append(tags, tag)
+	}
+	return tags
+}
+
+func seededShareCount(id, category string) int {
+	base, _ := strconv.Atoi(id)
+	switch strings.ToLower(strings.TrimSpace(category)) {
+	case "community":
+		return 58 + base*9
+	case "workshop":
+		return 32 + base*7
+	case "volunteer":
+		return 21 + base*5
+	default:
+		return 14 + base*4
+	}
+}
+
+func seededSaveCount(id, category string) int {
+	base, _ := strconv.Atoi(id)
+	switch strings.ToLower(strings.TrimSpace(category)) {
+	case "community":
+		return 86 + base*11
+	case "workshop":
+		return 48 + base*8
+	case "volunteer":
+		return 24 + base*6
+	default:
+		return 18 + base*5
+	}
+}
+
+func formatMetricLabel(value int, singular string) string {
+	if value == 1 {
+		return "1 " + singular
+	}
+	return strconv.Itoa(value) + " " + singular + "s"
 }
 
 func joinNonEmpty(sep string, values ...string) string {
@@ -1437,6 +1789,20 @@ func (a *app) render(w http.ResponseWriter, name string, data any) {
 func parseTemplates() *template.Template {
 	funcs := template.FuncMap{
 		"today": func() string { return time.Now().Format("2006-01-02") },
+		"coverStyle": func(event *eventView) template.CSS {
+			if event == nil || strings.TrimSpace(event.CoverImageURL) == "" {
+				return ""
+			}
+			return template.CSS("background-image: linear-gradient(180deg, rgba(17, 23, 28, 0.12), rgba(17, 23, 28, 0.48)), url('" + template.URL(event.CoverImageURL) + "'); background-size: cover; background-position: center;")
+		},
+		"mailtoLink": func(event *eventView) string {
+			if event == nil {
+				return "#"
+			}
+			subject := url.QueryEscape("You should check out: " + event.Title)
+			body := url.QueryEscape(event.Summary + "\n\n" + event.AbsoluteURL)
+			return "mailto:?subject=" + subject + "&body=" + body
+		},
 	}
 	return template.Must(template.New("pages").Funcs(funcs).Parse(frameTemplate + homeTemplate + calendarTemplate + detailTemplate + adminLoginTemplate + adminDashboardTemplate + adminFormTemplate))
 }
@@ -1479,6 +1845,7 @@ const frameTemplate = `
       Public event discovery with stable URLs, explicit time semantics, and organizer-first publishing controls.
     </footer>
   </div>
+  <script src="/assets/app.js"></script>
 </body>
 </html>
 {{end}}
@@ -1518,7 +1885,7 @@ const homeTemplate = `
 
   {{if .Featured}}
   <section class="feature-band theme-{{.Featured.ThemeClass}}">
-    <a class="feature-poster" href="{{.Featured.PublicURL}}">
+    <a class="feature-poster" href="{{.Featured.PublicURL}}" style="{{coverStyle .Featured}}">
       <div class="poster-meta">{{.Featured.Category}} · {{.Featured.Atmosphere}}</div>
       <div class="poster-date">
         <span>{{.Featured.MonthShort}}</span>
@@ -1531,9 +1898,12 @@ const homeTemplate = `
       <p class="section-kicker">Featured pick</p>
       <h2>{{.Featured.Summary}}</h2>
       <p class="feature-note">{{.Featured.DiscoveryNote}}</p>
+      <p class="host-line">Hosted by {{.Featured.OrganizerLabel}}</p>
       <dl class="summary-list feature-facts">
         <div><dt>When</dt><dd>{{.Featured.RangeLabel}}</dd></div>
         <div><dt>Where</dt><dd>{{.Featured.LocationLabel}}</dd></div>
+        <div><dt>Signals</dt><dd>{{.Featured.SaveLabel}} · {{.Featured.ShareLabel}}</dd></div>
+        <div><dt>Best with</dt><dd>{{.Featured.CrowdLabel}}</dd></div>
       </dl>
       <div class="hero-actions">
         <a class="pill-link" href="{{.Featured.PublicURL}}">Open event page</a>
@@ -1552,7 +1922,7 @@ const homeTemplate = `
 
   <section class="spotlight-grid">
     {{range .Spotlights}}
-    <article class="spotlight-card theme-{{.ThemeClass}}">
+    <article class="spotlight-card theme-{{.ThemeClass}}" style="{{coverStyle .}}">
       <div class="spotlight-top">
         <div class="mini-date">
           <span>{{.MonthShort}}</span>
@@ -1565,7 +1935,7 @@ const homeTemplate = `
       </div>
       <p>{{.DiscoveryNote}}</p>
       <div class="spotlight-foot">
-        <span>{{.LocationLabel}}</span>
+        <span>{{.LocationLabel}} · {{.SaveLabel}}</span>
         <a class="text-link" href="{{.PublicURL}}">Why go?</a>
       </div>
     </article>
@@ -1627,7 +1997,7 @@ const homeTemplate = `
     {{if .Events}}
       {{range .Events}}
       <article class="event-card discovery-card theme-{{.ThemeClass}}">
-        <div class="event-poster">
+        <div class="event-poster" style="{{coverStyle .}}">
           <div class="mini-date">
             <span>{{.MonthShort}}</span>
             <strong>{{.DayNumber}}</strong>
@@ -1644,6 +2014,8 @@ const homeTemplate = `
         <dl class="summary-list">
           <div><dt>When</dt><dd>{{.RangeLabel}}</dd></div>
           <div><dt>Where</dt><dd>{{.LocationLabel}}</dd></div>
+          <div><dt>Hosted by</dt><dd>{{.OrganizerName}}</dd></div>
+          <div><dt>Signals</dt><dd>{{.SaveLabel}} · {{.ShareLabel}}</dd></div>
         </dl>
         <p class="card-note">{{.DiscoveryNote}}</p>
         <a class="pill-link" href="{{.PublicURL}}">View details</a>
@@ -1675,7 +2047,7 @@ const calendarTemplate = `
   {{if .Highlights}}
   <section class="spotlight-grid calendar-highlights">
     {{range .Highlights}}
-    <article class="spotlight-card theme-{{.ThemeClass}}">
+    <article class="spotlight-card theme-{{.ThemeClass}}" style="{{coverStyle .}}">
       <div class="spotlight-top">
         <div class="mini-date">
           <span>{{.MonthShort}}</span>
@@ -1688,7 +2060,7 @@ const calendarTemplate = `
       </div>
       <p>{{.Summary}}</p>
       <div class="spotlight-foot">
-        <span>{{.LocationLabel}}</span>
+        <span>{{.LocationLabel}} · {{.SaveLabel}}</span>
         <a class="text-link" href="{{.PublicURL}}">Open event</a>
       </div>
     </article>
@@ -1729,7 +2101,7 @@ const detailTemplate = `
     <div class="notice {{if eq .Event.Status "canceled"}}warning{{end}}">{{.Warning}}</div>
   {{end}}
   <section class="detail-layout">
-    <article class="hero-card detail-story theme-{{.Event.ThemeClass}}">
+    <article class="hero-card detail-story theme-{{.Event.ThemeClass}}" style="{{coverStyle .Event}}">
       <div class="detail-banner">
         <div class="mini-date inverted">
           <span>{{.Event.MonthShort}}</span>
@@ -1746,11 +2118,23 @@ const detailTemplate = `
       <p class="detail-lead">{{.Event.Summary}}</p>
       <div class="pull-quote">{{.Event.DiscoveryNote}}</div>
       <div class="prose">{{.Event.Description}}</div>
+      <div class="detail-meta-strip">
+        <span>{{.Event.OrganizerLabel}}</span>
+        <span>{{.Event.CrowdLabel}}</span>
+        <span>{{.Event.SaveLabel}} · {{.Event.ShareLabel}}</span>
+      </div>
+      {{if .Event.Tags}}
+      <div class="tag-row">
+        {{range .Event.Tags}}<span class="tag">{{.}}</span>{{end}}
+      </div>
+      {{end}}
       <div class="hero-actions">
         {{if .Event.ExternalURL}}
           <a class="pill-link" href="{{.Event.ExternalURL}}" target="_blank" rel="noreferrer">Open official event link</a>
         {{end}}
         <a class="pill-link alt" href="/calendar">See this in the calendar</a>
+        <button class="alt" type="button" data-copy="{{.Event.AbsoluteURL}}">Copy link</button>
+        <a class="pill-link alt" href="{{mailtoLink .Event}}">Email this</a>
       </div>
     </article>
     <aside class="panel detail-sidebar">
@@ -1758,7 +2142,10 @@ const detailTemplate = `
       <dl class="meta-list">
         <div><dt>When</dt><dd>{{.Event.RangeLabel}}</dd></div>
         <div><dt>Venue</dt><dd>{{.Event.Venue}}</dd></div>
+        <div><dt>Venue note</dt><dd>{{.Event.VenueNote}}</dd></div>
+        <div><dt>Neighborhood</dt><dd>{{.Event.Neighborhood}}</dd></div>
         <div><dt>Location</dt><dd>{{.Event.Location}}</dd></div>
+        <div><dt>Organizer</dt><dd>{{.Event.OrganizerLabel}}</dd></div>
         <div><dt>Timezone</dt><dd>{{.Event.Timezone}}</dd></div>
         <div><dt>Status</dt><dd>{{.Event.StatusLabel}}</dd></div>
         <div><dt>Best fit</dt><dd>{{.Event.Atmosphere}}</dd></div>
@@ -1782,7 +2169,7 @@ const detailTemplate = `
   </section>
   <section class="spotlight-grid">
     {{range .Related}}
-    <article class="spotlight-card theme-{{.ThemeClass}}">
+    <article class="spotlight-card theme-{{.ThemeClass}}" style="{{coverStyle .}}">
       <div class="spotlight-top">
         <div class="mini-date">
           <span>{{.MonthShort}}</span>
@@ -1795,7 +2182,7 @@ const detailTemplate = `
       </div>
       <p>{{.Summary}}</p>
       <div class="spotlight-foot">
-        <span>{{.LocationLabel}}</span>
+        <span>{{.LocationLabel}} · {{.SaveLabel}}</span>
         <a class="text-link" href="{{.PublicURL}}">Open event</a>
       </div>
     </article>
@@ -1855,7 +2242,7 @@ const adminDashboardTemplate = `
         <tr>
           <td>
             <strong>{{.Title}}</strong><br>
-            <span class="muted">{{.Category}} · {{.Location}}</span>
+            <span class="muted">{{.Category}} · {{.Location}} · {{.OrganizerName}}</span>
           </td>
           <td><a href="{{.PublicURL}}">{{.Slug}}</a></td>
           <td><span class="badge {{.Status}}">{{.StatusLabel}}</span></td>
@@ -1909,6 +2296,9 @@ const adminFormTemplate = `
         <label>Venue
           <input type="text" name="venue" value="{{.Event.Venue}}">
         </label>
+        <label>Neighborhood
+          <input type="text" name="neighborhood" value="{{.Event.Neighborhood}}" placeholder="West End, Queens Quay, Downtown">
+        </label>
         <label>Location
           <input type="text" name="location" value="{{.Event.Location}}" required>
         </label>
@@ -1919,12 +2309,40 @@ const adminFormTemplate = `
           <input type="url" name="external_url" value="{{.Event.ExternalURL}}" placeholder="https://example.com">
         </label>
       </div>
+      <div class="grid-two" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+        <label>Organizer name
+          <input type="text" name="organizer_name" value="{{.Event.OrganizerName}}" required>
+        </label>
+        <label>Organizer role
+          <input type="text" name="organizer_role" value="{{.Event.OrganizerRole}}" placeholder="Independent organizer, community nonprofit">
+        </label>
+        <label>Organizer URL
+          <input type="url" name="organizer_url" value="{{.Event.OrganizerURL}}" placeholder="https://example.com/organizer">
+        </label>
+        <label>Cover image URL
+          <input type="url" name="cover_image_url" value="{{.Event.CoverImageURL}}" placeholder="https://images.example.com/event.jpg">
+        </label>
+      </div>
       <label>Summary
         <input type="text" name="summary" value="{{.Event.Summary}}" required>
+      </label>
+      <label>Featured blurb
+        <input type="text" name="featured_blurb" value="{{.Event.FeaturedBlurb}}" placeholder="Why this is worth going to or sharing">
       </label>
       <label>Description
         <textarea name="description" required>{{.Event.Description}}</textarea>
       </label>
+      <label>Venue note
+        <textarea name="venue_note" placeholder="Arrival details, room feel, what the venue is like">{{.Event.VenueNote}}</textarea>
+      </label>
+      <div class="grid-two" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+        <label>Tags
+          <input type="text" name="tags" value="{{.Event.Tags}}" placeholder="music, free, outdoors, family-friendly">
+        </label>
+        <label>Crowd label
+          <input type="text" name="crowd_label" value="{{.Event.CrowdLabel}}" placeholder="Best with 2-4 friends">
+        </label>
+      </div>
       <label class="checkbox">
         <input type="checkbox" name="all_day" {{if .Event.AllDay}}checked{{end}}>
         <span>All-day event</span>

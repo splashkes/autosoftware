@@ -5,10 +5,13 @@ Server-rendered Go MVP for the `0004-event-listings` seed.
 Features included:
 
 - organizer login and event management workspace
+- richer organizer authoring with cover image URL, organizer identity, tags, venue notes, and editorial blurb
 - draft, published, canceled, and archived lifecycle actions
 - stable public event URLs that survive edits
-- public upcoming list, month calendar, and event detail pages
+- public upcoming list, curated discovery modules, month calendar, and event detail pages
 - keyword search plus category, location, and date-range filtering
+- social/share affordances including recommendation copy, save/share signals, related-event suggestions, and copy-link action
+- file-backed local persistence so events survive restarts
 - JSON endpoints aligned with the realization contract
 
 Run locally:
@@ -21,6 +24,7 @@ Environment:
 
 - `AS_ADDR` defaults to `127.0.0.1:8096`
 - `AS_ADMIN_PASSWORD` defaults to `admin`
+- `AS_DATA_FILE` defaults to `data/events.json`
 
 Organizer login:
 

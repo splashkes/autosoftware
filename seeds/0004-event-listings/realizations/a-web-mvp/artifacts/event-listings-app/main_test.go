@@ -1,12 +1,18 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+func newTestStore(t *testing.T) *eventStore {
+	t.Helper()
+	return newEventStore(filepath.Join(t.TempDir(), "events.json"))
+}
+
 func TestSlugStaysStableAcrossEdits(t *testing.T) {
-	store := newEventStore()
+	store := newTestStore(t)
 	created, err := store.create(eventInput{
 		Title:       "City Studio Tour",
 		Summary:     "A public studio crawl.",
@@ -47,7 +53,7 @@ func TestSlugStaysStableAcrossEdits(t *testing.T) {
 }
 
 func TestDirectoryExcludesDraftAndArchived(t *testing.T) {
-	a := &app{store: newEventStore()}
+	a := &app{store: newTestStore(t)}
 	events := a.publicDirectory(directoryFilters{})
 	if len(events) == 0 {
 		t.Fatal("expected seeded public events in directory")
@@ -61,7 +67,7 @@ func TestDirectoryExcludesDraftAndArchived(t *testing.T) {
 }
 
 func TestCalendarIncludesMultiDayEventOnCoveredDay(t *testing.T) {
-	a := &app{store: newEventStore()}
+	a := &app{store: newTestStore(t)}
 	created, err := a.store.create(eventInput{
 		Title:       "Three Day Summit",
 		Summary:     "A multi-day summit.",
@@ -112,5 +118,36 @@ func TestOverlapsDateRange(t *testing.T) {
 	to, _ := time.Parse("2006-01-02", "2026-06-11")
 	if !overlapsDateRange(event, from, to) {
 		t.Fatal("expected date filter overlap on event middle day")
+	}
+}
+
+func TestStorePersistsCreatedEvent(t *testing.T) {
+	dataFile := filepath.Join(t.TempDir(), "events.json")
+	store := newEventStore(dataFile)
+	created, err := store.create(eventInput{
+		Title:         "Persistence Check",
+		Summary:       "Verifies disk-backed storage.",
+		Description:   "Created to prove the event store survives process restarts.",
+		Venue:         "Archive Hall",
+		Location:      "Toronto",
+		Category:      "QA",
+		OrganizerName: "Codex QA",
+		Timezone:      "America/Toronto",
+		StartDate:     "2026-04-02",
+		EndDate:       "2026-04-02",
+		StartTime:     "18:00",
+		EndTime:       "19:30",
+	})
+	if err != nil {
+		t.Fatalf("create event: %v", err)
+	}
+
+	reloaded := newEventStore(dataFile)
+	found, ok := reloaded.byID(created.ID)
+	if !ok {
+		t.Fatal("expected created event to persist to disk")
+	}
+	if found.Title != "Persistence Check" {
+		t.Fatalf("unexpected persisted title: %q", found.Title)
 	}
 }
