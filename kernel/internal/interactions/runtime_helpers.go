@@ -519,6 +519,159 @@ func scanJob(row rowScanner) (Job, error) {
 	return item, nil
 }
 
+func scanRealizationExecution(row rowScanner) (RealizationExecution, error) {
+	var item RealizationExecution
+	var routeSubdomain sql.NullString
+	var routePathPrefix sql.NullString
+	var previewPathPrefix sql.NullString
+	var upstreamAddr sql.NullString
+	var packageRef sql.NullString
+	var principalID sql.NullString
+	var sessionID sql.NullString
+	var requestID sql.NullString
+	var metadata string
+	var healthyAt sql.NullTime
+	var stoppedAt sql.NullTime
+	var lastError sql.NullString
+	if err := row.Scan(
+		&item.ExecutionID,
+		&item.Reference,
+		&item.SeedID,
+		&item.RealizationID,
+		&item.Backend,
+		&item.Mode,
+		&item.Status,
+		&routeSubdomain,
+		&routePathPrefix,
+		&previewPathPrefix,
+		&upstreamAddr,
+		&packageRef,
+		&principalID,
+		&sessionID,
+		&requestID,
+		&metadata,
+		&item.StartedAt,
+		&healthyAt,
+		&stoppedAt,
+		&lastError,
+	); err != nil {
+		return RealizationExecution{}, rowNotFound(err)
+	}
+	if routeSubdomain.Valid {
+		item.RouteSubdomain = routeSubdomain.String
+	}
+	if routePathPrefix.Valid {
+		item.RoutePathPrefix = routePathPrefix.String
+	}
+	if previewPathPrefix.Valid {
+		item.PreviewPathPrefix = previewPathPrefix.String
+	}
+	if upstreamAddr.Valid {
+		item.UpstreamAddr = upstreamAddr.String
+	}
+	if packageRef.Valid {
+		item.ExecutionPackageRef = packageRef.String
+	}
+	if principalID.Valid {
+		item.LaunchedByPrincipalID = principalID.String
+	}
+	if sessionID.Valid {
+		item.LaunchedBySessionID = sessionID.String
+	}
+	if requestID.Valid {
+		item.RequestID = requestID.String
+	}
+	if lastError.Valid {
+		item.LastError = lastError.String
+	}
+	item.Metadata = parseJSON(metadata)
+	item.HealthyAt = toTimePtr(healthyAt)
+	item.StoppedAt = toTimePtr(stoppedAt)
+	return item, nil
+}
+
+func scanRealizationExecutionEvent(row rowScanner) (RealizationExecutionEvent, error) {
+	var item RealizationExecutionEvent
+	var data string
+	if err := row.Scan(
+		&item.EventID,
+		&item.ExecutionID,
+		&item.Name,
+		&data,
+		&item.OccurredAt,
+	); err != nil {
+		return RealizationExecutionEvent{}, rowNotFound(err)
+	}
+	item.Data = parseJSON(data)
+	return item, nil
+}
+
+func scanRealizationActivation(row rowScanner) (RealizationActivation, error) {
+	var item RealizationActivation
+	var executionID sql.NullString
+	var principalID sql.NullString
+	var sessionID sql.NullString
+	var requestID sql.NullString
+	var metadata string
+	if err := row.Scan(
+		&item.SeedID,
+		&item.Reference,
+		&executionID,
+		&principalID,
+		&sessionID,
+		&requestID,
+		&metadata,
+		&item.ActivatedAt,
+	); err != nil {
+		return RealizationActivation{}, rowNotFound(err)
+	}
+	if executionID.Valid {
+		item.ExecutionID = executionID.String
+	}
+	if principalID.Valid {
+		item.ActivatedByPrincipalID = principalID.String
+	}
+	if sessionID.Valid {
+		item.ActivatedBySessionID = sessionID.String
+	}
+	if requestID.Valid {
+		item.RequestID = requestID.String
+	}
+	item.Metadata = parseJSON(metadata)
+	return item, nil
+}
+
+func scanRealizationRouteBinding(row rowScanner) (RealizationRouteBinding, error) {
+	var item RealizationRouteBinding
+	var subdomain sql.NullString
+	var pathPrefix sql.NullString
+	var metadata string
+	if err := row.Scan(
+		&item.BindingID,
+		&item.ExecutionID,
+		&item.SeedID,
+		&item.Reference,
+		&item.BindingKind,
+		&subdomain,
+		&pathPrefix,
+		&item.UpstreamAddr,
+		&item.Status,
+		&metadata,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return RealizationRouteBinding{}, rowNotFound(err)
+	}
+	if subdomain.Valid {
+		item.Subdomain = subdomain.String
+	}
+	if pathPrefix.Valid {
+		item.PathPrefix = pathPrefix.String
+	}
+	item.Metadata = parseJSON(metadata)
+	return item, nil
+}
+
 func scanOutboxMessage(row rowScanner) (OutboxMessage, error) {
 	var item OutboxMessage
 	var subjectKind sql.NullString

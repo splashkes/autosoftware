@@ -607,7 +607,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
             <div class="tile-actions">
               <button class="action-button" type="button" data-action="inspect" data-reference="{{.Reference}}" data-label="{{.Summary}}">Inspect</button>
               <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Reference}}" data-label="{{.Summary}}">Grow</button>
-              {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}">Run</button>
+              {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}"{{if .CanLaunchLocal}} data-launchable="true"{{end}}{{if .ExecutionOpenPath}} data-open-path="{{.ExecutionOpenPath}}"{{end}}>{{if .ExecutionOpenPath}}Open{{else if .CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
               {{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
             </div>
           </div>
@@ -634,7 +634,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
                 <div class="tile-actions">
                   <button class="action-button" type="button" data-action="inspect" data-reference="{{.Reference}}" data-label="{{.Summary}}">Inspect</button>
                   <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Reference}}" data-label="{{.Summary}}">Grow</button>
-                  {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}">Run</button>
+                  {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}"{{if .CanLaunchLocal}} data-launchable="true"{{end}}{{if .ExecutionOpenPath}} data-open-path="{{.ExecutionOpenPath}}"{{end}}>{{if .ExecutionOpenPath}}Open{{else if .CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
                   {{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
                 </div>
               </div>
@@ -676,6 +676,7 @@ type bootPageView struct {
 	RealizationCount  int
 	GrowthReadyCount  int
 	RunnableCount     int
+	ExecutionEnabled  bool
 	RemoteConfigured  bool
 	RuntimeConfigured bool
 	GitHubURL         string
@@ -698,23 +699,33 @@ type seedBootView struct {
 }
 
 type realizationBootView struct {
-	Reference        string
-	RealizationID    string
-	ApproachID       string
-	Summary          string
-	Status           string
-	SurfaceKind      string
-	ReadinessStage   string
-	ReadinessLabel   string
-	ReadinessSummary string
-	HasContract      bool
-	HasRuntime       bool
-	CanRun           bool
-	Subdomain        string
-	PathPrefix       string
+	Reference         string
+	RealizationID     string
+	ApproachID        string
+	Summary           string
+	Status            string
+	SurfaceKind       string
+	ReadinessStage    string
+	ReadinessLabel    string
+	ReadinessSummary  string
+	HasContract       bool
+	HasRuntime        bool
+	CanRun            bool
+	CanLaunchLocal    bool
+	ExecutionStatus   string
+	ExecutionID       string
+	ExecutionOpenPath string
+	Subdomain         string
+	PathPrefix        string
 }
 
-func newBootPageView(options []materializer.RealizationOption, remoteConfigured, runtimeConfigured bool, nonce string, feedbackScript string) bootPageView {
+type executionBootState struct {
+	ExecutionID string
+	Status      string
+	OpenPath    string
+}
+
+func newBootPageView(options []materializer.RealizationOption, executions map[string]executionBootState, executionEnabled, remoteConfigured, runtimeConfigured bool, nonce string, feedbackScript string) bootPageView {
 	seen := make(map[string]int)
 	seeds := make([]seedBootView, 0)
 	runnableCount := 0
@@ -737,22 +748,27 @@ func newBootPageView(options []materializer.RealizationOption, remoteConfigured,
 		readinessStage := firstNonEmpty(strings.TrimSpace(option.Readiness.Stage), "designed")
 		readinessLabel := firstNonEmpty(strings.TrimSpace(option.Readiness.Label), "Designed")
 		readinessSummary := firstNonEmpty(strings.TrimSpace(option.Readiness.Summary), "This realization is ready for inspection and growth.")
+		execution := executions[option.Reference]
 
 		item := realizationBootView{
-			Reference:        option.Reference,
-			RealizationID:    option.RealizationID,
-			ApproachID:       option.ApproachID,
-			Summary:          firstNonEmpty(strings.TrimSpace(option.Summary), option.RealizationID),
-			Status:           firstNonEmpty(strings.TrimSpace(option.Status), "draft"),
-			SurfaceKind:      strings.TrimSpace(option.SurfaceKind),
-			ReadinessStage:   readinessStage,
-			ReadinessLabel:   readinessLabel,
-			ReadinessSummary: readinessSummary,
-			HasContract:      option.Readiness.HasContract,
-			HasRuntime:       option.Readiness.HasRuntime,
-			CanRun:           option.Readiness.CanRun,
-			Subdomain:        option.Subdomain,
-			PathPrefix:       option.PathPrefix,
+			Reference:         option.Reference,
+			RealizationID:     option.RealizationID,
+			ApproachID:        option.ApproachID,
+			Summary:           firstNonEmpty(strings.TrimSpace(option.Summary), option.RealizationID),
+			Status:            firstNonEmpty(strings.TrimSpace(option.Status), "draft"),
+			SurfaceKind:       strings.TrimSpace(option.SurfaceKind),
+			ReadinessStage:    readinessStage,
+			ReadinessLabel:    readinessLabel,
+			ReadinessSummary:  readinessSummary,
+			HasContract:       option.Readiness.HasContract,
+			HasRuntime:        option.Readiness.HasRuntime,
+			CanRun:            option.Readiness.CanRun,
+			CanLaunchLocal:    executionEnabled && option.Readiness.CanLaunchLocal,
+			ExecutionStatus:   execution.Status,
+			ExecutionID:       execution.ExecutionID,
+			ExecutionOpenPath: execution.OpenPath,
+			Subdomain:         option.Subdomain,
+			PathPrefix:        option.PathPrefix,
 		}
 		seeds[index].Realizations = append(seeds[index].Realizations, item)
 		seeds[index].Count = len(seeds[index].Realizations)
@@ -775,6 +791,7 @@ func newBootPageView(options []materializer.RealizationOption, remoteConfigured,
 		RealizationCount:  len(options),
 		GrowthReadyCount:  growthReadyCount,
 		RunnableCount:     runnableCount,
+		ExecutionEnabled:  executionEnabled,
 		RemoteConfigured:  remoteConfigured,
 		RuntimeConfigured: runtimeConfigured,
 		GitHubURL:         envOrDefault("AS_GITHUB_URL", "https://github.com/anthropics/autosoftware"),
@@ -867,6 +884,54 @@ func consoleLoaderScript() string {
     if (status) status.textContent = copy || "";
   }
 
+  async function waitForExecution(projectionPath, label) {
+    for (var attempt = 0; attempt < 60; attempt++) {
+      var response = await fetch(projectionPath, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+      var result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || ("Execution poll failed: " + response.status));
+      }
+      var session = result.session || {};
+      if (session.status === "healthy" && session.open_path) {
+        setStatus("Running " + label + ".");
+        var launched = window.open(session.open_path, "_blank", "noopener");
+        if (!launched) window.location.assign(session.open_path);
+        return session;
+      }
+      if (session.status === "failed" || session.status === "stopped") {
+        throw new Error(session.last_error || ("Execution " + session.status));
+      }
+      setStatus("Launching " + label + " (" + (session.status || "starting") + ")...");
+      await new Promise(function (resolve) { setTimeout(resolve, 500); });
+    }
+    throw new Error("Execution timed out before becoming healthy.");
+  }
+
+  async function launchRealization(reference, label) {
+    ensureModal(true);
+    modalContent.innerHTML =
+      '<div class="indicator">' +
+      '<div class="indicator-title">Launching</div>' +
+      '<p class="indicator-copy">Starting ' + escapeHTML(label || reference) + ' through the kernel execution layer.</p></div>';
+    setStatus("Launching " + (label || reference) + "...");
+
+    var response = await fetch("/boot/commands/realizations.launch", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ reference: reference })
+    });
+    var result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || ("Launch failed: " + response.status));
+    }
+    return waitForExecution(result.projection, label || reference);
+  }
+
   /* ── Tile expand / collapse (State 0 ↔ 1) ── */
 
   function expandTile(tile) {
@@ -889,8 +954,7 @@ func consoleLoaderScript() string {
 
   /* ── Modal (State 2) ── */
 
-  function openModal(action, reference, label) {
-    var isRun = action === "run";
+  function ensureModal(isRun) {
     backdrop.classList.toggle("is-run-mode", isRun);
 
     if (!modalOpen) {
@@ -902,12 +966,17 @@ func consoleLoaderScript() string {
       modalOpen = true;
     }
 
+    backdrop.setAttribute("aria-hidden", "false");
+  }
+
+  function openModal(action, reference, label) {
+    var isRun = action === "run";
+    ensureModal(isRun);
+
     modalContent.innerHTML =
       '<div class="indicator">' +
       '<div class="indicator-title">' + escapeHTML(action === "inspect" ? "Inspecting" : action === "grow" ? "Preparing Growth" : action === "run" ? "Launching" : action === "registry" ? "Loading Registry" : "Loading") + '</div>' +
       '<p class="indicator-copy">Preparing ' + escapeHTML(label || reference || "content") + '...</p></div>';
-
-    backdrop.setAttribute("aria-hidden", "false");
 
     if (action === "inspect" || action === "grow" || action === "run" || action === "registry") {
       loadPartialIntoModal(action, reference, label);
@@ -1108,6 +1177,31 @@ func consoleLoaderScript() string {
     }
   }
 
+  async function stopExecution(executionID, label) {
+    ensureModal(true);
+    modalContent.innerHTML =
+      '<div class="indicator">' +
+      '<div class="indicator-title">Stopping</div>' +
+      '<p class="indicator-copy">Stopping ' + escapeHTML(label || executionID) + '...</p></div>';
+    setStatus("Stopping " + (label || executionID) + "...");
+
+    var response = await fetch("/boot/commands/realizations.stop", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ execution_id: executionID })
+    });
+    var result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || ("Stop failed: " + response.status));
+    }
+    modalContent.innerHTML =
+      '<div class="stack"><div class="indicator-title">Stopped</div><p class="indicator-copy">' +
+      escapeHTML(label || executionID) +
+      ' has been asked to stop.</p></div>';
+    setStatus("Stopped " + (label || executionID) + ".");
+  }
+
   /* ── Event delegation ── */
 
   document.addEventListener("click", function (event) {
@@ -1116,11 +1210,52 @@ func consoleLoaderScript() string {
     if (actionBtn) {
       event.preventDefault();
       event.stopPropagation();
+      if (actionBtn.getAttribute("data-action") === "run") {
+        if (actionBtn.getAttribute("data-open-path")) {
+          var openPath = actionBtn.getAttribute("data-open-path");
+          var launched = window.open(openPath, "_blank", "noopener");
+          if (!launched) window.location.assign(openPath);
+          setStatus("Opening " + (actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")) + "...");
+          return;
+        }
+        if (actionBtn.getAttribute("data-launchable") === "true") {
+          launchRealization(
+            actionBtn.getAttribute("data-reference"),
+            actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")
+          ).catch(function (err) {
+            modalContent.innerHTML =
+              '<div class="stack"><div class="indicator-title">Launch Failed</div><p class="indicator-copy">' +
+              escapeHTML(err && err.message ? err.message : String(err)) +
+              '</p></div>';
+            setStatus("Launch failed.");
+            console.error(err);
+          });
+          return;
+        }
+      }
       openModal(
         actionBtn.getAttribute("data-action"),
         actionBtn.getAttribute("data-reference"),
         actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")
       );
+      return;
+    }
+
+    var stopBtn = event.target.closest("[data-stop-execution]");
+    if (stopBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopExecution(
+        stopBtn.getAttribute("data-stop-execution"),
+        stopBtn.getAttribute("data-label") || stopBtn.getAttribute("data-stop-execution")
+      ).catch(function (err) {
+        modalContent.innerHTML =
+          '<div class="stack"><div class="indicator-title">Stop Failed</div><p class="indicator-copy">' +
+          escapeHTML(err && err.message ? err.message : String(err)) +
+          '</p></div>';
+        setStatus("Stop failed.");
+        console.error(err);
+      });
       return;
     }
 

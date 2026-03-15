@@ -33,17 +33,19 @@ type RuntimeManifestRun struct {
 }
 
 type ReadinessInfo struct {
-	Stage        string `json:"stage"`
-	Label        string `json:"label"`
-	Summary      string `json:"summary"`
-	HasContract  bool   `json:"has_contract"`
-	HasRuntime   bool   `json:"has_runtime"`
-	CanInspect   bool   `json:"can_inspect"`
-	CanGrow      bool   `json:"can_grow"`
-	CanRun       bool   `json:"can_run"`
-	SurfaceKind  string `json:"surface_kind,omitempty"`
-	ContractFile string `json:"contract_file,omitempty"`
-	RuntimeFile  string `json:"runtime_file,omitempty"`
+	Stage           string `json:"stage"`
+	Label           string `json:"label"`
+	Summary         string `json:"summary"`
+	HasContract     bool   `json:"has_contract"`
+	HasRuntime      bool   `json:"has_runtime"`
+	CanInspect      bool   `json:"can_inspect"`
+	CanGrow         bool   `json:"can_grow"`
+	CanRun          bool   `json:"can_run"`
+	CanLaunchLocal  bool   `json:"can_launch_local"`
+	CanLaunchShared bool   `json:"can_launch_shared"`
+	SurfaceKind     string `json:"surface_kind,omitempty"`
+	ContractFile    string `json:"contract_file,omitempty"`
+	RuntimeFile     string `json:"runtime_file,omitempty"`
 }
 
 type RealizationMeta struct {
@@ -54,7 +56,6 @@ type RealizationMeta struct {
 	SurfaceKind     string           `json:"surface_kind,omitempty"`
 	RuntimeArtifact string           `json:"runtime_artifact,omitempty"`
 	RuntimeManifest *RuntimeManifest `json:"runtime_manifest,omitempty"`
-	ProxyAddr       string           `json:"proxy_addr,omitempty"`
 	Readiness       ReadinessInfo    `json:"readiness"`
 }
 
@@ -94,12 +95,17 @@ func LoadRealizationMeta(repoRoot string, entry LocalRealization) (RealizationMe
 		meta.RuntimeManifest = &runtimeManifest
 		meta.Readiness.HasRuntime = true
 		meta.Readiness.RuntimeFile = meta.RuntimeArtifact
-		if addr := strings.TrimSpace(runtimeManifest.Environment["AS_ADDR"]); addr != "" {
-			meta.ProxyAddr = addr
+		if CanLaunchLocally(repoRoot, entry.RootDir, meta.RuntimeManifest) {
+			meta.Readiness.CanLaunchLocal = true
 		}
 	}
 
+	canLaunchLocal := meta.Readiness.CanLaunchLocal
+	canLaunchShared := meta.Readiness.CanLaunchShared
 	meta.Readiness = classifyReadiness(entry.Status, meta.Readiness.HasContract, meta.Readiness.HasRuntime, meta.SurfaceKind, meta.ContractFile, meta.RuntimeArtifact)
+	meta.Readiness.CanLaunchLocal = canLaunchLocal && meta.Readiness.HasRuntime
+	meta.Readiness.CanLaunchShared = canLaunchShared && meta.Readiness.HasRuntime
+	meta.Readiness.CanRun = meta.Readiness.CanLaunchLocal || meta.Readiness.CanLaunchShared
 	return meta, nil
 }
 
@@ -153,7 +159,6 @@ func classifyReadiness(status string, hasContract, hasRuntime bool, surfaceKind,
 		HasRuntime:   hasRuntime,
 		CanInspect:   true,
 		CanGrow:      true,
-		CanRun:       hasRuntime,
 		SurfaceKind:  strings.TrimSpace(surfaceKind),
 		ContractFile: strings.TrimSpace(contractFile),
 		RuntimeFile:  strings.TrimSpace(runtimeFile),
@@ -172,7 +177,7 @@ func classifyReadiness(status string, hasContract, hasRuntime bool, surfaceKind,
 	case hasRuntime:
 		info.Stage = "runnable"
 		info.Label = "Runnable"
-		info.Summary = "Runnable artifact exists. Inspect, grow, validate, or run this realization."
+		info.Summary = "Runtime artifacts exist. This realization may be launchable depending on the available execution backend."
 	case hasContract:
 		info.Stage = "defined"
 		info.Label = "Defined"

@@ -8,9 +8,8 @@ run:
   args:
     - run
     - .
-environment:
-  AS_ADDR: /tmp/as-realizations/0003-customer-service-app--a-web-mvp.sock
 notes:
+  - AS_ADDR is injected by the kernel execution backend at launch time.
   - In-memory state only; restart clears all data.
   - Default agent accounts are seeded at startup.
   - Chat sessions fall back to ticket creation after 2 minutes without an agent.

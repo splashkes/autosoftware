@@ -18,11 +18,13 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 			Summary:       "Shared notepad room",
 			Status:        "accepted",
 			Readiness: realizations.ReadinessInfo{
-				HasContract: true,
-				CanRun:      true,
-				Label:       "Runnable",
-				Stage:       "runnable",
+				HasContract:    true,
+				CanRun:         true,
+				CanLaunchLocal: true,
+				Label:          "Runnable",
+				Stage:          "runnable",
 			},
+			PathPrefix: "/notepad/",
 		},
 		{
 			Reference:     "0006-registry-browser/a-authoritative-browser",
@@ -54,7 +56,13 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 		},
 	}
 
-	view := newBootPageView(options, false, false, "", "")
+	view := newBootPageView(options, map[string]executionBootState{
+		"0001-shared-notepad/a-go-htmx-room": {
+			ExecutionID: "exec_notepad",
+			Status:      "healthy",
+			OpenPath:    "/__runs/exec_notepad/",
+		},
+	}, true, false, false, "", "")
 
 	if len(view.Seeds) != 2 {
 		t.Fatalf("expected 2 seeds, got %d", len(view.Seeds))
@@ -81,6 +89,9 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	}
 	if notepad.RunnableCount != 1 {
 		t.Fatalf("expected notepad runnable count 1, got %d", notepad.RunnableCount)
+	}
+	if got := notepad.Realizations[0].ExecutionOpenPath; got != "/__runs/exec_notepad/" {
+		t.Fatalf("expected notepad execution open path /__runs/exec_notepad/, got %q", got)
 	}
 
 	registryBrowser := view.Seeds[1]

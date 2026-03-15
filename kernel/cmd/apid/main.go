@@ -41,6 +41,7 @@ func main() {
 	api := jsontransport.NewRuntimeAPI(service, func(ctx context.Context) ([]string, error) {
 		return runtimedb.AppliedMigrations(ctx, pool)
 	})
+	executionAPI := jsontransport.NewExecutionAPI(repoRoot, service)
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
 	registryAPI := jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
@@ -48,6 +49,7 @@ func main() {
 	mux := http.NewServeMux()
 	contractsAPI.Register(mux)
 	api.Register(mux)
+	executionAPI.Register(mux)
 	growthAPI.Register(mux)
 	registryAPI.Register(mux)
 
