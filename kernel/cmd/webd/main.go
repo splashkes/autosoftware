@@ -374,7 +374,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	store := feedbackloop.NewMemoryStore()
+	var store feedbackloop.Recorder = feedbackloop.NewMemoryStore()
 	service, err := materializer.NewService(repoRoot, remoteClient())
 	if err != nil {
 		log.Fatal(err)
@@ -394,6 +394,8 @@ func main() {
 			}
 		}
 		runtimeService = interactions.NewRuntimeService(pool)
+		store = feedbackloop.NewPostgresStore(pool)
+		log.Print("feedback loop: persisting to runtime database")
 	}
 
 	mux := http.NewServeMux()
