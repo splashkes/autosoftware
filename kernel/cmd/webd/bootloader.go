@@ -578,6 +578,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       <span class="pill">{{.RunnableCount}} runnable</span>
       {{if .RuntimeConfigured}}<span class="pill">runtime on</span>{{else}}<span class="pill">runtime off</span>{{end}}
       {{if .RemoteConfigured}}<span class="pill">remote on</span>{{else}}<span class="pill">remote off</span>{{end}}
+      <button class="action-button" id="registry-open" type="button">Registry</button>
     </div>
 
     <section class="tile-grid" id="tile-grid">
@@ -684,13 +685,13 @@ type bootPageView struct {
 }
 
 type seedBootView struct {
-	SeedID           string
-	DisplayName      string
-	Summary          string
-	Status           string
-	Count            int
-	GrowthReadyCount int
-	RunnableCount    int
+	SeedID              string
+	DisplayName         string
+	Summary             string
+	Status              string
+	Count               int
+	GrowthReadyCount    int
+	RunnableCount       int
 	InitiallyOpen       bool
 	IsSingleRealization bool
 	Realizations        []realizationBootView
@@ -849,6 +850,7 @@ func consoleLoaderScript() string {
   var modalContent = document.getElementById("modal-content");
   var modalCloseBtn = document.getElementById("modal-close");
   var sproutFab = document.getElementById("sprout-fab");
+  var registryOpen = document.getElementById("registry-open");
   var status = document.getElementById("console-status");
   if (!grid || !backdrop || !modalContent) return;
 
@@ -902,12 +904,12 @@ func consoleLoaderScript() string {
 
     modalContent.innerHTML =
       '<div class="indicator">' +
-      '<div class="indicator-title">' + escapeHTML(action === "inspect" ? "Inspecting" : action === "grow" ? "Preparing Growth" : action === "run" ? "Launching" : "Loading") + '</div>' +
+      '<div class="indicator-title">' + escapeHTML(action === "inspect" ? "Inspecting" : action === "grow" ? "Preparing Growth" : action === "run" ? "Launching" : action === "registry" ? "Loading Registry" : "Loading") + '</div>' +
       '<p class="indicator-copy">Preparing ' + escapeHTML(label || reference || "content") + '...</p></div>';
 
     backdrop.setAttribute("aria-hidden", "false");
 
-    if (action === "inspect" || action === "grow" || action === "run") {
+    if (action === "inspect" || action === "grow" || action === "run" || action === "registry") {
       loadPartialIntoModal(action, reference, label);
     } else if (action === "create") {
       loadMutationWizard("", label);
@@ -937,11 +939,13 @@ func consoleLoaderScript() string {
       path = "/partials/grow?reference=" + encodeURIComponent(reference);
     } else if (action === "run") {
       path = "/partials/run?reference=" + encodeURIComponent(reference);
+    } else if (action === "registry") {
+      path = "/partials/registry";
     } else {
       return;
     }
 
-    setStatus((action === "inspect" ? "Inspecting " : action === "grow" ? "Preparing growth for " : "Launching ") + (label || reference) + "...");
+    setStatus((action === "inspect" ? "Inspecting " : action === "grow" ? "Preparing growth for " : action === "run" ? "Launching " : "Loading ") + (label || reference || "registry") + "...");
 
     try {
       var response = await fetch(path, {
@@ -954,7 +958,7 @@ func consoleLoaderScript() string {
         throw new Error(html || ("Request failed: " + response.status));
       }
       modalContent.innerHTML = html;
-      setStatus((action === "inspect" ? "Inspecting " : action === "grow" ? "Ready to grow " : "Run loaded for ") + (label || reference) + ".");
+      setStatus((action === "inspect" ? "Inspecting " : action === "grow" ? "Ready to grow " : action === "run" ? "Run loaded for " : "Loaded ") + (label || reference || "registry") + ".");
     } catch (err) {
       modalContent.innerHTML =
         '<div class="stack">' +
@@ -1153,6 +1157,12 @@ func consoleLoaderScript() string {
     sproutFab.addEventListener("click", function (event) {
       event.stopPropagation();
       openModal("create", "", "New Seed");
+    });
+  }
+  if (registryOpen) {
+    registryOpen.addEventListener("click", function (event) {
+      event.stopPropagation();
+      openModal("registry", "", "Registry");
     });
   }
 

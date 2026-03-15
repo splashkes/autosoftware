@@ -42,11 +42,13 @@ func main() {
 	})
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
+	registryAPI := jsontransport.NewRegistryAPI(repoRoot)
 
 	mux := http.NewServeMux()
 	contractsAPI.Register(mux)
 	api.Register(mux)
 	growthAPI.Register(mux)
+	registryAPI.Register(mux)
 
 	handler := server.DefaultMiddlewareStack(
 		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service}, mux),

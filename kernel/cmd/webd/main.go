@@ -20,6 +20,7 @@ import (
 	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
 	"as/kernel/internal/realizations"
+	registrycatalog "as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
 )
 
@@ -349,6 +350,116 @@ var mutateTemplate = template.Must(template.New("mutate").Parse(`
 </div>
 `))
 
+var registryTemplate = template.Must(template.New("registry").Parse(`
+<div class="stack">
+  <div class="row">
+    <div>
+      <div class="readiness defined">Phase 1</div>
+      <h2 style="margin:0.55rem 0 0.15rem;font-size:1.2rem;">Registry Catalog</h2>
+      <p class="empty">Repo-derived object and schema navigation built from validated realization contracts. This is agent-safe discovery data, not the final append-only ledger.</p>
+    </div>
+    <div class="subtle">
+      <div>{{.Catalog.Summary.Realizations}} realizations</div>
+      <div>{{.Catalog.Summary.Contracts}} contracts</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <span class="pill">{{.Catalog.Summary.Objects}} objects</span>
+    <span class="pill">{{.Catalog.Summary.Schemas}} schemas</span>
+    <span class="pill">{{.Catalog.Summary.Commands}} commands</span>
+    <span class="pill">{{.Catalog.Summary.Projections}} projections</span>
+  </div>
+
+  <article class="source">
+    <h3>Objects</h3>
+    <p class="subtle">Objects are grouped by seed and object kind. Each detail section shows the realizations, commands, projections, and schema refs attached to that declaration.</p>
+    <div class="doc-grid">
+      {{range .Catalog.Objects}}
+      <details class="doc">
+        <summary>{{.SeedID}} :: {{.Kind}} <span class="pathline">{{len .Realizations}} realizations</span></summary>
+        <div class="stack" style="margin-top:0.65rem;">
+          {{if .Summary}}<p class="empty">{{.Summary}}</p>{{end}}
+          {{if .Capabilities}}
+          <div class="meta">{{range .Capabilities}}<span class="pill">{{.}}</span>{{end}}</div>
+          {{end}}
+          <div>
+            <div class="subtle">Schemas</div>
+            {{range .SchemaRefs}}<div class="pathline">{{.}}</div>{{end}}
+          </div>
+          <div>
+            <div class="subtle">Realizations</div>
+            {{range .Realizations}}
+            <div class="pathline">{{.Reference}} :: {{.SurfaceKind}} :: {{.SchemaRef}}</div>
+            {{end}}
+          </div>
+          {{if .Commands}}
+          <div>
+            <div class="subtle">Commands</div>
+            {{range .Commands}}
+            <div class="pathline">{{.Reference}} :: {{.Name}} :: {{.Path}}</div>
+            {{end}}
+          </div>
+          {{end}}
+          {{if .Projections}}
+          <div>
+            <div class="subtle">Projections</div>
+            {{range .Projections}}
+            <div class="pathline">{{.Reference}} :: {{.Name}} :: {{.Path}}</div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </details>
+      {{else}}
+      <p class="empty">No objects discovered yet.</p>
+      {{end}}
+    </div>
+  </article>
+
+  <article class="source">
+    <h3>Schemas</h3>
+    <p class="subtle">Schema refs are canonicalized relative to each contract file so humans and agents navigate the same identifiers.</p>
+    <div class="doc-grid">
+      {{range .Catalog.Schemas}}
+      <details class="doc">
+        <summary>{{.Ref}} <span class="pathline">{{len .ObjectUses}} object uses / {{len .CommandInputs}} inputs / {{len .CommandResults}} results</span></summary>
+        <div class="stack" style="margin-top:0.65rem;">
+          <div class="pathline">{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}</div>
+          {{if .ObjectUses}}
+          <div>
+            <div class="subtle">Object Uses</div>
+            {{range .ObjectUses}}
+            <div class="pathline">{{.Reference}} :: {{.Kind}}</div>
+            {{end}}
+          </div>
+          {{end}}
+          {{if .CommandInputs}}
+          <div>
+            <div class="subtle">Command Inputs</div>
+            {{range .CommandInputs}}
+            <div class="pathline">{{.Reference}} :: {{.Name}} :: {{.Path}}</div>
+            {{end}}
+          </div>
+          {{end}}
+          {{if .CommandResults}}
+          <div>
+            <div class="subtle">Command Results</div>
+            {{range .CommandResults}}
+            <div class="pathline">{{.Reference}} :: {{.Name}} :: {{.Path}}</div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </details>
+      {{else}}
+      <p class="empty">No schemas discovered yet.</p>
+      {{end}}
+    </div>
+  </article>
+</div>
+`))
+
 type mutateView struct {
 	IsNew  bool
 	Packet realizations.GrowthContext
@@ -366,6 +477,10 @@ type growthView struct {
 
 type runView struct {
 	Packet realizations.GrowthContext
+}
+
+type registryView struct {
+	Catalog registrycatalog.Catalog
 }
 
 func main() {
@@ -402,6 +517,7 @@ func main() {
 	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
+	jsontransport.NewRegistryAPI(repoRoot).Register(mux)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		options, err := service.ListRealizations(r.Context())
 		if err != nil {
@@ -491,6 +607,19 @@ func main() {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := mutateTemplate.Execute(w, view); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+	mux.HandleFunc("GET /partials/registry", func(w http.ResponseWriter, r *http.Request) {
+		catalog, err := registrycatalog.LoadCatalog(repoRoot)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := registryTemplate.Execute(w, registryView{Catalog: catalog}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
