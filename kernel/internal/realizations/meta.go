@@ -54,6 +54,7 @@ type RealizationMeta struct {
 	SurfaceKind     string           `json:"surface_kind,omitempty"`
 	RuntimeArtifact string           `json:"runtime_artifact,omitempty"`
 	RuntimeManifest *RuntimeManifest `json:"runtime_manifest,omitempty"`
+	ProxyAddr       string           `json:"proxy_addr,omitempty"`
 	Readiness       ReadinessInfo    `json:"readiness"`
 }
 
@@ -93,6 +94,9 @@ func LoadRealizationMeta(repoRoot string, entry LocalRealization) (RealizationMe
 		meta.RuntimeManifest = &runtimeManifest
 		meta.Readiness.HasRuntime = true
 		meta.Readiness.RuntimeFile = meta.RuntimeArtifact
+		if addr := strings.TrimSpace(runtimeManifest.Environment["AS_ADDR"]); addr != "" {
+			meta.ProxyAddr = addr
+		}
 	}
 
 	meta.Readiness = classifyReadiness(entry.Status, meta.Readiness.HasContract, meta.Readiness.HasRuntime, meta.SurfaceKind, meta.ContractFile, meta.RuntimeArtifact)

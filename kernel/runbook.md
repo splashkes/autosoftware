@@ -22,52 +22,41 @@ The runbook should answer operational questions such as:
 - how to inspect registry and materializer state
 - how to inspect browser and request incidents for one realization
 
-## Local Postgres Bootstrap
+## Runtime Database
 
-The local kernel runtime expects a Postgres instance for runtime tables.
+The kernel optionally connects to a Postgres database for runtime features
+(identity, sessions, communications, guardrails). Set the connection string
+via environment variable:
 
-Bootstrap flow:
+    AS_RUNTIME_DATABASE_URL=postgres://user:pass@host:port/dbname
 
-1. Optionally copy `.env.postgres.example` to `.env.postgres` and override
-   database name, user, password, or port.
-2. Run `./scripts/as-postgres-up.sh` from the repo root.
-3. Verify access with `./scripts/as-postgres-psql.sh -c '\\dt runtime_*'`.
-4. Stop the service with `./scripts/as-postgres-down.sh`.
-5. If local state becomes disposable, recreate it with
-   `./scripts/as-postgres-reset.sh`.
-6. For login-time autostart on macOS, bootstrap the LaunchAgent in
-   `~/Library/LaunchAgents/com.splash.as-postgres.plist`.
+Set `AS_RUNTIME_AUTO_MIGRATE=true` to apply schema files from
+`kernel/db/runtime/*.sql` on startup.
 
-Notes:
+Without a database URL, the kernel runs in reduced mode — seed authoring,
+growth, materialization, and the boot console all work without it.
 
-- the service runs via `compose.yaml`
-- the container listens on `localhost:${AS_POSTGRES_PORT:-54329}`
-- every `kernel/db/runtime/*.sql` file is applied during bootstrap
-- runtime data persists in the Docker volume `as_as-postgres-data`
-- the autostart helper is `scripts/as-postgres-autostart.sh`
+### Local Postgres (Docker)
+
+Helper scripts for a disposable local instance:
+
+- `./scripts/as-postgres-up.sh` — start and bootstrap
+- `./scripts/as-postgres-down.sh` — stop
+- `./scripts/as-postgres-psql.sh` — connect
+- `./scripts/as-postgres-reset.sh` — destroy and recreate
+
+Override defaults via `.env.postgres` (copy from `.env.postgres.example`).
+Default port is `54329`.
 
 ## Local Run Script
 
-The fastest way to validate the local kernel stack is:
+The fastest way to validate the local kernel stack:
 
 `./scripts/local-run.sh`
 
-This script:
-
-1. bootstraps Postgres
-2. shows recent Postgres output
-3. verifies runtime tables
-4. runs `go test ./...` in `kernel/`
-5. starts `apid`, `registryd`, `materializerd`, and `webd`
-6. streams prefixed Postgres and Go service logs to the console
-7. checks the runtime health, contract, registry, realization, growth seed
-   packet, growth job, and materialization endpoints
-
-The script also prints the kernel growth console markers from `webd` so a local
-run proves the draft-seed workflow, not just the health endpoints.
-
-The script keeps running until interrupted.
-On exit it stops the Go services and leaves Postgres up.
+The script starts all kernel services, runs tests, and verifies endpoints.
+If a runtime database is configured, it bootstraps that first.
+On exit it stops Go services.
 
 ## Planned Operational Flow
 

@@ -1,116 +1,126 @@
 # Autosoftware
 
-Autosoftware (AS) is an experiment in software that evolves from user
-requests made inside the running experience.
+Software that evolves from within.
 
-In the historical model, a request leaves the experience and disappears into a
-separate software process. In Autosoftware, the experience itself is where
-change begins. The product is not just where software is used. It is where
-software continuously evolves.
+In the historical model, a change request leaves the product and disappears
+into a separate software process. In Autosoftware, the product is where change
+begins. Users describe what they want inside the running experience, and the
+system designs, builds, validates, and ships the change without leaving.
 
-## Core Loop
+## How It Works
 
-1. Capture the request in a seed, right in the user experience.
-2. Validate the early design with the user.
-3. Produce one or more realizations from named approaches, including different
-   coding agents or implementation strategies.
-4. Run automated validation and refine the realization.
-5. Review and accept a realization, publish the accepted result, and let the
-   materializer rebuild current state so the user experience updates
-   automatically.
+A **seed** captures a user request — what they want and why. The kernel
+validates the design with the user, then produces one or more **realizations**:
+concrete implementations compiled from the seed by different agents, models, or
+strategies. The best realization is accepted, and the **materializer** rebuilds
+the live experience automatically.
 
-## Repo Map
+Seeds are full change capsules. Each one holds the brief, design, acceptance
+criteria, approaches, and every realization compiled from them. The same seed
+can be realized many times as tools improve.
 
-- `genesis/` is the founding seed and the first complete example of the model.
-- `kernel/` is the trusted machinery, including the registry, the
-  materializer, and the main interface surfaces.
-- `seeds/` contains evolving app changes: request, design, approaches,
-  acceptance, and realizations.
-- `materialized/` contains hydrated outputs derived from accepted registry
-  history.
+## Active Seeds
 
-Most change should happen in `seeds/`. Changes to `kernel/` should be rarer and
-should tighten registry correctness, permission validation, artifact
-verification, replay/materialization determinism, or interface plumbing.
+| Seed | Summary |
+|------|---------|
+| `0001-shared-notepad` | Shared in-memory notepad — the first runnable realization |
+| `0003-customer-service-app` | Web-first support product with tickets, live chat, and knowledge base |
+| `0004-event-listings` | Public event calendar with organizer publishing and discovery |
+| `0005-charity-auction-manager` | Online auction product for charities with lot management and bidding |
 
-## Local Postgres For Testing
+## Repo Layout
 
-AS now includes a local Postgres dev environment for kernel/runtime testing.
+```
+genesis/        founding seed — the first complete example of the model
+kernel/         trusted machinery: registry, materializer, growth engine, web surfaces
+seeds/          change capsules: request → design → approaches → realizations
+materialized/   hydrated outputs derived from accepted registry history
+scripts/        local dev helpers
+```
 
-1. Copy `.env.postgres.example` to `.env.postgres` if you want non-default
-   credentials or a different port.
-2. Start and bootstrap the database with `./scripts/as-postgres-up.sh`.
-3. Connect with `./scripts/as-postgres-psql.sh`.
-4. Stop it with `./scripts/as-postgres-down.sh`.
-5. Reset the database volume with `./scripts/as-postgres-reset.sh`.
-6. Enable login-time autostart with `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.splash.as-postgres.plist`.
+Most change happens in `seeds/`. The kernel enforces correctness — registry
+validation, artifact verification, materialization determinism — and should
+change less often.
 
-Defaults:
+## The Registry
 
-- host: `localhost`
-- port: `54329`
-- database: `as_local`
-- user: `postgres`
-- password: `postgres`
+Accepted changes are not committed to a repo and forgotten. They are appended
+to an **object registry** — an ordered, append-only ledger of every accepted
+mutation. Objects have stable identity. **Claims** record what is true about
+them: a title, a UI binding, a moderation decision, a schema version.
+**Schemas** are first-class objects too, so the system preserves not just
+accepted bytes but accepted meaning.
 
-The bootstrap script reapplies every SQL file in `kernel/db/runtime/`, so the
-runtime feedback-loop tables are created automatically and future runtime SQL
-can be added there without changing the startup flow.
+The materializer reads the registry and rebuilds current state from it. The
+running application is always a derived view of accepted history, not an
+in-place overwrite. Old and new interpretations can coexist. A UI redesign
+is a new realization accepted alongside the previous one, not a replacement
+that erases it.
 
-For persistence across machine restarts, the Postgres data lives in the Docker
-volume `as_as-postgres-data`. The included LaunchAgent starts Docker Desktop if
-needed and then starts the `postgres` service automatically at login.
+This separation has practical consequences: the same underlying objects can
+power a kanban board, an HTMX workflow, and an agent-facing API
+simultaneously. Shared structured data lives in the registry, not buried
+inside one interface implementation.
 
-## Local Run
+### Public Registry
 
-To run the local kernel stack end to end, use:
+We maintain a public registry as the canonical authority for Autosoftware
+objects. Any accepted seed, realization, schema, or claim published here
+is openly addressable and replayable by anyone.
 
-`./scripts/local-run.sh`
+### Federation
 
-The script:
+Registries are designed to be federated. Each registry acts as its own
+authority with a signing identity, and object references are globally
+qualified (`as:<id>`, `acme:<id>`, `artbattle:<id>`). A worker can trust
+and sync from multiple registries at once.
 
-- bootstraps and verifies Postgres
-- prints recent Postgres container output
-- runs `go test ./...` in `kernel/`
-- starts `apid`, `registryd`, `materializerd`, and `webd`
-- streams Postgres and Go service logs to the console with service prefixes
-- verifies the main health, contract, growth, and materialization endpoints
+Different participants can fork the UI, workflows, local schemas, and
+algorithms while still collaborating on the same objects — as long as they
+share stable identities and the core claims they understand. Unknown claims
+and schemas are safely ignored by systems that don't recognize them.
 
-At `http://127.0.0.1:8090/`, `webd` now exposes the kernel growth console.
-That surface is intentionally not a generic "boot" screen for every draft.
-Instead it distinguishes:
+This means a charity auction platform and an art marketplace could share
+the same object model for lots, bids, and payouts, each with their own
+surfaces and business rules, while federation keeps the underlying data
+portable. Private claims (payout status, moderation notes, internal
+reliability scores) stay private — the ledger records that they exist and
+who authored them, but the content itself remains under the authority's
+control.
 
-- `Inspect` for current materialized realization state
-- `Grow` for seed-packet review plus queued growth, tweak, or validate work
-- `Run` only when a realization already carries a runtime artifact
+### Why This Matters
 
-Current readiness stages:
+Without the registry layer, this project would collapse into "agents editing
+a normal application repo." The registry is what makes continuous evolution
+safe: append-only history, explicit supersession instead of silent overwrite,
+deterministic replay, and traceability from current behavior back to the
+accepted mutation that produced it.
 
-- `Designed`: seed docs exist, but the realization is not yet normalized
-- `Defined`: docs plus `interaction_contract.yaml` exist, but there is no
-  runtime artifact yet
-- `Runnable`: a runtime manifest exists and the realization can be launched
-- `Accepted`: a runnable realization marked as accepted
-- `Bootstrap`: a special inspection-only foundational realization
+## Running Locally
 
-When you stop the script with `Ctrl-C`, it stops the Go services and leaves
-Postgres running for the next local session.
+No external dependencies required. Start the full kernel stack with:
 
-## Read Next
+```
+./scripts/local-run.sh
+```
 
-- [seeds/README.md](seeds/README.md) for the seed model and authoring structure
-- [kernel/public_object_registry.md](kernel/public_object_registry.md) for the
-  registry and materialization model
-- [kernel/public_claim_registry.md](kernel/public_claim_registry.md) for the
-  claim-focused view of the same registry
-- [kernel/public_schema_object_registry.md](kernel/public_schema_object_registry.md)
-  for schemas as first-class objects
-- [kernel/architecture.md](kernel/architecture.md) for kernel structure and
-  responsibilities
-- [kernel/protocol/v1/](kernel/protocol/v1/) for the deeper registry, object,
-  claim, and materialization model
-- [kernel/protocol/v1/growth.md](kernel/protocol/v1/growth.md) for the seed
-  packet and growth-job contract used by the kernel growth console
-- [kernel/philosophy.md](kernel/philosophy.md) for deeper concepts such as
-  runtime selection and the feedback loop
-- [genesis/](genesis/) for the founding seed
+The boot console is at `http://localhost:8090/`. From there you can inspect
+seeds, queue growth jobs, and launch runnable realizations.
+
+Realizations can declare their own subdomain or path prefix. When running,
+the kernel routes `notepad.localhost:8090` or `localhost:8090/notepad/`
+directly to the realization's process.
+
+A runtime database (Postgres) is optional and only needed for identity,
+sessions, and communications features. See [kernel/runbook.md](kernel/runbook.md)
+for configuration.
+
+## Learn More
+
+- [seeds/README.md](seeds/README.md) — seed model and authoring guide
+- [kernel/architecture.md](kernel/architecture.md) — kernel structure and responsibilities
+- [kernel/public_object_registry.md](kernel/public_object_registry.md) — the registry model in depth
+- [kernel/public_schema_object_registry.md](kernel/public_schema_object_registry.md) — schemas as first-class objects
+- [kernel/philosophy.md](kernel/philosophy.md) — runtime selection, feedback loops, and deeper concepts
+- [kernel/protocol/v1/growth.md](kernel/protocol/v1/growth.md) — seed packet and growth-job contract
+- [genesis/](genesis/) — the founding seed

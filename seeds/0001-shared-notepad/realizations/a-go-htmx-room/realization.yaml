@@ -3,6 +3,8 @@ seed_id: 0001-shared-notepad
 approach_id: a-go-htmx-room
 summary: Boot surface with kernel dot, feedback loop, and sprout seed planting.
 status: draft
+subdomain: notepad
+path_prefix: /notepad/
 artifacts:
   - artifacts/runtime.yaml
   - artifacts/notepad-app/go.mod

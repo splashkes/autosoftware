@@ -21,6 +21,8 @@ type Manifest struct {
 	Summary       string   `yaml:"summary" json:"summary"`
 	Status        string   `yaml:"status" json:"status"`
 	Artifacts     []string `yaml:"artifacts" json:"artifacts"`
+	Subdomain     string   `yaml:"subdomain" json:"subdomain,omitempty"`
+	PathPrefix    string   `yaml:"path_prefix" json:"path_prefix,omitempty"`
 }
 
 type LocalRealization struct {

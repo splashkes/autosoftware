@@ -39,6 +39,9 @@ type RealizationOption struct {
 	RuntimeArtifact string                     `json:"runtime_artifact,omitempty"`
 	Readiness       realizations.ReadinessInfo `json:"readiness"`
 	Sources         SourceFlags                `json:"sources"`
+	Subdomain       string                     `json:"subdomain,omitempty"`
+	PathPrefix      string                     `json:"path_prefix,omitempty"`
+	ProxyAddr       string                     `json:"proxy_addr,omitempty"`
 }
 
 type FilePreview struct {
@@ -146,6 +149,9 @@ func (s *Service) ListRealizations(ctx context.Context) ([]RealizationOption, er
 			RuntimeArtifact: meta.RuntimeArtifact,
 			Readiness:       meta.Readiness,
 			Sources:         SourceFlags{Local: true},
+			Subdomain:       entry.Subdomain,
+			PathPrefix:      entry.PathPrefix,
+			ProxyAddr:       meta.ProxyAddr,
 		}
 	}
 

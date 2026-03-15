@@ -7,6 +7,9 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"sort"
 	"strings"
 
 	"as/kernel/internal/boot"
@@ -237,6 +240,120 @@ var runTemplate = template.Must(template.New("run").Parse(`
 </div>
 `))
 
+var mutateTemplate = template.Must(template.New("mutate").Parse(`
+<div class="stack">
+  {{if .IsNew}}
+  <h2 style="margin:0;font-size:1.15rem;">Create from Bare Earth</h2>
+  <p class="subtle">Define a new seed. Describe what you want to build, then review the generated brief, design, and acceptance criteria.</p>
+  {{else}}
+  <h2 style="margin:0;font-size:1.15rem;">Mutate {{.Packet.Reference}}</h2>
+  <p class="subtle">Propose a change to this seed. Review the current specs, describe your mutation, then approve the approach and UAT updates.</p>
+  {{end}}
+
+  <!-- Step 1: Current Specs / Intent -->
+  <div data-wizard-step>
+    {{if .IsNew}}
+    <div class="field" style="margin-top:0.75rem;">
+      <label for="mutate-summary">What should this seed do?</label>
+      <input id="mutate-summary" type="text" name="summary" placeholder="A short summary of the application" maxlength="200">
+    </div>
+    <div class="field">
+      <label for="mutate-description">Describe the scope and key features</label>
+      <textarea id="mutate-description" name="description" placeholder="Who are the users? What workflows should it support? What are the boundaries?"></textarea>
+    </div>
+    {{else}}
+    <h3 style="margin:0.75rem 0 0.5rem;font-size:0.88rem;">Current Seed Specs</h3>
+    <div class="doc-grid">
+      {{range .Packet.SeedDocs}}
+      <details class="doc">
+        <summary>{{.Kind}} <span class="pathline">{{.Path}}</span></summary>
+        <pre>{{.Preview}}</pre>
+      </details>
+      {{end}}
+    </div>
+    <div class="field" style="margin-top:0.75rem;">
+      <label for="mutate-description">Describe the mutation</label>
+      <textarea id="mutate-description" name="description" placeholder="What do you want to change or add to this seed?"></textarea>
+    </div>
+    {{end}}
+    <div class="action-row" style="margin-top:0.75rem;">
+      <button class="action-button is-primary" type="button" data-wizard-next>Next: Review Approach</button>
+    </div>
+  </div>
+
+  <!-- Step 2: AI Approach Review (stub) -->
+  <div data-wizard-step style="display:none;">
+    <h3 style="margin:0.75rem 0 0.5rem;font-size:0.88rem;">Proposed Approach</h3>
+    <p class="indicator-copy">After you submit, an AI agent will review your description against the seed specs and propose a high-level implementation approach here.</p>
+    <div class="field" style="margin-top:0.75rem;">
+      <label for="mutate-approach">Approach notes (manual for now)</label>
+      <textarea id="mutate-approach" name="approach" placeholder="Describe the high-level approach you would take, or leave blank to let the AI decide."></textarea>
+    </div>
+    <div class="action-row" style="margin-top:0.75rem;">
+      <button class="action-button" type="button" data-wizard-prev>Back</button>
+      <button class="action-button is-primary" type="button" data-wizard-next>Next: UAT Criteria</button>
+    </div>
+  </div>
+
+  <!-- Step 3: UAT Criteria (stub) -->
+  <div data-wizard-step style="display:none;">
+    <h3 style="margin:0.75rem 0 0.5rem;font-size:0.88rem;">Acceptance &amp; UAT Criteria</h3>
+    {{if not .IsNew}}
+    <p class="subtle">Current acceptance criteria from the seed:</p>
+    {{range .Packet.SeedDocs}}{{if eq .Kind "seed_acceptance"}}
+    <details class="doc" open>
+      <summary>{{.Kind}} <span class="pathline">{{.Path}}</span></summary>
+      <pre>{{.Preview}}</pre>
+    </details>
+    {{end}}{{end}}
+    {{end}}
+    <div class="field" style="margin-top:0.75rem;">
+      <label for="mutate-uat">Additional UAT criteria</label>
+      <textarea id="mutate-uat" name="uat" placeholder="What tests should verify this change? The AI will suggest criteria here in the future."></textarea>
+    </div>
+    <div class="action-row" style="margin-top:0.75rem;">
+      <button class="action-button" type="button" data-wizard-prev>Back</button>
+      <button class="action-button is-primary" type="button" data-wizard-next>Next: Confirm</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Confirm & Queue -->
+  <div data-wizard-step style="display:none;">
+    <h3 style="margin:0.75rem 0 0.5rem;font-size:0.88rem;">Confirm &amp; Queue</h3>
+    <p class="indicator-copy">Review your inputs above, then queue this {{if .IsNew}}seed creation{{else}}mutation{{end}} as a growth job.</p>
+    {{if not .IsNew}}
+    <form class="stack" data-growth-form data-reference="{{.Packet.Reference}}" style="margin-top:0.75rem;">
+      <input type="hidden" name="operation" value="grow">
+      <input type="hidden" name="create_new" value="">
+      <input type="hidden" name="new_realization_id" value="">
+      <input type="hidden" name="new_summary" value="">
+      <input type="hidden" name="profile" value="balanced">
+      <input type="hidden" name="target" value="runnable_mvp">
+      <div class="field">
+        <label for="mutate-final-instructions">Developer Instructions</label>
+        <textarea id="mutate-final-instructions" name="developer_instructions" placeholder="Any final instructions for the growth agent."></textarea>
+      </div>
+      <div class="action-row">
+        <button class="action-button" type="button" data-wizard-prev>Back</button>
+        <button class="action-button is-primary" type="submit">Queue Growth Job</button>
+      </div>
+    </form>
+    {{else}}
+    <p class="subtle" style="margin-top:0.5rem;">New seed creation is not yet wired to the backend. Use the CLI: <code>as seed create</code></p>
+    <div class="action-row" style="margin-top:0.75rem;">
+      <button class="action-button" type="button" data-wizard-prev>Back</button>
+      <button class="action-button" type="button" disabled>Create Seed (coming soon)</button>
+    </div>
+    {{end}}
+  </div>
+</div>
+`))
+
+type mutateView struct {
+	IsNew  bool
+	Packet realizations.GrowthContext
+}
+
 type partialView struct {
 	Reference string
 	Result    materializer.Materialization
@@ -358,8 +475,37 @@ func main() {
 			return
 		}
 	})
+	mux.HandleFunc("GET /partials/mutate", func(w http.ResponseWriter, r *http.Request) {
+		reference := strings.TrimSpace(r.URL.Query().Get("reference"))
+		view := mutateView{IsNew: reference == ""}
+		if reference != "" {
+			packet, err := realizations.LoadGrowthContext(repoRoot, reference)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			view.Packet = packet
+		}
 
-	handler := http.Handler(mux)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := mutateTemplate.Execute(w, view); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// Build realization route table for subdomain/path-prefix proxying.
+	routeOptions, routeErr := service.ListRealizations(context.Background())
+	if routeErr != nil {
+		log.Printf("warning: could not discover realization routes: %v", routeErr)
+	}
+	routes := buildRouteTable(routeOptions)
+	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
+	if len(routes) > 0 {
+		log.Printf("realization routes: %d active (base domain %s)", len(routes), baseDomain)
+	}
+
+	handler := realizationRoutingMiddleware(routes, baseDomain, http.Handler(mux))
 	if runtimeService != nil {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
 	}
@@ -378,4 +524,104 @@ func remoteClient() *materializer.RemoteRegistryClient {
 	}
 
 	return &materializer.RemoteRegistryClient{BaseURL: baseURL}
+}
+
+// --- Realization routing (subdomain + path prefix) ---
+
+type realizationRoute struct {
+	Reference  string
+	Subdomain  string
+	PathPrefix string
+	ProxyAddr  string
+}
+
+func buildRouteTable(options []materializer.RealizationOption) []realizationRoute {
+	var routes []realizationRoute
+	for _, opt := range options {
+		if opt.ProxyAddr == "" {
+			continue
+		}
+		if opt.Subdomain == "" && opt.PathPrefix == "" {
+			continue
+		}
+		routes = append(routes, realizationRoute{
+			Reference:  opt.Reference,
+			Subdomain:  strings.TrimSpace(opt.Subdomain),
+			PathPrefix: strings.TrimSpace(opt.PathPrefix),
+			ProxyAddr:  strings.TrimSpace(opt.ProxyAddr),
+		})
+	}
+	// Longest path prefix first so more specific routes match before shorter ones.
+	sort.Slice(routes, func(i, j int) bool {
+		return len(routes[i].PathPrefix) > len(routes[j].PathPrefix)
+	})
+	return routes
+}
+
+func extractSubdomain(host, baseDomain string) string {
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	baseDomain = strings.ToLower(strings.TrimSpace(baseDomain))
+
+	if host == baseDomain {
+		return ""
+	}
+	suffix := "." + baseDomain
+	if strings.HasSuffix(host, suffix) {
+		return host[:len(host)-len(suffix)]
+	}
+	return ""
+}
+
+func realizationRoutingMiddleware(routes []realizationRoute, baseDomain string, fallback http.Handler) http.Handler {
+	subdomainMap := make(map[string]realizationRoute)
+	for _, r := range routes {
+		if r.Subdomain != "" {
+			subdomainMap[strings.ToLower(r.Subdomain)] = r
+		}
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Subdomain takes priority.
+		if sub := extractSubdomain(r.Host, baseDomain); sub != "" {
+			if route, ok := subdomainMap[sub]; ok {
+				proxyToRealization(route, w, r)
+				return
+			}
+		}
+
+		// Path prefix fallback.
+		for _, route := range routes {
+			if route.PathPrefix != "" && strings.HasPrefix(r.URL.Path, route.PathPrefix) {
+				r2 := r.Clone(r.Context())
+				r2.URL.Path = strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(route.PathPrefix, "/"))
+				if r2.URL.Path == "" {
+					r2.URL.Path = "/"
+				}
+				r2.URL.RawPath = ""
+				proxyToRealization(route, w, r2)
+				return
+			}
+		}
+
+		fallback.ServeHTTP(w, r)
+	})
+}
+
+func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse("http://" + route.ProxyAddr)
+	if err != nil {
+		http.Error(w, "invalid proxy target", http.StatusBadGateway)
+		return
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	seedID, realizationID := realizations.SplitReference(route.Reference)
+	r.Header.Set("X-AS-Seed-ID", seedID)
+	r.Header.Set("X-AS-Realization-ID", realizationID)
+
+	proxy.ServeHTTP(w, r)
 }
