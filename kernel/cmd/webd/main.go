@@ -365,11 +365,105 @@ var registryTemplate = template.Must(template.New("registry").Parse(`
   </div>
 
   <div class="meta">
+    <span class="pill">{{.Catalog.Summary.Realizations}} realizations</span>
     <span class="pill">{{.Catalog.Summary.Objects}} objects</span>
     <span class="pill">{{.Catalog.Summary.Schemas}} schemas</span>
     <span class="pill">{{.Catalog.Summary.Commands}} commands</span>
     <span class="pill">{{.Catalog.Summary.Projections}} projections</span>
   </div>
+
+  <article class="source">
+    <h3>Realizations</h3>
+    <p class="subtle">This is the top-level read-only registry catalog for realized surfaces. It shows which objects, commands, and projections each realization exposes.</p>
+    <div class="doc-grid">
+      {{range .Catalog.Realizations}}
+      <details class="doc">
+        <summary>{{.Reference}} <span class="pathline">{{.SurfaceKind}} :: {{.Status}}</span></summary>
+        <div class="stack" style="margin-top:0.65rem;">
+          <p class="empty">{{.Summary}}</p>
+          <div class="pathline">{{.ContractFile}}</div>
+          {{if .AuthModes}}
+          <div>
+            <div class="subtle">Auth Modes</div>
+            <div class="meta">{{range .AuthModes}}<span class="pill">{{.}}</span>{{end}}</div>
+          </div>
+          {{end}}
+          {{if .Capabilities}}
+          <div>
+            <div class="subtle">Capabilities</div>
+            <div class="meta">{{range .Capabilities}}<span class="pill">{{.}}</span>{{end}}</div>
+          </div>
+          {{end}}
+          {{if .ObjectKinds}}
+          <div>
+            <div class="subtle">Objects</div>
+            {{range .ObjectKinds}}<div class="pathline">{{.}}</div>{{end}}
+          </div>
+          {{end}}
+          {{if .CommandNames}}
+          <div>
+            <div class="subtle">Commands</div>
+            {{range .CommandNames}}<div class="pathline">{{.}}</div>{{end}}
+          </div>
+          {{end}}
+          {{if .Projections}}
+          <div>
+            <div class="subtle">Projections</div>
+            {{range .Projections}}<div class="pathline">{{.}}</div>{{end}}
+          </div>
+          {{end}}
+        </div>
+      </details>
+      {{else}}
+      <p class="empty">No realizations discovered yet.</p>
+      {{end}}
+    </div>
+  </article>
+
+  <article class="source">
+    <h3>Commands</h3>
+    <p class="subtle">Commands are shown directly so agents and humans can inspect their schema refs and projection bindings without traversing object detail first.</p>
+    <div class="doc-grid">
+      {{range .Catalog.Commands}}
+      <details class="doc">
+        <summary>{{.Reference}} :: {{.Name}} <span class="pathline">{{.Path}}</span></summary>
+        <div class="stack" style="margin-top:0.65rem;">
+          <p class="empty">{{.Summary}}</p>
+          <div class="pathline">input {{.InputSchemaRef}}</div>
+          <div class="pathline">result {{.ResultSchemaRef}}</div>
+          <div class="pathline">projection {{.Projection}}</div>
+          <div class="pathline">consistency {{.Consistency}} :: idempotency {{.Idempotency}}</div>
+          {{if .AuthModes}}
+          <div class="meta">{{range .AuthModes}}<span class="pill">{{.}}</span>{{end}}</div>
+          {{end}}
+        </div>
+      </details>
+      {{else}}
+      <p class="empty">No commands discovered yet.</p>
+      {{end}}
+    </div>
+  </article>
+
+  <article class="source">
+    <h3>Projections</h3>
+    <p class="subtle">Projections are first-class read surfaces. Keeping them visible here makes the human console match the agent discovery surface.</p>
+    <div class="doc-grid">
+      {{range .Catalog.Projections}}
+      <details class="doc">
+        <summary>{{.Reference}} :: {{.Name}} <span class="pathline">{{.Path}}</span></summary>
+        <div class="stack" style="margin-top:0.65rem;">
+          <p class="empty">{{.Summary}}</p>
+          <div class="pathline">freshness {{.Freshness}}</div>
+          {{if .Capabilities}}
+          <div class="meta">{{range .Capabilities}}<span class="pill">{{.}}</span>{{end}}</div>
+          {{end}}
+        </div>
+      </details>
+      {{else}}
+      <p class="empty">No projections discovered yet.</p>
+      {{end}}
+    </div>
+  </article>
 
   <article class="source">
     <h3>Objects</h3>
@@ -494,6 +588,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	registryReader := registrycatalog.NewCatalogReader(repoRoot)
 
 	var runtimeService *interactions.RuntimeService
 	runtimeConfig := config.LoadRuntimeConfigFromEnv()
@@ -517,7 +612,7 @@ func main() {
 	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
-	jsontransport.NewRegistryAPI(repoRoot).Register(mux)
+	jsontransport.NewRegistryCatalogAPI(registryReader).Register(mux)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		options, err := service.ListRealizations(r.Context())
 		if err != nil {
@@ -612,7 +707,7 @@ func main() {
 		}
 	})
 	mux.HandleFunc("GET /partials/registry", func(w http.ResponseWriter, r *http.Request) {
-		catalog, err := registrycatalog.LoadCatalog(repoRoot)
+		catalog, err := registryReader.Catalog()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

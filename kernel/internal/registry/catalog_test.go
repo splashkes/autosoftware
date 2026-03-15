@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,6 +100,15 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	if catalog.Summary.Schemas != 3 {
 		t.Fatalf("expected 3 schemas, got %d", catalog.Summary.Schemas)
 	}
+	if len(catalog.Realizations) != 2 {
+		t.Fatalf("expected 2 catalog realizations, got %d", len(catalog.Realizations))
+	}
+	if len(catalog.Commands) != 2 {
+		t.Fatalf("expected 2 catalog commands, got %d", len(catalog.Commands))
+	}
+	if len(catalog.Projections) != 2 {
+		t.Fatalf("expected 2 catalog projections, got %d", len(catalog.Projections))
+	}
 
 	object, ok := GetObject(catalog, "1234-demo", "ticket")
 	if !ok {
@@ -123,6 +133,17 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	}
 	if len(schema.CommandInputs) != 2 {
 		t.Fatalf("expected 2 command input uses, got %d", len(schema.CommandInputs))
+	}
+	realization, ok := GetRealization(catalog, "1234-demo/a-test")
+	if !ok {
+		t.Fatal("expected realization detail")
+	}
+	if len(realization.CommandNames) != 1 || realization.CommandNames[0] != "tickets.create" {
+		t.Fatalf("unexpected realization commands %+v", realization.CommandNames)
+	}
+	command, ok := GetCommand(catalog, "1234-demo/a-test", "tickets.create")
+	if !ok || command.InputSchemaRef != "seeds/1234-demo/design.md#ticket-input" {
+		t.Fatalf("unexpected command %+v", command)
 	}
 }
 
@@ -149,6 +170,39 @@ func TestFilterHelpers(t *testing.T) {
 	}
 	if got := FilterSchemas(catalog.Schemas, "1234-demo", "ticket"); len(got) != 1 {
 		t.Fatalf("expected schema query match, got %d", len(got))
+	}
+	if got := FilterRealizations([]CatalogRealization{{
+		Reference:     "1234-demo/a-test",
+		SeedID:        "1234-demo",
+		RealizationID: "a-test",
+		Summary:       "Support ticket UI",
+		ObjectKinds:   []string{"ticket"},
+	}}, "1234-demo", "ticket"); len(got) != 1 {
+		t.Fatalf("expected realization query match, got %d", len(got))
+	}
+}
+
+func TestCatalogReaderReturnsNotFoundErrors(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRegistryRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	reader := NewCatalogReader(repoRoot)
+	if _, err := reader.GetObject("missing-seed", "missing-kind"); !errors.Is(err, ErrCatalogObjectNotFound) {
+		t.Fatalf("expected ErrCatalogObjectNotFound, got %v", err)
+	}
+	if _, err := reader.GetSchema("missing-ref"); !errors.Is(err, ErrCatalogSchemaNotFound) {
+		t.Fatalf("expected ErrCatalogSchemaNotFound, got %v", err)
+	}
+	if _, err := reader.GetRealization("missing-reference"); !errors.Is(err, ErrCatalogRealizationNotFound) {
+		t.Fatalf("expected ErrCatalogRealizationNotFound, got %v", err)
+	}
+	if _, err := reader.GetCommand("missing-reference", "missing-command"); !errors.Is(err, ErrCatalogCommandNotFound) {
+		t.Fatalf("expected ErrCatalogCommandNotFound, got %v", err)
+	}
+	if _, err := reader.GetProjection("missing-reference", "missing-projection"); !errors.Is(err, ErrCatalogProjectionNotFound) {
+		t.Fatalf("expected ErrCatalogProjectionNotFound, got %v", err)
 	}
 }
 

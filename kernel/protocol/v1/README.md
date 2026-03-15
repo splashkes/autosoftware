@@ -14,6 +14,8 @@ shape rather than the conceptual explanation.
 Current protocol focus:
 
 - `registry.md` defines append-only change-set and row rules
+- `registry_query_api.md` defines the Phase 2 read/query surface for accepted
+  registry state
 - `objects.md` defines stable object identity and immutable creation metadata
 - `claims.md` defines append-only assertions, supersession, and interpretation
 - `schemas.md` defines schema identity, versioning, and interpretation rules

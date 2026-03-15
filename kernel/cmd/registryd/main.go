@@ -10,6 +10,7 @@ import (
 	jsontransport "as/kernel/internal/http/json"
 	"as/kernel/internal/http/server"
 	"as/kernel/internal/interactions"
+	"as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
 )
 
@@ -44,8 +45,24 @@ func main() {
 		}
 	}
 
+	mux := newMux(repoRoot, runtimeService, appliedMigrations)
+
+	var handler http.Handler = mux
+	if runtimeService != nil {
+		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, mux)
+	}
+	handler = server.DefaultMiddlewareStack(handler)
+
+	addr := config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093")
+	log.Printf("registryd listening on %s (repo root %s, runtime %t)", addr, repoRoot, runtimeService != nil)
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func newMux(repoRoot string, runtimeService *interactions.RuntimeService, appliedMigrations func(context.Context) ([]string, error)) *http.ServeMux {
 	mux := http.NewServeMux()
-	jsontransport.NewRegistryAPI(repoRoot).Register(mux)
+	jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot)).Register(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -77,16 +94,5 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
-
-	var handler http.Handler = mux
-	if runtimeService != nil {
-		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, mux)
-	}
-	handler = server.DefaultMiddlewareStack(handler)
-
-	addr := config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093")
-	log.Printf("registryd listening on %s (repo root %s, runtime %t)", addr, repoRoot, runtimeService != nil)
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatal(err)
-	}
+	return mux
 }
