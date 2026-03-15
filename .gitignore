@@ -4,16 +4,20 @@
 # Local docs/packages
 /plans/*.zip
 
-# Local binaries
+# Local binaries — kernel services
 /kernel/bin/
 /kernel/kernel/
 /kernel/asvalidate
 /kernel/materializerd
 /kernel/webd
-/seeds/**/artifacts/**/shared-notepad
-/seeds/**/artifacts/**/service-app/service-app
-/seeds/**/artifacts/**/event-listings-app/event-listings
-/seeds/**/artifacts/**/notepad-app/notepad-app
+
+# Realization Go build artifacts.
+# Runtime uses `go run .` so these don't normally appear, but if someone
+# runs `go build` inside an app dir the binary lands next to go.mod.
+# Ignore any extensionless executable in an artifacts subtree.
+/seeds/**/artifacts/**/[!.]?*[!.]*
+!/seeds/**/artifacts/**/*.*
+!/seeds/**/artifacts/**/
 
 # Local hydrated/materialized state
 /materialized/
