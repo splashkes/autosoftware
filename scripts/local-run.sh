@@ -21,10 +21,13 @@ apid_addr=${AS_APID_ADDR:-127.0.0.1:8092}
 registryd_addr=${AS_REGISTRYD_ADDR:-127.0.0.1:8093}
 materializerd_addr=${AS_MATERIALIZER_ADDR:-127.0.0.1:8091}
 webd_addr=${AS_WEBD_ADDR:-127.0.0.1:8090}
+execd_addr=${AS_EXECD_ADDR:-127.0.0.1:8094}
 
 log_dir=${AS_LOCAL_RUN_LOG_DIR:-${AS_LOCAL_DEPLOY_LOG_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/as-local-run.XXXXXX")}}
 declare -a service_pids=()
 declare -a log_pids=()
+
+mkdir -p "$log_dir"
 
 cleanup() {
   local exit_code=${1:-0}
@@ -178,7 +181,15 @@ start_go_service materializerd "$materializerd_addr" "/healthz" \
 start_go_service webd "$webd_addr" "/" \
   AS_RUNTIME_DATABASE_URL="$runtime_database_url" \
   AS_RUNTIME_AUTO_MIGRATE=1 \
+  AS_BOOT_EXECUTION_ENABLED=1 \
   AS_WEBD_ADDR="$webd_addr"
+
+start_go_service execd "$execd_addr" "/healthz" \
+  AS_RUNTIME_DATABASE_URL="$runtime_database_url" \
+  AS_RUNTIME_AUTO_MIGRATE=1 \
+  AS_APID_ADDR="$apid_addr" \
+  AS_REGISTRYD_ADDR="$registryd_addr" \
+  AS_EXECD_ADDR="$execd_addr"
 
 show_http_json "API runtime health" "http://$apid_addr/v1/runtime/health"
 show_http_json "API contracts" "http://$apid_addr/v1/contracts"
@@ -203,6 +214,7 @@ printf '    webd:         http://%s/\n' "$webd_addr"
 printf '    materializer: http://%s/v1/realizations\n' "$materializerd_addr"
 printf '    apid:         http://%s/v1/contracts\n' "$apid_addr"
 printf '    registryd:    http://%s/v1/registry/status\n' "$registryd_addr"
+printf '    execd:        http://%s/healthz\n' "$execd_addr"
 printf '\n==> Press Ctrl-C to stop the Go services. Postgres will remain running.\n'
 
 while true; do

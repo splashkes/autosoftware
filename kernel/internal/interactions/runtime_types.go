@@ -305,6 +305,124 @@ type JobFailInput struct {
 	FailedAt *time.Time `json:"failed_at,omitempty"`
 }
 
+type RealizationExecution struct {
+	ExecutionID           string                 `json:"execution_id"`
+	Reference             string                 `json:"reference"`
+	SeedID                string                 `json:"seed_id"`
+	RealizationID         string                 `json:"realization_id"`
+	Backend               string                 `json:"backend"`
+	Mode                  string                 `json:"mode"`
+	Status                string                 `json:"status"`
+	RouteSubdomain        string                 `json:"route_subdomain,omitempty"`
+	RoutePathPrefix       string                 `json:"route_path_prefix,omitempty"`
+	PreviewPathPrefix     string                 `json:"preview_path_prefix,omitempty"`
+	UpstreamAddr          string                 `json:"upstream_addr,omitempty"`
+	ExecutionPackageRef   string                 `json:"execution_package_ref,omitempty"`
+	LaunchedByPrincipalID string                 `json:"launched_by_principal_id,omitempty"`
+	LaunchedBySessionID   string                 `json:"launched_by_session_id,omitempty"`
+	RequestID             string                 `json:"request_id,omitempty"`
+	Metadata              map[string]interface{} `json:"metadata"`
+	StartedAt             time.Time              `json:"started_at"`
+	HealthyAt             *time.Time             `json:"healthy_at,omitempty"`
+	StoppedAt             *time.Time             `json:"stopped_at,omitempty"`
+	LastError             string                 `json:"last_error,omitempty"`
+}
+
+type CreateRealizationExecutionInput struct {
+	ExecutionID           string                 `json:"execution_id,omitempty"`
+	Reference             string                 `json:"reference"`
+	SeedID                string                 `json:"seed_id"`
+	RealizationID         string                 `json:"realization_id"`
+	Backend               string                 `json:"backend"`
+	Mode                  string                 `json:"mode,omitempty"`
+	Status                string                 `json:"status"`
+	RouteSubdomain        string                 `json:"route_subdomain,omitempty"`
+	RoutePathPrefix       string                 `json:"route_path_prefix,omitempty"`
+	PreviewPathPrefix     string                 `json:"preview_path_prefix,omitempty"`
+	UpstreamAddr          string                 `json:"upstream_addr,omitempty"`
+	ExecutionPackageRef   string                 `json:"execution_package_ref,omitempty"`
+	LaunchedByPrincipalID string                 `json:"launched_by_principal_id,omitempty"`
+	LaunchedBySessionID   string                 `json:"launched_by_session_id,omitempty"`
+	RequestID             string                 `json:"request_id,omitempty"`
+	Metadata              map[string]interface{} `json:"metadata,omitempty"`
+	StartedAt             *time.Time             `json:"started_at,omitempty"`
+}
+
+type UpdateRealizationExecutionInput struct {
+	Status            string                 `json:"status,omitempty"`
+	UpstreamAddr      string                 `json:"upstream_addr,omitempty"`
+	PreviewPathPrefix string                 `json:"preview_path_prefix,omitempty"`
+	HealthyAt         *time.Time             `json:"healthy_at,omitempty"`
+	StoppedAt         *time.Time             `json:"stopped_at,omitempty"`
+	LastError         string                 `json:"last_error,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type RealizationExecutionEvent struct {
+	EventID     string                 `json:"event_id"`
+	ExecutionID string                 `json:"execution_id"`
+	Name        string                 `json:"name"`
+	Data        map[string]interface{} `json:"data"`
+	OccurredAt  time.Time              `json:"occurred_at"`
+}
+
+type RecordRealizationExecutionEventInput struct {
+	EventID     string                 `json:"event_id,omitempty"`
+	ExecutionID string                 `json:"execution_id"`
+	Name        string                 `json:"name"`
+	Data        map[string]interface{} `json:"data,omitempty"`
+	OccurredAt  *time.Time             `json:"occurred_at,omitempty"`
+}
+
+type RealizationActivation struct {
+	SeedID                 string                 `json:"seed_id"`
+	Reference              string                 `json:"reference"`
+	ExecutionID            string                 `json:"execution_id,omitempty"`
+	ActivatedByPrincipalID string                 `json:"activated_by_principal_id,omitempty"`
+	ActivatedBySessionID   string                 `json:"activated_by_session_id,omitempty"`
+	RequestID              string                 `json:"request_id,omitempty"`
+	Metadata               map[string]interface{} `json:"metadata"`
+	ActivatedAt            time.Time              `json:"activated_at"`
+}
+
+type ActivateRealizationInput struct {
+	SeedID                 string                 `json:"seed_id"`
+	Reference              string                 `json:"reference"`
+	ExecutionID            string                 `json:"execution_id"`
+	ActivatedByPrincipalID string                 `json:"activated_by_principal_id,omitempty"`
+	ActivatedBySessionID   string                 `json:"activated_by_session_id,omitempty"`
+	RequestID              string                 `json:"request_id,omitempty"`
+	Metadata               map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type RealizationRouteBinding struct {
+	BindingID    string                 `json:"binding_id"`
+	ExecutionID  string                 `json:"execution_id"`
+	SeedID       string                 `json:"seed_id"`
+	Reference    string                 `json:"reference"`
+	BindingKind  string                 `json:"binding_kind"`
+	Subdomain    string                 `json:"subdomain,omitempty"`
+	PathPrefix   string                 `json:"path_prefix,omitempty"`
+	UpstreamAddr string                 `json:"upstream_addr"`
+	Status       string                 `json:"status"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+}
+
+type RealizationRouteBindingInput struct {
+	BindingID    string                 `json:"binding_id,omitempty"`
+	ExecutionID  string                 `json:"execution_id"`
+	SeedID       string                 `json:"seed_id"`
+	Reference    string                 `json:"reference"`
+	BindingKind  string                 `json:"binding_kind"`
+	Subdomain    string                 `json:"subdomain,omitempty"`
+	PathPrefix   string                 `json:"path_prefix,omitempty"`
+	UpstreamAddr string                 `json:"upstream_addr"`
+	Status       string                 `json:"status,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type OutboxMessage struct {
 	MessageID            string                 `json:"message_id"`
 	SubjectKind          string                 `json:"subject_kind,omitempty"`

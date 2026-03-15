@@ -26,6 +26,8 @@ type GrowthContext struct {
 	Status          string        `json:"status"`
 	SurfaceKind     string        `json:"surface_kind,omitempty"`
 	ContractSummary string        `json:"contract_summary,omitempty"`
+	Subdomain       string        `json:"subdomain,omitempty"`
+	PathPrefix      string        `json:"path_prefix,omitempty"`
 	Readiness       ReadinessInfo `json:"readiness"`
 	SeedDocs        []ContextFile `json:"seed_docs"`
 	ApproachDocs    []ContextFile `json:"approach_docs"`
@@ -61,6 +63,8 @@ func LoadGrowthContext(repoRoot, reference string) (GrowthContext, error) {
 		Status:          entry.Status,
 		SurfaceKind:     meta.SurfaceKind,
 		ContractSummary: meta.ContractSummary,
+		Subdomain:       entry.Subdomain,
+		PathPrefix:      entry.PathPrefix,
 		Readiness:       meta.Readiness,
 	}
 
