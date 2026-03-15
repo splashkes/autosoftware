@@ -10,9 +10,12 @@ import (
 )
 
 type Catalog struct {
-	Summary CatalogSummary  `json:"summary"`
-	Objects []CatalogObject `json:"objects"`
-	Schemas []CatalogSchema `json:"schemas"`
+	Summary      CatalogSummary       `json:"summary"`
+	Realizations []CatalogRealization `json:"realizations"`
+	Commands     []CatalogCommand     `json:"commands"`
+	Projections  []CatalogProjection  `json:"projections"`
+	Objects      []CatalogObject      `json:"objects"`
+	Schemas      []CatalogSchema      `json:"schemas"`
 }
 
 type CatalogSummary struct {
@@ -33,6 +36,22 @@ type CatalogObject struct {
 	Realizations []CatalogObjectRealization `json:"realizations"`
 	Commands     []CatalogCommand           `json:"commands"`
 	Projections  []CatalogProjection        `json:"projections"`
+}
+
+type CatalogRealization struct {
+	Reference     string   `json:"reference"`
+	SeedID        string   `json:"seed_id"`
+	RealizationID string   `json:"realization_id"`
+	ApproachID    string   `json:"approach_id,omitempty"`
+	Summary       string   `json:"summary"`
+	Status        string   `json:"status"`
+	SurfaceKind   string   `json:"surface_kind"`
+	ContractFile  string   `json:"contract_file"`
+	AuthModes     []string `json:"auth_modes"`
+	Capabilities  []string `json:"capabilities"`
+	ObjectKinds   []string `json:"object_kinds"`
+	CommandNames  []string `json:"command_names"`
+	Projections   []string `json:"projections"`
 }
 
 type CatalogObjectRealization struct {
@@ -133,8 +152,23 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 
 		contractPath := filepath.Join(item.RootDir, "interaction_contract.yaml")
 		contractFile := firstNonEmpty(item.ContractFile, candidateRelativePath(repoRoot, contractPath))
+		realization := CatalogRealization{
+			Reference:     item.Reference,
+			SeedID:        item.SeedID,
+			RealizationID: item.RealizationID,
+			ApproachID:    item.ApproachID,
+			Summary:       firstNonEmpty(strings.TrimSpace(item.Contract.Summary), strings.TrimSpace(item.Summary), item.RealizationID),
+			Status:        strings.TrimSpace(item.Status),
+			SurfaceKind:   strings.TrimSpace(item.Contract.SurfaceKind),
+			ContractFile:  contractFile,
+			AuthModes:     append([]string(nil), item.Contract.AuthModes...),
+		}
+		for _, capability := range item.Contract.Capabilities {
+			addUnique(&realization.Capabilities, capability.Name)
+		}
 
 		for _, object := range item.Contract.DomainObjects {
+			addUnique(&realization.ObjectKinds, object.Kind)
 			detail := ensureObject(objectIndex, item.SeedID, object.Kind)
 			if detail.Summary == "" {
 				detail.Summary = strings.TrimSpace(object.Summary)
@@ -192,6 +226,23 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 					ContractFile:    contractFile,
 				})
 			}
+			catalog.Commands = append(catalog.Commands, CatalogCommand{
+				Reference:       item.Reference,
+				SeedID:          item.SeedID,
+				RealizationID:   item.RealizationID,
+				Name:            strings.TrimSpace(command.Name),
+				Summary:         strings.TrimSpace(command.Summary),
+				Path:            strings.TrimSpace(command.Path),
+				AuthModes:       append([]string(nil), command.AuthModes...),
+				Capabilities:    append([]string(nil), command.Capabilities...),
+				Idempotency:     strings.TrimSpace(command.Idempotency),
+				InputSchemaRef:  inputRef.Canonical,
+				ResultSchemaRef: resultRef.Canonical,
+				Projection:      strings.TrimSpace(command.Projection),
+				Consistency:     strings.TrimSpace(command.Consistency),
+				ContractFile:    contractFile,
+			})
+			addUnique(&realization.CommandNames, strings.TrimSpace(command.Name))
 
 			if inputRef.Canonical != "" {
 				schema := ensureSchema(schemaIndex, inputRef)
@@ -234,9 +285,31 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 					ContractFile:  contractFile,
 				})
 			}
+			catalog.Projections = append(catalog.Projections, CatalogProjection{
+				Reference:     item.Reference,
+				SeedID:        item.SeedID,
+				RealizationID: item.RealizationID,
+				Name:          strings.TrimSpace(projection.Name),
+				Summary:       strings.TrimSpace(projection.Summary),
+				Path:          strings.TrimSpace(projection.Path),
+				Capabilities:  append([]string(nil), projection.Capabilities...),
+				Freshness:     strings.TrimSpace(projection.Freshness),
+				ContractFile:  contractFile,
+			})
+			addUnique(&realization.Projections, strings.TrimSpace(projection.Name))
 		}
+
+		sort.Strings(realization.AuthModes)
+		sort.Strings(realization.Capabilities)
+		sort.Strings(realization.ObjectKinds)
+		sort.Strings(realization.CommandNames)
+		sort.Strings(realization.Projections)
+		catalog.Realizations = append(catalog.Realizations, realization)
 	}
 
+	catalog.Realizations = flattenRealizations(catalog.Realizations)
+	catalog.Commands = flattenCommands(catalog.Commands)
+	catalog.Projections = flattenProjections(catalog.Projections)
 	catalog.Objects = flattenObjects(objectIndex)
 	catalog.Schemas = flattenSchemas(schemaIndex)
 	catalog.Summary.Objects = len(catalog.Objects)
@@ -263,6 +336,38 @@ func GetSchema(catalog Catalog, ref string) (CatalogSchema, bool) {
 		}
 	}
 	return CatalogSchema{}, false
+}
+
+func GetRealization(catalog Catalog, reference string) (CatalogRealization, bool) {
+	reference = strings.TrimSpace(reference)
+	for _, item := range catalog.Realizations {
+		if item.Reference == reference {
+			return item, true
+		}
+	}
+	return CatalogRealization{}, false
+}
+
+func GetCommand(catalog Catalog, reference, name string) (CatalogCommand, bool) {
+	reference = strings.TrimSpace(reference)
+	name = strings.TrimSpace(name)
+	for _, item := range catalog.Commands {
+		if item.Reference == reference && item.Name == name {
+			return item, true
+		}
+	}
+	return CatalogCommand{}, false
+}
+
+func GetProjection(catalog Catalog, reference, name string) (CatalogProjection, bool) {
+	reference = strings.TrimSpace(reference)
+	name = strings.TrimSpace(name)
+	for _, item := range catalog.Projections {
+		if item.Reference == reference && item.Name == name {
+			return item, true
+		}
+	}
+	return CatalogProjection{}, false
 }
 
 func ensureObject(index map[string]*CatalogObject, seedID, kind string) *CatalogObject {
@@ -318,6 +423,36 @@ func flattenObjects(index map[string]*CatalogObject) []CatalogObject {
 			return out[i].Kind < out[j].Kind
 		}
 		return out[i].SeedID < out[j].SeedID
+	})
+	return out
+}
+
+func flattenRealizations(items []CatalogRealization) []CatalogRealization {
+	out := append([]CatalogRealization(nil), items...)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Reference < out[j].Reference
+	})
+	return out
+}
+
+func flattenCommands(items []CatalogCommand) []CatalogCommand {
+	out := append([]CatalogCommand(nil), items...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Reference == out[j].Reference {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Reference < out[j].Reference
+	})
+	return out
+}
+
+func flattenProjections(items []CatalogProjection) []CatalogProjection {
+	out := append([]CatalogProjection(nil), items...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Reference == out[j].Reference {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Reference < out[j].Reference
 	})
 	return out
 }
@@ -461,6 +596,65 @@ func FilterSchemas(items []CatalogSchema, seedID, query string) []CatalogSchema 
 	return out
 }
 
+func FilterRealizations(items []CatalogRealization, seedID, query string) []CatalogRealization {
+	seedID = strings.TrimSpace(seedID)
+	query = strings.TrimSpace(query)
+
+	var out []CatalogRealization
+	for _, item := range items {
+		if seedID != "" && item.SeedID != seedID {
+			continue
+		}
+		if query != "" && !matchesRealizationQuery(item, query) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func FilterCommands(items []CatalogCommand, seedID, reference, query string) []CatalogCommand {
+	seedID = strings.TrimSpace(seedID)
+	reference = strings.TrimSpace(reference)
+	query = strings.TrimSpace(query)
+
+	var out []CatalogCommand
+	for _, item := range items {
+		if seedID != "" && item.SeedID != seedID {
+			continue
+		}
+		if reference != "" && item.Reference != reference {
+			continue
+		}
+		if query != "" && !matchesCommandQuery(item, query) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func FilterProjections(items []CatalogProjection, seedID, reference, query string) []CatalogProjection {
+	seedID = strings.TrimSpace(seedID)
+	reference = strings.TrimSpace(reference)
+	query = strings.TrimSpace(query)
+
+	var out []CatalogProjection
+	for _, item := range items {
+		if seedID != "" && item.SeedID != seedID {
+			continue
+		}
+		if reference != "" && item.Reference != reference {
+			continue
+		}
+		if query != "" && !matchesProjectionQuery(item, query) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
 func contains(items []string, target string) bool {
 	for _, item := range items {
 		if item == target {
@@ -507,6 +701,48 @@ func matchesSchemaQuery(item CatalogSchema, query string) bool {
 			if containsFold(candidate, query) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func matchesRealizationQuery(item CatalogRealization, query string) bool {
+	for _, candidate := range []string{item.Reference, item.SeedID, item.RealizationID, item.Summary, item.SurfaceKind, item.Status} {
+		if containsFold(candidate, query) {
+			return true
+		}
+	}
+	for _, value := range item.ObjectKinds {
+		if containsFold(value, query) {
+			return true
+		}
+	}
+	for _, value := range item.CommandNames {
+		if containsFold(value, query) {
+			return true
+		}
+	}
+	for _, value := range item.Projections {
+		if containsFold(value, query) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesCommandQuery(item CatalogCommand, query string) bool {
+	for _, candidate := range []string{item.Reference, item.SeedID, item.Name, item.Summary, item.Path, item.InputSchemaRef, item.ResultSchemaRef, item.Projection, item.Consistency} {
+		if containsFold(candidate, query) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesProjectionQuery(item CatalogProjection, query string) bool {
+	for _, candidate := range []string{item.Reference, item.SeedID, item.Name, item.Summary, item.Path, item.Freshness} {
+		if containsFold(candidate, query) {
+			return true
 		}
 	}
 	return false

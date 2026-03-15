@@ -6,10 +6,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestRegistryAPIListsCatalogObjectsAndSchemas(t *testing.T) {
+func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeRegistryHTTPRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
 	writeRegistryHTTPRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
@@ -87,9 +88,19 @@ func TestRegistryAPIListsCatalogObjectsAndSchemas(t *testing.T) {
 
 	var catalogPayload struct {
 		Summary struct {
-			Objects int `json:"objects"`
-			Schemas int `json:"schemas"`
+			Objects      int `json:"objects"`
+			Schemas      int `json:"schemas"`
+			Realizations int `json:"realizations"`
 		} `json:"summary"`
+		Realizations []struct {
+			Self string `json:"self"`
+		} `json:"realizations"`
+		Commands []struct {
+			Self string `json:"self"`
+		} `json:"commands"`
+		Projections []struct {
+			Self string `json:"self"`
+		} `json:"projections"`
 		Objects []struct {
 			Self string `json:"self"`
 		} `json:"objects"`
@@ -97,11 +108,68 @@ func TestRegistryAPIListsCatalogObjectsAndSchemas(t *testing.T) {
 	if err := json.Unmarshal(catalogRec.Body.Bytes(), &catalogPayload); err != nil {
 		t.Fatalf("unmarshal catalog: %v", err)
 	}
-	if catalogPayload.Summary.Objects != 1 || catalogPayload.Summary.Schemas != 3 {
+	if catalogPayload.Summary.Objects != 1 || catalogPayload.Summary.Schemas != 3 || catalogPayload.Summary.Realizations != 1 {
 		t.Fatalf("unexpected summary %+v", catalogPayload.Summary)
+	}
+	if catalogPayload.Realizations[0].Self != "/v1/registry/realization?reference=1234-demo%2Fa-test" {
+		t.Fatalf("unexpected realization self %q", catalogPayload.Realizations[0].Self)
+	}
+	if catalogPayload.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
+		t.Fatalf("unexpected command self %q", catalogPayload.Commands[0].Self)
+	}
+	if catalogPayload.Projections[0].Self != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
+		t.Fatalf("unexpected projection self %q", catalogPayload.Projections[0].Self)
 	}
 	if catalogPayload.Objects[0].Self != "/v1/registry/object?seed_id=1234-demo&kind=ticket" {
 		t.Fatalf("unexpected object self %q", catalogPayload.Objects[0].Self)
+	}
+
+	realizationReq := httptest.NewRequest(http.MethodGet, "/v1/registry/realization?reference=1234-demo%2Fa-test", nil)
+	realizationRec := httptest.NewRecorder()
+	mux.ServeHTTP(realizationRec, realizationReq)
+	if realizationRec.Code != http.StatusOK {
+		t.Fatalf("realization status = %d, body = %s", realizationRec.Code, realizationRec.Body.String())
+	}
+
+	var realizationPayload struct {
+		Realization struct {
+			Reference string `json:"reference"`
+			Commands  []struct {
+				Self string `json:"self"`
+			} `json:"commands"`
+		} `json:"realization"`
+	}
+	if err := json.Unmarshal(realizationRec.Body.Bytes(), &realizationPayload); err != nil {
+		t.Fatalf("unmarshal realization: %v", err)
+	}
+	if realizationPayload.Realization.Reference != "1234-demo/a-test" {
+		t.Fatalf("unexpected realization reference %q", realizationPayload.Realization.Reference)
+	}
+	if realizationPayload.Realization.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
+		t.Fatalf("unexpected realization command self %q", realizationPayload.Realization.Commands[0].Self)
+	}
+
+	commandReq := httptest.NewRequest(http.MethodGet, "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create", nil)
+	commandRec := httptest.NewRecorder()
+	mux.ServeHTTP(commandRec, commandReq)
+	if commandRec.Code != http.StatusOK {
+		t.Fatalf("command status = %d, body = %s", commandRec.Code, commandRec.Body.String())
+	}
+
+	var commandPayload struct {
+		Command struct {
+			Name           string `json:"name"`
+			ProjectionSelf string `json:"projection_self"`
+		} `json:"command"`
+	}
+	if err := json.Unmarshal(commandRec.Body.Bytes(), &commandPayload); err != nil {
+		t.Fatalf("unmarshal command: %v", err)
+	}
+	if commandPayload.Command.Name != "tickets.create" {
+		t.Fatalf("unexpected command name %q", commandPayload.Command.Name)
+	}
+	if commandPayload.Command.ProjectionSelf != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
+		t.Fatalf("unexpected projection self %q", commandPayload.Command.ProjectionSelf)
 	}
 
 	objectReq := httptest.NewRequest(http.MethodGet, "/v1/registry/object?seed_id=1234-demo&kind=ticket", nil)
@@ -158,6 +226,102 @@ func TestRegistryAPIListsCatalogObjectsAndSchemas(t *testing.T) {
 	}
 	if len(schemaPayload.Schema.CommandInputs) != 1 {
 		t.Fatalf("expected 1 input use, got %d", len(schemaPayload.Schema.CommandInputs))
+	}
+}
+
+func TestRegistryAPIRejectsMutatingMethods(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRegistryHTTPRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	seedDir := filepath.Join(repoRoot, "seeds", "1234-demo")
+	realizationDir := filepath.Join(seedDir, "realizations", "a-test")
+	writeRegistryHTTPRepoFile(t, filepath.Join(seedDir, "brief.md"), "# Brief\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(seedDir, "design.md"), "# Design\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(realizationDir, "README.md"), "# Demo\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(realizationDir, "realization.yaml"), ""+
+		"realization_id: a-test\n"+
+		"seed_id: 1234-demo\n"+
+		"approach_id: a-approach\n"+
+		"summary: Demo realization.\n"+
+		"status: draft\n")
+	writeRegistryHTTPRepoFile(t, filepath.Join(realizationDir, "interaction_contract.yaml"), ""+
+		"contract_version: v1\n"+
+		"surface_kind: interactive\n"+
+		"seed_id: 1234-demo\n"+
+		"realization_id: a-test\n"+
+		"summary: Demo contract.\n"+
+		"links:\n"+
+		"  seed_design: ../../design.md\n"+
+		"  seed_brief: ../../brief.md\n"+
+		"  realization_readme: README.md\n"+
+		"auth_modes:\n"+
+		"  - session\n"+
+		"capabilities:\n"+
+		"  - name: sessions\n"+
+		"    summary: Session plumbing.\n"+
+		"domain_objects:\n"+
+		"  - kind: ticket\n"+
+		"    summary: Ticket.\n"+
+		"    schema_ref: ../../design.md#ticket\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"commands:\n"+
+		"  - name: tickets.create\n"+
+		"    summary: Create ticket.\n"+
+		"    path: /v1/commands/1234-demo/tickets.create\n"+
+		"    object_kinds:\n"+
+		"      - ticket\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    idempotency: required\n"+
+		"    input_schema_ref: ../../design.md#ticket-input\n"+
+		"    result_schema_ref: ../../design.md#ticket-result\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    projection: tickets.detail\n"+
+		"    consistency: read_your_writes\n"+
+		"projections:\n"+
+		"  - name: tickets.detail\n"+
+		"    summary: Ticket detail.\n"+
+		"    path: /v1/projections/1234-demo/tickets/{ticket_id}\n"+
+		"    object_kinds:\n"+
+		"      - ticket\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    freshness: materialized\n"+
+		"consistency:\n"+
+		"  write_visibility: read_your_writes\n"+
+		"  projection_freshness: materialized\n")
+
+	mux := http.NewServeMux()
+	NewRegistryAPI(repoRoot).Register(mux)
+
+	paths := []string{
+		"/v1/registry/catalog",
+		"/v1/registry/realizations",
+		"/v1/registry/realization?reference=1234-demo%2Fa-test",
+		"/v1/registry/commands",
+		"/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create",
+		"/v1/registry/projections",
+		"/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail",
+		"/v1/registry/objects",
+		"/v1/registry/object?seed_id=1234-demo&kind=ticket",
+		"/v1/registry/schemas",
+		"/v1/registry/schema?ref=seeds%2F1234-demo%2Fdesign.md%23ticket",
+	}
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+
+	for _, path := range paths {
+		for _, method := range methods {
+			req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s %s status = %d, want %d", method, path, rec.Code, http.StatusMethodNotAllowed)
+			}
+		}
 	}
 }
 
