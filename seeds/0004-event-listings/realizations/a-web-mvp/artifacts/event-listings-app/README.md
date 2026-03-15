@@ -22,7 +22,7 @@ go run .
 
 Environment:
 
-- `AS_ADDR` defaults to `127.0.0.1:8096`
+- `AS_ADDR` — unix socket path (e.g. `/tmp/as-realizations/0004-event-listings--a-web-mvp.sock`); falls back to `127.0.0.1:8096` if unset
 - `AS_ADMIN_PASSWORD` defaults to `admin`
 - `AS_DATA_FILE` defaults to `data/events.json`
 

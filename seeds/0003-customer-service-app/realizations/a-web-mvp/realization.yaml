@@ -4,7 +4,7 @@ approach_id: a-web-mvp
 summary: First web MVP for ticketing, chat, and knowledge base workflows.
 status: runnable
 subdomain: support
-path_prefix: /
+path_prefix: /support/
 artifacts:
   - artifacts/runtime.yaml
   - artifacts/service-app/go.mod

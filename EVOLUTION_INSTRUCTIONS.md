@@ -8,15 +8,15 @@
 > All application code, runtime configuration, and artifacts belong under
 > `seeds/<seed_id>/realizations/<realization_id>/artifacts/`.
 
-> **Port assignments.** Each realization must bind to its assigned address
-> to avoid collisions when multiple realizations run concurrently.
+> **Socket assignments.** Each realization listens on a unix domain socket
+> to avoid port collisions when multiple realizations run concurrently.
+> Use the convention `/tmp/as-realizations/<seed-id>--<realization-id>.sock`.
 >
 > | Seed | `AS_ADDR` |
 > |------|-----------|
-> | 0001-shared-notepad | `127.0.0.1:8094` |
-> | 0003-customer-service-app | `127.0.0.1:8095` |
-> | 0004-event-listings | `127.0.0.1:8096` |
-> | 0005-charity-auction-manager | `127.0.0.1:8097` |
+> | 0001-shared-notepad | `/tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock` |
+> | 0003-customer-service-app | `/tmp/as-realizations/0003-customer-service-app--a-web-mvp.sock` |
+> | 0004-event-listings | `/tmp/as-realizations/0004-event-listings--a-web-mvp.sock` |
 
 The entire Autosoftware project exists to make this process work. Every other
 component — the registry, the materializer, the kernel, federation — is
@@ -350,7 +350,7 @@ run:
   command: go
   args: [run, main.go]
 environment:
-  AS_ADDR: 127.0.0.1:8094
+  AS_ADDR: /tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock
 ```
 
 **Runnable → Accepted:** Pass acceptance criteria, contract conformance,
@@ -696,7 +696,7 @@ run:
   command: go
   args: [run, main.go]
 environment:
-  AS_ADDR: 127.0.0.1:8094       # Where the realization listens
+  AS_ADDR: /tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock
 notes:
   - In-memory state only; restart clears all notes
 ```

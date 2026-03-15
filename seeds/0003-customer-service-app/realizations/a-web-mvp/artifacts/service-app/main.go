@@ -6,13 +6,18 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -107,6 +112,32 @@ func main() {
 	mux.HandleFunc("POST /agent/articles/{id}/publish", app.handleAgentArticlePublish)
 	mux.HandleFunc("POST /agent/articles/{id}/unpublish", app.handleAgentArticleUnpublish)
 	mux.HandleFunc("POST /agent/articles/{id}/delete", app.handleAgentArticleDelete)
+
+	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
+		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
+			log.Fatal(err)
+		}
+		os.Remove(addr)
+		ln, err := net.Listen("unix", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ln.Close()
+		defer os.Remove(addr)
+		go func() {
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+			<-sig
+			ln.Close()
+			os.Remove(addr)
+			os.Exit(0)
+		}()
+		log.Printf("Customer Service App listening on unix:%s", addr)
+		if err := http.Serve(ln, app.logMiddleware(mux)); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	log.Printf("Customer Service App listening on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, app.logMiddleware(mux)))

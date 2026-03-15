@@ -12,7 +12,7 @@ Validation evidence for this realization should cover:
 Current local validation target:
 
 - `go test ./...` inside `artifacts/event-listings-app`
-- manual smoke run on `127.0.0.1:8096`
+- manual smoke run via webd at `127.0.0.1:8090` (app listens on unix socket)
 - HTTP checks for:
   - `GET /healthz`
   - `GET /`

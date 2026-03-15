@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://127.0.0.1:8095';
+// App listens on unix socket; tests run through webd with /support/ prefix.
+const BASE = 'http://127.0.0.1:8090';
 
 // ── AC-09: Public help center and knowledge base ──
 

@@ -3,14 +3,13 @@
 > **Boundary rule.** Work in `seeds/` only. Do not modify `kernel/`, `compose.yaml`, or root config files.
 > All code and artifacts go in `seeds/<seed_id>/realizations/<realization_id>/artifacts/`.
 
-> **Port assignments.** Use your seed's assigned port in `runtime.yaml`:
+> **Socket assignments.** Each realization listens on a unix domain socket. Use the convention `/tmp/as-realizations/<seed-id>--<realization-id>.sock` in `runtime.yaml`:
 >
 > | Seed | `AS_ADDR` |
 > |------|-----------|
-> | 0001 | `127.0.0.1:8094` |
-> | 0003 | `127.0.0.1:8095` |
-> | 0004 | `127.0.0.1:8096` |
-> | 0005 | `127.0.0.1:8097` |
+> | 0001 | `/tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock` |
+> | 0003 | `/tmp/as-realizations/0003-customer-service-app--a-web-mvp.sock` |
+> | 0004 | `/tmp/as-realizations/0004-event-listings--a-web-mvp.sock` |
 
 One-page companion to [EVOLUTION_INSTRUCTIONS.md](EVOLUTION_INSTRUCTIONS.md).
 

@@ -7,14 +7,17 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -512,6 +515,32 @@ func main() {
 	mux.HandleFunc("GET /v1/projections/0004-event-listings/events/", a.handleDetailProjection)
 	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.create", a.handleCreateCommand)
 	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.publish", a.handlePublishCommand)
+
+	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
+		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
+			log.Fatal(err)
+		}
+		os.Remove(addr)
+		ln, err := net.Listen("unix", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ln.Close()
+		defer os.Remove(addr)
+		go func() {
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+			<-sig
+			ln.Close()
+			os.Remove(addr)
+			os.Exit(0)
+		}()
+		log.Printf("event listings MVP listening on unix:%s", addr)
+		if err := http.Serve(ln, requestLog(mux)); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	log.Printf("event listings MVP listening on http://%s", addr)
 	if err := http.ListenAndServe(addr, requestLog(mux)); err != nil {

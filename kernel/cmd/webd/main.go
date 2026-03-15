@@ -6,6 +6,7 @@ import (
 	"errors"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -836,7 +837,27 @@ func realizationRoutingMiddleware(routes []realizationRoute, baseDomain string, 
 	})
 }
 
+func isUnixSocketAddr(addr string) bool {
+	return strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".")
+}
+
 func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.Request) {
+	seedID, realizationID := realizations.SplitReference(route.Reference)
+	r.Header.Set("X-AS-Seed-ID", seedID)
+	r.Header.Set("X-AS-Realization-ID", realizationID)
+
+	if isUnixSocketAddr(route.ProxyAddr) {
+		target, _ := url.Parse("http://unix")
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", route.ProxyAddr)
+			},
+		}
+		proxy.ServeHTTP(w, r)
+		return
+	}
+
 	target, err := url.Parse("http://" + route.ProxyAddr)
 	if err != nil {
 		http.Error(w, "invalid proxy target", http.StatusBadGateway)
@@ -844,10 +865,5 @@ func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.R
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	seedID, realizationID := realizations.SplitReference(route.Reference)
-	r.Header.Set("X-AS-Seed-ID", seedID)
-	r.Header.Set("X-AS-Realization-ID", realizationID)
-
 	proxy.ServeHTTP(w, r)
 }

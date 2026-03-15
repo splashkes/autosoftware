@@ -120,7 +120,7 @@ entrypoint: main.go
 working_directory: artifacts/<app>
 run_command: go run .
 environment:
-  AS_ADDR: 127.0.0.1:8094
+  AS_ADDR: /tmp/as-realizations/<seed-id>--<realization-id>.sock
 ```
 
 Once this file exists, the readiness stage advances to **Runnable** and the
@@ -133,10 +133,10 @@ environment, working directory — and the operator launches it. The kernel does
 not yet manage processes directly.
 
 Once the realization process is listening on its `AS_ADDR`, the kernel's
-routing middleware proxies traffic to it:
+routing middleware proxies traffic to it via unix domain socket:
 
-- **Subdomain routing:** `notepad.localhost:8090` → `127.0.0.1:8094`
-- **Path prefix routing:** `localhost:8090/notepad/` → `127.0.0.1:8094`
+- **Subdomain routing:** `notepad.localhost:8090` → `/tmp/as-realizations/<seed>--<realization>.sock`
+- **Path prefix routing:** `localhost:8090/notepad/` → `/tmp/as-realizations/<seed>--<realization>.sock`
 
 The kernel injects `X-AS-Seed-ID` and `X-AS-Realization-ID` headers so the
 realization knows its own identity.

@@ -9,7 +9,7 @@ run:
     - run
     - .
 environment:
-  AS_ADDR: 127.0.0.1:8096
+  AS_ADDR: /tmp/as-realizations/0004-event-listings--a-web-mvp.sock
   AS_ADMIN_PASSWORD: admin
   AS_DATA_FILE: data/events.json
 notes:

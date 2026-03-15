@@ -3,17 +3,21 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -120,6 +124,35 @@ func main() {
 	fmt.Println()
 	fmt.Println("    ready.")
 	fmt.Println()
+
+	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
+		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
+			log.Fatal(err)
+		}
+		os.Remove(addr)
+		ln, err := net.Listen("unix", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ln.Close()
+		defer os.Remove(addr)
+		go func() {
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+			<-sig
+			ln.Close()
+			os.Remove(addr)
+			os.Exit(0)
+		}()
+		fmt.Printf("    socket    %s\n", addr)
+		fmt.Println()
+		fmt.Println("    ready.")
+		fmt.Println()
+		if err := http.Serve(ln, requestLog(mux)); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if err := http.ListenAndServe(addr, requestLog(mux)); err != nil {
 		log.Fatal(err)
