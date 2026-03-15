@@ -1,0 +1,65 @@
+{{define "content"}}
+<div class="justify-between">
+<h1>Inbox</h1>
+</div>
+
+<form method="get" action="/agent/inbox">
+<div class="filters">
+<select name="status" onchange="this.form.submit()">
+<option value="">All Statuses</option>
+<option value="new"{{if eq .FilterStatus "new"}} selected{{end}}>New</option>
+<option value="open"{{if eq .FilterStatus "open"}} selected{{end}}>Open</option>
+<option value="pending_customer"{{if eq .FilterStatus "pending_customer"}} selected{{end}}>Pending Customer</option>
+<option value="resolved"{{if eq .FilterStatus "resolved"}} selected{{end}}>Resolved</option>
+<option value="closed"{{if eq .FilterStatus "closed"}} selected{{end}}>Closed</option>
+</select>
+<select name="assignee" onchange="this.form.submit()">
+<option value="">All Agents</option>
+<option value="unassigned"{{if eq .FilterAssignee "unassigned"}} selected{{end}}>Unassigned</option>
+{{range .Agents}}
+<option value="{{.ID}}"{{if eq .ID $.FilterAssignee}} selected{{end}}>{{.Name}}</option>
+{{end}}
+</select>
+<a href="/agent/inbox" class="btn btn-sm">Clear</a>
+</div>
+</form>
+
+{{if .Tickets}}
+<table>
+<thead>
+<tr>
+<th>Ref</th>
+<th>Subject</th>
+<th>Requester</th>
+<th>Status</th>
+<th>Priority</th>
+<th>Assignee</th>
+<th>Updated</th>
+</tr>
+</thead>
+<tbody>
+{{range .Tickets}}
+<tr>
+<td><a href="/agent/tickets/{{.ID}}"><strong>{{.RefCode}}</strong></a></td>
+<td><a href="/agent/tickets/{{.ID}}">{{.Subject}}</a></td>
+<td>{{.RequesterName}}</td>
+<td><span class="badge {{statusClass .Status}}">{{.Status.Label}}</span></td>
+<td><span class="badge {{priorityClass .Priority}}">{{.Priority.Label}}</span></td>
+<td>
+{{if .AssigneeID}}
+{{agentName $.Agents .AssigneeID}}
+{{else}}
+<span class="text-muted">—</span>
+{{end}}
+</td>
+<td class="text-muted">{{timeAgo .UpdatedAt}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<div class="card">
+<p class="text-muted">No tickets found matching the current filters.</p>
+</div>
+{{end}}
+{{end}}

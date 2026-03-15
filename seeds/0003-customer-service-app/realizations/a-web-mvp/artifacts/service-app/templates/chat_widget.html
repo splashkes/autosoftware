@@ -1,0 +1,50 @@
+{{define "content"}}
+<h1>Chat</h1>
+
+<div class="card">
+<div class="flex gap-1 items-center mb-1">
+<span class="badge {{chatStatusClass .Session.Status}}">{{.Session.Status.Label}}</span>
+{{if .Session.AgentName}}<span class="text-muted">Agent: {{.Session.AgentName}}</span>{{end}}
+{{if eq (printf "%s" .Session.Status) "waiting"}}
+<span class="text-muted">Waiting for an agent to join...</span>
+{{end}}
+</div>
+</div>
+
+<div class="chat-container">
+<div class="chat-messages" id="chat-messages" hx-ext="sse" sse-connect="/chat/{{.Session.ID}}/stream" sse-swap="message" hx-swap="beforeend">
+{{range .Session.Messages}}
+<div class="chat-msg chat-msg-{{.AuthorType}}">
+<strong>{{.AuthorName}}</strong> <span class="chat-time">{{.CreatedAt.Format "15:04"}}</span>
+<p>{{.Body}}</p>
+</div>
+{{end}}
+</div>
+
+{{if and (ne (printf "%s" .Session.Status) "ended") (ne (printf "%s" .Session.Status) "escalated")}}
+<form hx-post="/chat/{{.Session.ID}}/message" hx-target="#chat-messages" hx-swap="beforeend" hx-on::after-request="this.reset()">
+<div class="chat-input">
+<input type="text" name="body" placeholder="Type a message..." autocomplete="off" required>
+<button type="submit" class="btn btn-primary">Send</button>
+</div>
+</form>
+{{else}}
+<div class="alert alert-info">
+This chat session has ended.
+{{if .Session.TicketID}}
+Your conversation has been saved as a ticket.
+{{end}}
+</div>
+{{end}}
+</div>
+
+<script>
+// Auto-scroll to bottom when new messages arrive
+const chatMessages = document.getElementById('chat-messages');
+const observer = new MutationObserver(() => {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+observer.observe(chatMessages, { childList: true });
+chatMessages.scrollTop = chatMessages.scrollHeight;
+</script>
+{{end}}

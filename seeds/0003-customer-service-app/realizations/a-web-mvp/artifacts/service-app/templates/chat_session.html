@@ -1,0 +1,64 @@
+{{define "content"}}
+<p class="text-muted mb-1"><a href="/agent/chats">← Chat Console</a></p>
+
+<div class="justify-between">
+<h1>Chat with {{.Session.CustomerName}}</h1>
+<div class="flex gap-1 items-center">
+<span class="badge {{chatStatusClass .Session.Status}}">{{.Session.Status.Label}}</span>
+{{if eq (printf "%s" .Session.Status) "active"}}
+<form method="post" action="/agent/chats/{{.Session.ID}}/escalate" style="display:inline">
+<button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Convert this chat to a ticket?')">Escalate to Ticket</button>
+</form>
+<form method="post" action="/agent/chats/{{.Session.ID}}/end" style="display:inline">
+<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('End this chat session?')">End Chat</button>
+</form>
+{{end}}
+{{if eq (printf "%s" .Session.Status) "waiting"}}
+<form method="post" action="/agent/chats/{{.Session.ID}}/join" style="display:inline">
+<button type="submit" class="btn btn-sm btn-primary">Join Chat</button>
+</form>
+{{end}}
+</div>
+</div>
+
+<div class="card mb-1">
+<table>
+<tr><th style="width:100px">Customer</th><td>{{.Session.CustomerName}} ({{.Session.CustomerEmail}})</td></tr>
+<tr><th>Started</th><td>{{formatTime .Session.CreatedAt}}</td></tr>
+{{if .Session.TicketID}}<tr><th>Ticket</th><td><a href="/agent/tickets/{{.Session.TicketID}}">View Ticket</a></td></tr>{{end}}
+</table>
+</div>
+
+<div class="chat-container">
+<div class="chat-messages" id="chat-messages" hx-ext="sse" sse-connect="/agent/chats/{{.Session.ID}}/stream" sse-swap="message" hx-swap="beforeend">
+{{range .Session.Messages}}
+<div class="chat-msg chat-msg-{{.AuthorType}}">
+<strong>{{.AuthorName}}</strong> <span class="chat-time">{{.CreatedAt.Format "15:04"}}</span>
+<p>{{.Body}}</p>
+</div>
+{{end}}
+</div>
+
+{{if eq (printf "%s" .Session.Status) "active"}}
+<form hx-post="/agent/chats/{{.Session.ID}}/message" hx-target="#chat-messages" hx-swap="beforeend" hx-on::after-request="this.reset()">
+<div class="chat-input">
+<input type="text" name="body" placeholder="Type a message..." autocomplete="off" required>
+<button type="submit" class="btn btn-primary">Send</button>
+</div>
+</form>
+{{else if eq (printf "%s" .Session.Status) "ended"}}
+<div class="alert alert-info">This chat session has ended.</div>
+{{else if eq (printf "%s" .Session.Status) "escalated"}}
+<div class="alert alert-info">This chat has been escalated to a ticket.</div>
+{{end}}
+</div>
+
+<script>
+const chatMessages = document.getElementById('chat-messages');
+const observer = new MutationObserver(() => {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+observer.observe(chatMessages, { childList: true });
+chatMessages.scrollTop = chatMessages.scrollHeight;
+</script>
+{{end}}

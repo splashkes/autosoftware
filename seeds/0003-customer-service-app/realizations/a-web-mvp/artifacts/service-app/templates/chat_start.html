@@ -1,0 +1,27 @@
+{{define "content"}}
+<h1>Live Chat</h1>
+
+<p class="text-muted mb-2">Start a conversation with our support team. If no agent is available, we'll automatically create a ticket for you.</p>
+
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+<form method="post" action="/chat">
+<div class="form-row">
+<div class="form-group">
+<label for="name">Your Name</label>
+<input type="text" id="name" name="name" required value="{{.Name}}">
+</div>
+<div class="form-group">
+<label for="email">Email Address</label>
+<input type="email" id="email" name="email" required value="{{.Email}}">
+</div>
+</div>
+<div class="form-group">
+<label for="message">Your Message</label>
+<textarea id="message" name="message" required placeholder="How can we help you today?">{{.Message}}</textarea>
+</div>
+<button type="submit" class="btn btn-primary">Start Chat</button>
+</form>
+</div>
+{{end}}

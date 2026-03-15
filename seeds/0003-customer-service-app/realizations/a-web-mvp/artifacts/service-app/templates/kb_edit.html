@@ -1,0 +1,58 @@
+{{define "content"}}
+<p class="text-muted mb-1"><a href="/agent/articles">← All Articles</a></p>
+
+{{if .IsNew}}
+<h1>New Article</h1>
+{{else}}
+<div class="justify-between">
+<h1>Edit: {{.Article.Title}}</h1>
+<div class="flex gap-1">
+{{if eq (printf "%s" .Article.Status) "draft"}}
+<form method="post" action="/agent/articles/{{.Article.ID}}/publish" style="display:inline">
+<button type="submit" class="btn btn-success btn-sm">Publish</button>
+</form>
+{{else}}
+<a href="/help/articles/{{.Article.Slug}}" class="btn btn-sm" target="_blank">View Public</a>
+<form method="post" action="/agent/articles/{{.Article.ID}}/unpublish" style="display:inline">
+<button type="submit" class="btn btn-sm">Unpublish</button>
+</form>
+{{end}}
+<form method="post" action="/agent/articles/{{.Article.ID}}/delete" style="display:inline">
+<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this article?')">Delete</button>
+</form>
+</div>
+</div>
+{{if eq (printf "%s" .Article.Status) "published"}}
+<div class="alert alert-success">This article is published.</div>
+{{else}}
+<div class="alert alert-info">This article is a draft.</div>
+{{end}}
+{{end}}
+
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+{{if .IsNew}}
+<form method="post" action="/agent/articles">
+{{else}}
+<form method="post" action="/agent/articles/{{.Article.ID}}">
+{{end}}
+<div class="form-group">
+<label for="title">Title</label>
+<input type="text" id="title" name="title" required value="{{if .Article}}{{.Article.Title}}{{else}}{{.ArticleTitle}}{{end}}">
+</div>
+<div class="form-group">
+<label for="category">Category</label>
+<input type="text" id="category" name="category" value="{{if .Article}}{{.Article.Category}}{{else}}{{.Category}}{{end}}" placeholder="e.g., General, Billing, Technical" list="category-list">
+<datalist id="category-list">
+{{range .Categories}}<option value="{{.}}">{{end}}
+</datalist>
+</div>
+<div class="form-group">
+<label for="body">Content</label>
+<textarea id="body" name="body" required style="min-height:300px" placeholder="Article content... Supports basic formatting:&#10;# Heading&#10;## Subheading&#10;- List item&#10;**bold text**">{{if .Article}}{{.Article.Body}}{{else}}{{.Body}}{{end}}</textarea>
+</div>
+<button type="submit" class="btn btn-primary">{{if .IsNew}}Create Article{{else}}Save Changes{{end}}</button>
+</form>
+</div>
+{{end}}

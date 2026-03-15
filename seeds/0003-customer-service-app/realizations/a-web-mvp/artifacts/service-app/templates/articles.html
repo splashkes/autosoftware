@@ -1,0 +1,35 @@
+{{define "content"}}
+<h1>Knowledge Base</h1>
+
+<div class="search-box">
+<form method="get" action="/help/articles">
+<input type="text" name="q" placeholder="Search articles..." value="{{.Query}}">
+</form>
+</div>
+
+{{if .Categories}}
+<div class="filters mb-2">
+<span class="text-muted">Categories:</span>
+<a href="/help/articles" class="btn btn-sm{{if not .Category}} btn-primary{{end}}">All</a>
+{{range .Categories}}
+<a href="/help/articles?category={{.}}" class="btn btn-sm{{if eq . $.Category}} btn-primary{{end}}">{{.}}</a>
+{{end}}
+</div>
+{{end}}
+
+{{if .Query}}
+<h2>Results for "{{.Query}}"</h2>
+{{end}}
+
+{{if .Articles}}
+{{range .Articles}}
+<div class="card">
+<h3><a href="/help/articles/{{.Slug}}">{{.Title}}</a></h3>
+<span class="badge badge-blue">{{.Category}}</span>
+<span class="text-muted" style="margin-left:.5rem">Updated {{timeAgo .UpdatedAt}}</span>
+</div>
+{{end}}
+{{else}}
+<p class="text-muted">No articles found.{{if .Query}} Try a different search term.{{end}}</p>
+{{end}}
+{{end}}

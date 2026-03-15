@@ -1,0 +1,27 @@
+{{define "content"}}
+<h1>Request Submitted</h1>
+
+<div class="alert alert-success">
+Your support request has been submitted successfully.
+</div>
+
+<div class="card">
+<h3>Ticket Details</h3>
+<table>
+<tr><th style="width:140px">Reference Code</th><td><strong>{{.Ticket.RefCode}}</strong></td></tr>
+<tr><th>Subject</th><td>{{.Ticket.Subject}}</td></tr>
+<tr><th>Status</th><td><span class="badge badge-blue">New</span></td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>Access Your Ticket</h3>
+<p>Use this secure link to view your ticket status and reply to our team:</p>
+<p class="mt-1"><a href="{{.AccessURL}}" class="btn btn-primary">View Your Ticket</a></p>
+<p class="text-muted mt-1">
+Save this link — you can use it anytime to check your ticket status or reply.
+If you lose the link, you can recover access using your email and reference code <strong>{{.Ticket.RefCode}}</strong>
+on the <a href="/help/tickets/lookup">ticket lookup page</a>.
+</p>
+</div>
+{{end}}

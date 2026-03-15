@@ -1,0 +1,31 @@
+{{define "content"}}
+<h1>Submit a Support Request</h1>
+
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+<form method="post" action="/help/tickets">
+<div class="form-row">
+<div class="form-group">
+<label for="name">Your Name</label>
+<input type="text" id="name" name="name" required value="{{.Name}}">
+</div>
+<div class="form-group">
+<label for="email">Email Address</label>
+<input type="email" id="email" name="email" required value="{{.Email}}">
+</div>
+</div>
+<div class="form-group">
+<label for="subject">Subject</label>
+<input type="text" id="subject" name="subject" required value="{{.Subject}}" placeholder="Brief summary of your issue">
+</div>
+<div class="form-group">
+<label for="description">Description</label>
+<textarea id="description" name="description" required placeholder="Please describe your issue in detail...">{{.Description}}</textarea>
+</div>
+<button type="submit" class="btn btn-primary">Submit Request</button>
+</form>
+</div>
+
+<p class="text-muted mt-1">You do not need to create an account. We'll provide a secure link to track your ticket.</p>
+{{end}}

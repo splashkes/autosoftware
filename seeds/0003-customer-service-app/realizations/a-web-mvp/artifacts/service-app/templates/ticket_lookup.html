@@ -1,0 +1,23 @@
+{{define "content"}}
+<h1>Find Your Ticket</h1>
+
+<p class="text-muted mb-2">Enter your email address and ticket reference code to access your ticket.</p>
+
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+<div class="card">
+<form method="post" action="/help/tickets/lookup">
+<div class="form-row">
+<div class="form-group">
+<label for="email">Email Address</label>
+<input type="email" id="email" name="email" required value="{{.Email}}" placeholder="you@example.com">
+</div>
+<div class="form-group">
+<label for="ref_code">Reference Code</label>
+<input type="text" id="ref_code" name="ref_code" required value="{{.RefCode}}" placeholder="CS-0001">
+</div>
+</div>
+<button type="submit" class="btn btn-primary">Find Ticket</button>
+</form>
+</div>
+{{end}}
