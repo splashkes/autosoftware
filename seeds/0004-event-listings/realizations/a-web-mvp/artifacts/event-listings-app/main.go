@@ -347,6 +347,8 @@ type homePageData struct {
 	CurrentPath    string
 	Filters        directoryFilters
 	Events         []*eventView
+	Featured       *eventView
+	Spotlights     []*eventView
 	Categories     []string
 	Locations      []string
 	Stats          statsView
@@ -376,6 +378,13 @@ type eventView struct {
 	RangeLabel    string `json:"range_label"`
 	StatusLabel   string `json:"status_label"`
 	LocationLabel string `json:"location_label"`
+	ThemeClass    string `json:"theme_class"`
+	DayName       string `json:"day_name"`
+	MonthShort    string `json:"month_short"`
+	DayNumber     string `json:"day_number"`
+	TimeBadge     string `json:"time_badge"`
+	DiscoveryNote string `json:"discovery_note"`
+	Atmosphere    string `json:"atmosphere"`
 }
 
 type statsView struct {
@@ -395,6 +404,8 @@ func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
 		CurrentPath:    r.URL.Path,
 		Filters:        filters,
 		Events:         events,
+		Featured:       firstEvent(events),
+		Spotlights:     takeEvents(events, 3),
 		Categories:     categories,
 		Locations:      locations,
 		Stats:          a.stats(),
@@ -421,6 +432,7 @@ type calendarPageData struct {
 	MonthLabel  string
 	PrevMonth   string
 	NextMonth   string
+	Highlights  []*eventView
 	Days        []calendarDayView
 }
 
@@ -441,6 +453,7 @@ func (a *app) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		MonthLabel:  monthLabel(month),
 		PrevMonth:   monthStart.AddDate(0, -1, 0).Format("2006-01"),
 		NextMonth:   monthStart.AddDate(0, 1, 0).Format("2006-01"),
+		Highlights:  a.calendarHighlights(month, 3),
 		Days:        a.calendarDays(month),
 	}
 	a.render(w, "calendar", data)
@@ -452,6 +465,7 @@ type detailPageData struct {
 	Event       *eventView
 	Warning     string
 	IsAdmin     bool
+	Related     []*eventView
 }
 
 func (a *app) handleEventDetail(w http.ResponseWriter, r *http.Request) {
@@ -479,6 +493,7 @@ func (a *app) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 		Event:       toEventView(event),
 		Warning:     warning,
 		IsAdmin:     isAdmin,
+		Related:     a.relatedEvents(event.ID, event.Category, 3),
 	})
 }
 
@@ -870,6 +885,53 @@ func (a *app) calendarDays(month string) []calendarDayView {
 	return days
 }
 
+func (a *app) calendarHighlights(month string, limit int) []*eventView {
+	start, err := time.Parse("2006-01", month)
+	if err != nil {
+		return nil
+	}
+	end := start.AddDate(0, 1, 0)
+	items := make([]*eventView, 0, limit)
+	for _, event := range a.store.all() {
+		if !isPublic(event) {
+			continue
+		}
+		if event.End.Before(start) || !event.Start.Before(end) {
+			continue
+		}
+		items = append(items, toEventView(event))
+		if len(items) == limit {
+			break
+		}
+	}
+	return items
+}
+
+func (a *app) relatedEvents(id, category string, limit int) []*eventView {
+	items := make([]*eventView, 0, limit)
+	fallback := make([]*eventView, 0, limit)
+	for _, event := range a.store.all() {
+		if event.ID == id || !isPublic(event) || !isUpcoming(event) {
+			continue
+		}
+		view := toEventView(event)
+		if strings.EqualFold(event.Category, category) && len(items) < limit {
+			items = append(items, view)
+			continue
+		}
+		if len(fallback) < limit {
+			fallback = append(fallback, view)
+		}
+	}
+	for _, item := range fallback {
+		if len(items) == limit {
+			break
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 func (a *app) handleDirectoryProjection(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"filters": parseDirectoryFilters(r),
@@ -1181,7 +1243,31 @@ func toEventView(event *eventRecord) *eventView {
 		RangeLabel:    formatRange(start, end, event.AllDay, event.Timezone),
 		StatusLabel:   strings.Title(string(event.Status)),
 		LocationLabel: joinNonEmpty(" · ", event.Venue, event.Location),
+		ThemeClass:    eventThemeClass(event),
+		DayName:       strings.ToUpper(start.Format("Mon")),
+		MonthShort:    strings.ToUpper(start.Format("Jan")),
+		DayNumber:     start.Format("2"),
+		TimeBadge:     eventTimeBadge(start, end, event.AllDay),
+		DiscoveryNote: eventDiscoveryNote(event),
+		Atmosphere:    eventAtmosphere(event),
 	}
+}
+
+func firstEvent(events []*eventView) *eventView {
+	if len(events) == 0 {
+		return nil
+	}
+	return events[0]
+}
+
+func takeEvents(events []*eventView, limit int) []*eventView {
+	if limit <= 0 || len(events) == 0 {
+		return nil
+	}
+	if len(events) < limit {
+		limit = len(events)
+	}
+	return events[:limit]
 }
 
 func formFromInput(input eventInput) eventFormView {
@@ -1242,6 +1328,59 @@ func formatRange(start, end time.Time, allDay bool, timezone string) string {
 		return start.Format("Mon Jan 2, 2006 · 3:04 PM") + " to " + end.Format("3:04 PM") + " · " + timezone
 	}
 	return start.Format("Mon Jan 2, 2006 · 3:04 PM") + " to " + end.Format("Mon Jan 2, 2006 · 3:04 PM") + " · " + timezone
+}
+
+func eventTimeBadge(start, end time.Time, allDay bool) string {
+	if allDay {
+		if sameDay(start, end) {
+			return "ALL DAY"
+		}
+		return "MULTI-DAY"
+	}
+	return strings.ToUpper(start.Format("3:04 PM"))
+}
+
+func eventThemeClass(event *eventRecord) string {
+	switch {
+	case event.Status == statusCanceled:
+		return "ember"
+	case strings.EqualFold(event.Category, "Workshop"):
+		return "marine"
+	case strings.EqualFold(event.Category, "Community"):
+		return "sunset"
+	case strings.EqualFold(event.Category, "Volunteer"):
+		return "grove"
+	default:
+		return "midnight"
+	}
+}
+
+func eventDiscoveryNote(event *eventRecord) string {
+	switch {
+	case strings.EqualFold(event.Category, "Community"):
+		return "Good pick for a group text: social, local, and easy to say yes to after work."
+	case strings.EqualFold(event.Category, "Workshop"):
+		return "More useful than passive: this is the kind of event people attend to leave with sharper notes and new contacts."
+	case strings.EqualFold(event.Category, "Volunteer"):
+		return "Shows up best when people want a concrete plan and a clear meeting point."
+	case event.Status == statusCanceled:
+		return "Kept visible so nobody wastes a trip or assumes it quietly vanished."
+	default:
+		return "A focused local listing with enough detail to decide quickly and share confidently."
+	}
+}
+
+func eventAtmosphere(event *eventRecord) string {
+	switch {
+	case strings.EqualFold(event.Category, "Community"):
+		return "Casual evening energy"
+	case strings.EqualFold(event.Category, "Workshop"):
+		return "Small-room skill building"
+	case strings.EqualFold(event.Category, "Volunteer"):
+		return "Morning with a purpose"
+	default:
+		return "Local scene pick"
+	}
 }
 
 func joinNonEmpty(sep string, values ...string) string {
@@ -1348,29 +1487,94 @@ const frameTemplate = `
 const homeTemplate = `
 {{define "home"}}
   {{template "frame_start" .}}
-  <section class="hero">
-    <div class="hero-card">
-      <h1>Publish events with discipline. Discover them without friction.</h1>
-      <p>Organizers move events through draft, published, canceled, and archived states. Visitors browse one public directory, one shared calendar, and stable event pages that do not shift when details change.</p>
+  <section class="landing">
+    <div class="hero-card landing-copy">
+      <p class="section-kicker">City picks for people who actually go out</p>
+      <h1>Find the nights, workshops, and local scenes worth texting your friends about.</h1>
+      <p>Field Guide Events should feel less like a spreadsheet of listings and more like a trustworthy local guide: quick to scan, easy to share, and clear about whether something is worth leaving home for.</p>
+      <div class="hero-actions">
+        <a class="pill-link" href="#browse">Browse picks</a>
+        <a class="pill-link alt" href="{{.MonthURL}}">Open {{.MonthLabel}}</a>
+      </div>
       <div class="hero-stats">
-        <div class="stat"><strong>{{.Stats.Upcoming}}</strong>Upcoming public listings</div>
-        <div class="stat"><strong>{{.Stats.Canceled}}</strong>Still-visible canceled events</div>
-        <div class="stat"><strong>{{.Stats.Categories}}</strong>Categories in circulation</div>
+        <div class="stat"><strong>{{.Stats.Upcoming}}</strong>live picks this week</div>
+        <div class="stat"><strong>{{.Stats.Categories}}</strong>ways to spend the week</div>
+        <div class="stat"><strong>{{.Stats.Canceled}}</strong>clear status updates</div>
       </div>
     </div>
     <aside class="hero-side hero-card">
-      <h2>This release stays narrow on purpose.</h2>
-      <p>No ticketing, no attendee accounts, no recurrence engine. Just reliable publishing, trustworthy public discovery, and explicit time handling for small teams.</p>
-      <a class="pill-link alt" href="{{.MonthURL}}">Open {{.MonthLabel}}</a>
-      <a class="pill-link alt" href="/admin">Enter organizer workspace</a>
+      <p class="section-kicker subtle">This week’s rhythm</p>
+      <h2>Fast answers to the real questions.</h2>
+      <ul class="scene-points">
+        <li>What is actually happening soon?</li>
+        <li>Which listing feels social versus useful?</li>
+        <li>What can I forward without adding explanation?</li>
+      </ul>
+      <a class="pill-link alt" href="/admin">Organizer workspace</a>
     </aside>
   </section>
 
   {{if .Flash}}<div class="notice">{{.Flash}}</div>{{end}}
 
+  {{if .Featured}}
+  <section class="feature-band theme-{{.Featured.ThemeClass}}">
+    <a class="feature-poster" href="{{.Featured.PublicURL}}">
+      <div class="poster-meta">{{.Featured.Category}} · {{.Featured.Atmosphere}}</div>
+      <div class="poster-date">
+        <span>{{.Featured.MonthShort}}</span>
+        <strong>{{.Featured.DayNumber}}</strong>
+      </div>
+      <h2>{{.Featured.Title}}</h2>
+      <p>{{.Featured.LocationLabel}}</p>
+    </a>
+    <div class="feature-copy">
+      <p class="section-kicker">Featured pick</p>
+      <h2>{{.Featured.Summary}}</h2>
+      <p class="feature-note">{{.Featured.DiscoveryNote}}</p>
+      <dl class="summary-list feature-facts">
+        <div><dt>When</dt><dd>{{.Featured.RangeLabel}}</dd></div>
+        <div><dt>Where</dt><dd>{{.Featured.LocationLabel}}</dd></div>
+      </dl>
+      <div class="hero-actions">
+        <a class="pill-link" href="{{.Featured.PublicURL}}">Open event page</a>
+        <a class="pill-link alt" href="{{.CalendarURL}}">View full calendar</a>
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="section-head" id="browse">
+    <div>
+      <h2>Quick picks</h2>
+      <p>Events should scan like recommendations, not database rows.</p>
+    </div>
+  </section>
+
+  <section class="spotlight-grid">
+    {{range .Spotlights}}
+    <article class="spotlight-card theme-{{.ThemeClass}}">
+      <div class="spotlight-top">
+        <div class="mini-date">
+          <span>{{.MonthShort}}</span>
+          <strong>{{.DayNumber}}</strong>
+        </div>
+        <div>
+          <p class="section-kicker subtle">{{.Category}} · {{.TimeBadge}}</p>
+          <h3><a href="{{.PublicURL}}">{{.Title}}</a></h3>
+        </div>
+      </div>
+      <p>{{.DiscoveryNote}}</p>
+      <div class="spotlight-foot">
+        <span>{{.LocationLabel}}</span>
+        <a class="text-link" href="{{.PublicURL}}">Why go?</a>
+      </div>
+    </article>
+    {{end}}
+  </section>
+
   <section class="section-head">
     <div>
-      <h2>Upcoming directory</h2>
+      <h2>Dial the map in</h2>
       <p>Search by keyword, then narrow by date range, category, or location.</p>
     </div>
     <a class="pill-link alt" href="{{.CalendarURL}}">Switch to calendar</a>
@@ -1412,13 +1616,26 @@ const homeTemplate = `
     </form>
   </section>
 
-  <section class="event-grid">
+  <section class="section-head">
+    <div>
+      <h2>Browse everything upcoming</h2>
+      <p>Still structured, but now with a little more attitude.</p>
+    </div>
+  </section>
+
+  <section class="event-grid discovery-grid">
     {{if .Events}}
       {{range .Events}}
-      <article class="event-card">
-        <div class="eyebrow">
-          <span class="badge {{.Status}}">{{.StatusLabel}}</span>
-          <span>{{.Category}}</span>
+      <article class="event-card discovery-card theme-{{.ThemeClass}}">
+        <div class="event-poster">
+          <div class="mini-date">
+            <span>{{.MonthShort}}</span>
+            <strong>{{.DayNumber}}</strong>
+          </div>
+          <div class="poster-copy">
+            <span class="badge {{.Status}}">{{.StatusLabel}}</span>
+            <span class="eyebrow">{{.Category}} · {{.TimeBadge}}</span>
+          </div>
         </div>
         <div>
           <h3><a href="{{.PublicURL}}">{{.Title}}</a></h3>
@@ -1428,6 +1645,7 @@ const homeTemplate = `
           <div><dt>When</dt><dd>{{.RangeLabel}}</dd></div>
           <div><dt>Where</dt><dd>{{.LocationLabel}}</dd></div>
         </dl>
+        <p class="card-note">{{.DiscoveryNote}}</p>
         <a class="pill-link" href="{{.PublicURL}}">View details</a>
       </article>
       {{end}}
@@ -1442,16 +1660,41 @@ const homeTemplate = `
 const calendarTemplate = `
 {{define "calendar"}}
   {{template "frame_start" .}}
-  <section class="section-head">
+  <section class="section-head calendar-hero">
     <div>
+      <p class="section-kicker">Plan the month, then pick the nights that feel alive</p>
       <h2>{{.MonthLabel}}</h2>
-      <p>Single-day and simple multi-day events appear on every covered day.</p>
+      <p>Use the grid for timing, but use the highlights to decide what is actually worth your attention.</p>
     </div>
     <div class="nav-actions">
       <a class="pill-link alt" href="/calendar?month={{.PrevMonth}}">Previous</a>
       <a class="pill-link alt" href="/calendar?month={{.NextMonth}}">Next</a>
     </div>
   </section>
+
+  {{if .Highlights}}
+  <section class="spotlight-grid calendar-highlights">
+    {{range .Highlights}}
+    <article class="spotlight-card theme-{{.ThemeClass}}">
+      <div class="spotlight-top">
+        <div class="mini-date">
+          <span>{{.MonthShort}}</span>
+          <strong>{{.DayNumber}}</strong>
+        </div>
+        <div>
+          <p class="section-kicker subtle">{{.Category}} · {{.TimeBadge}}</p>
+          <h3><a href="{{.PublicURL}}">{{.Title}}</a></h3>
+        </div>
+      </div>
+      <p>{{.Summary}}</p>
+      <div class="spotlight-foot">
+        <span>{{.LocationLabel}}</span>
+        <a class="text-link" href="{{.PublicURL}}">Open event</a>
+      </div>
+    </article>
+    {{end}}
+  </section>
+  {{end}}
 
   <section class="calendar-card">
     <div class="calendar-grid">
@@ -1486,36 +1729,79 @@ const detailTemplate = `
     <div class="notice {{if eq .Event.Status "canceled"}}warning{{end}}">{{.Warning}}</div>
   {{end}}
   <section class="detail-layout">
-    <article class="hero-card">
-      <div class="eyebrow">
-        <span class="badge {{.Event.Status}}">{{.Event.StatusLabel}}</span>
-        <span>{{.Event.Category}}</span>
+    <article class="hero-card detail-story theme-{{.Event.ThemeClass}}">
+      <div class="detail-banner">
+        <div class="mini-date inverted">
+          <span>{{.Event.MonthShort}}</span>
+          <strong>{{.Event.DayNumber}}</strong>
+        </div>
+        <div>
+          <div class="eyebrow">
+            <span class="badge {{.Event.Status}}">{{.Event.StatusLabel}}</span>
+            <span>{{.Event.Category}} · {{.Event.Atmosphere}}</span>
+          </div>
+          <h1 class="detail-title">{{.Event.Title}}</h1>
+        </div>
       </div>
-      <h1 style="font-size:clamp(2.2rem,5vw,4rem);margin-top:12px;">{{.Event.Title}}</h1>
-      <p>{{.Event.Summary}}</p>
+      <p class="detail-lead">{{.Event.Summary}}</p>
+      <div class="pull-quote">{{.Event.DiscoveryNote}}</div>
       <div class="prose">{{.Event.Description}}</div>
-      {{if .Event.ExternalURL}}
-        <p><a class="pill-link" href="{{.Event.ExternalURL}}" target="_blank" rel="noreferrer">External event link</a></p>
-      {{end}}
-      {{if .IsAdmin}}
-        <p class="muted">Organizer note: this public URL is fixed at <code>{{.Event.PublicURL}}</code>.</p>
-      {{end}}
+      <div class="hero-actions">
+        {{if .Event.ExternalURL}}
+          <a class="pill-link" href="{{.Event.ExternalURL}}" target="_blank" rel="noreferrer">Open official event link</a>
+        {{end}}
+        <a class="pill-link alt" href="/calendar">See this in the calendar</a>
+      </div>
     </article>
-    <aside class="panel">
-      <h2>Event facts</h2>
+    <aside class="panel detail-sidebar">
+      <h2>Before you send this to friends</h2>
       <dl class="meta-list">
         <div><dt>When</dt><dd>{{.Event.RangeLabel}}</dd></div>
         <div><dt>Venue</dt><dd>{{.Event.Venue}}</dd></div>
         <div><dt>Location</dt><dd>{{.Event.Location}}</dd></div>
         <div><dt>Timezone</dt><dd>{{.Event.Timezone}}</dd></div>
         <div><dt>Status</dt><dd>{{.Event.StatusLabel}}</dd></div>
+        <div><dt>Best fit</dt><dd>{{.Event.Atmosphere}}</dd></div>
       </dl>
+      {{if .IsAdmin}}
+        <p class="muted">Stable public URL: <code>{{.Event.PublicURL}}</code></p>
+      {{end}}
       <div class="nav-actions">
         <a class="pill-link alt" href="/">Back to directory</a>
         <a class="pill-link alt" href="/calendar">Calendar</a>
       </div>
     </aside>
   </section>
+
+  {{if .Related}}
+  <section class="section-head">
+    <div>
+      <h2>Keep the night moving</h2>
+      <p>If this one is close, these are the next listings worth checking.</p>
+    </div>
+  </section>
+  <section class="spotlight-grid">
+    {{range .Related}}
+    <article class="spotlight-card theme-{{.ThemeClass}}">
+      <div class="spotlight-top">
+        <div class="mini-date">
+          <span>{{.MonthShort}}</span>
+          <strong>{{.DayNumber}}</strong>
+        </div>
+        <div>
+          <p class="section-kicker subtle">{{.Category}} · {{.TimeBadge}}</p>
+          <h3><a href="{{.PublicURL}}">{{.Title}}</a></h3>
+        </div>
+      </div>
+      <p>{{.Summary}}</p>
+      <div class="spotlight-foot">
+        <span>{{.LocationLabel}}</span>
+        <a class="text-link" href="{{.PublicURL}}">Open event</a>
+      </div>
+    </article>
+    {{end}}
+  </section>
+  {{end}}
   {{template "frame_end" .}}
 {{end}}
 `
