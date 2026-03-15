@@ -1,5 +1,23 @@
 # Evolution Instructions
 
+> **Boundary rule — read this first.**
+> Your work happens in `seeds/`. Do not modify anything under `kernel/`,
+> including `kernel/go.mod`, `kernel/go.sum`, `kernel/internal/`, or
+> `kernel/cmd/`. The kernel is trusted infrastructure maintained separately.
+> Do not modify `compose.yaml` or shared root-level config files.
+> All application code, runtime configuration, and artifacts belong under
+> `seeds/<seed_id>/realizations/<realization_id>/artifacts/`.
+
+> **Port assignments.** Each realization must bind to its assigned address
+> to avoid collisions when multiple realizations run concurrently.
+>
+> | Seed | `AS_ADDR` |
+> |------|-----------|
+> | 0001-shared-notepad | `127.0.0.1:8094` |
+> | 0003-customer-service-app | `127.0.0.1:8095` |
+> | 0004-event-listings | `127.0.0.1:8096` |
+> | 0005-charity-auction-manager | `127.0.0.1:8097` |
+
 The entire Autosoftware project exists to make this process work. Every other
 component — the registry, the materializer, the kernel, federation — is
 infrastructure in service of one thing: a seed becomes running software, and
@@ -7,6 +25,8 @@ that software keeps evolving from within.
 
 This document is the primary guide for anyone or anything that participates
 in that process. Human, AI agent, automated pipeline, or any combination.
+
+For a one-page summary, see [EVOLUTION_QUICK.md](EVOLUTION_QUICK.md).
 
 ---
 
