@@ -47,3 +47,47 @@ Reason:
 
 - recurrence logic creates disproportionate complexity
 - single and simple multi-day events are enough for the first useful release
+
+## Stable Slugs Generated Once
+
+The first runnable realization generates a slug when an event is created and
+keeps that slug fixed through later edits.
+
+Reason:
+
+- public detail URLs must remain stable across organizer edits
+- the simplest trustworthy rule is "slug is write-once"
+- a stored slug avoids title-change edge cases in links, search, and archives
+
+## Server-Rendered MVP First
+
+The initial runnable realization is a self-contained server-rendered Go web app
+with local file-backed persistence and minimal JSON projections.
+
+Reason:
+
+- it satisfies the seed quickly without changing kernel infrastructure
+- it keeps organizer and public surfaces coherent in one code path
+- it leaves room for later persistence and kernel capability integration
+
+## Discovery Pages Need Editorial Framing
+
+Public discovery pages cannot behave like neutral record listings if the goal is
+habit-forming event discovery.
+
+Reason:
+
+- people decide quickly using curation cues, not only filters
+- event cards need atmosphere, organizer identity, and a reason to share
+- a discovery product needs featured picks, related events, and social proof
+
+## File-Backed Local Persistence
+
+The first usable MVP needs to survive restarts even before a database-backed
+runtime is introduced.
+
+Reason:
+
+- organizers cannot evaluate an event product if drafts disappear on reboot
+- JSON persistence keeps the seed self-contained within artifacts/
+- it creates a practical bridge to later kernel or database integration

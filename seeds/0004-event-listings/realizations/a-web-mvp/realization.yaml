@@ -3,3 +3,13 @@ seed_id: 0004-event-listings
 approach_id: a-web-mvp
 summary: First web MVP for public event publishing and discovery.
 status: draft
+subdomain: events
+path_prefix: /event-listings/
+artifacts:
+  - artifacts/runtime.yaml
+  - artifacts/event-listings-app/go.mod
+  - artifacts/event-listings-app/main.go
+  - artifacts/event-listings-app/main_test.go
+  - artifacts/event-listings-app/README.md
+  - artifacts/event-listings-app/assets/app.css
+  - artifacts/event-listings-app/assets/app.js
