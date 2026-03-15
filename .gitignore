@@ -11,6 +11,9 @@
 /kernel/materializerd
 /kernel/webd
 /seeds/**/artifacts/**/shared-notepad
+/seeds/**/artifacts/**/service-app/service-app
+/seeds/**/artifacts/**/event-listings-app/event-listings
+/seeds/**/artifacts/**/notepad-app/notepad-app
 
 # Local hydrated/materialized state
 /materialized/
