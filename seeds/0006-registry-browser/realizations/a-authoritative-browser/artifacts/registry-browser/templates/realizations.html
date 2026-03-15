@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Realizations</h2>
+  <p>Each realization is a concrete implementation of a seed.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/realizations">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search realizations...">
+  <button type="submit">Search</button>
+</form>
+
+{{if .Realizations}}
+<ul class="resource-list">
+  {{range .Realizations}}
+  <li class="resource-item">
+    <a href="/realizations/{{pathEscape .Reference}}" class="name">{{.Reference}}</a>
+    <div class="meta">
+      <span>{{.Status}}</span>
+      <span>{{.SurfaceKind}}</span>
+      <span>{{.CommandCount}} {{plural .CommandCount "command" "commands"}}</span>
+      <span>{{.ProjectionCount}} {{plural .ProjectionCount "projection" "projections"}}</span>
+    </div>
+    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No realizations found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

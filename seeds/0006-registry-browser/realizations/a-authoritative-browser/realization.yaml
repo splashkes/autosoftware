@@ -1,0 +1,11 @@
+realization_id: a-authoritative-browser
+seed_id: 0006-registry-browser
+approach_id: a-authoritative-browser
+summary: First read-only registry browser realization focused on trust, provenance, and explicit API access.
+status: draft
+subdomain: registry
+path_prefix: /registry/
+artifacts:
+  - artifacts/runtime.yaml
+  - artifacts/registry-browser/go.mod
+  - artifacts/registry-browser/main.go

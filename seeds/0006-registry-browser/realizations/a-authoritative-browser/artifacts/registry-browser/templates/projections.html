@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Projections</h2>
+  <p>Projections are read-only views declared by realizations.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/projections">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search projections...">
+  {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
+  <button type="submit">Search</button>
+</form>
+
+{{if .Projections}}
+<ul class="resource-list">
+  {{range .Projections}}
+  <li class="resource-item">
+    <a href="/projections/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    <div class="meta">
+      <span>{{.SeedID}}</span>
+      <span>{{.RealizationID}}</span>
+      <span>{{.Freshness}}</span>
+      {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
+    </div>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No projections found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

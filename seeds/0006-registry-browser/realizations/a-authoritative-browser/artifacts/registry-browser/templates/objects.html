@@ -1,0 +1,43 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Objects</h2>
+  <p>Objects represent stable identities in the registry. Each object has a seed and kind.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/objects">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search objects...">
+  {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
+  {{if .SchemaRef}}<input type="hidden" name="schema_ref" value="{{.SchemaRef}}">{{end}}
+  <button type="submit">Search</button>
+</form>
+
+{{if .SeedIDs}}
+<div class="facets">
+  <span class="label">Seed:</span>
+  <a href="/objects{{if .Query}}?q={{queryEscape .Query}}{{end}}" class="facet-tag{{if not .SeedID}} active{{end}}">All</a>
+  {{range .SeedIDs}}
+  <a href="/objects?seed_id={{queryEscape .}}{{if $.Query}}&q={{queryEscape $.Query}}{{end}}" class="facet-tag{{if eq . $.SeedID}} active{{end}}">{{.}}</a>
+  {{end}}
+</div>
+{{end}}
+
+{{if .Objects}}
+<ul class="resource-list">
+  {{range .Objects}}
+  <li class="resource-item">
+    <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+    <div class="meta">
+      <span>{{.SeedID}}</span>
+      <span>{{.RealizationCount}} {{plural .RealizationCount "realization" "realizations"}}</span>
+      <span>{{.CommandCount}} {{plural .CommandCount "command" "commands"}}</span>
+      <span>{{.ProjectionCount}} {{plural .ProjectionCount "projection" "projections"}}</span>
+    </div>
+    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No objects found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

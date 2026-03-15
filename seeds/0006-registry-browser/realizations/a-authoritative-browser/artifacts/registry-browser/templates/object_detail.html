@@ -1,0 +1,89 @@
+{{define "content"}}
+{{$o := .Object}}
+<div class="page-head">
+  <h2>{{$o.Kind}}</h2>
+  <p>{{$o.Summary}}</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>Identity</h3>
+  <table class="field-table">
+    <tr><td>Seed</td><td>{{$o.SeedID}}</td></tr>
+    <tr><td>Kind</td><td>{{$o.Kind}}</td></tr>
+  </table>
+</div>
+
+{{if $o.Capabilities}}
+<div class="detail-section">
+  <h3>Capabilities</h3>
+  {{range $o.Capabilities}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+{{if $o.Schemas}}
+<div class="detail-section">
+  <h3>Schemas</h3>
+  <ul class="resource-list">
+    {{range $o.Schemas}}
+    <li class="resource-item">
+      <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Realizations}}
+<div class="detail-section">
+  <h3>Realizations</h3>
+  <ul class="resource-list">
+    {{range $o.Realizations}}
+    <li class="resource-item">
+      <a href="/realizations/{{pathEscape .Reference}}" class="name">{{.Reference}}</a>
+      <div class="meta">
+        <span>{{.Status}}</span>
+        <span>{{.SurfaceKind}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Commands}}
+<div class="detail-section">
+  <h3>Commands</h3>
+  <ul class="resource-list">
+    {{range $o.Commands}}
+    <li class="resource-item">
+      <a href="/commands/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Projections}}
+<div class="detail-section">
+  <h3>Projections</h3>
+  <ul class="resource-list">
+    {{range $o.Projections}}
+    <li class="resource-item">
+      <a href="/projections/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        <span>{{.Freshness}}</span>
+        {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

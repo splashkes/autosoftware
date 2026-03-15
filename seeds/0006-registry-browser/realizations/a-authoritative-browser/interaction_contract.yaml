@@ -1,0 +1,172 @@
+contract_version: v1
+surface_kind: read_only
+seed_id: 0006-registry-browser
+realization_id: a-authoritative-browser
+summary: Read-only operational contract for an authoritative registry browser that serves humans and agents from the same accepted history.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+capabilities:
+  - name: search_documents
+    summary: Searchable registry browse views for realizations, commands, projections, objects, and schemas.
+  - name: search_facets
+    summary: Facet filters for narrowing current registry catalog resources.
+  - name: cross_references
+    summary: Links between related registry resources visible in the current catalog.
+domain_objects:
+  - kind: registry_realization
+    summary: Realization contract exposed through the current registry catalog.
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+      - search_facets
+      - cross_references
+  - kind: registry_command
+    summary: Command contract exposed through the current registry catalog.
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+      - search_facets
+      - cross_references
+  - kind: registry_projection
+    summary: Projection contract exposed through the current registry catalog.
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+      - search_facets
+      - cross_references
+  - kind: registry_object
+    summary: Stable object identity exposed through the current registry catalog.
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+      - search_facets
+      - cross_references
+  - kind: registry_schema
+    summary: Schema reference exposed through the current registry catalog.
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+      - search_facets
+projections:
+  - name: registry.home
+    summary: Simple landing surface for orientation, catalog discovery, and agent guidance.
+    path: /v1/projections/0006-registry-browser/home
+    object_kinds:
+      - registry_realization
+      - registry_command
+      - registry_projection
+      - registry_object
+      - registry_schema
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.realizations
+    summary: Searchable list of realizations built directly on the current registry catalog route.
+    path: /v1/projections/0006-registry-browser/realizations
+    object_kinds:
+      - registry_realization
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.realization_detail
+    summary: Realization detail built on the current realization detail route.
+    path: /v1/projections/0006-registry-browser/realizations/{reference}
+    object_kinds:
+      - registry_realization
+      - registry_command
+      - registry_projection
+      - registry_object
+    capabilities:
+      - search_documents
+      - cross_references
+    freshness: materialized
+  - name: registry.commands
+    summary: Searchable list of commands built directly on the current registry catalog route.
+    path: /v1/projections/0006-registry-browser/commands
+    object_kinds:
+      - registry_command
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.command_detail
+    summary: Command detail built on the current command detail route.
+    path: /v1/projections/0006-registry-browser/commands/{reference}/{name}
+    object_kinds:
+      - registry_command
+      - registry_realization
+      - registry_object
+    capabilities:
+      - search_documents
+      - cross_references
+    freshness: materialized
+  - name: registry.projections
+    summary: Searchable list of projections built directly on the current registry catalog route.
+    path: /v1/projections/0006-registry-browser/projections
+    object_kinds:
+      - registry_projection
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.projection_detail
+    summary: Projection detail built on the current projection detail route.
+    path: /v1/projections/0006-registry-browser/projections/{reference}/{name}
+    object_kinds:
+      - registry_projection
+      - registry_realization
+      - registry_object
+    capabilities:
+      - search_documents
+      - cross_references
+    freshness: materialized
+  - name: registry.objects
+    summary: Searchable and faceted list of registry objects for human browsing.
+    path: /v1/projections/0006-registry-browser/objects
+    object_kinds:
+      - registry_object
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.object_detail
+    summary: Object detail built on the current object detail route.
+    path: /v1/projections/0006-registry-browser/objects/{seed_id}/{kind}
+    object_kinds:
+      - registry_object
+      - registry_realization
+      - registry_command
+      - registry_projection
+    capabilities:
+      - search_documents
+      - cross_references
+    freshness: materialized
+  - name: registry.schemas
+    summary: Searchable list of schema references built directly on the current registry catalog route.
+    path: /v1/projections/0006-registry-browser/schemas
+    object_kinds:
+      - registry_schema
+    capabilities:
+      - search_documents
+      - search_facets
+    freshness: materialized
+  - name: registry.schema_detail
+    summary: Schema detail built on the current schema detail route.
+    path: /v1/projections/0006-registry-browser/schemas/{ref}
+    object_kinds:
+      - registry_schema
+      - registry_object
+      - registry_command
+    capabilities:
+      - search_documents
+      - cross_references
+    freshness: materialized
+consistency:
+  projection_freshness: materialized

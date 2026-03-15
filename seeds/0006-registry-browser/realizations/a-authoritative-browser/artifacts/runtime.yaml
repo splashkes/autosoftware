@@ -1,0 +1,14 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/registry-browser/main.go
+working_directory: artifacts/registry-browser
+run:
+  command: go
+  args: [run, .]
+environment:
+  AS_ADDR: /tmp/as-realizations/0006-registry-browser--a-authoritative-browser.sock
+  AS_REGISTRY_URL: http://localhost:8090
+notes:
+  - Manual boot only for now.
+  - AS_REGISTRY_URL must point to a running kernel with registry catalog routes.

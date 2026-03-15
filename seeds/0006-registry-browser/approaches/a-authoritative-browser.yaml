@@ -1,0 +1,11 @@
+approach_id: a-authoritative-browser
+summary: Conservative read-only browser with progressive disclosure and explicit authoritative API linkage.
+status: active
+strategy:
+  implementation_style: conservative
+  review_style: human-validated-first
+  interface_bias: server-rendered-web
+realizer:
+  model: codex-gpt-5
+  prompt_profile: trust-first-registry-browser
+  coding_ruleset: read-only-observability

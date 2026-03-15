@@ -1,0 +1,43 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Registry</h2>
+  <p>The registry records what this system knows: which objects exist, how they are realized, and which schemas govern them. Everything here is read-only.</p>
+</div>
+
+<div class="card-grid">
+  <a href="/realizations" class="card">
+    <div class="count">{{.Summary.Realizations}}</div>
+    <div class="label">{{plural .Summary.Realizations "Realization" "Realizations"}}</div>
+  </a>
+  <a href="/commands" class="card">
+    <div class="count">{{.Summary.Commands}}</div>
+    <div class="label">{{plural .Summary.Commands "Command" "Commands"}}</div>
+  </a>
+  <a href="/projections" class="card">
+    <div class="count">{{.Summary.Projections}}</div>
+    <div class="label">{{plural .Summary.Projections "Projection" "Projections"}}</div>
+  </a>
+  <a href="/objects" class="card">
+    <div class="count">{{.Summary.Objects}}</div>
+    <div class="label">{{plural .Summary.Objects "Object" "Objects"}}</div>
+  </a>
+  <a href="/schemas" class="card">
+    <div class="count">{{.Summary.Schemas}}</div>
+    <div class="label">{{plural .Summary.Schemas "Schema" "Schemas"}}</div>
+  </a>
+</div>
+
+<div class="agent-box">
+  <h3>For Agents</h3>
+  <p>Do not scrape this browser. Use the registry API directly:</p>
+  <pre>GET /v1/registry/catalog</pre>
+  <p>The catalog returns all available resources with discovery links. From there, follow the list and detail routes for each resource type:</p>
+  <pre>GET /v1/registry/objects
+GET /v1/registry/object?seed_id=...&amp;kind=...
+GET /v1/registry/schemas
+GET /v1/registry/schema?ref=...
+GET /v1/registry/realizations
+GET /v1/registry/realization?reference=...</pre>
+  <p>When stricter ledger-backed routes exist, use <code>GET /v1/registry/status</code> as the discovery root instead.</p>
+</div>
+{{end}}

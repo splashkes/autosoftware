@@ -1,0 +1,4 @@
+seed_id: 0006-registry-browser
+version: 1
+summary: Authoritative read-only browser for registry objects, claims, schemas, and accepted history.
+status: proposed

@@ -1,0 +1,36 @@
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} - Registry Browser</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1><a href="/">Registry Browser</a></h1>
+      <nav>
+        <a href="/realizations">Realizations</a>
+        <a href="/commands">Commands</a>
+        <a href="/projections">Projections</a>
+        <a href="/objects">Objects</a>
+        <a href="/schemas">Schemas</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      {{template "content" .}}
+    </div>
+  </main>
+  <footer>
+    <div class="container">
+      <p>Read-only view of accepted registry state. Agents should use the <a href="/v1/registry/catalog">authoritative API</a> directly.</p>
+    </div>
+  </footer>
+</body>
+</html>
+{{end}}
+
+{{define "content"}}{{end}}
