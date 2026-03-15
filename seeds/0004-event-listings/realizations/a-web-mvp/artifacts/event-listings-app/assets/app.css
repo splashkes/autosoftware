@@ -1,18 +1,21 @@
 :root {
-  --bg: #f5efe3;
-  --paper: #fffaf2;
-  --ink: #182126;
-  --muted: #5d675d;
-  --line: rgba(24, 33, 38, 0.12);
-  --card: rgba(255, 250, 242, 0.92);
-  --accent: #bf4b2c;
-  --accent-2: #0f766e;
-  --gold: #d8a72f;
+  --bg: #f6f3ea;
+  --paper: #fffdf8;
+  --ink: #1d2529;
+  --muted: #627076;
+  --line: rgba(29, 37, 41, 0.1);
+  --card: rgba(255, 253, 248, 0.92);
+  --accent: #cf5a34;
+  --accent-2: #1f8a80;
+  --gold: #d6a735;
   --draft: #64748b;
   --published: #0f766e;
   --canceled: #b91c1c;
   --archived: #6b7280;
-  --shadow: 0 20px 60px rgba(24, 33, 38, 0.08);
+  --shadow: 0 10px 30px rgba(24, 33, 38, 0.05);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 }
 
 * {
@@ -27,10 +30,15 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    radial-gradient(circle at top right, rgba(216, 167, 47, 0.18), transparent 32%),
-    radial-gradient(circle at left 20%, rgba(15, 118, 110, 0.14), transparent 28%),
-    linear-gradient(180deg, #f9f2e7, var(--bg));
-  font-family: Georgia, "Times New Roman", serif;
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)),
+    linear-gradient(90deg, rgba(29, 37, 41, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(29, 37, 41, 0.03) 1px, transparent 1px),
+    radial-gradient(circle at top right, rgba(214, 167, 53, 0.12), transparent 28%),
+    radial-gradient(circle at left 18%, rgba(31, 138, 128, 0.09), transparent 24%),
+    linear-gradient(180deg, #fbf8f2, var(--bg));
+  background-size: auto, 28px 28px, 28px 28px, auto, auto, auto;
+  font-family: "Avenir Next", Avenir, "Trebuchet MS", "Segoe UI", sans-serif;
+  line-height: 1.45;
 }
 
 a {
@@ -38,17 +46,17 @@ a {
 }
 
 .shell {
-  max-width: 1180px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 18px 20px 28px;
 }
 
 .nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 18px;
-  padding: 18px 0 24px;
+  gap: 16px;
+  padding: 10px 0 18px;
 }
 
 .brand {
@@ -58,15 +66,17 @@ a {
 }
 
 .brand-mark {
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 700;
   color: var(--accent);
 }
 
 .brand-name {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .nav-links,
@@ -82,12 +92,14 @@ a {
 .button,
 button,
 input[type="submit"] {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  padding: 10px 16px;
+  padding: 9px 13px;
   text-decoration: none;
   font: inherit;
   cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .pill-link,
@@ -96,6 +108,7 @@ button,
 input[type="submit"] {
   background: var(--ink);
   color: white;
+  box-shadow: none;
 }
 
 .pill-link.alt,
@@ -109,14 +122,15 @@ button.alt {
 .text-link {
   color: var(--muted);
   padding: 0;
+  font-weight: 700;
 }
 
 .hero {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
-  gap: 24px;
+  gap: 16px;
   align-items: stretch;
-  margin-bottom: 28px;
+  margin-bottom: 18px;
 }
 
 .hero-card,
@@ -125,54 +139,55 @@ button.alt {
 .calendar-card,
 .login-card {
   background: var(--card);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(29, 37, 41, 0.08);
   box-shadow: var(--shadow);
-  border-radius: 28px;
+  border-radius: var(--radius-lg);
 }
 
 .hero-card {
-  padding: 28px;
+  padding: 20px;
 }
 
 .hero-card h1 {
-  font-size: clamp(2.6rem, 6vw, 4.8rem);
-  line-height: 0.92;
-  margin: 0 0 18px;
+  font-size: clamp(2.1rem, 5vw, 3.8rem);
+  line-height: 0.94;
+  letter-spacing: -0.06em;
+  margin: 0 0 12px;
 }
 
 .hero-card p {
   max-width: 38rem;
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 0.98rem;
+  line-height: 1.55;
   color: var(--muted);
 }
 
 .hero-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .stat {
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.42);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .stat strong {
   display: block;
-  font-size: 1.6rem;
-  margin-bottom: 6px;
+  font-size: 1.35rem;
+  margin-bottom: 4px;
 }
 
 .hero-side {
-  padding: 24px;
+  padding: 18px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
   background:
-    linear-gradient(135deg, rgba(191, 75, 44, 0.94), rgba(24, 33, 38, 0.96));
+    linear-gradient(135deg, rgba(207, 90, 52, 0.96), rgba(29, 37, 41, 0.98));
   color: white;
 }
 
@@ -192,13 +207,14 @@ button.alt {
   display: flex;
   justify-content: space-between;
   align-items: end;
-  gap: 18px;
-  margin: 28px 0 14px;
+  gap: 16px;
+  margin: 18px 0 10px;
 }
 
 .section-head p {
   margin: 0;
   color: var(--muted);
+  font-size: 0.94rem;
 }
 
 .filters,
@@ -206,7 +222,7 @@ button.alt {
 .event-grid,
 .admin-layout {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .filters {
@@ -214,18 +230,19 @@ button.alt {
 }
 
 .panel {
-  padding: 22px;
+  padding: 16px;
 }
 
 .panel form {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 label {
   display: grid;
-  gap: 8px;
-  font-weight: 600;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.92rem;
 }
 
 input,
@@ -233,14 +250,14 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  padding: 10px 11px;
   font: inherit;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 textarea {
-  min-height: 140px;
+  min-height: 120px;
   resize: vertical;
 }
 
@@ -259,27 +276,30 @@ textarea {
 }
 
 .event-card {
-  padding: 22px;
+  padding: 16px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .eyebrow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  font-size: 0.9rem;
+  gap: 8px;
+  font-size: 0.82rem;
   color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.8rem;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
   text-transform: capitalize;
   border: 1px solid transparent;
 }
@@ -305,8 +325,8 @@ textarea {
 }
 
 .notice {
-  padding: 14px 16px;
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(15, 118, 110, 0.14);
   background: rgba(15, 118, 110, 0.08);
   color: var(--ink);
@@ -320,21 +340,22 @@ textarea {
 .meta-list,
 .summary-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .meta-list div,
 .summary-list div {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .meta-list dt,
 .summary-list dt {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
+  font-weight: 800;
 }
 
 .meta-list dd,
@@ -343,30 +364,31 @@ textarea {
 }
 
 .calendar-card {
-  padding: 22px;
+  padding: 16px;
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .calendar-head {
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
+  font-weight: 800;
 }
 
 .calendar-day {
-  min-height: 148px;
-  padding: 12px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.78);
+  min-height: 128px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.84);
   border: 1px solid var(--line);
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
 }
 
@@ -375,16 +397,18 @@ textarea {
 }
 
 .calendar-number {
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 0.92rem;
 }
 
 .calendar-event {
   display: block;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 7px 8px;
+  border-radius: 7px;
   text-decoration: none;
   background: rgba(24, 33, 38, 0.06);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .calendar-event.canceled {
@@ -409,14 +433,21 @@ textarea {
 .table th,
 .table td {
   text-align: left;
-  padding: 14px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
 
+.table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
 .table td.actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -427,11 +458,11 @@ textarea {
 .detail-layout {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  gap: 22px;
+  gap: 16px;
 }
 
 .prose {
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--ink);
 }
 
@@ -440,17 +471,17 @@ textarea {
 }
 
 .empty {
-  padding: 28px;
+  padding: 20px;
   border: 1px dashed var(--line);
-  border-radius: 24px;
+  border-radius: var(--radius-lg);
   color: var(--muted);
   background: rgba(255, 255, 255, 0.5);
 }
 
 .footer {
-  padding: 32px 0 48px;
+  padding: 22px 0 30px;
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: 0.86rem;
 }
 
 @media (max-width: 980px) {
@@ -467,7 +498,7 @@ textarea {
 
 @media (max-width: 700px) {
   .shell {
-    padding: 16px;
+    padding: 14px;
   }
 
   .nav {
