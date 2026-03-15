@@ -1,0 +1,1668 @@
+package main
+
+import (
+	"embed"
+	"encoding/json"
+	"errors"
+	"html/template"
+	"io/fs"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	adminCookieName = "as_event_admin"
+	maxFormMemory   = 1 << 20
+)
+
+//go:embed assets/*
+var assets embed.FS
+
+type eventStatus string
+
+const (
+	statusDraft     eventStatus = "draft"
+	statusPublished eventStatus = "published"
+	statusCanceled  eventStatus = "canceled"
+	statusArchived  eventStatus = "archived"
+)
+
+type eventRecord struct {
+	ID          string
+	Slug        string
+	Title       string
+	Summary     string
+	Description string
+	Venue       string
+	Location    string
+	Category    string
+	ExternalURL string
+	Timezone    string
+	AllDay      bool
+	Status      eventStatus
+	Start       time.Time
+	End         time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type eventInput struct {
+	Title       string
+	Summary     string
+	Description string
+	Venue       string
+	Location    string
+	Category    string
+	ExternalURL string
+	Timezone    string
+	AllDay      bool
+	StartDate   string
+	EndDate     string
+	StartTime   string
+	EndTime     string
+}
+
+type eventStore struct {
+	mu     sync.RWMutex
+	nextID int
+	order  []string
+	events map[string]*eventRecord
+}
+
+func newEventStore() *eventStore {
+	s := &eventStore{
+		nextID: 1,
+		events: make(map[string]*eventRecord),
+	}
+
+	now := time.Now()
+	s.mustSeed(eventInput{
+		Title:       "Harbour Lights Night Market",
+		Summary:     "An evening market with local food, craft stalls, and live jazz.",
+		Description: "Browse independent makers, snack at harbour-side food stands, and stay for an outdoor jazz set after sunset.",
+		Venue:       "Pier Warehouse",
+		Location:    "Toronto",
+		Category:    "Community",
+		ExternalURL: "https://example.com/night-market",
+		Timezone:    "America/Toronto",
+		StartDate:   now.AddDate(0, 0, 3).Format("2006-01-02"),
+		EndDate:     now.AddDate(0, 0, 3).Format("2006-01-02"),
+		StartTime:   "18:30",
+		EndTime:     "22:00",
+	}, statusPublished)
+	s.mustSeed(eventInput{
+		Title:       "Design Systems Field Day",
+		Summary:     "A two-day workshop on documentation, component audits, and accessibility reviews.",
+		Description: "Small-team sessions on component inventory, naming conventions, content patterns, and documentation debt remediation.",
+		Venue:       "Foundry Hall",
+		Location:    "Ottawa",
+		Category:    "Workshop",
+		ExternalURL: "https://example.com/design-field-day",
+		Timezone:    "America/Toronto",
+		StartDate:   now.AddDate(0, 0, 7).Format("2006-01-02"),
+		EndDate:     now.AddDate(0, 0, 8).Format("2006-01-02"),
+		AllDay:      true,
+	}, statusPublished)
+	s.mustSeed(eventInput{
+		Title:       "Riverfront Cleanup Rally",
+		Summary:     "Volunteer-led cleanup with loaner gloves, coffee, and route captains.",
+		Description: "Meet at the south gate, collect supplies, and move in teams along the riverfront trail before lunch.",
+		Venue:       "South Gate Plaza",
+		Location:    "Hamilton",
+		Category:    "Volunteer",
+		Timezone:    "America/Toronto",
+		StartDate:   now.AddDate(0, 0, 10).Format("2006-01-02"),
+		EndDate:     now.AddDate(0, 0, 10).Format("2006-01-02"),
+		StartTime:   "09:00",
+		EndTime:     "12:30",
+	}, statusCanceled)
+	s.mustSeed(eventInput{
+		Title:       "Autumn Venue Crawl",
+		Summary:     "Draft route for venue managers comparing neighborhood spaces.",
+		Description: "Internal draft itinerary used to compare capacity, transit access, and accessibility notes across partner venues.",
+		Venue:       "Multiple venues",
+		Location:    "Toronto",
+		Category:    "Industry",
+		Timezone:    "America/Toronto",
+		StartDate:   now.AddDate(0, 0, 14).Format("2006-01-02"),
+		EndDate:     now.AddDate(0, 0, 14).Format("2006-01-02"),
+		StartTime:   "13:00",
+		EndTime:     "17:00",
+	}, statusDraft)
+	s.mustSeed(eventInput{
+		Title:       "Last Season Recap Gala",
+		Summary:     "Archived gala page kept reachable for direct links and retrospectives.",
+		Description: "An archived page preserving the event record and venue notes after the live season wrapped.",
+		Venue:       "Civic Exchange",
+		Location:    "Kingston",
+		Category:    "Celebration",
+		Timezone:    "America/Toronto",
+		StartDate:   now.AddDate(0, -1, -4).Format("2006-01-02"),
+		EndDate:     now.AddDate(0, -1, -4).Format("2006-01-02"),
+		StartTime:   "19:00",
+		EndTime:     "22:00",
+	}, statusArchived)
+	return s
+}
+
+func (s *eventStore) mustSeed(input eventInput, status eventStatus) {
+	event, err := s.create(input)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := s.setStatus(event.ID, status); err != nil {
+		panic(err)
+	}
+}
+
+func (s *eventStore) create(input eventInput) (*eventRecord, error) {
+	start, end, err := parseSchedule(input)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := strconv.Itoa(s.nextID)
+	s.nextID++
+	now := time.Now()
+	event := &eventRecord{
+		ID:          id,
+		Slug:        uniqueSlug(slugify(input.Title), id),
+		Title:       strings.TrimSpace(input.Title),
+		Summary:     strings.TrimSpace(input.Summary),
+		Description: strings.TrimSpace(input.Description),
+		Venue:       strings.TrimSpace(input.Venue),
+		Location:    strings.TrimSpace(input.Location),
+		Category:    strings.TrimSpace(input.Category),
+		ExternalURL: strings.TrimSpace(input.ExternalURL),
+		Timezone:    strings.TrimSpace(input.Timezone),
+		AllDay:      input.AllDay,
+		Status:      statusDraft,
+		Start:       start,
+		End:         end,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	s.events[id] = event
+	s.order = append(s.order, id)
+	return cloneEvent(event), nil
+}
+
+func (s *eventStore) update(id string, input eventInput) (*eventRecord, error) {
+	start, end, err := parseSchedule(input)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	event, ok := s.events[id]
+	if !ok {
+		return nil, errors.New("event not found")
+	}
+	event.Title = strings.TrimSpace(input.Title)
+	event.Summary = strings.TrimSpace(input.Summary)
+	event.Description = strings.TrimSpace(input.Description)
+	event.Venue = strings.TrimSpace(input.Venue)
+	event.Location = strings.TrimSpace(input.Location)
+	event.Category = strings.TrimSpace(input.Category)
+	event.ExternalURL = strings.TrimSpace(input.ExternalURL)
+	event.Timezone = strings.TrimSpace(input.Timezone)
+	event.AllDay = input.AllDay
+	event.Start = start
+	event.End = end
+	event.UpdatedAt = time.Now()
+	return cloneEvent(event), nil
+}
+
+func (s *eventStore) setStatus(id string, status eventStatus) (*eventRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	event, ok := s.events[id]
+	if !ok {
+		return nil, errors.New("event not found")
+	}
+	event.Status = status
+	event.UpdatedAt = time.Now()
+	return cloneEvent(event), nil
+}
+
+func (s *eventStore) byID(id string) (*eventRecord, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	event, ok := s.events[id]
+	if !ok {
+		return nil, false
+	}
+	return cloneEvent(event), true
+}
+
+func (s *eventStore) bySlug(slug string) (*eventRecord, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, id := range s.order {
+		event := s.events[id]
+		if event.Slug == slug {
+			return cloneEvent(event), true
+		}
+	}
+	return nil, false
+}
+
+func (s *eventStore) all() []*eventRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]*eventRecord, 0, len(s.order))
+	for _, id := range s.order {
+		items = append(items, cloneEvent(s.events[id]))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Start.Equal(items[j].Start) {
+			return items[i].Title < items[j].Title
+		}
+		return items[i].Start.Before(items[j].Start)
+	})
+	return items
+}
+
+func cloneEvent(in *eventRecord) *eventRecord {
+	if in == nil {
+		return nil
+	}
+	copy := *in
+	return &copy
+}
+
+type app struct {
+	store         *eventStore
+	templates     *template.Template
+	adminPassword string
+}
+
+func main() {
+	addr := envOrDefault("AS_ADDR", "127.0.0.1:8096")
+	a := &app{
+		store:         newEventStore(),
+		templates:     parseTemplates(),
+		adminPassword: envOrDefault("AS_ADMIN_PASSWORD", "admin"),
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /assets/", a.assetHandler())
+	mux.HandleFunc("GET /healthz", a.handleHealth)
+	mux.HandleFunc("GET /", a.handleHome)
+	mux.HandleFunc("GET /calendar", a.handleCalendar)
+	mux.HandleFunc("GET /events/", a.handleEventDetail)
+
+	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("POST /admin/login", a.handleAdminLoginPost)
+	mux.HandleFunc("POST /admin/logout", a.handleAdminLogoutPost)
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+	mux.HandleFunc("GET /admin/events/new", a.requireAdmin(a.handleAdminNew))
+	mux.HandleFunc("POST /admin/events", a.requireAdmin(a.handleAdminCreatePost))
+	mux.HandleFunc("GET /admin/events/", a.requireAdmin(a.handleAdminEventRoutes))
+	mux.HandleFunc("POST /admin/events/", a.requireAdmin(a.handleAdminEventRoutes))
+
+	mux.HandleFunc("GET /v1/projections/0004-event-listings/events", a.handleDirectoryProjection)
+	mux.HandleFunc("GET /v1/projections/0004-event-listings/calendar", a.handleCalendarProjection)
+	mux.HandleFunc("GET /v1/projections/0004-event-listings/events/", a.handleDetailProjection)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.create", a.handleCreateCommand)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.publish", a.handlePublishCommand)
+
+	log.Printf("event listings MVP listening on http://%s", addr)
+	if err := http.ListenAndServe(addr, requestLog(mux)); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (a *app) assetHandler() http.Handler {
+	sub, err := fs.Sub(assets, "assets")
+	if err != nil {
+		panic(err)
+	}
+	return http.StripPrefix("/assets/", http.FileServer(http.FS(sub)))
+}
+
+func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": "ok",
+		"seed":   "0004-event-listings",
+	})
+}
+
+type homePageData struct {
+	Title          string
+	CurrentPath    string
+	Filters        directoryFilters
+	Events         []*eventView
+	Categories     []string
+	Locations      []string
+	Stats          statsView
+	Flash          string
+	MonthLabel     string
+	MonthURL       string
+	CalendarURL    string
+	AdminAvailable bool
+}
+
+type eventView struct {
+	ID            string `json:"id"`
+	Slug          string `json:"slug"`
+	Title         string `json:"title"`
+	Summary       string `json:"summary"`
+	Description   string `json:"description"`
+	Venue         string `json:"venue"`
+	Location      string `json:"location"`
+	Category      string `json:"category"`
+	ExternalURL   string `json:"external_url,omitempty"`
+	Timezone      string `json:"timezone"`
+	AllDay        bool   `json:"all_day"`
+	Status        string `json:"status"`
+	PublicURL     string `json:"public_url"`
+	StartISO      string `json:"start"`
+	EndISO        string `json:"end"`
+	RangeLabel    string `json:"range_label"`
+	StatusLabel   string `json:"status_label"`
+	LocationLabel string `json:"location_label"`
+}
+
+type statsView struct {
+	Upcoming     int
+	Canceled     int
+	Categories   int
+	OrganizerURL string
+}
+
+func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
+	filters := parseDirectoryFilters(r)
+	events := a.publicDirectory(filters)
+	categories, locations := a.filterOptions()
+	nowMonth := time.Now().Format("2006-01")
+	data := homePageData{
+		Title:          "Event Listings",
+		CurrentPath:    r.URL.Path,
+		Filters:        filters,
+		Events:         events,
+		Categories:     categories,
+		Locations:      locations,
+		Stats:          a.stats(),
+		Flash:          r.URL.Query().Get("flash"),
+		MonthLabel:     monthLabel(nowMonth),
+		MonthURL:       "/calendar?month=" + nowMonth,
+		CalendarURL:    "/calendar",
+		AdminAvailable: true,
+	}
+	a.render(w, "home", data)
+}
+
+type calendarDayView struct {
+	Date      string
+	DayNumber int
+	InMonth   bool
+	Events    []*eventView
+}
+
+type calendarPageData struct {
+	Title       string
+	CurrentPath string
+	Month       string
+	MonthLabel  string
+	PrevMonth   string
+	NextMonth   string
+	Days        []calendarDayView
+}
+
+func (a *app) handleCalendar(w http.ResponseWriter, r *http.Request) {
+	month := r.URL.Query().Get("month")
+	if month == "" {
+		month = time.Now().Format("2006-01")
+	}
+	monthStart, err := time.Parse("2006-01", month)
+	if err != nil {
+		http.Error(w, "invalid month", http.StatusBadRequest)
+		return
+	}
+	data := calendarPageData{
+		Title:       "Event Calendar",
+		CurrentPath: r.URL.Path,
+		Month:       month,
+		MonthLabel:  monthLabel(month),
+		PrevMonth:   monthStart.AddDate(0, -1, 0).Format("2006-01"),
+		NextMonth:   monthStart.AddDate(0, 1, 0).Format("2006-01"),
+		Days:        a.calendarDays(month),
+	}
+	a.render(w, "calendar", data)
+}
+
+type detailPageData struct {
+	Title       string
+	CurrentPath string
+	Event       *eventView
+	Warning     string
+	IsAdmin     bool
+}
+
+func (a *app) handleEventDetail(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimPrefix(r.URL.Path, "/events/")
+	event, ok := a.store.bySlug(strings.Trim(slug, "/"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	isAdmin := a.isAdmin(r)
+	if event.Status == statusDraft && !isAdmin {
+		http.NotFound(w, r)
+		return
+	}
+	warning := ""
+	if event.Status == statusCanceled {
+		warning = "This event remains listed, but it has been canceled."
+	}
+	if event.Status == statusArchived {
+		warning = "This event has been archived and no longer appears in default upcoming discovery."
+	}
+	a.render(w, "detail", detailPageData{
+		Title:       event.Title,
+		CurrentPath: r.URL.Path,
+		Event:       toEventView(event),
+		Warning:     warning,
+		IsAdmin:     isAdmin,
+	})
+}
+
+type adminDashboardData struct {
+	Title          string
+	CurrentPath    string
+	Events         []*eventView
+	Flash          string
+	OrganizerCount int
+}
+
+func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
+	events := a.store.all()
+	views := make([]*eventView, 0, len(events))
+	for _, event := range events {
+		views = append(views, toEventView(event))
+	}
+	a.render(w, "admin_dashboard", adminDashboardData{
+		Title:          "Organizer Workspace",
+		CurrentPath:    "/admin",
+		Events:         views,
+		Flash:          r.URL.Query().Get("flash"),
+		OrganizerCount: len(views),
+	})
+}
+
+type adminFormData struct {
+	Title       string
+	CurrentPath string
+	Mode        string
+	Flash       string
+	Error       string
+	Event       eventFormView
+}
+
+type eventFormView struct {
+	ID          string
+	Slug        string
+	Title       string
+	Summary     string
+	Description string
+	Venue       string
+	Location    string
+	Category    string
+	ExternalURL string
+	Timezone    string
+	AllDay      bool
+	StartDate   string
+	EndDate     string
+	StartTime   string
+	EndTime     string
+	Status      string
+}
+
+func blankEventForm() eventFormView {
+	return eventFormView{
+		Timezone:  "America/Toronto",
+		StartDate: time.Now().Format("2006-01-02"),
+		EndDate:   time.Now().Format("2006-01-02"),
+		StartTime: "18:00",
+		EndTime:   "20:00",
+	}
+}
+
+func formFromEvent(event *eventRecord) eventFormView {
+	loc, _ := time.LoadLocation(event.Timezone)
+	start := event.Start.In(loc)
+	end := event.End.In(loc)
+	view := eventFormView{
+		ID:          event.ID,
+		Slug:        event.Slug,
+		Title:       event.Title,
+		Summary:     event.Summary,
+		Description: event.Description,
+		Venue:       event.Venue,
+		Location:    event.Location,
+		Category:    event.Category,
+		ExternalURL: event.ExternalURL,
+		Timezone:    event.Timezone,
+		AllDay:      event.AllDay,
+		StartDate:   start.Format("2006-01-02"),
+		EndDate:     end.Format("2006-01-02"),
+		StartTime:   start.Format("15:04"),
+		EndTime:     end.Format("15:04"),
+		Status:      string(event.Status),
+	}
+	if event.AllDay {
+		view.StartTime = ""
+		view.EndTime = ""
+	}
+	return view
+}
+
+func (a *app) handleAdminNew(w http.ResponseWriter, _ *http.Request) {
+	a.render(w, "admin_form", adminFormData{
+		Title:       "New Event",
+		CurrentPath: "/admin/events/new",
+		Mode:        "create",
+		Event:       blankEventForm(),
+	})
+}
+
+func (a *app) handleAdminCreatePost(w http.ResponseWriter, r *http.Request) {
+	input, err := parseEventInput(r)
+	if err != nil {
+		a.render(w, "admin_form", adminFormData{
+			Title:       "New Event",
+			CurrentPath: "/admin/events/new",
+			Mode:        "create",
+			Error:       err.Error(),
+			Event:       formFromInput(input),
+		})
+		return
+	}
+	event, err := a.store.create(input)
+	if err != nil {
+		a.render(w, "admin_form", adminFormData{
+			Title:       "New Event",
+			CurrentPath: "/admin/events/new",
+			Mode:        "create",
+			Error:       err.Error(),
+			Event:       formFromInput(input),
+		})
+		return
+	}
+	http.Redirect(w, r, "/admin?flash="+url.QueryEscape("Draft created for "+event.Title), http.StatusSeeOther)
+}
+
+func (a *app) handleAdminEventRoutes(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/admin/events/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 2 && parts[1] == "edit" && r.Method == http.MethodGet {
+		a.handleAdminEdit(w, r, parts[0])
+		return
+	}
+	if len(parts) == 1 && r.Method == http.MethodPost {
+		a.handleAdminUpdatePost(w, r, parts[0])
+		return
+	}
+	if len(parts) == 2 && parts[1] == "state" && r.Method == http.MethodPost {
+		a.handleAdminStatePost(w, r, parts[0])
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func (a *app) handleAdminEdit(w http.ResponseWriter, _ *http.Request, id string) {
+	event, ok := a.store.byID(id)
+	if !ok {
+		http.Error(w, "event not found", http.StatusNotFound)
+		return
+	}
+	a.render(w, "admin_form", adminFormData{
+		Title:       "Edit Event",
+		CurrentPath: "/admin",
+		Mode:        "edit",
+		Event:       formFromEvent(event),
+	})
+}
+
+func (a *app) handleAdminUpdatePost(w http.ResponseWriter, r *http.Request, id string) {
+	input, err := parseEventInput(r)
+	if err != nil {
+		inputView := formFromInput(input)
+		inputView.ID = id
+		if existing, ok := a.store.byID(id); ok {
+			inputView.Slug = existing.Slug
+			inputView.Status = string(existing.Status)
+		}
+		a.render(w, "admin_form", adminFormData{
+			Title:       "Edit Event",
+			CurrentPath: "/admin",
+			Mode:        "edit",
+			Error:       err.Error(),
+			Event:       inputView,
+		})
+		return
+	}
+	event, err := a.store.update(id, input)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin?flash="+url.QueryEscape("Updated "+event.Title+" without changing "+event.Slug), http.StatusSeeOther)
+}
+
+func (a *app) handleAdminStatePost(w http.ResponseWriter, r *http.Request, id string) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	action := r.PostForm.Get("action")
+	var target eventStatus
+	switch action {
+	case "publish":
+		target = statusPublished
+	case "unpublish":
+		target = statusDraft
+	case "cancel":
+		target = statusCanceled
+	case "archive":
+		target = statusArchived
+	default:
+		http.Error(w, "invalid action", http.StatusBadRequest)
+		return
+	}
+	event, err := a.store.setStatus(id, target)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin?flash="+url.QueryEscape(event.Title+" is now "+string(event.Status)), http.StatusSeeOther)
+}
+
+func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if a.isAdmin(r) {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	a.render(w, "admin_login", map[string]any{
+		"Title":       "Organizer Login",
+		"CurrentPath": "/admin/login",
+		"Error":       r.URL.Query().Get("error"),
+	})
+}
+
+func (a *app) handleAdminLoginPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if r.PostForm.Get("password") != a.adminPassword {
+		http.Redirect(w, r, "/admin/login?error="+url.QueryEscape("Incorrect password"), http.StatusSeeOther)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminCookieName,
+		Value:    "ok",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminLogoutPost(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (a *app) isAdmin(r *http.Request) bool {
+	cookie, err := r.Cookie(adminCookieName)
+	return err == nil && cookie.Value == "ok"
+}
+
+func (a *app) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.isAdmin(r) {
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+
+type directoryFilters struct {
+	Query    string `json:"q,omitempty"`
+	Category string `json:"category,omitempty"`
+	Location string `json:"location,omitempty"`
+	From     string `json:"from,omitempty"`
+	To       string `json:"to,omitempty"`
+}
+
+func parseDirectoryFilters(r *http.Request) directoryFilters {
+	q := r.URL.Query()
+	return directoryFilters{
+		Query:    strings.TrimSpace(q.Get("q")),
+		Category: strings.TrimSpace(q.Get("category")),
+		Location: strings.TrimSpace(q.Get("location")),
+		From:     strings.TrimSpace(q.Get("from")),
+		To:       strings.TrimSpace(q.Get("to")),
+	}
+}
+
+func (a *app) publicDirectory(filters directoryFilters) []*eventView {
+	all := a.store.all()
+	results := make([]*eventView, 0, len(all))
+	for _, event := range all {
+		if !isPublic(event) {
+			continue
+		}
+		if !isUpcoming(event) {
+			continue
+		}
+		if !matchesFilters(event, filters) {
+			continue
+		}
+		results = append(results, toEventView(event))
+	}
+	return results
+}
+
+func (a *app) filterOptions() ([]string, []string) {
+	all := a.store.all()
+	catSet := map[string]struct{}{}
+	locSet := map[string]struct{}{}
+	for _, event := range all {
+		if event.Category != "" {
+			catSet[event.Category] = struct{}{}
+		}
+		if event.Location != "" {
+			locSet[event.Location] = struct{}{}
+		}
+	}
+	categories := make([]string, 0, len(catSet))
+	for category := range catSet {
+		categories = append(categories, category)
+	}
+	locations := make([]string, 0, len(locSet))
+	for location := range locSet {
+		locations = append(locations, location)
+	}
+	sort.Strings(categories)
+	sort.Strings(locations)
+	return categories, locations
+}
+
+func (a *app) stats() statsView {
+	all := a.store.all()
+	categories := map[string]struct{}{}
+	var upcoming, canceled int
+	for _, event := range all {
+		if isPublic(event) && isUpcoming(event) {
+			upcoming++
+		}
+		if event.Status == statusCanceled {
+			canceled++
+		}
+		if event.Category != "" {
+			categories[event.Category] = struct{}{}
+		}
+	}
+	return statsView{
+		Upcoming:     upcoming,
+		Canceled:     canceled,
+		Categories:   len(categories),
+		OrganizerURL: "/admin",
+	}
+}
+
+func (a *app) calendarDays(month string) []calendarDayView {
+	start, err := time.Parse("2006-01", month)
+	if err != nil {
+		return nil
+	}
+	firstDay := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
+	gridStart := firstDay.AddDate(0, 0, -int(firstDay.Weekday()))
+	nextMonth := firstDay.AddDate(0, 1, 0)
+
+	all := a.store.all()
+	days := make([]calendarDayView, 0, 42)
+	for i := 0; i < 42; i++ {
+		day := gridStart.AddDate(0, 0, i)
+		view := calendarDayView{
+			Date:      day.Format("2006-01-02"),
+			DayNumber: day.Day(),
+			InMonth:   day.Month() == firstDay.Month(),
+		}
+		for _, event := range all {
+			if !isPublic(event) || !overlapsCalendarDay(event, day) {
+				continue
+			}
+			if day.Before(firstDay) || !day.Before(nextMonth) {
+				// Show overflow days too; they are already visually muted.
+			}
+			view.Events = append(view.Events, toEventView(event))
+		}
+		sort.Slice(view.Events, func(i, j int) bool {
+			return view.Events[i].StartISO < view.Events[j].StartISO
+		})
+		days = append(days, view)
+	}
+	return days
+}
+
+func (a *app) handleDirectoryProjection(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"filters": parseDirectoryFilters(r),
+		"events":  a.publicDirectory(parseDirectoryFilters(r)),
+	})
+}
+
+func (a *app) handleCalendarProjection(w http.ResponseWriter, r *http.Request) {
+	month := r.URL.Query().Get("month")
+	if month == "" {
+		month = time.Now().Format("2006-01")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"month": month,
+		"days":  a.calendarDays(month),
+	})
+}
+
+func (a *app) handleDetailProjection(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimPrefix(r.URL.Path, "/v1/projections/0004-event-listings/events/")
+	event, ok := a.store.bySlug(strings.Trim(slug, "/"))
+	if !ok || event.Status == statusDraft {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event": toEventView(event),
+	})
+}
+
+func (a *app) handleCreateCommand(w http.ResponseWriter, r *http.Request) {
+	var payload eventCommandPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	event, err := a.store.create(payload.toInput())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"event": toEventView(event),
+	})
+}
+
+func (a *app) handlePublishCommand(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		EventID string `json:"event_id"`
+		Slug    string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	event, ok := a.lookupEvent(payload.EventID, payload.Slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	published, err := a.store.setStatus(event.ID, statusPublished)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event": toEventView(published),
+	})
+}
+
+func (a *app) lookupEvent(id, slug string) (*eventRecord, bool) {
+	if id != "" {
+		return a.store.byID(id)
+	}
+	if slug != "" {
+		return a.store.bySlug(slug)
+	}
+	return nil, false
+}
+
+type eventCommandPayload struct {
+	Title       string `json:"title"`
+	Summary     string `json:"summary"`
+	Description string `json:"description"`
+	Venue       string `json:"venue"`
+	Location    string `json:"location"`
+	Category    string `json:"category"`
+	ExternalURL string `json:"external_url"`
+	Timezone    string `json:"timezone"`
+	AllDay      bool   `json:"all_day"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+}
+
+func (p eventCommandPayload) toInput() eventInput {
+	return eventInput{
+		Title:       p.Title,
+		Summary:     p.Summary,
+		Description: p.Description,
+		Venue:       p.Venue,
+		Location:    p.Location,
+		Category:    p.Category,
+		ExternalURL: p.ExternalURL,
+		Timezone:    p.Timezone,
+		AllDay:      p.AllDay,
+		StartDate:   p.StartDate,
+		EndDate:     p.EndDate,
+		StartTime:   p.StartTime,
+		EndTime:     p.EndTime,
+	}
+}
+
+func parseEventInput(r *http.Request) (eventInput, error) {
+	if err := r.ParseMultipartForm(maxFormMemory); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return eventInput{}, errors.New("could not parse form")
+	}
+	input := eventInput{
+		Title:       r.FormValue("title"),
+		Summary:     r.FormValue("summary"),
+		Description: r.FormValue("description"),
+		Venue:       r.FormValue("venue"),
+		Location:    r.FormValue("location"),
+		Category:    r.FormValue("category"),
+		ExternalURL: r.FormValue("external_url"),
+		Timezone:    r.FormValue("timezone"),
+		AllDay:      r.FormValue("all_day") == "on",
+		StartDate:   r.FormValue("start_date"),
+		EndDate:     r.FormValue("end_date"),
+		StartTime:   r.FormValue("start_time"),
+		EndTime:     r.FormValue("end_time"),
+	}
+	if strings.TrimSpace(input.Title) == "" {
+		return input, errors.New("title is required")
+	}
+	if strings.TrimSpace(input.Summary) == "" {
+		return input, errors.New("summary is required")
+	}
+	if strings.TrimSpace(input.Description) == "" {
+		return input, errors.New("description is required")
+	}
+	if strings.TrimSpace(input.Category) == "" {
+		return input, errors.New("category is required")
+	}
+	if strings.TrimSpace(input.Location) == "" {
+		return input, errors.New("location is required")
+	}
+	if strings.TrimSpace(input.Timezone) == "" {
+		input.Timezone = "America/Toronto"
+	}
+	if input.ExternalURL != "" {
+		if _, err := url.ParseRequestURI(input.ExternalURL); err != nil {
+			return input, errors.New("external URL must be a valid absolute URL")
+		}
+	}
+	if _, _, err := parseSchedule(input); err != nil {
+		return input, err
+	}
+	return input, nil
+}
+
+func parseSchedule(input eventInput) (time.Time, time.Time, error) {
+	locationName := strings.TrimSpace(input.Timezone)
+	if locationName == "" {
+		locationName = "America/Toronto"
+	}
+	loc, err := time.LoadLocation(locationName)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("timezone must be valid")
+	}
+	if input.StartDate == "" || input.EndDate == "" {
+		return time.Time{}, time.Time{}, errors.New("start and end dates are required")
+	}
+	if input.AllDay {
+		start, err := time.ParseInLocation("2006-01-02", input.StartDate, loc)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("start date must be valid")
+		}
+		endDate, err := time.ParseInLocation("2006-01-02", input.EndDate, loc)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("end date must be valid")
+		}
+		end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 0, 0, loc)
+		if end.Before(start) {
+			return time.Time{}, time.Time{}, errors.New("end date must be on or after start date")
+		}
+		return start, end, nil
+	}
+
+	if input.StartTime == "" || input.EndTime == "" {
+		return time.Time{}, time.Time{}, errors.New("start and end times are required unless the event is all day")
+	}
+	start, err := time.ParseInLocation("2006-01-02 15:04", input.StartDate+" "+input.StartTime, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("start date/time must be valid")
+	}
+	end, err := time.ParseInLocation("2006-01-02 15:04", input.EndDate+" "+input.EndTime, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("end date/time must be valid")
+	}
+	if !end.After(start) {
+		return time.Time{}, time.Time{}, errors.New("end must be after start")
+	}
+	return start, end, nil
+}
+
+func isPublic(event *eventRecord) bool {
+	return event.Status == statusPublished || event.Status == statusCanceled
+}
+
+func isUpcoming(event *eventRecord) bool {
+	loc, err := time.LoadLocation(event.Timezone)
+	if err != nil {
+		return false
+	}
+	now := time.Now().In(loc)
+	endDay := time.Date(event.End.In(loc).Year(), event.End.In(loc).Month(), event.End.In(loc).Day(), 23, 59, 0, 0, loc)
+	return !endDay.Before(now)
+}
+
+func matchesFilters(event *eventRecord, filters directoryFilters) bool {
+	if filters.Query != "" {
+		haystack := strings.ToLower(strings.Join([]string{
+			event.Title, event.Summary, event.Description, event.Venue, event.Location, event.Category,
+		}, " "))
+		if !strings.Contains(haystack, strings.ToLower(filters.Query)) {
+			return false
+		}
+	}
+	if filters.Category != "" && !strings.EqualFold(filters.Category, event.Category) {
+		return false
+	}
+	if filters.Location != "" && !strings.Contains(strings.ToLower(event.Location), strings.ToLower(filters.Location)) {
+		return false
+	}
+	from, to := parseDateRange(filters)
+	if !from.IsZero() || !to.IsZero() {
+		if !overlapsDateRange(event, from, to) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseDateRange(filters directoryFilters) (time.Time, time.Time) {
+	var from, to time.Time
+	if filters.From != "" {
+		from, _ = time.Parse("2006-01-02", filters.From)
+	}
+	if filters.To != "" {
+		to, _ = time.Parse("2006-01-02", filters.To)
+	}
+	return from, to
+}
+
+func overlapsDateRange(event *eventRecord, from, to time.Time) bool {
+	loc, err := time.LoadLocation(event.Timezone)
+	if err != nil {
+		return false
+	}
+	start := event.Start.In(loc)
+	end := event.End.In(loc)
+	eventStart := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	eventEnd := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
+	if !from.IsZero() && eventEnd.Before(from) {
+		return false
+	}
+	if !to.IsZero() && eventStart.After(to) {
+		return false
+	}
+	return true
+}
+
+func overlapsCalendarDay(event *eventRecord, day time.Time) bool {
+	loc, err := time.LoadLocation(event.Timezone)
+	if err != nil {
+		return false
+	}
+	eventStart := event.Start.In(loc)
+	eventEnd := event.End.In(loc)
+	dayInLoc := day.In(loc)
+	startDay := time.Date(eventStart.Year(), eventStart.Month(), eventStart.Day(), 0, 0, 0, 0, loc)
+	endDay := time.Date(eventEnd.Year(), eventEnd.Month(), eventEnd.Day(), 0, 0, 0, 0, loc)
+	target := time.Date(dayInLoc.Year(), dayInLoc.Month(), dayInLoc.Day(), 0, 0, 0, 0, loc)
+	return !target.Before(startDay) && !target.After(endDay)
+}
+
+func toEventView(event *eventRecord) *eventView {
+	loc := loadLocationOrUTC(event.Timezone)
+	start := event.Start.In(loc)
+	end := event.End.In(loc)
+	return &eventView{
+		ID:            event.ID,
+		Slug:          event.Slug,
+		Title:         event.Title,
+		Summary:       event.Summary,
+		Description:   event.Description,
+		Venue:         event.Venue,
+		Location:      event.Location,
+		Category:      event.Category,
+		ExternalURL:   event.ExternalURL,
+		Timezone:      event.Timezone,
+		AllDay:        event.AllDay,
+		Status:        string(event.Status),
+		PublicURL:     "/events/" + event.Slug,
+		StartISO:      event.Start.Format(time.RFC3339),
+		EndISO:        event.End.Format(time.RFC3339),
+		RangeLabel:    formatRange(start, end, event.AllDay, event.Timezone),
+		StatusLabel:   strings.Title(string(event.Status)),
+		LocationLabel: joinNonEmpty(" · ", event.Venue, event.Location),
+	}
+}
+
+func formFromInput(input eventInput) eventFormView {
+	return eventFormView{
+		Title:       input.Title,
+		Summary:     input.Summary,
+		Description: input.Description,
+		Venue:       input.Venue,
+		Location:    input.Location,
+		Category:    input.Category,
+		ExternalURL: input.ExternalURL,
+		Timezone:    input.Timezone,
+		AllDay:      input.AllDay,
+		StartDate:   input.StartDate,
+		EndDate:     input.EndDate,
+		StartTime:   input.StartTime,
+		EndTime:     input.EndTime,
+	}
+}
+
+func uniqueSlug(base, id string) string {
+	if base == "" {
+		base = "event"
+	}
+	return base + "-" + id
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+			lastDash = false
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteRune('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func formatRange(start, end time.Time, allDay bool, timezone string) string {
+	if allDay {
+		if sameDay(start, end) {
+			return start.Format("Mon Jan 2, 2006") + " · All day · " + timezone
+		}
+		return start.Format("Mon Jan 2") + " to " + end.Format("Mon Jan 2, 2006") + " · All day · " + timezone
+	}
+	if sameDay(start, end) {
+		return start.Format("Mon Jan 2, 2006 · 3:04 PM") + " to " + end.Format("3:04 PM") + " · " + timezone
+	}
+	return start.Format("Mon Jan 2, 2006 · 3:04 PM") + " to " + end.Format("Mon Jan 2, 2006 · 3:04 PM") + " · " + timezone
+}
+
+func joinNonEmpty(sep string, values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, sep)
+}
+
+func sameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+}
+
+func monthLabel(month string) string {
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		return month
+	}
+	return t.Format("January 2006")
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func requestLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("%s %s (%s)", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (a *app) render(w http.ResponseWriter, name string, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func parseTemplates() *template.Template {
+	funcs := template.FuncMap{
+		"today": func() string { return time.Now().Format("2006-01-02") },
+	}
+	return template.Must(template.New("pages").Funcs(funcs).Parse(frameTemplate + homeTemplate + calendarTemplate + detailTemplate + adminLoginTemplate + adminDashboardTemplate + adminFormTemplate))
+}
+
+func loadLocationOrUTC(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+const frameTemplate = `
+{{define "frame_start"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav">
+      <a class="brand" href="/">
+        <span class="brand-mark">Autosoftware Seed 0004</span>
+        <span class="brand-name">Field Guide Events</span>
+      </a>
+      <div class="nav-links">
+        <a class="text-link" href="/">Directory</a>
+        <a class="text-link" href="/calendar">Calendar</a>
+        <a class="text-link" href="/admin">Organizer</a>
+      </div>
+    </nav>
+{{end}}
+
+{{define "frame_end"}}
+    <footer class="footer">
+      Public event discovery with stable URLs, explicit time semantics, and organizer-first publishing controls.
+    </footer>
+  </div>
+</body>
+</html>
+{{end}}
+`
+
+const homeTemplate = `
+{{define "home"}}
+  {{template "frame_start" .}}
+  <section class="hero">
+    <div class="hero-card">
+      <h1>Publish events with discipline. Discover them without friction.</h1>
+      <p>Organizers move events through draft, published, canceled, and archived states. Visitors browse one public directory, one shared calendar, and stable event pages that do not shift when details change.</p>
+      <div class="hero-stats">
+        <div class="stat"><strong>{{.Stats.Upcoming}}</strong>Upcoming public listings</div>
+        <div class="stat"><strong>{{.Stats.Canceled}}</strong>Still-visible canceled events</div>
+        <div class="stat"><strong>{{.Stats.Categories}}</strong>Categories in circulation</div>
+      </div>
+    </div>
+    <aside class="hero-side hero-card">
+      <h2>This release stays narrow on purpose.</h2>
+      <p>No ticketing, no attendee accounts, no recurrence engine. Just reliable publishing, trustworthy public discovery, and explicit time handling for small teams.</p>
+      <a class="pill-link alt" href="{{.MonthURL}}">Open {{.MonthLabel}}</a>
+      <a class="pill-link alt" href="/admin">Enter organizer workspace</a>
+    </aside>
+  </section>
+
+  {{if .Flash}}<div class="notice">{{.Flash}}</div>{{end}}
+
+  <section class="section-head">
+    <div>
+      <h2>Upcoming directory</h2>
+      <p>Search by keyword, then narrow by date range, category, or location.</p>
+    </div>
+    <a class="pill-link alt" href="{{.CalendarURL}}">Switch to calendar</a>
+  </section>
+
+  <section class="panel">
+    <form method="get" action="/">
+      <div class="filters">
+        <label>Keyword
+          <input type="search" name="q" value="{{.Filters.Query}}" placeholder="market, workshop, cleanup">
+        </label>
+        <label>Category
+          <select name="category">
+            <option value="">All categories</option>
+            {{range .Categories}}
+              <option value="{{.}}" {{if eq $.Filters.Category .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label>Location
+          <select name="location">
+            <option value="">All locations</option>
+            {{range .Locations}}
+              <option value="{{.}}" {{if eq $.Filters.Location .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label>From
+          <input type="date" name="from" value="{{.Filters.From}}">
+        </label>
+        <label>To
+          <input type="date" name="to" value="{{.Filters.To}}">
+        </label>
+      </div>
+      <div class="nav-actions">
+        <input type="submit" value="Apply filters">
+        <a class="text-link" href="/">Reset</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="event-grid">
+    {{if .Events}}
+      {{range .Events}}
+      <article class="event-card">
+        <div class="eyebrow">
+          <span class="badge {{.Status}}">{{.StatusLabel}}</span>
+          <span>{{.Category}}</span>
+        </div>
+        <div>
+          <h3><a href="{{.PublicURL}}">{{.Title}}</a></h3>
+          <p class="muted">{{.Summary}}</p>
+        </div>
+        <dl class="summary-list">
+          <div><dt>When</dt><dd>{{.RangeLabel}}</dd></div>
+          <div><dt>Where</dt><dd>{{.LocationLabel}}</dd></div>
+        </dl>
+        <a class="pill-link" href="{{.PublicURL}}">View details</a>
+      </article>
+      {{end}}
+    {{else}}
+      <div class="empty">No published or canceled upcoming events match the current filters.</div>
+    {{end}}
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`
+
+const calendarTemplate = `
+{{define "calendar"}}
+  {{template "frame_start" .}}
+  <section class="section-head">
+    <div>
+      <h2>{{.MonthLabel}}</h2>
+      <p>Single-day and simple multi-day events appear on every covered day.</p>
+    </div>
+    <div class="nav-actions">
+      <a class="pill-link alt" href="/calendar?month={{.PrevMonth}}">Previous</a>
+      <a class="pill-link alt" href="/calendar?month={{.NextMonth}}">Next</a>
+    </div>
+  </section>
+
+  <section class="calendar-card">
+    <div class="calendar-grid">
+      <div class="calendar-head">Sun</div>
+      <div class="calendar-head">Mon</div>
+      <div class="calendar-head">Tue</div>
+      <div class="calendar-head">Wed</div>
+      <div class="calendar-head">Thu</div>
+      <div class="calendar-head">Fri</div>
+      <div class="calendar-head">Sat</div>
+      {{range .Days}}
+      <div class="calendar-day {{if not .InMonth}}muted{{end}}">
+        <div class="calendar-number">{{.DayNumber}}</div>
+        {{range .Events}}
+          <a class="calendar-event {{.Status}}" href="{{.PublicURL}}">
+            {{.Title}}
+            <small>{{if .AllDay}}All day{{else}}{{.RangeLabel}}{{end}}</small>
+          </a>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`
+
+const detailTemplate = `
+{{define "detail"}}
+  {{template "frame_start" .}}
+  {{if .Warning}}
+    <div class="notice {{if eq .Event.Status "canceled"}}warning{{end}}">{{.Warning}}</div>
+  {{end}}
+  <section class="detail-layout">
+    <article class="hero-card">
+      <div class="eyebrow">
+        <span class="badge {{.Event.Status}}">{{.Event.StatusLabel}}</span>
+        <span>{{.Event.Category}}</span>
+      </div>
+      <h1 style="font-size:clamp(2.2rem,5vw,4rem);margin-top:12px;">{{.Event.Title}}</h1>
+      <p>{{.Event.Summary}}</p>
+      <div class="prose">{{.Event.Description}}</div>
+      {{if .Event.ExternalURL}}
+        <p><a class="pill-link" href="{{.Event.ExternalURL}}" target="_blank" rel="noreferrer">External event link</a></p>
+      {{end}}
+      {{if .IsAdmin}}
+        <p class="muted">Organizer note: this public URL is fixed at <code>{{.Event.PublicURL}}</code>.</p>
+      {{end}}
+    </article>
+    <aside class="panel">
+      <h2>Event facts</h2>
+      <dl class="meta-list">
+        <div><dt>When</dt><dd>{{.Event.RangeLabel}}</dd></div>
+        <div><dt>Venue</dt><dd>{{.Event.Venue}}</dd></div>
+        <div><dt>Location</dt><dd>{{.Event.Location}}</dd></div>
+        <div><dt>Timezone</dt><dd>{{.Event.Timezone}}</dd></div>
+        <div><dt>Status</dt><dd>{{.Event.StatusLabel}}</dd></div>
+      </dl>
+      <div class="nav-actions">
+        <a class="pill-link alt" href="/">Back to directory</a>
+        <a class="pill-link alt" href="/calendar">Calendar</a>
+      </div>
+    </aside>
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`
+
+const adminLoginTemplate = `
+{{define "admin_login"}}
+  {{template "frame_start" .}}
+  <section class="login-card panel" style="max-width:520px;margin:40px auto;">
+    <h2>Organizer login</h2>
+    <p class="muted">Use the local development password to manage event drafts and public state transitions.</p>
+    {{if .Error}}<div class="notice warning">{{.Error}}</div>{{end}}
+    <form method="post" action="/admin/login">
+      <label>Password
+        <input type="password" name="password" autocomplete="current-password">
+      </label>
+      <input type="submit" value="Sign in">
+    </form>
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`
+
+const adminDashboardTemplate = `
+{{define "admin_dashboard"}}
+  {{template "frame_start" .}}
+  {{if .Flash}}<div class="notice">{{.Flash}}</div>{{end}}
+  <section class="section-head">
+    <div>
+      <h2>Organizer workspace</h2>
+      <p>Create drafts, preserve stable URLs, then publish, unpublish, cancel, or archive without changing the slug.</p>
+    </div>
+    <div class="nav-actions">
+      <a class="pill-link" href="/admin/events/new">Create event</a>
+      <form class="inline-form" method="post" action="/admin/logout"><button class="alt" type="submit">Log out</button></form>
+    </div>
+  </section>
+
+  <section class="panel">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Public URL</th>
+          <th>Status</th>
+          <th>Schedule</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Events}}
+        <tr>
+          <td>
+            <strong>{{.Title}}</strong><br>
+            <span class="muted">{{.Category}} · {{.Location}}</span>
+          </td>
+          <td><a href="{{.PublicURL}}">{{.Slug}}</a></td>
+          <td><span class="badge {{.Status}}">{{.StatusLabel}}</span></td>
+          <td>{{.RangeLabel}}</td>
+          <td class="actions">
+            <a class="pill-link alt" href="/admin/events/{{.ID}}/edit">Edit</a>
+            {{if eq .Status "draft"}}
+              <form class="inline-form" method="post" action="/admin/events/{{.ID}}/state"><input type="hidden" name="action" value="publish"><button type="submit">Publish</button></form>
+            {{else}}
+              <form class="inline-form" method="post" action="/admin/events/{{.ID}}/state"><input type="hidden" name="action" value="unpublish"><button class="alt" type="submit">Unpublish</button></form>
+            {{end}}
+            {{if ne .Status "canceled"}}
+              <form class="inline-form" method="post" action="/admin/events/{{.ID}}/state"><input type="hidden" name="action" value="cancel"><button class="alt" type="submit">Cancel</button></form>
+            {{end}}
+            {{if ne .Status "archived"}}
+              <form class="inline-form" method="post" action="/admin/events/{{.ID}}/state"><input type="hidden" name="action" value="archive"><button class="alt" type="submit">Archive</button></form>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`
+
+const adminFormTemplate = `
+{{define "admin_form"}}
+  {{template "frame_start" .}}
+  <section class="section-head">
+    <div>
+      <h2>{{if eq .Mode "create"}}Create event draft{{else}}Edit event{{end}}</h2>
+      <p>{{if eq .Mode "create"}}Drafts stay private until published.{{else}}Edits keep the same public URL.{{end}}</p>
+    </div>
+    <a class="pill-link alt" href="/admin">Back to workspace</a>
+  </section>
+  {{if .Error}}<div class="notice warning">{{.Error}}</div>{{end}}
+  <section class="panel">
+    <form method="post" action="{{if eq .Mode "create"}}/admin/events{{else}}/admin/events/{{.Event.ID}}{{end}}">
+      {{if .Event.Slug}}
+        <div class="notice">Stable public URL: <code>/events/{{.Event.Slug}}</code></div>
+      {{end}}
+      <div class="grid-two" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+        <label>Title
+          <input type="text" name="title" value="{{.Event.Title}}" required>
+        </label>
+        <label>Category
+          <input type="text" name="category" value="{{.Event.Category}}" required>
+        </label>
+        <label>Venue
+          <input type="text" name="venue" value="{{.Event.Venue}}">
+        </label>
+        <label>Location
+          <input type="text" name="location" value="{{.Event.Location}}" required>
+        </label>
+        <label>Timezone
+          <input type="text" name="timezone" value="{{.Event.Timezone}}" required>
+        </label>
+        <label>External URL
+          <input type="url" name="external_url" value="{{.Event.ExternalURL}}" placeholder="https://example.com">
+        </label>
+      </div>
+      <label>Summary
+        <input type="text" name="summary" value="{{.Event.Summary}}" required>
+      </label>
+      <label>Description
+        <textarea name="description" required>{{.Event.Description}}</textarea>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="all_day" {{if .Event.AllDay}}checked{{end}}>
+        <span>All-day event</span>
+      </label>
+      <div class="grid-two" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+        <label>Start date
+          <input type="date" name="start_date" value="{{.Event.StartDate}}" required>
+        </label>
+        <label>End date
+          <input type="date" name="end_date" value="{{.Event.EndDate}}" required>
+        </label>
+        <label>Start time
+          <input type="time" name="start_time" value="{{.Event.StartTime}}">
+        </label>
+        <label>End time
+          <input type="time" name="end_time" value="{{.Event.EndTime}}">
+        </label>
+      </div>
+      <div class="nav-actions">
+        <input type="submit" value="{{if eq .Mode "create"}}Save draft{{else}}Update event{{end}}">
+        <a class="text-link" href="/admin">Cancel</a>
+      </div>
+    </form>
+  </section>
+  {{template "frame_end" .}}
+{{end}}
+`

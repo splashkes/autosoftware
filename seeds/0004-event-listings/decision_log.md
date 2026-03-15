@@ -47,3 +47,25 @@ Reason:
 
 - recurrence logic creates disproportionate complexity
 - single and simple multi-day events are enough for the first useful release
+
+## Stable Slugs Generated Once
+
+The first runnable realization generates a slug when an event is created and
+keeps that slug fixed through later edits.
+
+Reason:
+
+- public detail URLs must remain stable across organizer edits
+- the simplest trustworthy rule is "slug is write-once"
+- a stored slug avoids title-change edge cases in links, search, and archives
+
+## Server-Rendered MVP First
+
+The initial runnable realization is a self-contained server-rendered Go web app
+with in-memory state and minimal JSON projections.
+
+Reason:
+
+- it satisfies the seed quickly without changing kernel infrastructure
+- it keeps organizer and public surfaces coherent in one code path
+- it leaves room for later persistence and kernel capability integration

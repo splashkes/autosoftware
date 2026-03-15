@@ -1,0 +1,16 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/event-listings-app/main.go
+working_directory: artifacts/event-listings-app
+run:
+  command: go
+  args:
+    - run
+    - .
+environment:
+  AS_ADDR: 127.0.0.1:8096
+  AS_ADMIN_PASSWORD: admin
+notes:
+  - Manual boot only for now.
+  - Organizer login uses AS_ADMIN_PASSWORD and defaults to admin for local development.
