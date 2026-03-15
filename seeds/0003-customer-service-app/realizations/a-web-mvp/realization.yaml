@@ -2,4 +2,29 @@ realization_id: a-web-mvp
 seed_id: 0003-customer-service-app
 approach_id: a-web-mvp
 summary: First web MVP for ticketing, chat, and knowledge base workflows.
-status: draft
+status: runnable
+subdomain: support
+path_prefix: /
+artifacts:
+  - artifacts/runtime.yaml
+  - artifacts/service-app/go.mod
+  - artifacts/service-app/main.go
+  - artifacts/service-app/store.go
+  - artifacts/service-app/handlers.go
+  - artifacts/service-app/templates/base.html
+  - artifacts/service-app/templates/home.html
+  - artifacts/service-app/templates/ticket_new.html
+  - artifacts/service-app/templates/ticket_created.html
+  - artifacts/service-app/templates/ticket_view.html
+  - artifacts/service-app/templates/ticket_lookup.html
+  - artifacts/service-app/templates/articles.html
+  - artifacts/service-app/templates/article_detail.html
+  - artifacts/service-app/templates/chat_start.html
+  - artifacts/service-app/templates/chat_widget.html
+  - artifacts/service-app/templates/login.html
+  - artifacts/service-app/templates/inbox.html
+  - artifacts/service-app/templates/ticket_detail.html
+  - artifacts/service-app/templates/chat_console.html
+  - artifacts/service-app/templates/chat_session.html
+  - artifacts/service-app/templates/kb_list.html
+  - artifacts/service-app/templates/kb_edit.html

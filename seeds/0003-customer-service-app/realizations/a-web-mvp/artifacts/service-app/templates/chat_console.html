@@ -1,0 +1,55 @@
+{{define "content"}}
+<h1>Chat Console</h1>
+
+<div class="filters">
+<a href="/agent/chats" class="btn btn-sm{{if not .Filter}} btn-primary{{end}}">Active & Waiting</a>
+<a href="/agent/chats?status=waiting" class="btn btn-sm{{if eq .Filter "waiting"}} btn-primary{{end}}">Waiting</a>
+<a href="/agent/chats?status=active" class="btn btn-sm{{if eq .Filter "active"}} btn-primary{{end}}">Active</a>
+<a href="/agent/chats?status=escalated" class="btn btn-sm{{if eq .Filter "escalated"}} btn-primary{{end}}">Escalated</a>
+<a href="/agent/chats?status=ended" class="btn btn-sm{{if eq .Filter "ended"}} btn-primary{{end}}">Ended</a>
+</div>
+
+{{if .Sessions}}
+<table>
+<thead>
+<tr>
+<th>Customer</th>
+<th>Status</th>
+<th>Agent</th>
+<th>Messages</th>
+<th>Started</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+{{range .Sessions}}
+<tr>
+<td>
+<strong>{{.CustomerName}}</strong><br>
+<span class="text-muted">{{.CustomerEmail}}</span>
+</td>
+<td><span class="badge {{chatStatusClass .Status}}">{{.Status.Label}}</span></td>
+<td>{{if .AgentName}}{{.AgentName}}{{else}}<span class="text-muted">—</span>{{end}}</td>
+<td>{{len .Messages}}</td>
+<td class="text-muted">{{timeAgo .CreatedAt}}</td>
+<td>
+{{if eq (printf "%s" .Status) "waiting"}}
+<form method="post" action="/agent/chats/{{.ID}}/join" style="display:inline">
+<button type="submit" class="btn btn-sm btn-primary">Join</button>
+</form>
+{{else if eq (printf "%s" .Status) "active"}}
+<a href="/agent/chats/{{.ID}}" class="btn btn-sm">Open</a>
+{{else}}
+<a href="/agent/chats/{{.ID}}" class="btn btn-sm">View</a>
+{{end}}
+</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<div class="card">
+<p class="text-muted">No chat sessions found.</p>
+</div>
+{{end}}
+{{end}}

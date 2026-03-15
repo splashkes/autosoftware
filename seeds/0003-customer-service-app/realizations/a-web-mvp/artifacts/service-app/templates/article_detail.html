@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="sidebar">
+<div class="sidebar-main">
+<p class="text-muted mb-1"><a href="/help/articles">← Knowledge Base</a></p>
+<h1>{{.Article.Title}}</h1>
+<div class="flex gap-1 items-center mb-2">
+<span class="badge badge-blue">{{.Article.Category}}</span>
+<span class="text-muted">Updated {{timeAgo .Article.UpdatedAt}}</span>
+</div>
+<div class="card kb-article">
+{{markdown .Article.Body}}
+</div>
+</div>
+<div class="sidebar-aside">
+{{if .Related}}
+<div class="card">
+<h3>Related Articles</h3>
+{{range .Related}}
+<p class="mt-1"><a href="/help/articles/{{.Slug}}">{{.Title}}</a></p>
+{{end}}
+</div>
+{{end}}
+<div class="card">
+<h3>Need More Help?</h3>
+<p class="text-sm mt-1"><a href="/help/tickets/new">Submit a ticket</a></p>
+<p class="text-sm mt-1"><a href="/chat">Start a live chat</a></p>
+</div>
+</div>
+</div>
+{{end}}

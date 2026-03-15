@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="justify-between">
+<h1>Knowledge Base Management</h1>
+<a href="/agent/articles/new" class="btn btn-primary">New Article</a>
+</div>
+
+{{if .Articles}}
+<table>
+<thead>
+<tr>
+<th>Title</th>
+<th>Category</th>
+<th>Status</th>
+<th>Author</th>
+<th>Updated</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+{{range .Articles}}
+<tr>
+<td><a href="/agent/articles/{{.ID}}/edit"><strong>{{.Title}}</strong></a></td>
+<td>{{if .Category}}<span class="badge badge-blue">{{.Category}}</span>{{else}}<span class="text-muted">—</span>{{end}}</td>
+<td>
+{{if eq (printf "%s" .Status) "published"}}
+<span class="badge badge-green">Published</span>
+{{else}}
+<span class="badge badge-yellow">Draft</span>
+{{end}}
+</td>
+<td>{{.AuthorName}}</td>
+<td class="text-muted">{{timeAgo .UpdatedAt}}</td>
+<td>
+{{if eq (printf "%s" .Status) "published"}}
+<a href="/help/articles/{{.Slug}}" class="btn btn-sm" target="_blank">View</a>
+{{end}}
+<a href="/agent/articles/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<div class="card">
+<p class="text-muted">No articles yet. <a href="/agent/articles/new">Create your first article.</a></p>
+</div>
+{{end}}
+{{end}}

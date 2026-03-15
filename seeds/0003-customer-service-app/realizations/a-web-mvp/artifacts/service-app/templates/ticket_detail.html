@@ -1,0 +1,125 @@
+{{define "content"}}
+<p class="text-muted mb-1"><a href="/agent/inbox">← Back to Inbox</a></p>
+
+<div class="justify-between">
+<h1>{{.Ticket.RefCode}}: {{.Ticket.Subject}}</h1>
+</div>
+
+<div class="sidebar">
+<div class="sidebar-main">
+{{/* Conversation thread */}}
+<h2>Conversation</h2>
+{{range .Ticket.Messages}}
+<div class="message message-{{.AuthorType}}">
+<div class="message-header">
+<span class="message-author">{{.AuthorName}} <span class="badge {{if eq .AuthorType "customer"}}badge-blue{{else}}badge-green{{end}}">{{.AuthorType}}</span></span>
+<span class="message-time">{{timeAgo .CreatedAt}}</span>
+</div>
+<div>{{nl2br .Body}}</div>
+</div>
+{{end}}
+
+{{/* Agent reply form */}}
+{{if ne (printf "%s" .Ticket.Status) "closed"}}
+<div class="card mt-2">
+<h3>Reply to Customer</h3>
+<form method="post" action="/agent/tickets/{{.Ticket.ID}}/reply">
+<div class="form-group">
+<textarea name="body" required placeholder="Type your reply... (visible to customer)"></textarea>
+</div>
+<button type="submit" class="btn btn-primary">Send Reply</button>
+</form>
+</div>
+{{end}}
+
+{{/* Internal notes */}}
+<h2 class="mt-2">Internal Notes</h2>
+{{if .Ticket.InternalNotes}}
+{{range .Ticket.InternalNotes}}
+<div class="note">
+<div class="note-header">
+<strong>{{.AuthorName}}</strong>
+<span class="text-muted">{{timeAgo .CreatedAt}}</span>
+</div>
+<div>{{nl2br .Body}}</div>
+</div>
+{{end}}
+{{else}}
+<p class="text-muted mb-1">No internal notes yet.</p>
+{{end}}
+
+<div class="card">
+<form method="post" action="/agent/tickets/{{.Ticket.ID}}/note">
+<div class="form-group">
+<textarea name="body" required placeholder="Add an internal note (not visible to customer)..." rows="2"></textarea>
+</div>
+<button type="submit" class="btn btn-sm">Add Note</button>
+</form>
+</div>
+</div>
+
+<div class="sidebar-aside">
+{{/* Ticket metadata */}}
+<div class="card">
+<h3>Details</h3>
+<table>
+<tr><th>Status</th><td><span class="badge {{statusClass .Ticket.Status}}">{{.Ticket.Status.Label}}</span></td></tr>
+<tr><th>Priority</th><td><span class="badge {{priorityClass .Ticket.Priority}}">{{.Ticket.Priority.Label}}</span></td></tr>
+<tr><th>Requester</th><td>{{.Ticket.RequesterName}}<br><span class="text-muted">{{.Ticket.RequesterEmail}}</span></td></tr>
+<tr><th>Created</th><td class="text-muted">{{formatTime .Ticket.CreatedAt}}</td></tr>
+<tr><th>Updated</th><td class="text-muted">{{formatTime .Ticket.UpdatedAt}}</td></tr>
+</table>
+</div>
+
+{{/* Actions */}}
+<div class="card">
+<h3>Actions</h3>
+
+<form method="post" action="/agent/tickets/{{.Ticket.ID}}/status" class="mb-1">
+<div class="form-group">
+<label>Status</label>
+<div class="flex gap-1">
+<select name="status">
+<option value="open"{{if eq (printf "%s" .Ticket.Status) "open"}} selected{{end}}>Open</option>
+<option value="pending_customer"{{if eq (printf "%s" .Ticket.Status) "pending_customer"}} selected{{end}}>Pending Customer</option>
+<option value="resolved"{{if eq (printf "%s" .Ticket.Status) "resolved"}} selected{{end}}>Resolved</option>
+<option value="closed"{{if eq (printf "%s" .Ticket.Status) "closed"}} selected{{end}}>Closed</option>
+</select>
+<button type="submit" class="btn btn-sm">Set</button>
+</div>
+</div>
+</form>
+
+<form method="post" action="/agent/tickets/{{.Ticket.ID}}/priority" class="mb-1">
+<div class="form-group">
+<label>Priority</label>
+<div class="flex gap-1">
+<select name="priority">
+<option value="low"{{if eq (printf "%s" .Ticket.Priority) "low"}} selected{{end}}>Low</option>
+<option value="normal"{{if eq (printf "%s" .Ticket.Priority) "normal"}} selected{{end}}>Normal</option>
+<option value="high"{{if eq (printf "%s" .Ticket.Priority) "high"}} selected{{end}}>High</option>
+<option value="urgent"{{if eq (printf "%s" .Ticket.Priority) "urgent"}} selected{{end}}>Urgent</option>
+</select>
+<button type="submit" class="btn btn-sm">Set</button>
+</div>
+</div>
+</form>
+
+<form method="post" action="/agent/tickets/{{.Ticket.ID}}/assign">
+<div class="form-group">
+<label>Assignee</label>
+<div class="flex gap-1">
+<select name="assignee_id">
+<option value="">Unassigned</option>
+{{range .Agents}}
+<option value="{{.ID}}"{{if eq .ID $.Ticket.AssigneeID}} selected{{end}}>{{.Name}}</option>
+{{end}}
+</select>
+<button type="submit" class="btn btn-sm">Assign</button>
+</div>
+</div>
+</form>
+</div>
+</div>
+</div>
+{{end}}

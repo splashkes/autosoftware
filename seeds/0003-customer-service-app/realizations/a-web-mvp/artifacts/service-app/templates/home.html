@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="hero">
+<h1>How can we help?</h1>
+<p>Search our knowledge base or get in touch with our support team.</p>
+</div>
+
+<div class="search-box">
+<form method="get" action="/">
+<input type="text" name="q" placeholder="Search for answers..." value="{{.Query}}">
+</form>
+</div>
+
+<div class="action-cards">
+<a href="/help/articles" class="action-card">
+<h3>Knowledge Base</h3>
+<p>Browse articles and guides</p>
+</a>
+<a href="/help/tickets/new" class="action-card">
+<h3>Submit a Request</h3>
+<p>Create a support ticket</p>
+</a>
+<a href="/chat" class="action-card">
+<h3>Live Chat</h3>
+<p>Talk to us in real time</p>
+</a>
+</div>
+
+{{if .Query}}
+<h2>Search results for "{{.Query}}"</h2>
+{{if .Articles}}
+{{range .Articles}}
+<div class="card">
+<h3><a href="/help/articles/{{.Slug}}">{{.Title}}</a></h3>
+<span class="badge badge-blue">{{.Category}}</span>
+<span class="text-muted" style="margin-left:.5rem">{{timeAgo .UpdatedAt}}</span>
+</div>
+{{end}}
+{{else}}
+<p class="text-muted">No results found. Try a different search or <a href="/help/tickets/new">submit a request</a>.</p>
+{{end}}
+{{else if .Articles}}
+<h2>Popular Articles</h2>
+{{range .Articles}}
+<div class="card">
+<h3><a href="/help/articles/{{.Slug}}">{{.Title}}</a></h3>
+<span class="badge badge-blue">{{.Category}}</span>
+</div>
+{{end}}
+{{end}}
+{{end}}

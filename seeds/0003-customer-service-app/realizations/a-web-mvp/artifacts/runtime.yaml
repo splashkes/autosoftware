@@ -1,0 +1,16 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: service-app/main.go
+working_directory: artifacts/service-app
+run:
+  command: go
+  args:
+    - run
+    - .
+environment:
+  AS_ADDR: 127.0.0.1:8095
+notes:
+  - In-memory state only; restart clears all data.
+  - Default agent accounts are seeded at startup.
+  - Chat sessions fall back to ticket creation after 2 minutes without an agent.

@@ -1,0 +1,42 @@
+{{define "content"}}
+<h1>Ticket {{.Ticket.RefCode}}: {{.Ticket.Subject}}</h1>
+
+<div class="card">
+<div class="justify-between mb-1">
+<div class="flex gap-1 items-center">
+<span class="badge {{statusClass .Ticket.Status}}">{{.Ticket.Status.Label}}</span>
+<span class="badge {{priorityClass .Ticket.Priority}}">{{.Ticket.Priority.Label}}</span>
+</div>
+<span class="text-muted">Created {{timeAgo .Ticket.CreatedAt}}</span>
+</div>
+</div>
+
+<h2>Conversation</h2>
+
+{{range .Ticket.Messages}}
+<div class="message message-{{.AuthorType}}">
+<div class="message-header">
+<span class="message-author">{{.AuthorName}}</span>
+<span class="message-time">{{timeAgo .CreatedAt}}</span>
+</div>
+<div>{{nl2br .Body}}</div>
+</div>
+{{end}}
+
+{{if and (ne (printf "%s" .Ticket.Status) "closed") (not .IsAgent)}}
+<div class="card mt-2">
+<h3>Reply</h3>
+<form method="post" action="/help/tickets/{{.Ticket.RefCode}}/reply">
+<input type="hidden" name="token" value="{{.Token}}">
+<div class="form-group">
+<textarea name="body" required placeholder="Type your reply..."></textarea>
+</div>
+<button type="submit" class="btn btn-primary">Send Reply</button>
+</form>
+</div>
+{{end}}
+
+{{if eq (printf "%s" .Ticket.Status) "closed"}}
+<div class="alert alert-info mt-2">This ticket is closed and no longer accepts replies.</div>
+{{end}}
+{{end}}
