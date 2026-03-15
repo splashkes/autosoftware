@@ -1,18 +1,28 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"as/kernel/internal/config"
 	"as/kernel/internal/http/server"
+	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
+	runtimedb "as/kernel/internal/runtime"
+	"as/kernel/internal/telemetry"
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	repoRoot, err := config.RepoRootFromEnvOrWD()
 	if err != nil {
 		log.Fatal(err)
@@ -21,6 +31,23 @@ func main() {
 	service, err := materializer.NewService(repoRoot, remoteClient())
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	var runtimeService *interactions.RuntimeService
+	runtimeConfig := config.LoadRuntimeConfigFromEnv()
+	if runtimeConfig.Enabled() {
+		pool, err := runtimedb.OpenPool(ctx, runtimeConfig.DatabaseURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer pool.Close()
+		if runtimeConfig.AutoMigrate {
+			if err := runtimedb.RunMigrations(ctx, pool, repoRoot); err != nil {
+				log.Fatal(err)
+			}
+		}
+		runtimeService = interactions.NewRuntimeService(pool)
+		telemetry.NewServiceMonitor("materializerd", runtimeService).Start(ctx)
 	}
 
 	mux := http.NewServeMux()
@@ -58,7 +85,14 @@ func main() {
 
 	addr := config.EnvOrDefault("AS_MATERIALIZER_ADDR", "127.0.0.1:8091")
 	log.Printf("materializerd listening on %s (repo root %s)", addr, repoRoot)
-	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(mux)); err != nil {
+	httpServer := &http.Server{Addr: addr, Handler: server.DefaultMiddlewareStack(mux)}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdownCtx)
+	}()
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

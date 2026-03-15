@@ -128,6 +128,27 @@ func nullInt(value *int) interface{} {
 	return *value
 }
 
+func nullInt32(value int) interface{} {
+	if value == 0 {
+		return nil
+	}
+	return value
+}
+
+func nullInt64(value int64) interface{} {
+	if value == 0 {
+		return nil
+	}
+	return value
+}
+
+func nullFloat64(value float64) interface{} {
+	if value == 0 {
+		return nil
+	}
+	return value
+}
+
 func toTimePtr(value sql.NullTime) *time.Time {
 	if !value.Valid {
 		return nil
@@ -669,6 +690,147 @@ func scanRealizationRouteBinding(row rowScanner) (RealizationRouteBinding, error
 		item.PathPrefix = pathPrefix.String
 	}
 	item.Metadata = parseJSON(metadata)
+	return item, nil
+}
+
+func scanProcessSample(row rowScanner) (ProcessSample, error) {
+	var item ProcessSample
+	var serviceName sql.NullString
+	var executionID sql.NullString
+	var seedID sql.NullString
+	var reference sql.NullString
+	var pid sql.NullInt32
+	var cpuPercent sql.NullFloat64
+	var rssBytes sql.NullInt64
+	var virtualBytes sql.NullInt64
+	var openFDs sql.NullInt32
+	var logBytes sql.NullInt64
+	var metadata string
+	if err := row.Scan(
+		&item.SampleID,
+		&item.ScopeKind,
+		&serviceName,
+		&executionID,
+		&seedID,
+		&reference,
+		&pid,
+		&cpuPercent,
+		&rssBytes,
+		&virtualBytes,
+		&openFDs,
+		&logBytes,
+		&metadata,
+		&item.ObservedAt,
+	); err != nil {
+		return ProcessSample{}, rowNotFound(err)
+	}
+	if serviceName.Valid {
+		item.ServiceName = serviceName.String
+	}
+	if executionID.Valid {
+		item.ExecutionID = executionID.String
+	}
+	if seedID.Valid {
+		item.SeedID = seedID.String
+	}
+	if reference.Valid {
+		item.Reference = reference.String
+	}
+	if pid.Valid {
+		item.PID = int(pid.Int32)
+	}
+	if cpuPercent.Valid {
+		item.CPUPercent = cpuPercent.Float64
+	}
+	if rssBytes.Valid {
+		item.RSSBytes = rssBytes.Int64
+	}
+	if virtualBytes.Valid {
+		item.VirtualBytes = virtualBytes.Int64
+	}
+	if openFDs.Valid {
+		item.OpenFDs = int(openFDs.Int32)
+	}
+	if logBytes.Valid {
+		item.LogBytes = logBytes.Int64
+	}
+	item.Metadata = parseJSON(metadata)
+	return item, nil
+}
+
+func scanServiceEvent(row rowScanner) (ServiceEvent, error) {
+	var item ServiceEvent
+	var message sql.NullString
+	var bootID sql.NullString
+	var pid sql.NullInt32
+	var requestID sql.NullString
+	var metadata string
+	if err := row.Scan(
+		&item.EventID,
+		&item.ServiceName,
+		&item.EventName,
+		&item.Severity,
+		&message,
+		&bootID,
+		&pid,
+		&requestID,
+		&metadata,
+		&item.OccurredAt,
+	); err != nil {
+		return ServiceEvent{}, rowNotFound(err)
+	}
+	if message.Valid {
+		item.Message = message.String
+	}
+	if bootID.Valid {
+		item.BootID = bootID.String
+	}
+	if pid.Valid {
+		item.PID = int(pid.Int32)
+	}
+	if requestID.Valid {
+		item.RequestID = requestID.String
+	}
+	item.Metadata = parseJSON(metadata)
+	return item, nil
+}
+
+func scanRealizationSuspension(row rowScanner) (RealizationSuspension, error) {
+	var item RealizationSuspension
+	var executionID sql.NullString
+	var routeSubdomain sql.NullString
+	var routePathPrefix sql.NullString
+	var metadata string
+	var clearedAt sql.NullTime
+	if err := row.Scan(
+		&item.SuspensionID,
+		&item.SeedID,
+		&item.Reference,
+		&executionID,
+		&routeSubdomain,
+		&routePathPrefix,
+		&item.ReasonCode,
+		&item.Message,
+		&item.RemediationTarget,
+		&item.RemediationHint,
+		&item.Status,
+		&metadata,
+		&item.CreatedAt,
+		&clearedAt,
+	); err != nil {
+		return RealizationSuspension{}, rowNotFound(err)
+	}
+	if executionID.Valid {
+		item.ExecutionID = executionID.String
+	}
+	if routeSubdomain.Valid {
+		item.RouteSubdomain = routeSubdomain.String
+	}
+	if routePathPrefix.Valid {
+		item.RoutePathPrefix = routePathPrefix.String
+	}
+	item.Metadata = parseJSON(metadata)
+	item.ClearedAt = toTimePtr(clearedAt)
 	return item, nil
 }
 

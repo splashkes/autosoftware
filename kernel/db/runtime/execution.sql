@@ -72,3 +72,75 @@ create index if not exists runtime_realization_route_bindings_active_idx
 
 create index if not exists runtime_realization_route_bindings_execution_idx
   on runtime_realization_route_bindings (execution_id, status, updated_at desc);
+
+create table if not exists runtime_process_samples (
+  sample_id text primary key,
+  scope_kind text not null,
+  service_name text,
+  execution_id text references runtime_realization_executions(execution_id) on delete cascade,
+  seed_id text,
+  reference text,
+  pid integer,
+  cpu_percent double precision,
+  rss_bytes bigint,
+  virtual_bytes bigint,
+  open_fds integer,
+  log_bytes bigint,
+  metadata jsonb not null default '{}'::jsonb,
+  observed_at timestamptz not null default now()
+);
+
+create index if not exists runtime_process_samples_scope_idx
+  on runtime_process_samples (scope_kind, observed_at desc);
+
+create index if not exists runtime_process_samples_execution_idx
+  on runtime_process_samples (execution_id, observed_at desc);
+
+create index if not exists runtime_process_samples_service_idx
+  on runtime_process_samples (service_name, observed_at desc);
+
+create table if not exists runtime_service_events (
+  event_id text primary key,
+  service_name text not null,
+  event_name text not null,
+  severity text not null default 'info',
+  message text,
+  boot_id text,
+  pid integer,
+  request_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists runtime_service_events_service_idx
+  on runtime_service_events (service_name, occurred_at desc);
+
+create index if not exists runtime_service_events_name_idx
+  on runtime_service_events (event_name, occurred_at desc);
+
+create table if not exists runtime_realization_suspensions (
+  suspension_id text primary key,
+  seed_id text not null,
+  reference text not null,
+  execution_id text references runtime_realization_executions(execution_id) on delete set null,
+  route_subdomain text,
+  route_path_prefix text,
+  reason_code text not null,
+  message text not null default '',
+  remediation_target text not null default 'main',
+  remediation_hint text not null default '',
+  status text not null default 'active',
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  cleared_at timestamptz
+);
+
+create unique index if not exists runtime_realization_suspensions_active_reference_idx
+  on runtime_realization_suspensions (reference)
+  where status = 'active' and cleared_at is null;
+
+create index if not exists runtime_realization_suspensions_active_route_idx
+  on runtime_realization_suspensions (status, route_subdomain, route_path_prefix, created_at desc);
+
+create index if not exists runtime_realization_suspensions_execution_idx
+  on runtime_realization_suspensions (execution_id, created_at desc);

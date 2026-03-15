@@ -38,8 +38,15 @@ type LocalSpec struct {
 }
 
 type LocalProcess struct {
-	cmd     *exec.Cmd
-	logFile string
+	executionID string
+	cmd         *exec.Cmd
+	logFile     string
+}
+
+type RunningProcess struct {
+	ExecutionID string
+	PID         int
+	LogFile     string
 }
 
 type LocalExecutor struct {
@@ -145,7 +152,7 @@ func (e *LocalExecutor) Launch(_ context.Context, spec LocalSpec) (string, error
 	}
 
 	e.mu.Lock()
-	e.processes[spec.ExecutionID] = LocalProcess{cmd: cmd, logFile: logPath}
+	e.processes[spec.ExecutionID] = LocalProcess{executionID: spec.ExecutionID, cmd: cmd, logFile: logPath}
 	e.mu.Unlock()
 
 	go func() {
@@ -170,6 +177,24 @@ func (e *LocalExecutor) Stop(executionID string) error {
 		return errors.New("execution process not found")
 	}
 	return process.cmd.Process.Kill()
+}
+
+func (e *LocalExecutor) RunningProcesses() []RunningProcess {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	out := make([]RunningProcess, 0, len(e.processes))
+	for executionID, process := range e.processes {
+		if process.cmd == nil || process.cmd.Process == nil {
+			continue
+		}
+		out = append(out, RunningProcess{
+			ExecutionID: executionID,
+			PID:         process.cmd.Process.Pid,
+			LogFile:     process.logFile,
+		})
+	}
+	return out
 }
 
 func WaitForHealthy(ctx context.Context, upstreamAddr string) error {

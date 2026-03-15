@@ -423,6 +423,120 @@ type RealizationRouteBindingInput struct {
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type ProcessSample struct {
+	SampleID     string                 `json:"sample_id"`
+	ScopeKind    string                 `json:"scope_kind"`
+	ServiceName  string                 `json:"service_name,omitempty"`
+	ExecutionID  string                 `json:"execution_id,omitempty"`
+	SeedID       string                 `json:"seed_id,omitempty"`
+	Reference    string                 `json:"reference,omitempty"`
+	PID          int                    `json:"pid,omitempty"`
+	CPUPercent   float64                `json:"cpu_percent,omitempty"`
+	RSSBytes     int64                  `json:"rss_bytes,omitempty"`
+	VirtualBytes int64                  `json:"virtual_bytes,omitempty"`
+	OpenFDs      int                    `json:"open_fds,omitempty"`
+	LogBytes     int64                  `json:"log_bytes,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	ObservedAt   time.Time              `json:"observed_at"`
+}
+
+type RecordProcessSampleInput struct {
+	SampleID     string                 `json:"sample_id,omitempty"`
+	ScopeKind    string                 `json:"scope_kind"`
+	ServiceName  string                 `json:"service_name,omitempty"`
+	ExecutionID  string                 `json:"execution_id,omitempty"`
+	SeedID       string                 `json:"seed_id,omitempty"`
+	Reference    string                 `json:"reference,omitempty"`
+	PID          int                    `json:"pid,omitempty"`
+	CPUPercent   float64                `json:"cpu_percent,omitempty"`
+	RSSBytes     int64                  `json:"rss_bytes,omitempty"`
+	VirtualBytes int64                  `json:"virtual_bytes,omitempty"`
+	OpenFDs      int                    `json:"open_fds,omitempty"`
+	LogBytes     int64                  `json:"log_bytes,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	ObservedAt   *time.Time             `json:"observed_at,omitempty"`
+}
+
+type ListProcessSamplesInput struct {
+	ScopeKind   string `json:"scope_kind,omitempty"`
+	ServiceName string `json:"service_name,omitempty"`
+	ExecutionID string `json:"execution_id,omitempty"`
+	Reference   string `json:"reference,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
+type ServiceEvent struct {
+	EventID     string                 `json:"event_id"`
+	ServiceName string                 `json:"service_name"`
+	EventName   string                 `json:"event_name"`
+	Severity    string                 `json:"severity"`
+	Message     string                 `json:"message,omitempty"`
+	BootID      string                 `json:"boot_id,omitempty"`
+	PID         int                    `json:"pid,omitempty"`
+	RequestID   string                 `json:"request_id,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata"`
+	OccurredAt  time.Time              `json:"occurred_at"`
+}
+
+type RecordServiceEventInput struct {
+	EventID     string                 `json:"event_id,omitempty"`
+	ServiceName string                 `json:"service_name"`
+	EventName   string                 `json:"event_name"`
+	Severity    string                 `json:"severity,omitempty"`
+	Message     string                 `json:"message,omitempty"`
+	BootID      string                 `json:"boot_id,omitempty"`
+	PID         int                    `json:"pid,omitempty"`
+	RequestID   string                 `json:"request_id,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	OccurredAt  *time.Time             `json:"occurred_at,omitempty"`
+}
+
+type ListServiceEventsInput struct {
+	ServiceName string `json:"service_name,omitempty"`
+	EventName   string `json:"event_name,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
+type RealizationSuspension struct {
+	SuspensionID      string                 `json:"suspension_id"`
+	SeedID            string                 `json:"seed_id"`
+	Reference         string                 `json:"reference"`
+	ExecutionID       string                 `json:"execution_id,omitempty"`
+	RouteSubdomain    string                 `json:"route_subdomain,omitempty"`
+	RoutePathPrefix   string                 `json:"route_path_prefix,omitempty"`
+	ReasonCode        string                 `json:"reason_code"`
+	Message           string                 `json:"message"`
+	RemediationTarget string                 `json:"remediation_target"`
+	RemediationHint   string                 `json:"remediation_hint"`
+	Status            string                 `json:"status"`
+	Metadata          map[string]interface{} `json:"metadata"`
+	CreatedAt         time.Time              `json:"created_at"`
+	ClearedAt         *time.Time             `json:"cleared_at,omitempty"`
+}
+
+type UpsertRealizationSuspensionInput struct {
+	SuspensionID      string                 `json:"suspension_id,omitempty"`
+	SeedID            string                 `json:"seed_id"`
+	Reference         string                 `json:"reference"`
+	ExecutionID       string                 `json:"execution_id,omitempty"`
+	RouteSubdomain    string                 `json:"route_subdomain,omitempty"`
+	RoutePathPrefix   string                 `json:"route_path_prefix,omitempty"`
+	ReasonCode        string                 `json:"reason_code"`
+	Message           string                 `json:"message,omitempty"`
+	RemediationTarget string                 `json:"remediation_target,omitempty"`
+	RemediationHint   string                 `json:"remediation_hint,omitempty"`
+	Status            string                 `json:"status,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt         *time.Time             `json:"created_at,omitempty"`
+}
+
+type ListRealizationSuspensionsInput struct {
+	Reference   string `json:"reference,omitempty"`
+	ExecutionID string `json:"execution_id,omitempty"`
+	ActiveOnly  bool   `json:"active_only,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
 type OutboxMessage struct {
 	MessageID            string                 `json:"message_id"`
 	SubjectKind          string                 `json:"subject_kind,omitempty"`

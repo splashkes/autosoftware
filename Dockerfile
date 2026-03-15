@@ -11,18 +11,20 @@ RUN mkdir -p /out && \
     go build -o /out/apid ./cmd/apid && \
     go build -o /out/registryd ./cmd/registryd && \
     go build -o /out/materializerd ./cmd/materializerd && \
+    go build -o /out/execd ./cmd/execd && \
     go build -o /out/webd ./cmd/webd
 
 FROM alpine:3.21
 
 RUN addgroup -S app && adduser -S -G app app
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates lsof procps tzdata
 
 WORKDIR /app
 
 COPY --from=builder /out/apid /usr/local/bin/apid
 COPY --from=builder /out/registryd /usr/local/bin/registryd
 COPY --from=builder /out/materializerd /usr/local/bin/materializerd
+COPY --from=builder /out/execd /usr/local/bin/execd
 COPY --from=builder /out/webd /usr/local/bin/webd
 COPY . /app
 

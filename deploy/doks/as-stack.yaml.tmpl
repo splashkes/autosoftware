@@ -25,6 +25,7 @@ data:
   AS_APID_ADDR: ":8092"
   AS_REGISTRYD_ADDR: ":8093"
   AS_MATERIALIZER_ADDR: ":8091"
+  AS_EXECD_ADDR: ":8094"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -286,4 +287,74 @@ spec:
   ports:
     - name: http
       port: 8091
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: as-execd
+  namespace: ${AS_NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: as-execd
+  template:
+    metadata:
+      labels:
+        app: as-execd
+    spec:
+      imagePullSecrets:
+        - name: ${AS_IMAGE_PULL_SECRET}
+      containers:
+        - name: execd
+          image: ${AS_IMAGE}
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/execd"]
+          ports:
+            - containerPort: 8094
+              name: http
+          envFrom:
+            - configMapRef:
+                name: as-runtime-config
+            - secretRef:
+                name: as-runtime-secret
+          env:
+            - name: AS_RUNTIME_AUTO_MIGRATE
+              value: "false"
+            - name: AS_EXECUTION_REMEDIATION_TARGET
+              value: "main"
+            - name: AS_EXECUTION_REMEDIATION_HINT
+              value: "Fix the realization, open a PR, and relaunch once merged."
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: as-execd
+  namespace: ${AS_NAMESPACE}
+spec:
+  selector:
+    app: as-execd
+  ports:
+    - name: http
+      port: 8094
       targetPort: http

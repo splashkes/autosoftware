@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"as/kernel/internal/config"
 	jsontransport "as/kernel/internal/http/json"
@@ -12,6 +15,7 @@ import (
 	"as/kernel/internal/interactions"
 	"as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
+	"as/kernel/internal/telemetry"
 )
 
 func main() {
@@ -21,7 +25,8 @@ func main() {
 	}
 
 	runtimeConfig := config.LoadRuntimeConfigFromEnv()
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	var runtimeService *interactions.RuntimeService
 	var appliedMigrations func(context.Context) ([]string, error)
@@ -46,6 +51,9 @@ func main() {
 	}
 
 	mux := newMux(repoRoot, runtimeService, appliedMigrations)
+	if runtimeService != nil {
+		telemetry.NewServiceMonitor("registryd", runtimeService).Start(ctx)
+	}
 
 	var handler http.Handler = mux
 	if runtimeService != nil {
@@ -55,7 +63,14 @@ func main() {
 
 	addr := config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093")
 	log.Printf("registryd listening on %s (repo root %s, runtime %t)", addr, repoRoot, runtimeService != nil)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	server := &http.Server{Addr: addr, Handler: handler}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+	}()
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }
