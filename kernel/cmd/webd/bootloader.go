@@ -20,7 +20,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AS</title>
+  <title>Autosoftware</title>
   <link rel="stylesheet" href="/assets/sprout-logo.css">
   <style nonce="{{.CSPNonce}}">
     * { box-sizing: border-box; }
@@ -28,16 +28,15 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(circle at top, rgba(34, 197, 94, 0.08), transparent 28rem),
+        radial-gradient(circle at top left, rgba(34, 197, 94, 0.15), transparent 32rem),
+        radial-gradient(circle at top right, rgba(244, 211, 94, 0.12), transparent 26rem),
         linear-gradient(180deg, #eceef2 0%, #e7eaee 100%);
       color: #20242c;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-family: Georgia, "Times New Roman", serif;
     }
     .page {
-      width: min(52rem, calc(100vw - 2rem));
+      width: min(72rem, calc(100vw - 2rem));
+      margin: 0 auto;
       padding: 1.25rem 0 2.5rem;
     }
 
@@ -47,7 +46,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       justify-items: center;
       text-align: center;
       gap: 0.4rem;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
     }
     .wordmark {
       font-size: 2rem;
@@ -55,6 +54,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       letter-spacing: 0.52rem;
       color: #181c24;
       padding-left: 0.52rem;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .tagline {
       font-size: 0.72rem;
@@ -62,6 +62,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-transform: uppercase;
       color: #7e8592;
       padding-left: 0.22rem;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .lede {
       margin: 0.4rem auto 0;
@@ -69,6 +70,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       color: #69707c;
       font-size: 0.82rem;
       line-height: 1.6;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .gh-link {
       display: inline-flex;
@@ -77,6 +79,120 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       transition: color 0.15s ease;
     }
     .gh-link:hover { color: #22a05a; }
+
+    .hero-shell {
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+      border: 1px solid rgba(189, 196, 207, 0.95);
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 244, 0.88)),
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 18rem);
+      box-shadow: 0 1.4rem 3rem rgba(38, 45, 56, 0.08);
+    }
+    .hero-shell::before {
+      content: "";
+      position: absolute;
+      inset: auto -6rem -6rem auto;
+      width: 18rem;
+      height: 18rem;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34, 160, 90, 0.1), transparent 68%);
+      pointer-events: none;
+    }
+    .hero-grid {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.9fr);
+      gap: 1rem;
+      padding: 1.5rem;
+    }
+    .hero-copy {
+      display: grid;
+      gap: 1rem;
+      align-content: start;
+    }
+    .hero-kicker {
+      color: #178243;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .hero-title {
+      margin: 0;
+      max-width: 12ch;
+      color: #171b22;
+      font-size: clamp(2.3rem, 6vw, 4.6rem);
+      line-height: 0.94;
+      letter-spacing: -0.06em;
+      font-weight: 700;
+    }
+    .hero-title em {
+      color: #178243;
+      font-style: normal;
+    }
+    .hero-body {
+      margin: 0;
+      max-width: 42rem;
+      color: #4d5561;
+      font-size: 1rem;
+      line-height: 1.75;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      align-items: center;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .hero-note {
+      color: #6b7380;
+      font-size: 0.8rem;
+      line-height: 1.65;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .hero-side {
+      display: grid;
+      gap: 0.7rem;
+      align-content: start;
+      padding-top: 0.2rem;
+    }
+    .story-card,
+    .proof-card {
+      border: 1px solid rgba(201, 207, 216, 0.9);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 0.95rem 1rem;
+    }
+    .story-label,
+    .proof-label {
+      color: #7f8793;
+      font-size: 0.66rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .story-copy,
+    .proof-copy {
+      margin: 0.35rem 0 0;
+      color: #2d3440;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .proof-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.7rem;
+    }
+    .proof-card strong {
+      display: block;
+      color: #171b22;
+      font-size: 1.45rem;
+      line-height: 1;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
 
     /* ── Meta pills ── */
     .console-meta {
@@ -98,6 +214,101 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       font-size: 0.7rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    .explain-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: 1rem;
+      margin: 0 0 1.25rem;
+    }
+    .explain-card {
+      border: 1px solid #cfd4dc;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 1rem;
+    }
+    .section-kicker {
+      color: #7f8793;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .section-title {
+      margin: 0.38rem 0 0.55rem;
+      color: #171b22;
+      font-size: 1.45rem;
+      line-height: 1.1;
+    }
+    .section-copy {
+      margin: 0;
+      color: #54606d;
+      font-size: 0.92rem;
+      line-height: 1.7;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .process-list,
+    .difference-list {
+      display: grid;
+      gap: 0.65rem;
+      margin-top: 0.9rem;
+    }
+    .process-step,
+    .difference-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.75rem;
+      align-items: start;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .process-index,
+    .difference-badge {
+      min-width: 2rem;
+      padding-top: 0.05rem;
+      color: #178243;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .process-head,
+    .difference-head {
+      color: #222730;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .process-text,
+    .difference-text {
+      margin-top: 0.18rem;
+      color: #5f6874;
+      font-size: 0.84rem;
+      line-height: 1.65;
+    }
+
+    .catalog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 1rem;
+      margin: 0 0 0.85rem;
+    }
+    .catalog-copy {
+      max-width: 38rem;
+    }
+    .catalog-title {
+      margin: 0.2rem 0 0.35rem;
+      color: #171b22;
+      font-size: 1.7rem;
+      line-height: 1.05;
+    }
+    .catalog-text {
+      margin: 0;
+      color: #5c6673;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
 
     /* ── Tile grid ── */
@@ -268,6 +479,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-transform: uppercase;
       letter-spacing: 0.05em;
       line-height: 1;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .status { color: #2f855a; }
     .status.draft { color: #9a6700; }
@@ -294,6 +506,8 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       letter-spacing: 0.06em;
       text-transform: uppercase;
       cursor: pointer;
+      text-decoration: none;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .action-button:hover,
     .action-button:focus-visible {
@@ -543,8 +757,24 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     .footer code { color: #4f5664; }
 
     /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .hero-grid,
+      .explain-grid {
+        grid-template-columns: 1fr;
+      }
+      .catalog-header {
+        align-items: start;
+        flex-direction: column;
+      }
+    }
     @media (max-width: 720px) {
-      .page { width: min(52rem, calc(100vw - 1rem)); }
+      .page { width: min(72rem, calc(100vw - 1rem)); }
+      .hero-grid {
+        padding: 1rem;
+      }
+      .proof-grid {
+        grid-template-columns: 1fr;
+      }
       .tile-grid {
         grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
       }
@@ -571,6 +801,41 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       </a>{{end}}
     </section>
 
+    <section class="hero-shell">
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="hero-kicker">User- and agent-driven rapid software evolution</div>
+          <h1 class="hero-title">Software that can evolve <em>from within and from outside.</em></h1>
+          <p class="hero-body">AS is built for continuous evolution by both users and agents. Code may self-optimize, but purpose, design intent, and preserved decisions remain the guide rails. The root page should explain the thesis and expose the live system in the same place.</p>
+          <div class="hero-actions">
+            <a class="action-button is-primary" href="#catalog">Explore the live catalog</a>
+            <a class="action-button" href="{{if .GitHubURL}}{{.GitHubURL}}{{else}}https://github.com/splashkes/autosoftware{{end}}" target="_blank" rel="noopener">Read the repo</a>
+          </div>
+          <div class="hero-note">Use the sprout action to understand the purpose of a page, request improvements, or fork your own version on the same data or on a new dataset. Security, scale, and infrastructure stay centrally maintained while the software surface keeps changing.</div>
+        </div>
+        <div class="hero-side">
+          <div class="story-card">
+            <div class="story-label">Guide rails</div>
+            <p class="story-copy">Purpose docs, design docs, and legacy decisions are not side notes. They are part of the governing structure that keeps self-optimizing software aligned with what it is for.</p>
+          </div>
+          <div class="proof-grid">
+            <div class="proof-card">
+              <div class="proof-label">Active seeds</div>
+              <p class="proof-copy"><strong>{{len .Seeds}}</strong> live mutation tracks</p>
+            </div>
+            <div class="proof-card">
+              <div class="proof-label">Agent access</div>
+              <p class="proof-copy"><strong>{{.RunnableCount}}</strong> runnable surfaces, all designed to be API-addressable</p>
+            </div>
+          </div>
+          <div class="story-card">
+            <div class="story-label">Economic model</div>
+            <p class="story-copy">Evolution costs can be paid directly, crowdsourced through user fees, or executed with coding agents. The software can keep moving without requiring one owner to hand-author every change.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="console-meta">
       <span class="pill">{{len .Seeds}} seeds</span>
       <span class="pill">{{.RealizationCount}} realizations</span>
@@ -580,6 +845,74 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       {{if .RemoteConfigured}}<span class="pill">remote on</span>{{else}}<span class="pill">remote off</span>{{end}}
       <button class="action-button" id="registry-open" type="button">Registry</button>
     </div>
+
+    <section class="explain-grid">
+      <article class="explain-card">
+        <div class="section-kicker">Operating model</div>
+        <h2 class="section-title">Users, agents, code, and purpose in one loop.</h2>
+        <p class="section-copy">AS software is meant to evolve continuously. Users can ask for improvements, agents can execute them, code can be optimized, and the purpose and design documents remain the guides that keep the system coherent over time.</p>
+        <div class="process-list">
+          <div class="process-step">
+            <div class="process-index">01</div>
+            <div>
+              <div class="process-head">Understand</div>
+              <div class="process-text">The sprout action exists on the page itself so someone can understand the page purpose, request a change, or fork a new branch without leaving the running surface.</div>
+            </div>
+          </div>
+          <div class="process-step">
+            <div class="process-index">02</div>
+            <div>
+              <div class="process-head">Evolve</div>
+              <div class="process-text">Changes can be funded by users, paid directly, or executed with coding agents. Multiple realizations can compete against the same goals and contracts.</div>
+            </div>
+          </div>
+          <div class="process-step">
+            <div class="process-index">03</div>
+            <div>
+              <div class="process-head">Operate</div>
+              <div class="process-text">Security, scale, and shared infrastructure are maintained centrally while the application layer keeps improving, forking, and re-materializing.</div>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="explain-card">
+        <div class="section-kicker">Registry model</div>
+        <h2 class="section-title">Rollback, replay, and re-realization are built in.</h2>
+        <p class="section-copy">An immutable object registry plus an evolving claims and schema ledger means the system can be inspected, replayed, and rolled back when access to the underlying objects is available. As technology improves, realizations can be rerun against the same goals.</p>
+        <div class="difference-list">
+          <div class="difference-item">
+            <div class="difference-badge">API</div>
+            <div>
+              <div class="difference-head">The interface is optional</div>
+              <div class="difference-text">Every AS system is meant to be accessible through agent-scoped APIs, so direct agent use is a first-class surface rather than an afterthought.</div>
+            </div>
+          </div>
+          <div class="difference-item">
+            <div class="difference-badge">Registry</div>
+            <div>
+              <div class="difference-head">History stays replayable</div>
+              <div class="difference-text">Objects remain durable while claims and schema evolve, which keeps accepted behavior traceable and lets older or newer interpretations coexist.</div>
+            </div>
+          </div>
+          <div class="difference-item">
+            <div class="difference-badge">Future</div>
+            <div>
+              <div class="difference-head">Realizations can be rerun</div>
+              <div class="difference-text">As tools and models improve, the same software can be realized again from preserved purpose, contracts, and data instead of being trapped in the limitations of its first implementation.</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="catalog-header" id="catalog">
+      <div class="catalog-copy">
+        <div class="section-kicker">Live catalog</div>
+        <h2 class="catalog-title">Current seeds and realizations</h2>
+        <p class="catalog-text">These are the actual seeds and realizations this repo knows about right now. They are grouped by seed and wired into the same inspect, grow, run, and registry flows exposed at the root domain.</p>
+      </div>
+      <button class="action-button" id="registry-open-catalog" type="button">Open registry</button>
+    </section>
 
     <section class="tile-grid" id="tile-grid">
       {{range .Seeds}}
@@ -867,7 +1200,7 @@ func consoleLoaderScript() string {
   var modalContent = document.getElementById("modal-content");
   var modalCloseBtn = document.getElementById("modal-close");
   var sproutFab = document.getElementById("sprout-fab");
-  var registryOpen = document.getElementById("registry-open");
+  var registryButtons = document.querySelectorAll("#registry-open, #registry-open-catalog");
   var status = document.getElementById("console-status");
   if (!grid || !backdrop || !modalContent) return;
 
@@ -902,7 +1235,7 @@ func consoleLoaderScript() string {
         if (!launched) window.location.assign(session.open_path);
         return session;
       }
-      if (session.status === "failed" || session.status === "stopped") {
+      if (session.status === "failed" || session.status === "stopped" || session.status === "terminated") {
         throw new Error(session.last_error || ("Execution " + session.status));
       }
       setStatus("Launching " + label + " (" + (session.status || "starting") + ")...");
@@ -1294,12 +1627,12 @@ func consoleLoaderScript() string {
       openModal("create", "", "New Seed");
     });
   }
-  if (registryOpen) {
-    registryOpen.addEventListener("click", function (event) {
+  registryButtons.forEach(function (button) {
+    button.addEventListener("click", function (event) {
       event.stopPropagation();
       openModal("registry", "", "Registry");
     });
-  }
+  });
 
   // Modal close
   if (modalCloseBtn) {

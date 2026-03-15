@@ -4,6 +4,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"as/kernel/internal/config"
 	jsontransport "as/kernel/internal/http/json"
@@ -11,6 +14,7 @@ import (
 	"as/kernel/internal/interactions"
 	"as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
+	"as/kernel/internal/telemetry"
 )
 
 func main() {
@@ -24,7 +28,8 @@ func main() {
 		log.Fatal("AS_RUNTIME_DATABASE_URL is required")
 	}
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	pool, err := runtimedb.OpenPool(ctx, runtimeConfig.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
@@ -42,6 +47,7 @@ func main() {
 		return runtimedb.AppliedMigrations(ctx, pool)
 	})
 	executionAPI := jsontransport.NewExecutionAPI(repoRoot, service)
+	operationsAPI := jsontransport.NewOperationsAPI(service)
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
 	registryAPI := jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
@@ -50,8 +56,11 @@ func main() {
 	contractsAPI.Register(mux)
 	api.Register(mux)
 	executionAPI.Register(mux)
+	operationsAPI.Register(mux)
 	growthAPI.Register(mux)
 	registryAPI.Register(mux)
+
+	telemetry.NewServiceMonitor("apid", service).Start(ctx)
 
 	handler := server.DefaultMiddlewareStack(
 		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service}, mux),
@@ -59,7 +68,14 @@ func main() {
 
 	addr := config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092")
 	log.Printf("apid listening on %s (repo root %s)", addr, repoRoot)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	server := &http.Server{Addr: addr, Handler: handler}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+	}()
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

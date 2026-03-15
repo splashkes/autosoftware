@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"as/kernel/internal/execution"
 	"as/kernel/internal/interactions"
 	runtimedb "as/kernel/internal/runtime"
+	"as/kernel/internal/telemetry"
 )
 
 func main() {
@@ -46,6 +49,15 @@ func main() {
 		PublicAPIBaseURL:   "http://" + config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092"),
 		InternalAPIBaseURL: "http://" + config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092"),
 	}, config.EnvOrDefault("AS_EXECD_WORKER", "execd-local"), true)
+	worker.Budgets.MaxRSSBytes = int64Env("AS_EXECUTION_MAX_RSS_BYTES", worker.Budgets.MaxRSSBytes)
+	worker.Budgets.MaxLogBytes = int64Env("AS_EXECUTION_MAX_LOG_BYTES", worker.Budgets.MaxLogBytes)
+	worker.Budgets.MaxCPUPercent = float64Env("AS_EXECUTION_MAX_CPU_PERCENT", worker.Budgets.MaxCPUPercent)
+	worker.Budgets.MaxOpenFDs = intEnv("AS_EXECUTION_MAX_OPEN_FDS", worker.Budgets.MaxOpenFDs)
+	worker.Budgets.ConsecutiveBreaches = intEnv("AS_EXECUTION_BUDGET_STRIKES", worker.Budgets.ConsecutiveBreaches)
+	worker.Budgets.RemediationTarget = config.EnvOrDefault("AS_EXECUTION_REMEDIATION_TARGET", worker.Budgets.RemediationTarget)
+	worker.Budgets.RemediationHint = config.EnvOrDefault("AS_EXECUTION_REMEDIATION_HINT", worker.Budgets.RemediationHint)
+
+	telemetry.NewServiceMonitor("execd", service).Start(ctx)
 
 	if err := worker.ReconcileStartup(ctx); err != nil {
 		log.Fatal(err)
@@ -93,4 +105,28 @@ func runWorkerLoop(ctx context.Context, worker *execution.LocalWorker) {
 		case <-ticker.C:
 		}
 	}
+}
+
+func intEnv(key string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(config.EnvOrDefault(key, "")))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func int64Env(key string, fallback int64) int64 {
+	value, err := strconv.ParseInt(strings.TrimSpace(config.EnvOrDefault(key, "")), 10, 64)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func float64Env(key string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(strings.TrimSpace(config.EnvOrDefault(key, "")), 64)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
