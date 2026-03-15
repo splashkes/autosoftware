@@ -96,6 +96,28 @@ safe: append-only history, explicit supersession instead of silent overwrite,
 deterministic replay, and traceability from current behavior back to the
 accepted mutation that produced it.
 
+## Who This Is Not For
+
+Yes, AI can generate a working app in minutes. Yes, there are thousands of
+starter repos, boilerplates, and "ship your SaaS this weekend" templates.
+That is a solved problem and we are not solving it again.
+
+This project is not a code generator. It is not a shortcut for solo founders.
+It is not trying to replace your favorite framework or make developers
+obsolete. If you want an app built and deployed by Friday, you already have
+great options.
+
+What does not exist yet is a **shared interaction platform that evolves
+continuously** — where users participate in the change process, where
+competing realizations coexist safely, where the history of every accepted
+mutation is preserved and replayable, and where the whole thing is designed
+from the ground up for an era where AI is a first-class participant in
+software creation.
+
+We are building a public software commons. The people who use it should own
+its evolution, not just its interface. That is a different problem, and it is
+the one we are here for.
+
 ## Running Locally
 
 No external dependencies required. Start the full kernel stack with:
