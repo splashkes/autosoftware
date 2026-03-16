@@ -219,15 +219,7 @@ jobs:
               curl -fsS "http://127.0.0.1:28092/v1/contracts" >/tmp/as-contracts.json 2>/dev/null && \
               curl -fsS "http://127.0.0.1:28092/v1/runtime/health" >/tmp/as-runtime-health.json 2>/dev/null; then
               grep -Eq 'Software that evolves from within|Explore the live catalog' /tmp/as-home.html
-              python3 - <<'PY'
-              import json
-              contracts = json.load(open('/tmp/as-contracts.json'))['contracts']
-              if len(contracts) < 1:
-                  raise SystemExit('expected at least one contract')
-              print(f"contracts={len(contracts)}")
-              print(open('/tmp/as-registry.json').read().strip())
-              print(open('/tmp/as-runtime-health.json').read().strip())
-              PY
+              python3 -c 'import json; contracts = json.load(open("/tmp/as-contracts.json"))["contracts"]; assert len(contracts) >= 1, "expected at least one contract"; print(f"contracts={len(contracts)}"); print(open("/tmp/as-registry.json").read().strip()); print(open("/tmp/as-runtime-health.json").read().strip())'
               exit 0
             fi
             sleep 1
