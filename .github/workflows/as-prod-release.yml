@@ -13,6 +13,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  DOCTL_VERSION: "1.146.0"
 
 concurrency:
   group: as-production-release
@@ -25,6 +26,8 @@ jobs:
   build-and-push:
     if: ${{ github.event_name == 'push' || inputs.image_ref == '' }}
     runs-on: ubuntu-latest
+    environment:
+      name: as-production
     outputs:
       image_ref: ${{ steps.image.outputs.image_ref }}
       image_digest: ${{ steps.image.outputs.image_digest }}
@@ -38,18 +41,23 @@ jobs:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          : "${IMAGE_REPOSITORY:?Repository variable AS_IMAGE_REPOSITORY is required}"
+          : "${IMAGE_REPOSITORY:?Environment variable AS_IMAGE_REPOSITORY is required}"
           : "${DIGITALOCEAN_ACCESS_TOKEN:?Repository secret DIGITALOCEAN_ACCESS_TOKEN is required}"
 
       - name: Set Up Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+          tar -C /tmp -xf /tmp/doctl.tar.gz
+          sudo mv /tmp/doctl /usr/local/bin/doctl
+          doctl version
 
       - name: Authenticate Docker to DOCR
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: doctl registry login --expiry-seconds 1800
 
       - name: Build and Push Image
@@ -60,7 +68,6 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ vars.AS_IMAGE_REPOSITORY }}:main
             ${{ vars.AS_IMAGE_REPOSITORY }}:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -80,6 +87,12 @@ jobs:
           echo "image_ref=${IMAGE_REPOSITORY}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "image_digest=${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           printf 'Built image: %s@%s\n' "$IMAGE_REPOSITORY" "$IMAGE_DIGEST"
+          {
+            echo "## AS Production Image"
+            echo
+            echo "- tag: \`${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}\`"
+            echo "- digest: \`${IMAGE_REPOSITORY}@${IMAGE_DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-as-production:
     needs:
@@ -138,9 +151,12 @@ jobs:
           printf 'Deploying image: %s\n' "$image_ref"
 
       - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+          tar -C /tmp -xf /tmp/doctl.tar.gz
+          sudo mv /tmp/doctl /usr/local/bin/doctl
+          doctl version
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -214,15 +230,7 @@ jobs:
               curl -fsS "http://127.0.0.1:28092/v1/contracts" >/tmp/as-contracts.json 2>/dev/null && \
               curl -fsS "http://127.0.0.1:28092/v1/runtime/health" >/tmp/as-runtime-health.json 2>/dev/null; then
               grep -Eq 'Software that evolves from within|Explore the live catalog' /tmp/as-home.html
-              python3 - <<'PY'
-              import json
-              contracts = json.load(open('/tmp/as-contracts.json'))['contracts']
-              if len(contracts) < 1:
-                  raise SystemExit('expected at least one contract')
-              print(f"contracts={len(contracts)}")
-              print(open('/tmp/as-registry.json').read().strip())
-              print(open('/tmp/as-runtime-health.json').read().strip())
-              PY
+              python3 -c 'import json; contracts = json.load(open("/tmp/as-contracts.json"))["contracts"]; assert len(contracts) >= 1, "expected at least one contract"; print(f"contracts={len(contracts)}"); print(open("/tmp/as-registry.json").read().strip()); print(open("/tmp/as-runtime-health.json").read().strip())'
               exit 0
             fi
             sleep 1
