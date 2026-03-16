@@ -900,6 +900,17 @@ func consoleLoaderScript() string {
     if (status) status.textContent = copy || "";
   }
 
+  async function readJSONResponse(response) {
+    var body = await response.text();
+    if (!body) return {};
+    try {
+      return JSON.parse(body);
+    } catch (err) {
+      if (!response.ok) return { error: body.trim() || ("Request failed: " + response.status) };
+      throw err;
+    }
+  }
+
   async function waitForExecution(projectionPath, label) {
     for (var attempt = 0; attempt < 60; attempt++) {
       var response = await fetch(projectionPath, {
@@ -914,8 +925,7 @@ func consoleLoaderScript() string {
       var session = result.session || {};
       if (session.status === "healthy" && session.open_path) {
         setStatus("Running " + label + ".");
-        var launched = window.open(session.open_path, "_blank", "noopener");
-        if (!launched) window.location.assign(session.open_path);
+        window.location.assign(session.open_path);
         return session;
       }
       if (session.status === "failed" || session.status === "stopped" || session.status === "terminated") {
@@ -941,7 +951,7 @@ func consoleLoaderScript() string {
       headers: { "Accept": "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ reference: reference })
     });
-    var result = await response.json();
+    var result = await readJSONResponse(response);
     if (!response.ok) {
       throw new Error(result.error || ("Launch failed: " + response.status));
     }
@@ -1229,8 +1239,7 @@ func consoleLoaderScript() string {
       if (actionBtn.getAttribute("data-action") === "run") {
         if (actionBtn.getAttribute("data-open-path")) {
           var openPath = actionBtn.getAttribute("data-open-path");
-          var launched = window.open(openPath, "_blank", "noopener");
-          if (!launched) window.location.assign(openPath);
+          window.location.assign(openPath);
           setStatus("Opening " + (actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")) + "...");
           return;
         }

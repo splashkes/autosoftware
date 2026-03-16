@@ -42,6 +42,15 @@ jobs:
       - name: Run seed Go tests
         run: ./scripts/ci-seed-go-tests.sh
 
+  realization-rendered-url-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify rendered realizations do not bake environment URLs
+        run: ./scripts/ci-realization-rendered-url-guard.sh
+
   kernel-stack-smoke:
     runs-on: ubuntu-latest
     steps:

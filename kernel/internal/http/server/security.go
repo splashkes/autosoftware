@@ -57,7 +57,9 @@ func SecurityHeadersMiddlewareWithOptions(options SecurityHeadersOptions, next h
 }
 
 func SameOriginUnsafeMethodsMiddleware(next http.Handler) http.Handler {
-	return SameOriginUnsafeMethodsMiddlewareWithOptions(SameOriginUnsafeMethodsOptions{}, next)
+	return SameOriginUnsafeMethodsMiddlewareWithOptions(SameOriginUnsafeMethodsOptions{
+		TrustForwardedProto: true,
+	}, next)
 }
 
 func SameOriginUnsafeMethodsMiddlewareWithOptions(options SameOriginUnsafeMethodsOptions, next http.Handler) http.Handler {
