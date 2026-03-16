@@ -6,6 +6,7 @@ import (
 
 	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
+	registrycatalog "as/kernel/internal/registry"
 	"as/kernel/internal/realizations"
 )
 
@@ -58,7 +59,26 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 		},
 	}
 
-	view := newBootPageView(options, map[string]executionBootState{
+	view := newBootPageView(options, registrycatalog.Catalog{
+		Realizations: []registrycatalog.CatalogRealization{
+			{SeedID: "0003-customer-service-app"},
+			{SeedID: "0006-registry-browser"},
+			{SeedID: "0006-registry-browser"},
+		},
+		Objects: []registrycatalog.CatalogObject{
+			{SeedID: "0003-customer-service-app"},
+			{SeedID: "0006-registry-browser"},
+		},
+		Commands: []registrycatalog.CatalogCommand{
+			{SeedID: "0003-customer-service-app"},
+			{SeedID: "0006-registry-browser"},
+			{SeedID: "0006-registry-browser"},
+		},
+		Projections: []registrycatalog.CatalogProjection{
+			{SeedID: "0003-customer-service-app"},
+			{SeedID: "0006-registry-browser"},
+		},
+	}, map[string]executionBootState{
 		"0003-customer-service-app/a-web-mvp": {
 			ExecutionID: "exec_support",
 			Status:      "healthy",
@@ -69,14 +89,17 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	if len(view.Seeds) != 2 {
 		t.Fatalf("expected 2 seeds, got %d", len(view.Seeds))
 	}
-	if view.RealizationCount != 3 {
-		t.Fatalf("expected 3 realizations, got %d", view.RealizationCount)
+	if len(view.Featured) != 2 {
+		t.Fatalf("expected 2 featured seeds, got %d", len(view.Featured))
 	}
-	if view.GrowthReadyCount != 3 {
-		t.Fatalf("expected 3 growth-ready realizations, got %d", view.GrowthReadyCount)
+	if len(view.ReadinessGroups) != 2 {
+		t.Fatalf("expected 2 readiness groups, got %d", len(view.ReadinessGroups))
 	}
-	if view.RunnableCount != 1 {
-		t.Fatalf("expected 1 runnable realization, got %d", view.RunnableCount)
+	if view.ReadinessGroups[0].Title != "Runnable Now" {
+		t.Fatalf("expected first readiness group to be Runnable Now, got %q", view.ReadinessGroups[0].Title)
+	}
+	if len(view.ReadinessGroups[0].Realizations) != 1 {
+		t.Fatalf("expected 1 runnable realization, got %d", len(view.ReadinessGroups[0].Realizations))
 	}
 
 	support := view.Seeds[0]
@@ -95,6 +118,9 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	if got := support.Realizations[0].ExecutionOpenPath; got != "/support/" {
 		t.Fatalf("expected support execution open path /support/, got %q", got)
 	}
+	if support.Metrics.Total != 4 {
+		t.Fatalf("expected support metrics total 4, got %d", support.Metrics.Total)
+	}
 
 	registryBrowser := view.Seeds[1]
 	if registryBrowser.SeedID != "0006-registry-browser" {
@@ -108,6 +134,9 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	}
 	if registryBrowser.GrowthReadyCount != 2 {
 		t.Fatalf("expected registry browser growth-ready count 2, got %d", registryBrowser.GrowthReadyCount)
+	}
+	if registryBrowser.Metrics.Total != 6 {
+		t.Fatalf("expected registry browser metrics total 6, got %d", registryBrowser.Metrics.Total)
 	}
 }
 
@@ -146,7 +175,7 @@ func TestNewBootPageViewSkipsArchivedSeeds(t *testing.T) {
 		},
 	}
 
-	view := newBootPageView(options, nil, true, false, false, "", "")
+	view := newBootPageView(options, registrycatalog.Catalog{}, nil, true, false, false, "", "")
 
 	if len(view.Seeds) != 1 {
 		t.Fatalf("expected 1 visible seed, got %d", len(view.Seeds))
@@ -154,11 +183,11 @@ func TestNewBootPageViewSkipsArchivedSeeds(t *testing.T) {
 	if view.Seeds[0].SeedID != "0006-registry-browser" {
 		t.Fatalf("expected registry browser to remain visible, got %q", view.Seeds[0].SeedID)
 	}
-	if view.RealizationCount != 1 {
-		t.Fatalf("expected 1 visible realization, got %d", view.RealizationCount)
+	if len(view.ReadinessGroups) != 1 {
+		t.Fatalf("expected 1 readiness group, got %d", len(view.ReadinessGroups))
 	}
-	if view.RunnableCount != 0 {
-		t.Fatalf("expected archived runnable realization to be excluded, got %d runnable", view.RunnableCount)
+	if len(view.ReadinessGroups[0].Realizations) != 1 {
+		t.Fatalf("expected 1 visible realization, got %d", len(view.ReadinessGroups[0].Realizations))
 	}
 }
 
