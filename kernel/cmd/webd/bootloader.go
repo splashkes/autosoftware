@@ -900,6 +900,17 @@ func consoleLoaderScript() string {
     if (status) status.textContent = copy || "";
   }
 
+  async function readJSONResponse(response) {
+    var body = await response.text();
+    if (!body) return {};
+    try {
+      return JSON.parse(body);
+    } catch (err) {
+      if (!response.ok) return { error: body.trim() || ("Request failed: " + response.status) };
+      throw err;
+    }
+  }
+
   async function waitForExecution(projectionPath, label) {
     for (var attempt = 0; attempt < 60; attempt++) {
       var response = await fetch(projectionPath, {
@@ -941,7 +952,7 @@ func consoleLoaderScript() string {
       headers: { "Accept": "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ reference: reference })
     });
-    var result = await response.json();
+    var result = await readJSONResponse(response);
     if (!response.ok) {
       throw new Error(result.error || ("Launch failed: " + response.status));
     }
