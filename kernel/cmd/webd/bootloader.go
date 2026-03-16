@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"unicode"
 
 	"as/kernel/internal/materializer"
+	registrycatalog "as/kernel/internal/registry"
 )
 
 //go:embed assets/sprout-logo.css assets/sprout-logo.js
@@ -85,13 +87,6 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-align: center;
     }
 
-    .console-meta {
-      display: flex;
-      justify-content: center;
-      gap: 0.45rem;
-      flex-wrap: wrap;
-      margin: 0 0 1rem;
-    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -106,9 +101,24 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-transform: uppercase;
     }
 
-    .catalog-shell {
-      margin-top: 0.2rem;
+    .hero-note {
+      margin: 0 auto 1.5rem;
+      max-width: 34rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid #d3d9e1;
+      background: rgba(255, 255, 255, 0.75);
+      color: #5c6370;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      text-align: center;
     }
+
+    .featured-shell,
+    .catalog-shell,
+    .agent-shell {
+      margin-top: 1.2rem;
+    }
+    .section-head,
     .catalog-head {
       display: flex;
       align-items: end;
@@ -116,9 +126,11 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       gap: 0.8rem;
       margin-bottom: 0.75rem;
     }
+    .section-copy,
     .catalog-copy {
       min-width: 0;
     }
+    .section-title,
     .catalog-title {
       margin: 0 0 0.2rem;
       color: #2a2d35;
@@ -127,29 +139,162 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-transform: uppercase;
       font-weight: 600;
     }
-
-    .tile-grid {
-      border-top: 1px solid #d0d4dc;
-      border-bottom: 1px solid #d0d4dc;
+    .featured-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.8rem;
     }
+    .featured-card,
     .tile {
       position: relative;
-      border-bottom: 1px solid #d0d4dc;
-      background: transparent;
-      padding: 0;
-      cursor: pointer;
-      transition: background 0.15s ease;
+      border: 1px solid hsl(var(--seed-hue) 22% 82%);
+      background: linear-gradient(180deg, hsl(var(--seed-hue) 48% 98%) 0%, rgba(255, 255, 255, 0.96) 100%);
+      box-shadow: 0 0.9rem 2rem rgba(23, 29, 38, 0.06);
     }
-    .tile:last-child {
-      border-bottom: none;
+    .featured-card {
+      padding: 1rem;
+      display: grid;
+      gap: 0.8rem;
+      min-height: 15rem;
+    }
+    .featured-card::before,
+    .tile::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: hsl(var(--seed-hue) 62% 46%);
+    }
+    .featured-kicker {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      gap: 0.35rem;
+      padding: 0.18rem 0.48rem;
+      border-radius: 999px;
+      background: hsl(var(--seed-hue) 75% 96%);
+      color: hsl(var(--seed-hue) 48% 32%);
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .featured-card h3 {
+      margin: 0;
+      color: #1d2430;
+      font-size: 1.05rem;
+      line-height: 1.2;
+    }
+    .featured-summary {
+      margin: 0;
+      color: #616977;
+      font-size: 0.8rem;
+      line-height: 1.55;
+    }
+    .footprint-label {
+      font-size: 0.63rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: #77808e;
+      margin-bottom: 0.3rem;
+    }
+    .footprint-track {
+      width: 100%;
+      height: 0.58rem;
+      background: #e4e8ee;
+      overflow: hidden;
+      border-radius: 999px;
+    }
+    .footprint-fill {
+      display: flex;
+      height: 100%;
+      min-width: 1px;
+    }
+    .footprint-segment.objects,
+    .metric-dot.objects {
+      background: hsl(var(--seed-hue) 64% 38%);
+    }
+    .footprint-segment.commands,
+    .metric-dot.commands {
+      background: hsl(var(--seed-hue) 68% 47%);
+    }
+    .footprint-segment.projections,
+    .metric-dot.projections {
+      background: hsl(var(--seed-hue) 72% 58%);
+    }
+    .footprint-segment.realizations,
+    .metric-dot.realizations {
+      background: hsl(var(--seed-hue) 68% 72%);
+    }
+    .metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.7rem;
+      margin-top: 0.55rem;
+      color: #616977;
+      font-size: 0.69rem;
+      line-height: 1.4;
+    }
+    .metric {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.32rem;
+    }
+    .metric-dot {
+      width: 0.48rem;
+      height: 0.48rem;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .featured-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: auto;
+    }
+
+    .tile-grid {
+      display: grid;
+      gap: 1rem;
+    }
+    .readiness-band {
+      display: grid;
+      gap: 0.65rem;
+    }
+    .group-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+    .tile {
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+      padding: 0.85rem 0.9rem 0.95rem;
     }
     .tile:hover {
-      background: rgba(255, 255, 255, 0.45);
+      transform: translateY(-1px);
+      box-shadow: 0 1.1rem 2.1rem rgba(23, 29, 38, 0.08);
     }
     .tile-face {
       display: grid;
-      gap: 0.25rem;
-      padding: 0.95rem 0 0.4rem;
+      gap: 0.32rem;
+      padding: 0.25rem 0 0.4rem;
+    }
+    .seed-chip {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: hsl(var(--seed-hue) 75% 96%);
+      color: hsl(var(--seed-hue) 48% 32%);
+      font-size: 0.63rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
     }
     .tile-name {
       font-size: 0.84rem;
@@ -157,13 +302,9 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       color: #2a2d35;
       line-height: 1.4;
     }
-    .tile-count {
-      font-size: 0.72rem;
-      color: #8d94a0;
-    }
     .tile-route {
       font-size: 0.68rem;
-      color: #22a05a;
+      color: hsl(var(--seed-hue) 58% 38%);
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -197,16 +338,14 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
 
     .tile-expanded {
       display: none;
-      padding: 0 0 0.95rem;
+      padding: 0.1rem 0 0;
     }
     .tile.is-expanded .tile-expanded {
       display: grid;
       gap: 0.55rem;
     }
     .tile-grid.has-expanded .tile:not(.is-expanded) {
-      opacity: 1;
-      pointer-events: auto;
-      filter: none;
+      opacity: 0.72;
     }
     .tile-summary {
       margin: 0;
@@ -224,33 +363,6 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       gap: 0.4rem;
       flex-wrap: wrap;
       margin-top: 0.1rem;
-    }
-    .tile-children {
-      display: grid;
-      gap: 0.45rem;
-    }
-    .tile-child {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.45rem 0;
-      border-top: 1px dashed #d7dbe2;
-    }
-    .tile-child:first-child {
-      border-top: none;
-    }
-    .tile-child-name {
-      flex: 1;
-      min-width: 0;
-      font-size: 0.78rem;
-      color: #3a4250;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .tile-child .tile-actions {
-      margin-top: 0;
-      flex-shrink: 0;
     }
 
     .status,
@@ -309,6 +421,43 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       opacity: 0.45;
       border-color: #d5d8de;
       color: #9aa1ac;
+    }
+    .agent-shell {
+      padding: 1rem;
+      border: 1px solid #d3d9e1;
+      background: rgba(255, 255, 255, 0.84);
+    }
+    .agent-shell p {
+      margin: 0.35rem 0 0;
+      color: #616977;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .agent-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 0.9rem;
+      margin-top: 0.9rem;
+    }
+    .agent-box {
+      border: 1px solid #d9dde4;
+      background: #fbfbfc;
+      padding: 0.9rem;
+    }
+    .agent-box h3 {
+      margin: 0 0 0.4rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #2a2d35;
+    }
+    .agent-box pre {
+      margin: 0;
+      overflow-x: auto;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      color: #26303d;
+      white-space: pre-wrap;
     }
 
     /* ── Full-screen modal (State 2) ── */
@@ -646,16 +795,13 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     /* ── Responsive ── */
     @media (max-width: 720px) {
       .page { width: min(36rem, calc(100vw - 1rem)); }
+      .featured-grid,
+      .group-grid,
+      .agent-grid { grid-template-columns: 1fr; }
+      .section-head,
       .catalog-head {
         align-items: start;
         flex-direction: column;
-      }
-      .tile-child {
-        align-items: start;
-        flex-wrap: wrap;
-      }
-      .tile-child .tile-actions {
-        width: 100%;
       }
       .form-grid.two-up { grid-template-columns: 1fr; }
     }
@@ -679,90 +825,119 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       </a>{{end}}
     </section>
 
-    <p class="intro">The running kernel shows the actual seeds and realizations available right now. Inspect, grow, run, or plant a new seed from here.</p>
+    <p class="intro">User- and agent-driven rapid software evolution, guided by purpose, design docs, and accepted decision history. Realizations can be rerun as technology improves without losing the contract beneath them.</p>
+    <div class="hero-note">Use the sprout any time to understand a page, request improvements, or fork your own version on the same data or a new dataset. Security and scale stay centralized while each realization keeps evolving.</div>
 
-    <div class="console-meta">
-      <span class="pill">{{len .Seeds}} seeds</span>
-      <span class="pill">{{.RealizationCount}} realizations</span>
-      <span class="pill">{{.GrowthReadyCount}} growth-ready</span>
-      <span class="pill">{{.RunnableCount}} runnable</span>
-      {{if .RuntimeConfigured}}<span class="pill">runtime on</span>{{else}}<span class="pill">runtime off</span>{{end}}
-      {{if .RemoteConfigured}}<span class="pill">remote on</span>{{else}}<span class="pill">remote off</span>{{end}}
-    </div>
+    <section class="featured-shell">
+      <div class="section-head">
+        <div class="section-copy">
+          <h2 class="section-title">Featured Systems</h2>
+          <p class="catalog-text">Highlighted surfaces first. The registry footprint bar under each card is relative across the seeds shown on this page.</p>
+        </div>
+        <button class="action-button" id="registry-open" type="button">Registry</button>
+      </div>
+      <div class="featured-grid">
+        {{range .Featured}}
+        <article class="featured-card" style="--seed-hue: {{.AccentHue}};">
+          <div class="featured-kicker">{{.Primary.ReadinessLabel}}</div>
+          <div>
+            <h3>{{.Label}}</h3>
+            <p class="featured-summary">{{.Summary}}</p>
+          </div>
+          <div>
+            <div class="footprint-label">Registry Footprint</div>
+            <div class="footprint-track">
+              <div class="footprint-fill" style="width: {{.Metrics.Width}};">
+                {{range .Metrics.Segments}}{{if gt .Count 0}}<span class="footprint-segment {{.Key}}" style="width: {{.Width}};"></span>{{end}}{{end}}
+              </div>
+            </div>
+            <div class="metric-row">
+              {{range .Metrics.Segments}}{{if gt .Count 0}}<span class="metric"><span class="metric-dot {{.Key}}"></span>{{.Count}} {{.Label}}</span>{{end}}{{end}}
+            </div>
+          </div>
+          <div class="featured-actions">
+            <button class="action-button" type="button" data-action="inspect" data-reference="{{.Primary.Reference}}" data-label="{{.Label}}">Inspect</button>
+            <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Primary.Reference}}" data-label="{{.Label}}">Grow</button>
+            {{if .Primary.CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Primary.Reference}}" data-label="{{.Label}}"{{if .Primary.CanLaunchLocal}} data-launchable="true"{{end}}{{if .Primary.ExecutionOpenPath}} data-open-path="{{.Primary.ExecutionOpenPath}}"{{end}}>{{if .Primary.ExecutionOpenPath}}Open{{else if .Primary.CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>{{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
+          </div>
+        </article>
+        {{end}}
+      </div>
+    </section>
 
     <section class="catalog-shell" id="catalog">
       <div class="catalog-head">
         <div class="catalog-copy">
-          <h2 class="catalog-title">Live seeds and realizations</h2>
-          <p class="catalog-text">Grouped by seed and wired into the same inspect, grow, run, and registry flows exposed at the root domain.</p>
+          <h2 class="catalog-title">Explore By Readiness</h2>
+          <p class="catalog-text">Smaller tiles keep the active surfaces visible while grouping realizations by what you can do with them right now.</p>
         </div>
-        <button class="action-button" id="registry-open" type="button">Registry</button>
       </div>
-
     <section class="tile-grid" id="tile-grid">
-      {{range .Seeds}}
-      {{if .IsSingleRealization}}
-        {{with index .Realizations 0}}
-        <article class="tile" data-tile data-tile-type="realization"
-                 data-reference="{{.Reference}}" data-label="{{.Summary}}"
-                 data-can-run="{{.CanRun}}" tabindex="0">
-          <div class="tile-face">
-            <span class="tile-name">{{.Summary}}</span>
-            {{if .Subdomain}}<span class="tile-route">{{.Subdomain}}</span>
-            {{else if .PathPrefix}}<span class="tile-route">{{.PathPrefix}}</span>{{end}}
-          </div>
-          <div class="tile-foot">
-            <span class="tile-dot" data-status="{{.Status}}"></span>
-            <span class="tile-stage">{{.ReadinessLabel}}</span>
-          </div>
-          <div class="tile-expanded" aria-hidden="true">
-            <p class="tile-summary">{{.ReadinessSummary}}</p>
-            <div class="tile-meta">
-              <span class="status {{.Status}}">{{.Status}}</span>
-              <span class="readiness {{.ReadinessStage}}">{{.ReadinessLabel}}</span>
-              {{if .SurfaceKind}}<span class="pill">{{.SurfaceKind}}</span>{{end}}
+      {{range .ReadinessGroups}}
+      <section class="readiness-band">
+        <div class="catalog-copy">
+          <h2 class="catalog-title">{{.Title}}</h2>
+          <p class="catalog-text">{{.Summary}}</p>
+        </div>
+        <div class="group-grid">
+          {{range .Realizations}}
+          <article class="tile" style="--seed-hue: {{.SeedHue}};" data-tile data-tile-type="realization"
+                   data-reference="{{.Reference}}" data-label="{{.Summary}}"
+                   data-can-run="{{.CanRun}}" tabindex="0">
+            <span class="seed-chip">{{.SeedDisplayName}}</span>
+            <div class="tile-face">
+              <span class="tile-name">{{.Summary}}</span>
+              {{if .Subdomain}}<span class="tile-route">{{.Subdomain}}</span>
+              {{else if .PathPrefix}}<span class="tile-route">{{.PathPrefix}}</span>{{end}}
             </div>
-            <div class="tile-actions">
-              <button class="action-button" type="button" data-action="inspect" data-reference="{{.Reference}}" data-label="{{.Summary}}">Inspect</button>
-              <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Reference}}" data-label="{{.Summary}}">Grow</button>
-              {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}"{{if .CanLaunchLocal}} data-launchable="true"{{end}}{{if .ExecutionOpenPath}} data-open-path="{{.ExecutionOpenPath}}"{{end}}>{{if .ExecutionOpenPath}}Open{{else if .CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
-              {{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
+            <div class="tile-foot">
+              <span class="tile-dot" data-status="{{.Status}}"></span>
+              <span class="tile-stage">{{.ReadinessLabel}}</span>
             </div>
-          </div>
-        </article>
-        {{end}}
-      {{else}}
-        <article class="tile tile-seed" data-tile data-tile-type="seed" data-seed-id="{{.SeedID}}" tabindex="0">
-          <div class="tile-face">
-            <span class="tile-name">{{.DisplayName}}</span>
-            <span class="tile-count">{{.Count}} realizations</span>
-          </div>
-          <div class="tile-foot">
-            <span class="tile-dot" data-status="{{.Status}}"></span>
-            <span class="tile-stage">{{.Status}}</span>
-          </div>
-          <div class="tile-expanded" aria-hidden="true">
-            {{if .Summary}}<p class="tile-summary">{{.Summary}}</p>{{end}}
-            <div class="tile-children">
-              {{range .Realizations}}
-              <div class="tile-child">
-                <span class="tile-dot" data-status="{{.Status}}"></span>
-                <span class="tile-child-name">{{.Summary}}</span>
+            <div class="tile-expanded" aria-hidden="true">
+              <p class="tile-summary">{{.ReadinessSummary}}</p>
+              <div class="tile-meta">
+                <span class="status {{.Status}}">{{.Status}}</span>
                 <span class="readiness {{.ReadinessStage}}">{{.ReadinessLabel}}</span>
-                <div class="tile-actions">
-                  <button class="action-button" type="button" data-action="inspect" data-reference="{{.Reference}}" data-label="{{.Summary}}">Inspect</button>
-                  <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Reference}}" data-label="{{.Summary}}">Grow</button>
-                  {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}"{{if .CanLaunchLocal}} data-launchable="true"{{end}}{{if .ExecutionOpenPath}} data-open-path="{{.ExecutionOpenPath}}"{{end}}>{{if .ExecutionOpenPath}}Open{{else if .CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
-                  {{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
-                </div>
+                {{if .SurfaceKind}}<span class="pill">{{.SurfaceKind}}</span>{{end}}
               </div>
-              {{end}}
+              <div class="tile-actions">
+                <button class="action-button" type="button" data-action="inspect" data-reference="{{.Reference}}" data-label="{{.Summary}}">Inspect</button>
+                <button class="action-button is-primary" type="button" data-action="grow" data-reference="{{.Reference}}" data-label="{{.Summary}}">Grow</button>
+                {{if .CanRun}}<button class="action-button" type="button" data-action="run" data-reference="{{.Reference}}" data-label="{{.Summary}}"{{if .CanLaunchLocal}} data-launchable="true"{{end}}{{if .ExecutionOpenPath}} data-open-path="{{.ExecutionOpenPath}}"{{end}}>{{if .ExecutionOpenPath}}Open{{else if .CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
+                {{else}}<button class="action-button" type="button" disabled>Run</button>{{end}}
+              </div>
             </div>
-          </div>
-        </article>
-      {{end}}
+          </article>
+          {{end}}
+        </div>
+      </section>
       {{end}}
     </section>
+    </section>
+
+    <section class="agent-shell">
+      <div class="section-copy">
+        <h2 class="section-title">For Agents</h2>
+        <p>Do not depend on scraping the interface. Every AS surface is intended to be reachable through scoped API access, with the same purpose and ledger history available to humans and agents.</p>
+      </div>
+      <div class="agent-grid">
+        <div class="agent-box">
+          <h3>Discovery</h3>
+          <pre>GET /v1/registry/catalog
+GET /v1/registry/objects?seed_id=...
+GET /v1/registry/commands?seed_id=...
+GET /v1/registry/projections?seed_id=...
+GET /v1/registry/realizations?seed_id=...</pre>
+        </div>
+        <div class="agent-box">
+          <h3>Operating Model</h3>
+          <pre>Purpose, design docs, and legacy decisions guide change.
+Security and scale stay centralized in the kernel.
+Evolution cost can be funded by users, paid directly, or executed by coding agents.
+Immutable object and schema history keeps rollback and replay possible.</pre>
+        </div>
+      </div>
     </section>
 
     <button class="sprout-fab" id="sprout-fab" type="button" aria-label="Plant a new seed" data-sprout-trigger>
@@ -781,7 +956,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     </div>
 
     <div id="console-status"></div>
-    <p class="footer">Draft realizations materialize into <code>materialized/</code> for inspection. Growth requests enqueue agent-ready jobs in <code>runtime_jobs</code>.</p>
+    <p class="footer">Draft realizations materialize into <code>materialized/</code> for inspection. Growth requests enqueue agent-ready jobs in <code>runtime_jobs</code>, and accepted history stays replayable through the registry layer.</p>
 
     <script src="/assets/sprout-logo.js"></script>
     <script nonce="{{.CSPNonce}}">{{.LoaderScript}}</script>
@@ -792,9 +967,8 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
 
 type bootPageView struct {
 	Seeds             []seedBootView
-	RealizationCount  int
-	GrowthReadyCount  int
-	RunnableCount     int
+	Featured          []featuredSeedView
+	ReadinessGroups   []readinessGroupView
 	ExecutionEnabled  bool
 	RemoteConfigured  bool
 	RuntimeConfigured bool
@@ -809,6 +983,8 @@ type seedBootView struct {
 	DisplayName         string
 	Summary             string
 	Status              string
+	AccentHue           int
+	Metrics             seedMetricsView
 	Count               int
 	GrowthReadyCount    int
 	RunnableCount       int
@@ -817,8 +993,39 @@ type seedBootView struct {
 	Realizations        []realizationBootView
 }
 
+type featuredSeedView struct {
+	SeedID    string
+	Label     string
+	Summary   string
+	AccentHue int
+	Metrics   seedMetricsView
+	Primary   realizationBootView
+}
+
+type readinessGroupView struct {
+	Title        string
+	Summary      string
+	Realizations []realizationBootView
+}
+
+type seedMetricsView struct {
+	Total    int
+	Width    string
+	Segments []metricSegmentView
+}
+
+type metricSegmentView struct {
+	Key   string
+	Label string
+	Count int
+	Width string
+}
+
 type realizationBootView struct {
 	Reference         string
+	SeedID            string
+	SeedDisplayName   string
+	SeedHue           int
 	RealizationID     string
 	ApproachID        string
 	Summary           string
@@ -844,11 +1051,10 @@ type executionBootState struct {
 	OpenPath    string
 }
 
-func newBootPageView(options []materializer.RealizationOption, executions map[string]executionBootState, executionEnabled, remoteConfigured, runtimeConfigured bool, nonce string, feedbackScript string) bootPageView {
+func newBootPageView(options []materializer.RealizationOption, catalog registrycatalog.Catalog, executions map[string]executionBootState, executionEnabled, remoteConfigured, runtimeConfigured bool, nonce string, feedbackScript string) bootPageView {
 	seen := make(map[string]int)
 	seeds := make([]seedBootView, 0)
-	runnableCount := 0
-	growthReadyCount := 0
+	allRealizations := make([]realizationBootView, 0)
 
 	for _, option := range options {
 		if !seedVisibleOnBootPage(option.SeedStatus) {
@@ -864,6 +1070,7 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 				DisplayName:   humanizeSeedID(option.SeedID),
 				Summary:       strings.TrimSpace(option.SeedSummary),
 				Status:        strings.TrimSpace(option.SeedStatus),
+				AccentHue:     seedAccentHue(option.SeedID),
 				InitiallyOpen: len(seeds) == 0,
 			})
 		}
@@ -875,6 +1082,9 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 
 		item := realizationBootView{
 			Reference:         option.Reference,
+			SeedID:            option.SeedID,
+			SeedDisplayName:   humanizeSeedID(option.SeedID),
+			SeedHue:           seeds[index].AccentHue,
 			RealizationID:     option.RealizationID,
 			ApproachID:        option.ApproachID,
 			Summary:           firstNonEmpty(strings.TrimSpace(option.Summary), option.RealizationID),
@@ -894,26 +1104,28 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 			PathPrefix:        option.PathPrefix,
 		}
 		seeds[index].Realizations = append(seeds[index].Realizations, item)
+		allRealizations = append(allRealizations, item)
 		seeds[index].Count = len(seeds[index].Realizations)
 		if item.HasContract {
 			seeds[index].GrowthReadyCount++
-			growthReadyCount++
 		}
 		if item.CanRun {
 			seeds[index].RunnableCount++
-			runnableCount++
 		}
 	}
 
+	metricsBySeed := buildSeedMetrics(catalog, seeds)
 	for i := range seeds {
 		seeds[i].IsSingleRealization = len(seeds[i].Realizations) == 1
+		if metric, ok := metricsBySeed[seeds[i].SeedID]; ok {
+			seeds[i].Metrics = metric
+		}
 	}
 
 	return bootPageView{
 		Seeds:             seeds,
-		RealizationCount:  growthReadyCount + countDesignedOnlyRealizations(seeds),
-		GrowthReadyCount:  growthReadyCount,
-		RunnableCount:     runnableCount,
+		Featured:          buildFeaturedSeeds(seeds),
+		ReadinessGroups:   buildReadinessGroups(allRealizations),
 		ExecutionEnabled:  executionEnabled,
 		RemoteConfigured:  remoteConfigured,
 		RuntimeConfigured: runtimeConfigured,
@@ -922,14 +1134,6 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 		LoaderScript:      template.JS(consoleLoaderScript()),
 		FeedbackScript:    template.JS(feedbackScript),
 	}
-}
-
-func countDesignedOnlyRealizations(seeds []seedBootView) int {
-	total := 0
-	for _, seed := range seeds {
-		total += seed.Count - seed.GrowthReadyCount
-	}
-	return total
 }
 
 func seedVisibleOnBootPage(status string) bool {
@@ -972,6 +1176,178 @@ func humanizeSeedID(seedID string) string {
 		words[index] = capitalizeWord(word)
 	}
 	return strings.Join(words, " ")
+}
+
+func buildSeedMetrics(catalog registrycatalog.Catalog, seeds []seedBootView) map[string]seedMetricsView {
+	type seedCounts struct {
+		Realizations int
+		Objects      int
+		Commands     int
+		Projections  int
+	}
+
+	visible := make(map[string]bool, len(seeds))
+	counts := make(map[string]*seedCounts, len(seeds))
+	for _, seed := range seeds {
+		visible[seed.SeedID] = true
+		counts[seed.SeedID] = &seedCounts{}
+	}
+
+	for _, item := range catalog.Realizations {
+		if visible[item.SeedID] {
+			counts[item.SeedID].Realizations++
+		}
+	}
+	for _, item := range catalog.Objects {
+		if visible[item.SeedID] {
+			counts[item.SeedID].Objects++
+		}
+	}
+	for _, item := range catalog.Commands {
+		if visible[item.SeedID] {
+			counts[item.SeedID].Commands++
+		}
+	}
+	for _, item := range catalog.Projections {
+		if visible[item.SeedID] {
+			counts[item.SeedID].Projections++
+		}
+	}
+
+	maxTotal := 0
+	for _, seed := range seeds {
+		total := counts[seed.SeedID].Realizations + counts[seed.SeedID].Objects + counts[seed.SeedID].Commands + counts[seed.SeedID].Projections
+		if total > maxTotal {
+			maxTotal = total
+		}
+	}
+
+	out := make(map[string]seedMetricsView, len(seeds))
+	for _, seed := range seeds {
+		count := counts[seed.SeedID]
+		total := count.Realizations + count.Objects + count.Commands + count.Projections
+		out[seed.SeedID] = seedMetricsView{
+			Total: total,
+			Width: percentString(total, maxTotal),
+			Segments: []metricSegmentView{
+				{Key: "objects", Label: "objects", Count: count.Objects, Width: percentString(count.Objects, total)},
+				{Key: "commands", Label: "actions", Count: count.Commands, Width: percentString(count.Commands, total)},
+				{Key: "projections", Label: "read models", Count: count.Projections, Width: percentString(count.Projections, total)},
+				{Key: "realizations", Label: "realizations", Count: count.Realizations, Width: percentString(count.Realizations, total)},
+			},
+		}
+	}
+	return out
+}
+
+func buildFeaturedSeeds(seeds []seedBootView) []featuredSeedView {
+	plans := []struct {
+		SeedID             string
+		Label              string
+		PreferredReference string
+	}{
+		{SeedID: "0006-registry-browser", Label: "Registry Browser", PreferredReference: "0006-registry-browser/a-ledger-reading-room"},
+		{SeedID: "0004-event-listings", Label: "Event Listings", PreferredReference: "0004-event-listings/a-web-mvp"},
+		{SeedID: "0003-customer-service-app", Label: "Ticketing", PreferredReference: "0003-customer-service-app/a-web-mvp"},
+	}
+
+	index := make(map[string]seedBootView, len(seeds))
+	for _, seed := range seeds {
+		index[seed.SeedID] = seed
+	}
+
+	featured := make([]featuredSeedView, 0, len(plans))
+	for _, plan := range plans {
+		seed, ok := index[plan.SeedID]
+		if !ok || len(seed.Realizations) == 0 {
+			continue
+		}
+		primary := preferredFeaturedRealization(seed.Realizations, plan.PreferredReference)
+		featured = append(featured, featuredSeedView{
+			SeedID:    seed.SeedID,
+			Label:     plan.Label,
+			Summary:   firstNonEmpty(seed.Summary, primary.ReadinessSummary),
+			AccentHue: seed.AccentHue,
+			Metrics:   seed.Metrics,
+			Primary:   primary,
+		})
+	}
+	return featured
+}
+
+func preferredFeaturedRealization(items []realizationBootView, preferredReference string) realizationBootView {
+	for _, item := range items {
+		if item.Reference == preferredReference {
+			return item
+		}
+	}
+	for _, item := range items {
+		if item.CanRun {
+			return item
+		}
+	}
+	for _, item := range items {
+		if item.HasContract {
+			return item
+		}
+	}
+	return items[0]
+}
+
+func buildReadinessGroups(items []realizationBootView) []readinessGroupView {
+	runnable := make([]realizationBootView, 0)
+	ready := make([]realizationBootView, 0)
+	designed := make([]realizationBootView, 0)
+
+	for _, item := range items {
+		switch {
+		case item.CanRun:
+			runnable = append(runnable, item)
+		case item.HasContract:
+			ready = append(ready, item)
+		default:
+			designed = append(designed, item)
+		}
+	}
+
+	groups := make([]readinessGroupView, 0, 3)
+	if len(runnable) > 0 {
+		groups = append(groups, readinessGroupView{
+			Title:        "Runnable Now",
+			Summary:      "Surfaces that can open or launch immediately from the kernel.",
+			Realizations: runnable,
+		})
+	}
+	if len(ready) > 0 {
+		groups = append(groups, readinessGroupView{
+			Title:        "Ready To Grow",
+			Summary:      "Contract-defined realizations that are prepared for the next agent or developer pass.",
+			Realizations: ready,
+		})
+	}
+	if len(designed) > 0 {
+		groups = append(groups, readinessGroupView{
+			Title:        "Designed Drafts",
+			Summary:      "Earlier passes still shaping their contract, runtime, or delivery path.",
+			Realizations: designed,
+		})
+	}
+	return groups
+}
+
+func seedAccentHue(seedID string) int {
+	hash := 0
+	for _, r := range seedID {
+		hash = (hash*33 + int(r)) % 360
+	}
+	return 18 + (hash % 300)
+}
+
+func percentString(value, total int) string {
+	if value <= 0 || total <= 0 {
+		return "0%"
+	}
+	return fmt.Sprintf("%.1f%%", (float64(value)*100)/float64(total))
 }
 
 func capitalizeWord(word string) string {

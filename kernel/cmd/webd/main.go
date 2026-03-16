@@ -825,10 +825,15 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		catalog, err := registryReader.Catalog()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		executions := latestExecutionStateByReference(r.Context(), runtimeService)
 
 		requestMeta := server.RequestMetadataFromContext(r.Context())
-		view := newBootPageView(options, executions, bootExecutionEnabled, service.Remote != nil, runtimeService != nil, server.CSPNonceFromContext(r.Context()), boot.ClientFeedbackLoopScript(boot.FeedbackLoopScriptConfig{
+		view := newBootPageView(options, catalog, executions, bootExecutionEnabled, service.Remote != nil, runtimeService != nil, server.CSPNonceFromContext(r.Context()), boot.ClientFeedbackLoopScript(boot.FeedbackLoopScriptConfig{
 			EndpointPath: "/feedback/incidents",
 			Request:      requestMeta,
 			Selection: boot.PinnedSelection{
