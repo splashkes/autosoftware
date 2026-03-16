@@ -86,8 +86,8 @@ func newMockRegistry() *httptest.Server {
 					Commands:     []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
 					Projections:  []ResourceLink{{Name: "notes.room"}},
 					Self:         "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
-					CanonicalURL: "/contracts/0001-notepad%2Fa-go-htmx",
-					PermalinkURL: "/@sha256-" + realizationHash + "/contracts/0001-notepad%2Fa-go-htmx",
+					CanonicalURL: "/contracts/0001-notepad/a-go-htmx",
+					PermalinkURL: "/@sha256-" + realizationHash + "/contracts/0001-notepad/a-go-htmx",
 					ContentHash:  realizationHash,
 				},
 			})
@@ -136,8 +136,8 @@ func newMockRegistry() *httptest.Server {
 					Name: name, Summary: summary, Path: path,
 					AuthModes: []string{"anonymous"}, Idempotency: "required", Consistency: "read_your_writes",
 					Self:         self,
-					CanonicalURL: "/actions/0001-notepad%2Fa-go-htmx/" + name,
-					PermalinkURL: "/@sha256-" + contentHash + "/actions/0001-notepad%2Fa-go-htmx/" + name,
+					CanonicalURL: "/actions/0001-notepad/a-go-htmx/" + name,
+					PermalinkURL: "/@sha256-" + contentHash + "/actions/0001-notepad/a-go-htmx/" + name,
 					ContentHash:  contentHash,
 				},
 			})
@@ -173,8 +173,8 @@ func newMockRegistry() *httptest.Server {
 					Name: "notes.room", Summary: "Note room view", Path: "/v1/projections/0001-notepad/notes.room",
 					Freshness:    "materialized",
 					Self:         "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
-					CanonicalURL: "/read-models/0001-notepad%2Fa-go-htmx/notes.room",
-					PermalinkURL: "/@sha256-" + projectionHash + "/read-models/0001-notepad%2Fa-go-htmx/notes.room",
+					CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
+					PermalinkURL: "/@sha256-" + projectionHash + "/read-models/0001-notepad/a-go-htmx/notes.room",
 					ContentHash:  projectionHash,
 				},
 			})
@@ -524,7 +524,7 @@ func TestRealizationDetailPage(t *testing.T) {
 	app := newTestApp(mock.URL)
 	mux := newTestMux(app)
 
-	req := httptest.NewRequest("GET", "/realizations/0001-notepad%2Fa-go-htmx", nil)
+	req := httptest.NewRequest("GET", "/realizations/0001-notepad/a-go-htmx", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -544,6 +544,21 @@ func TestRealizationDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "notes.room") {
 		t.Error("detail page missing projection link")
+	}
+}
+
+func TestRealizationDetailPageAcceptsEncodedReferencePath(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/realizations/0001-notepad%2Fa-go-htmx", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("encoded realization detail returned %d", rec.Code)
 	}
 }
 
@@ -593,7 +608,7 @@ func TestCommandDetailPage(t *testing.T) {
 	app := newTestApp(mock.URL)
 	mux := newTestMux(app)
 
-	req := httptest.NewRequest("GET", "/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
+	req := httptest.NewRequest("GET", "/commands/0001-notepad/a-go-htmx/notes.create", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -613,6 +628,21 @@ func TestCommandDetailPage(t *testing.T) {
 	}
 }
 
+func TestCommandDetailPageAcceptsEncodedReferencePath(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("encoded command detail returned %d", rec.Code)
+	}
+}
+
 func TestCommandDetailPermalinkPage(t *testing.T) {
 	mock := newMockRegistry()
 	defer mock.Close()
@@ -620,9 +650,7 @@ func TestCommandDetailPermalinkPage(t *testing.T) {
 	mux := newTestMux(app)
 
 	hash := strings.Repeat("2", 64)
-	req := httptest.NewRequest("GET", "/@sha256-"+hash+"/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
-	req.URL.Path = "/@sha256-" + hash + "/commands/0001-notepad/a-go-htmx/notes.create"
-	req.URL.RawPath = "/@sha256-" + hash + "/commands/0001-notepad%2Fa-go-htmx/notes.create"
+	req := httptest.NewRequest("GET", "/@sha256-"+hash+"/commands/0001-notepad/a-go-htmx/notes.create", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -633,10 +661,10 @@ func TestCommandDetailPermalinkPage(t *testing.T) {
 		t.Fatalf("unexpected ETag %q", got)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<link rel="canonical" href="/actions/0001-notepad%2Fa-go-htmx/notes.create">`) {
+	if !strings.Contains(body, `<link rel="canonical" href="/actions/0001-notepad/a-go-htmx/notes.create">`) {
 		t.Fatal("command permalink page missing canonical link tag")
 	}
-	if !strings.Contains(body, "/@sha256-"+hash+"/actions/0001-notepad%2Fa-go-htmx/notes.create") {
+	if !strings.Contains(body, "/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create") {
 		t.Fatal("command permalink page missing rendered permalink")
 	}
 }
@@ -648,9 +676,7 @@ func TestCommandDetailPermalinkMismatchReturnsNotFound(t *testing.T) {
 	mux := newTestMux(app)
 
 	badHash := strings.Repeat("9", 64)
-	req := httptest.NewRequest("GET", "/@sha256-"+badHash+"/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
-	req.URL.Path = "/@sha256-" + badHash + "/commands/0001-notepad/a-go-htmx/notes.create"
-	req.URL.RawPath = "/@sha256-" + badHash + "/commands/0001-notepad%2Fa-go-htmx/notes.create"
+	req := httptest.NewRequest("GET", "/@sha256-"+badHash+"/commands/0001-notepad/a-go-htmx/notes.create", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -690,7 +716,7 @@ func TestProjectionDetailPage(t *testing.T) {
 	app := newTestApp(mock.URL)
 	mux := newTestMux(app)
 
-	req := httptest.NewRequest("GET", "/projections/0001-notepad%2Fa-go-htmx/notes.room", nil)
+	req := httptest.NewRequest("GET", "/projections/0001-notepad/a-go-htmx/notes.room", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -704,6 +730,21 @@ func TestProjectionDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "materialized") {
 		t.Error("projection detail missing freshness")
+	}
+}
+
+func TestProjectionDetailPageAcceptsEncodedReferencePath(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/projections/0001-notepad%2Fa-go-htmx/notes.room", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("encoded projection detail returned %d", rec.Code)
 	}
 }
 
@@ -757,7 +798,7 @@ func TestObjectDetailPage(t *testing.T) {
 	if !strings.Contains(body, "A shared note") {
 		t.Error("object detail missing summary")
 	}
-	if !strings.Contains(body, "/contracts/0001-notepad%2Fa-go-htmx") {
+	if !strings.Contains(body, "/contracts/0001-notepad/a-go-htmx") {
 		t.Error("object detail missing contract link")
 	}
 }

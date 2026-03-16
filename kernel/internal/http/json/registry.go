@@ -737,7 +737,11 @@ func realizationSelfPath(reference string) string {
 }
 
 func browseRealizationPath(reference string) string {
-	return "/contracts/" + url.PathEscape(reference)
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/contracts/" + url.PathEscape(reference)
+	}
+	return "/contracts/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID)
 }
 
 func commandSelfPath(reference, name string) string {
@@ -745,7 +749,11 @@ func commandSelfPath(reference, name string) string {
 }
 
 func browseCommandPath(reference, name string) string {
-	return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	}
+	return "/actions/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
 }
 
 func projectionSelfPath(reference, name string) string {
@@ -753,7 +761,11 @@ func projectionSelfPath(reference, name string) string {
 }
 
 func browseProjectionPath(reference, name string) string {
-	return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	}
+	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
 }
 
 func objectSelfPath(seedID, kind string) string {
@@ -777,4 +789,16 @@ func permalinkBrowsePath(canonicalURL, contentHash string) string {
 		return ""
 	}
 	return "/@sha256-" + contentHash + canonicalURL
+}
+
+func splitBrowseReference(reference string) (string, string, bool) {
+	reference = strings.Trim(strings.TrimSpace(reference), "/")
+	if reference == "" {
+		return "", "", false
+	}
+	parts := strings.Split(reference, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
 }

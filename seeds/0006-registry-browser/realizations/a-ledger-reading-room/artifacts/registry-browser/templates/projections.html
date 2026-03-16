@@ -15,7 +15,7 @@
 <ul class="resource-list">
   {{range .Projections}}
   <li class="resource-item">
-    <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    <a href="{{projectionPath .Reference .Name}}" class="name">{{.Name}}</a>
     <div class="meta">
       <span>{{.SeedID}}</span>
       <span>{{.RealizationID}}</span>

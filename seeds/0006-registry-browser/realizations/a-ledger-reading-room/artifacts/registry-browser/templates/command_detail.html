@@ -11,7 +11,7 @@
   <table class="field-table">
     <tr><td>Name</td><td>{{$c.Name}}</td></tr>
     <tr><td>Seed</td><td>{{$c.SeedID}}</td></tr>
-    <tr><td>Contract</td><td><a href="/contracts/{{pathEscape $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
+    <tr><td>Contract</td><td><a href="{{realizationPath $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
     <tr><td>Path</td><td><code>{{$c.Path}}</code></td></tr>
     <tr><td>Idempotency</td><td>{{$c.Idempotency}}</td></tr>
     <tr><td>Consistency</td><td>{{$c.Consistency}}</td></tr>
@@ -44,7 +44,7 @@
 {{if $c.Projection}}
 <div class="detail-section">
   <h3>Resulting Read Model</h3>
-  <p><a href="/read-models/{{pathEscape $c.Reference}}/{{pathEscape $c.Projection}}">{{$c.Projection}}</a></p>
+  <p><a href="{{projectionPath $c.Reference $c.Projection}}">{{$c.Projection}}</a></p>
 </div>
 {{end}}
 {{end}}

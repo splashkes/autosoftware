@@ -15,7 +15,7 @@
 <ul class="resource-list">
   {{range .Commands}}
   <li class="resource-item">
-    <a href="/actions/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    <a href="{{commandPath .Reference .Name}}" class="name">{{.Name}}</a>
     <div class="meta">
       <span>{{.SeedID}}</span>
       <span>{{.RealizationID}}</span>

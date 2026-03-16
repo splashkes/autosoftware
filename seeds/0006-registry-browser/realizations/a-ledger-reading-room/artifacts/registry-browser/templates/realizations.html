@@ -14,7 +14,7 @@
 <ul class="resource-list">
   {{range .Realizations}}
   <li class="resource-item">
-    <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+    <a href="{{realizationPath .Reference}}" class="name">{{.RealizationID}}</a>
     <div class="meta">
       <span>{{.SeedID}}</span>
       <span>{{.Status}}</span>
