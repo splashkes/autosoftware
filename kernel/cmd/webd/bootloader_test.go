@@ -6,8 +6,8 @@ import (
 
 	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
-	registrycatalog "as/kernel/internal/registry"
 	"as/kernel/internal/realizations"
+	registrycatalog "as/kernel/internal/registry"
 )
 
 func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
@@ -216,12 +216,13 @@ func TestPreferredOpenPathForBindingPrefersStablePath(t *testing.T) {
 }
 
 func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
-	body := []byte(`<link rel="stylesheet" href="/assets/app.css"><a href="/calendar">Calendar</a><form action="/admin/login"></form><div hx-post="/chat/123"></div><script src="/__sprout-assets/sprout-logo.js"></script>`)
+	body := []byte(`<link rel="stylesheet" href="/assets/app.css"><a href="/calendar">Calendar</a><a href="/v1/contracts/0004-event-listings/a-web-mvp">Contract</a><form action="/admin/login"></form><div hx-post="/chat/123"></div><script src="/__sprout-assets/sprout-logo.js"></script>`)
 	got := string(rewriteMountedHTML(body, "/event-listings/"))
 
 	wantContains := []string{
 		`href="/event-listings/assets/app.css"`,
 		`href="/event-listings/calendar"`,
+		`href="/v1/contracts/0004-event-listings/a-web-mvp"`,
 		`action="/event-listings/admin/login"`,
 		`hx-post="/event-listings/chat/123"`,
 		`src="/__sprout-assets/sprout-logo.js"`,
