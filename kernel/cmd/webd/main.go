@@ -1733,6 +1733,32 @@ func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
 		`data-copy='`+reserved, `data-copy='/__`,
 	).Replace(rewritten)
 
+	apiRoot := strings.TrimSuffix(mountPrefix, "/") + "/v1/"
+	rewritten = strings.NewReplacer(
+		`href="`+apiRoot, `href="/v1/`,
+		`href='`+apiRoot, `href='/v1/`,
+		`src="`+apiRoot, `src="/v1/`,
+		`src='`+apiRoot, `src='/v1/`,
+		`action="`+apiRoot, `action="/v1/`,
+		`action='`+apiRoot, `action='/v1/`,
+		`formaction="`+apiRoot, `formaction="/v1/`,
+		`formaction='`+apiRoot, `formaction='/v1/`,
+		`hx-get="`+apiRoot, `hx-get="/v1/`,
+		`hx-get='`+apiRoot, `hx-get='/v1/`,
+		`hx-post="`+apiRoot, `hx-post="/v1/`,
+		`hx-post='`+apiRoot, `hx-post='/v1/`,
+		`hx-put="`+apiRoot, `hx-put="/v1/`,
+		`hx-put='`+apiRoot, `hx-put='/v1/`,
+		`hx-delete="`+apiRoot, `hx-delete="/v1/`,
+		`hx-delete='`+apiRoot, `hx-delete='/v1/`,
+		`hx-patch="`+apiRoot, `hx-patch="/v1/`,
+		`hx-patch='`+apiRoot, `hx-patch='/v1/`,
+		`sse-connect="`+apiRoot, `sse-connect="/v1/`,
+		`sse-connect='`+apiRoot, `sse-connect='/v1/`,
+		`data-copy="`+apiRoot, `data-copy="/v1/`,
+		`data-copy='`+apiRoot, `data-copy='/v1/`,
+	).Replace(rewritten)
+
 	return []byte(rewritten)
 }
 
