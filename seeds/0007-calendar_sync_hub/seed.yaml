@@ -1,0 +1,4 @@
+seed_id: 0007-calendar_sync_hub
+version: 1
+summary: Calendar orchestration hub for multi-source ingestion, production-calendar control, and downstream propagation.
+status: proposed
