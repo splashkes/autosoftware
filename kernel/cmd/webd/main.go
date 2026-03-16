@@ -1312,10 +1312,11 @@ func realizationRoutingMiddleware(
 			reference, matchedPrefix := realizationReferenceForPath(r.Context(), catalogService, r.URL.Path)
 			if reference != "" {
 				targetPath := ""
+				requestPath := requestRedirectPath(r)
 				if existingLaunchPath := activeOrQueuedLaunchPath(r.Context(), runtimeService, reference); existingLaunchPath != "" {
-					targetPath = launchRedirectPath(existingLaunchPath, r.URL.Path, matchedPrefix)
+					targetPath = launchRedirectPath(existingLaunchPath, requestPath, matchedPrefix)
 				} else if newLaunchPath, err := enqueueLaunchForMissingPath(r.Context(), runtimeService, repoRoot, reference, r); err == nil && newLaunchPath != "" {
-					targetPath = launchRedirectPath(newLaunchPath, r.URL.Path, matchedPrefix)
+					targetPath = launchRedirectPath(newLaunchPath, requestPath, matchedPrefix)
 				} else if err != nil {
 					log.Printf("warning: could not auto-launch %s for path %s: %v", reference, r.URL.Path, err)
 				}
@@ -1414,6 +1415,16 @@ func launchRedirectPath(openPath, requestPath, matchedPrefix string) string {
 		return strings.TrimSpace(openPath) + remainder
 	}
 	return strings.TrimSpace(openPath) + "/" + remainder
+}
+
+func requestRedirectPath(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return ""
+	}
+	if escaped := strings.TrimSpace(r.URL.EscapedPath()); escaped != "" {
+		return escaped
+	}
+	return strings.TrimSpace(r.URL.Path)
 }
 
 func activeOrQueuedLaunchPath(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) string {

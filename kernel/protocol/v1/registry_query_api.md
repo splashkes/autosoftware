@@ -60,6 +60,11 @@ Required properties:
 Human-readable fields such as `kind`, `seed_id`, `reference`, or `name` may
 appear in payloads, but they are not the canonical IDs.
 
+Browse URLs are a separate concern from opaque identifiers. When a response
+includes `canonical_url`, `permalink_url`, or `content_hash`, clients should
+treat them as dereferenceable browse affordances for the current registry
+surface rather than as replacements for the underlying resource IDs.
+
 ## Common Response Shape
 
 Every successful response should return JSON.
@@ -88,6 +93,18 @@ List responses should use:
 
 The API may add summary fields beside `items`, but it should not omit the page
 block from cursorable list endpoints.
+
+Registry detail and list items may additionally expose:
+
+- `canonical_url`: the stable semantic browse URL for the latest active form of
+  the resource on the current public registry surface
+- `permalink_url`: an immutable browse URL that binds the resource to the
+  returned `content_hash`
+- `content_hash`: the SHA-256 content digest used to derive `permalink_url`
+
+Canonical browse URLs must remain stable across preview executions. Preview
+paths such as `/__runs/<execution-id>/...` are operational launch URLs and are
+not canonical or permanent.
 
 ## Error Shape
 

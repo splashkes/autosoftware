@@ -69,6 +69,10 @@ If `AS_BOOT_EXECUTION_ENABLED` is missing, runnable realizations degrade to
 `Show Run`, the launch route is not registered, and no preview path under
 `/__runs/<execution_id>/` can be created from the homepage.
 
+Treat `/__runs/<execution_id>/...` as preview-only execution URLs. They are
+useful for launch diagnostics and live inspection, but they are not canonical
+document URLs and should not be linked as permanent public routes.
+
 In DOKS, keep `webd` and `execd` in the same pod and set
 `AS_BOOT_EXECUTION_ENABLED=true` in the shared runtime config so
 `autosoftware.app` can launch realizations and bind their preview and stable

@@ -62,3 +62,6 @@ The ledger reading room realization must additionally satisfy:
     software.
 18. Every human-facing grouping remains traceable back to the authoritative
     registry routes that currently exist today.
+19. Human-facing detail pages expose a stable canonical URL and a hash-bound
+    permalink URL for citation, and neither URL resolves through a preview-only
+    `__runs` path.
