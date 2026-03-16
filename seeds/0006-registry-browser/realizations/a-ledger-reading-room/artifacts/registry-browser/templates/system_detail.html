@@ -1,0 +1,113 @@
+{{define "content"}}
+{{$s := .System}}
+<div class="page-head">
+  <h2>{{$s.Title}}</h2>
+  <p>{{$s.Summary}}</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>System Identity</h3>
+  <table class="field-table">
+    <tr><td>Seed</td><td>{{$s.SeedID}}</td></tr>
+    {{if $s.Statuses}}<tr><td>Lifecycle</td><td>{{join $s.Statuses ", "}}</td></tr>{{end}}
+    {{if $s.SurfaceKinds}}<tr><td>Surface Kind</td><td>{{join $s.SurfaceKinds ", "}}</td></tr>{{end}}
+    <tr><td>Governed Things</td><td>{{$s.ObjectCount}}</td></tr>
+    <tr><td>Actions</td><td>{{$s.ActionCount}}</td></tr>
+    <tr><td>Read Models</td><td>{{$s.ReadModelCount}}</td></tr>
+    <tr><td>Schemas</td><td>{{$s.SchemaCount}}</td></tr>
+  </table>
+</div>
+
+{{if $s.Objects}}
+<div class="detail-section">
+  <h3>Governed Things</h3>
+  <ul class="resource-list">
+    {{range $s.Objects}}
+    <li class="resource-item">
+      <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <div class="meta">
+        <span>{{.CommandCount}} {{plural .CommandCount "action" "actions"}}</span>
+        <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Commands}}
+<div class="detail-section">
+  <h3>Actions</h3>
+  <ul class="resource-list">
+    {{range $s.Commands}}
+    <li class="resource-item">
+      <a href="/actions/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        {{if .Projection}}<span>shows in {{.Projection}}</span>{{end}}
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Projections}}
+<div class="detail-section">
+  <h3>Read Models</h3>
+  <ul class="resource-list">
+    {{range $s.Projections}}
+    <li class="resource-item">
+      <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        <span>{{.Freshness}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Realizations}}
+<div class="detail-section">
+  <h3>Contracts</h3>
+  <ul class="resource-list">
+    {{range $s.Realizations}}
+    <li class="resource-item">
+      <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+      <div class="meta">
+        <span>{{.Status}}</span>
+        <span>{{.SurfaceKind}}</span>
+        <span>{{.CommandCount}} {{plural .CommandCount "action" "actions"}}</span>
+        <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Schemas}}
+<div class="detail-section">
+  <h3>Schemas</h3>
+  <ul class="resource-list">
+    {{range $s.Schemas}}
+    <li class="resource-item">
+      <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+      <div class="meta">
+        <span>{{.ObjectUseCount}} object uses</span>
+        <span>{{.CommandInputCount}} command inputs</span>
+        <span>{{.CommandResultCount}} command results</span>
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

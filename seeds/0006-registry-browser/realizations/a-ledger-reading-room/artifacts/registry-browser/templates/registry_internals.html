@@ -1,0 +1,80 @@
+{{define "content"}}
+{{$s := .System}}
+<div class="page-head">
+  <h2>Registry Internals</h2>
+  <p>This section isolates the registry's self-describing resources so humans can inspect the catalog machinery without mixing it into the default domain browse flow.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>Why This Is Separate</h3>
+  <p class="summary">{{$s.Summary}}</p>
+</div>
+
+{{if $s.Objects}}
+<div class="detail-section">
+  <h3>Registry Objects</h3>
+  <ul class="resource-list">
+    {{range $s.Objects}}
+    <li class="resource-item">
+      <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <div class="meta">
+        <span>{{.CommandCount}} {{plural .CommandCount "action" "actions"}}</span>
+        <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Commands}}
+<div class="detail-section">
+  <h3>Registry Actions</h3>
+  <ul class="resource-list">
+    {{range $s.Commands}}
+    <li class="resource-item">
+      <a href="/actions/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Projections}}
+<div class="detail-section">
+  <h3>Registry Read Models</h3>
+  <ul class="resource-list">
+    {{range $s.Projections}}
+    <li class="resource-item">
+      <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.Freshness}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.Realizations}}
+<div class="detail-section">
+  <h3>Registry Contracts</h3>
+  <ul class="resource-list">
+    {{range $s.Realizations}}
+    <li class="resource-item">
+      <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+      <div class="meta">
+        <span>{{.Status}}</span>
+        <span>{{.SurfaceKind}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

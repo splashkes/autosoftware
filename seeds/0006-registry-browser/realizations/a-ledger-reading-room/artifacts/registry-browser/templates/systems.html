@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Systems</h2>
+  <p>Systems are the clearest starting point for human readers. Each system groups the governed things, actions, read models, and contracts that share one seed identity.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/systems">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search systems...">
+  <button type="submit">Search</button>
+</form>
+
+{{if .Systems}}
+<ul class="resource-list">
+  {{range .Systems}}
+  <li class="resource-item">
+    <a href="/systems/{{pathEscape .SeedID}}" class="name">{{.Title}}</a>
+    <div class="meta">
+      <span>{{.SeedID}}</span>
+      {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}
+      {{if .SurfaceKinds}}<span>{{join .SurfaceKinds ", "}}</span>{{end}}
+      <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+      <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
+      <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
+    </div>
+    <div class="summary">{{.Summary}}</div>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No systems found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

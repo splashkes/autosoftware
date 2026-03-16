@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Contracts</h2>
+  <p>Contracts are the concrete realizations that define behavior for a system. They tell you which actions and read models a system exposes right now.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/contracts">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search contracts...">
+  <button type="submit">Search</button>
+</form>
+
+{{if .Realizations}}
+<ul class="resource-list">
+  {{range .Realizations}}
+  <li class="resource-item">
+    <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+    <div class="meta">
+      <span>{{.SeedID}}</span>
+      <span>{{.Status}}</span>
+      <span>{{.SurfaceKind}}</span>
+      <span>{{.CommandCount}} {{plural .CommandCount "action" "actions"}}</span>
+      <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>
+      <span>{{.SchemaCount}} {{plural .SchemaCount "schema" "schemas"}}</span>
+    </div>
+    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No contracts found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

@@ -1,11 +1,14 @@
 realization_id: a-ledger-reading-room
 seed_id: 0006-registry-browser
 approach_id: a-ledger-reading-room
-summary: Draft human-first refinement of the registry browser that preserves authoritative API parity while reorganizing the catalog for legibility.
-status: draft
+summary: Human-first refinement of the registry browser that preserves authoritative API parity while reorganizing the catalog for legibility.
+status: runnable
 subdomain: registry
 path_prefix: /registry/reading-room/
 artifacts:
+  - artifacts/runtime.yaml
+  - artifacts/registry-browser/go.mod
+  - artifacts/registry-browser/main.go
   - artifacts/information_architecture.md
   - artifacts/page_blueprints.md
   - artifacts/route_map.yaml
