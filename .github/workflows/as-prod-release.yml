@@ -1,0 +1,229 @@
+name: AS Production Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: Existing image ref to deploy (for example registry/repo@sha256:...)
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: as-production-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    if: ${{ github.event_name == 'push' || inputs.image_ref == '' }}
+    runs-on: ubuntu-latest
+    outputs:
+      image_ref: ${{ steps.image.outputs.image_ref }}
+      image_digest: ${{ steps.image.outputs.image_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Build Configuration
+        env:
+          IMAGE_REPOSITORY: ${{ vars.AS_IMAGE_REPOSITORY }}
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${IMAGE_REPOSITORY:?Repository variable AS_IMAGE_REPOSITORY is required}"
+          : "${DIGITALOCEAN_ACCESS_TOKEN:?Repository secret DIGITALOCEAN_ACCESS_TOKEN is required}"
+
+      - name: Set Up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Authenticate Docker to DOCR
+        run: doctl registry login --expiry-seconds 1800
+
+      - name: Build and Push Image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ vars.AS_IMAGE_REPOSITORY }}:main
+            ${{ vars.AS_IMAGE_REPOSITORY }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record Image Ref
+        id: image
+        env:
+          IMAGE_REPOSITORY: ${{ vars.AS_IMAGE_REPOSITORY }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          : "${IMAGE_REPOSITORY:?}"
+          : "${IMAGE_DIGEST:?}"
+          echo "image_ref=${IMAGE_REPOSITORY}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          printf 'Built image: %s@%s\n' "$IMAGE_REPOSITORY" "$IMAGE_DIGEST"
+
+  deploy-as-production:
+    needs:
+      - build-and-push
+    if: ${{ github.event_name == 'push' || inputs.image_ref != '' || needs.build-and-push.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: as-production
+      url: ${{ vars.AS_WEB_HOST != '' && format('https://{0}', vars.AS_WEB_HOST) || '' }}
+    concurrency:
+      group: as-production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Deployment Configuration
+        env:
+          AS_NAMESPACE: ${{ vars.AS_NAMESPACE }}
+          AS_BASE_DOMAIN: ${{ vars.AS_BASE_DOMAIN }}
+          AS_GITHUB_URL: ${{ vars.AS_GITHUB_URL }}
+          AS_IMAGE_PULL_SECRET: ${{ vars.AS_IMAGE_PULL_SECRET }}
+          AS_WEB_HOST: ${{ vars.AS_WEB_HOST }}
+          AS_REGISTRY_HOST: ${{ vars.AS_REGISTRY_HOST }}
+          AS_API_HOST: ${{ vars.AS_API_HOST }}
+          AS_EDGE_TLS_SECRET: ${{ vars.AS_EDGE_TLS_SECRET }}
+          AS_RUNTIME_DATABASE_URL: ${{ secrets.AS_RUNTIME_DATABASE_URL }}
+          AS_KUBECONFIG_B64: ${{ secrets.AS_KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          : "${AS_NAMESPACE:?Environment variable AS_NAMESPACE is required}"
+          : "${AS_BASE_DOMAIN:?Environment variable AS_BASE_DOMAIN is required}"
+          : "${AS_GITHUB_URL:?Environment variable AS_GITHUB_URL is required}"
+          : "${AS_IMAGE_PULL_SECRET:?Environment variable AS_IMAGE_PULL_SECRET is required}"
+          : "${AS_WEB_HOST:?Environment variable AS_WEB_HOST is required}"
+          : "${AS_REGISTRY_HOST:?Environment variable AS_REGISTRY_HOST is required}"
+          : "${AS_API_HOST:?Environment variable AS_API_HOST is required}"
+          : "${AS_EDGE_TLS_SECRET:?Environment variable AS_EDGE_TLS_SECRET is required}"
+          : "${AS_RUNTIME_DATABASE_URL:?Environment secret AS_RUNTIME_DATABASE_URL is required}"
+          : "${AS_KUBECONFIG_B64:?Environment secret AS_KUBECONFIG_B64 is required}"
+
+      - name: Set Image Ref
+        id: image
+        env:
+          INPUT_IMAGE_REF: ${{ inputs.image_ref }}
+          BUILT_IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_IMAGE_REF}" ]]; then
+            image_ref="${INPUT_IMAGE_REF}"
+          else
+            image_ref="${BUILT_IMAGE_REF}"
+          fi
+          : "${image_ref:?A built image ref or workflow_dispatch input is required}"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          printf 'Deploying image: %s\n' "$image_ref"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install envsubst
+        run: sudo apt-get update && sudo apt-get install -y gettext-base
+
+      - name: Write kubeconfig
+        env:
+          AS_KUBECONFIG_B64: ${{ secrets.AS_KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/.kube"
+          printf '%s' "$AS_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/.kube/config"
+          chmod 600 "$RUNNER_TEMP/.kube/config"
+          echo "KUBECONFIG=$RUNNER_TEMP/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Render Kubernetes Manifests
+        env:
+          AS_NAMESPACE: ${{ vars.AS_NAMESPACE }}
+          AS_BASE_DOMAIN: ${{ vars.AS_BASE_DOMAIN }}
+          AS_GITHUB_URL: ${{ vars.AS_GITHUB_URL }}
+          AS_IMAGE_PULL_SECRET: ${{ vars.AS_IMAGE_PULL_SECRET }}
+          AS_RUNTIME_DATABASE_URL: ${{ secrets.AS_RUNTIME_DATABASE_URL }}
+          AS_WEB_HOST: ${{ vars.AS_WEB_HOST }}
+          AS_REGISTRY_HOST: ${{ vars.AS_REGISTRY_HOST }}
+          AS_API_HOST: ${{ vars.AS_API_HOST }}
+          AS_EDGE_TLS_SECRET: ${{ vars.AS_EDGE_TLS_SECRET }}
+          AS_IMAGE: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rendered"
+          envsubst < deploy/doks/as-stack.yaml.tmpl > "$RUNNER_TEMP/rendered/as-stack.yaml"
+          envsubst < deploy/doks/autosoftware-ingress.yaml.tmpl > "$RUNNER_TEMP/rendered/as-ingress.yaml"
+
+      - name: Apply Kubernetes Manifests
+        env:
+          AS_NAMESPACE: ${{ vars.AS_NAMESPACE }}
+        run: |
+          set -euo pipefail
+          kubectl apply -f "$RUNNER_TEMP/rendered/as-stack.yaml"
+          kubectl apply -f "$RUNNER_TEMP/rendered/as-ingress.yaml"
+          kubectl -n "$AS_NAMESPACE" rollout status deployment/as-apid --timeout=300s
+          kubectl -n "$AS_NAMESPACE" rollout status deployment/as-registryd --timeout=300s
+          kubectl -n "$AS_NAMESPACE" rollout status deployment/as-webd --timeout=300s
+          kubectl -n "$AS_NAMESPACE" rollout status deployment/as-materializerd --timeout=300s
+          kubectl -n "$AS_NAMESPACE" delete deployment as-execd --ignore-not-found
+          kubectl -n "$AS_NAMESPACE" delete service as-execd --ignore-not-found
+          kubectl -n "$AS_NAMESPACE" get deploy,pods,svc -o wide
+
+      - name: Verify Public Endpoints
+        env:
+          AS_WEB_HOST: ${{ vars.AS_WEB_HOST }}
+          AS_REGISTRY_HOST: ${{ vars.AS_REGISTRY_HOST }}
+          AS_API_HOST: ${{ vars.AS_API_HOST }}
+        run: |
+          set -euo pipefail
+          curl -fsS "https://${AS_WEB_HOST}" > /tmp/as-home.html
+          curl -fsS "https://${AS_REGISTRY_HOST}/healthz" > /tmp/as-registry.json
+          curl -fsS "https://${AS_API_HOST}/v1/contracts" > /tmp/as-contracts.json
+          grep -Eq 'Software that evolves from within|Explore the live catalog' /tmp/as-home.html
+          python3 - <<'PY'
+          import json
+          contracts = json.load(open('/tmp/as-contracts.json'))['contracts']
+          if len(contracts) < 1:
+              raise SystemExit('expected at least one contract')
+          print(f"contracts={len(contracts)}")
+          print(open('/tmp/as-registry.json').read().strip())
+          PY
+
+      - name: Verify Internal Runtime Health
+        env:
+          AS_NAMESPACE: ${{ vars.AS_NAMESPACE }}
+        run: |
+          set -euo pipefail
+          kubectl -n "$AS_NAMESPACE" port-forward --address 127.0.0.1 service/as-apid 28092:80 >/tmp/as-port-forward.log 2>&1 &
+          pf_pid=$!
+          cleanup() {
+            kill "$pf_pid" 2>/dev/null || true
+            wait "$pf_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 20); do
+            if curl -fsS "http://127.0.0.1:28092/v1/runtime/health" >/tmp/as-runtime-health.json 2>/dev/null; then
+              cat /tmp/as-runtime-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/as-port-forward.log >&2 || true
+          exit 1
