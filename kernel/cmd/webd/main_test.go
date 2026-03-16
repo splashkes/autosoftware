@@ -60,7 +60,7 @@ func testMountedRoutingPreservesRawPath(t *testing.T, mountPrefix string) {
 		PathPrefix: mountPrefix,
 		ProxyAddr:  strings.TrimPrefix(backend.URL, "http://"),
 	}
-	handler := realizationRoutingMiddleware([]realizationRoute{route}, nil, nil, "", http.NotFoundHandler())
+	handler := realizationRoutingMiddleware([]realizationRoute{route}, nil, nil, "", nil, "", http.NotFoundHandler())
 
 	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app"+mountPrefix+"actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply", nil)
 	req.URL.Path = mountPrefix + "actions/0003-customer-service-app/a-web-mvp/tickets.reply"
