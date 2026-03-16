@@ -27,26 +27,23 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(34, 197, 94, 0.15), transparent 32rem),
-        radial-gradient(circle at top right, rgba(244, 211, 94, 0.12), transparent 26rem),
-        linear-gradient(180deg, #eceef2 0%, #e7eaee 100%);
-      color: #20242c;
-      font-family: Georgia, "Times New Roman", serif;
+      background: #eef0f3;
+      color: #2a2d35;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
     }
     .page {
-      width: min(72rem, calc(100vw - 2rem));
-      margin: 0 auto;
+      width: min(36rem, calc(100vw - 2rem));
       padding: 1.25rem 0 2.5rem;
     }
 
-    /* ── Branding ── */
     .brand {
       display: grid;
       justify-items: center;
       text-align: center;
       gap: 0.4rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.1rem;
     }
     .wordmark {
       font-size: 2rem;
@@ -54,7 +51,6 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       letter-spacing: 0.52rem;
       color: #181c24;
       padding-left: 0.52rem;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .tagline {
       font-size: 0.72rem;
@@ -62,15 +58,18 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       text-transform: uppercase;
       color: #7e8592;
       padding-left: 0.22rem;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
-    .lede {
-      margin: 0.4rem auto 0;
-      max-width: 32rem;
+    .lede,
+    .intro,
+    .catalog-text {
+      margin: 0;
       color: #69707c;
       font-size: 0.82rem;
       line-height: 1.6;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .lede {
+      max-width: 19rem;
+      margin-top: 0.2rem;
     }
     .gh-link {
       display: inline-flex;
@@ -80,127 +79,18 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     }
     .gh-link:hover { color: #22a05a; }
 
-    .hero-shell {
-      position: relative;
-      overflow: hidden;
-      margin-bottom: 1.25rem;
-      border: 1px solid rgba(189, 196, 207, 0.95);
-      background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 244, 0.88)),
-        radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 18rem);
-      box-shadow: 0 1.4rem 3rem rgba(38, 45, 56, 0.08);
-    }
-    .hero-shell::before {
-      content: "";
-      position: absolute;
-      inset: auto -6rem -6rem auto;
-      width: 18rem;
-      height: 18rem;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(34, 160, 90, 0.1), transparent 68%);
-      pointer-events: none;
-    }
-    .hero-grid {
-      position: relative;
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.9fr);
-      gap: 1rem;
-      padding: 1.5rem;
-    }
-    .hero-copy {
-      display: grid;
-      gap: 1rem;
-      align-content: start;
-    }
-    .hero-kicker {
-      color: #178243;
-      font-size: 0.72rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .hero-title {
-      margin: 0;
-      max-width: 12ch;
-      color: #171b22;
-      font-size: clamp(2.3rem, 6vw, 4.6rem);
-      line-height: 0.94;
-      letter-spacing: -0.06em;
-      font-weight: 700;
-    }
-    .hero-title em {
-      color: #178243;
-      font-style: normal;
-    }
-    .hero-body {
-      margin: 0;
-      max-width: 42rem;
-      color: #4d5561;
-      font-size: 1rem;
-      line-height: 1.75;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .hero-actions {
-      display: flex;
-      gap: 0.65rem;
-      flex-wrap: wrap;
-      align-items: center;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .hero-note {
-      color: #6b7380;
-      font-size: 0.8rem;
-      line-height: 1.65;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .hero-side {
-      display: grid;
-      gap: 0.7rem;
-      align-content: start;
-      padding-top: 0.2rem;
-    }
-    .story-card,
-    .proof-card {
-      border: 1px solid rgba(201, 207, 216, 0.9);
-      background: rgba(255, 255, 255, 0.72);
-      padding: 0.95rem 1rem;
-    }
-    .story-label,
-    .proof-label {
-      color: #7f8793;
-      font-size: 0.66rem;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .story-copy,
-    .proof-copy {
-      margin: 0.35rem 0 0;
-      color: #2d3440;
-      font-size: 0.92rem;
-      line-height: 1.55;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .proof-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.7rem;
-    }
-    .proof-card strong {
-      display: block;
-      color: #171b22;
-      font-size: 1.45rem;
-      line-height: 1;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    .intro {
+      max-width: 31rem;
+      margin: 0 auto 1rem;
+      text-align: center;
     }
 
-    /* ── Meta pills ── */
     .console-meta {
       display: flex;
       justify-content: center;
-      gap: 0.5rem;
+      gap: 0.45rem;
       flex-wrap: wrap;
-      margin: 0 0 1.25rem;
+      margin: 0 0 1rem;
     }
     .pill {
       display: inline-flex;
@@ -209,156 +99,72 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       padding: 0.24rem 0.62rem;
       border-radius: 999px;
       border: 1px solid #c8cdd6;
-      background: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.72);
       color: #6c7380;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
 
-    .explain-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-      gap: 1rem;
-      margin: 0 0 1.25rem;
+    .catalog-shell {
+      margin-top: 0.2rem;
     }
-    .explain-card {
-      border: 1px solid #cfd4dc;
-      background: rgba(255, 255, 255, 0.7);
-      padding: 1rem;
-    }
-    .section-kicker {
-      color: #7f8793;
-      font-size: 0.68rem;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .section-title {
-      margin: 0.38rem 0 0.55rem;
-      color: #171b22;
-      font-size: 1.45rem;
-      line-height: 1.1;
-    }
-    .section-copy {
-      margin: 0;
-      color: #54606d;
-      font-size: 0.92rem;
-      line-height: 1.7;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .process-list,
-    .difference-list {
-      display: grid;
-      gap: 0.65rem;
-      margin-top: 0.9rem;
-    }
-    .process-step,
-    .difference-item {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.75rem;
-      align-items: start;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .process-index,
-    .difference-badge {
-      min-width: 2rem;
-      padding-top: 0.05rem;
-      color: #178243;
-      font-size: 0.72rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-    .process-head,
-    .difference-head {
-      color: #222730;
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .process-text,
-    .difference-text {
-      margin-top: 0.18rem;
-      color: #5f6874;
-      font-size: 0.84rem;
-      line-height: 1.65;
-    }
-
-    .catalog-header {
+    .catalog-head {
       display: flex;
-      justify-content: space-between;
       align-items: end;
-      gap: 1rem;
-      margin: 0 0 0.85rem;
+      justify-content: space-between;
+      gap: 0.8rem;
+      margin-bottom: 0.75rem;
     }
     .catalog-copy {
-      max-width: 38rem;
+      min-width: 0;
     }
     .catalog-title {
-      margin: 0.2rem 0 0.35rem;
-      color: #171b22;
-      font-size: 1.7rem;
-      line-height: 1.05;
-    }
-    .catalog-text {
-      margin: 0;
-      color: #5c6673;
-      font-size: 0.9rem;
-      line-height: 1.65;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      margin: 0 0 0.2rem;
+      color: #2a2d35;
+      font-size: 0.74rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
     }
 
-    /* ── Tile grid ── */
     .tile-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-      gap: 0.75rem;
+      border-top: 1px solid #d0d4dc;
+      border-bottom: 1px solid #d0d4dc;
     }
     .tile {
       position: relative;
-      aspect-ratio: 1;
-      border: 1px solid #cfd4dc;
-      background: rgba(245, 246, 248, 0.92);
-      padding: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+      border-bottom: 1px solid #d0d4dc;
+      background: transparent;
+      padding: 0;
       cursor: pointer;
-      transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-      overflow: hidden;
-      z-index: 1;
+      transition: background 0.15s ease;
+    }
+    .tile:last-child {
+      border-bottom: none;
     }
     .tile:hover {
-      border-color: #b0b6c0;
-      box-shadow: 0 0.25rem 1rem rgba(28, 35, 48, 0.06);
+      background: rgba(255, 255, 255, 0.45);
     }
     .tile-face {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
+      display: grid;
+      gap: 0.25rem;
+      padding: 0.95rem 0 0.4rem;
     }
     .tile-name {
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: #222730;
-      line-height: 1.35;
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: #2a2d35;
+      line-height: 1.4;
     }
     .tile-count {
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       color: #8d94a0;
     }
     .tile-route {
-      font-size: 0.62rem;
+      font-size: 0.68rem;
       color: #22a05a;
-      font-family: monospace;
-      letter-spacing: 0.02em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -367,6 +173,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       display: flex;
       align-items: center;
       gap: 0.35rem;
+      padding: 0 0 0.95rem;
     }
     .tile-dot {
       width: 6px;
@@ -382,42 +189,24 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     .tile-dot[data-status="failed"],
     .tile-dot[data-status="error"] { background: #dc2626; }
     .tile-stage {
-      font-size: 0.6rem;
+      font-size: 0.64rem;
       color: #8d94a0;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
 
-    /* ── Tile expanded (State 1) ── */
     .tile-expanded {
       display: none;
-    }
-    .tile.is-expanded {
-      aspect-ratio: auto;
-      grid-column: span 2;
-      grid-row: span 2;
-      z-index: 10;
-      border-color: #22a05a;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 0.5rem 2rem rgba(28, 35, 48, 0.12);
-      cursor: default;
+      padding: 0 0 0.95rem;
     }
     .tile.is-expanded .tile-expanded {
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 0.55rem;
-      margin-top: 0.65rem;
-      animation: tile-reveal 0.2s ease-out;
     }
     .tile-grid.has-expanded .tile:not(.is-expanded) {
-      opacity: 0.35;
-      pointer-events: none;
-      filter: grayscale(0.3);
-      transition: opacity 0.25s ease, filter 0.25s ease;
-    }
-    @keyframes tile-reveal {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
+      opacity: 1;
+      pointer-events: auto;
+      filter: none;
     }
     .tile-summary {
       margin: 0;
@@ -434,10 +223,8 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       display: flex;
       gap: 0.4rem;
       flex-wrap: wrap;
-      margin-top: 0.25rem;
+      margin-top: 0.1rem;
     }
-
-    /* Seed tile children (multi-realization) */
     .tile-children {
       display: grid;
       gap: 0.45rem;
@@ -446,26 +233,26 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.45rem 0.5rem;
-      border: 1px solid #e0e3e8;
-      background: rgba(248, 249, 251, 0.8);
+      padding: 0.45rem 0;
+      border-top: 1px dashed #d7dbe2;
+    }
+    .tile-child:first-child {
+      border-top: none;
     }
     .tile-child-name {
       flex: 1;
-      font-size: 0.76rem;
-      color: #3a4250;
-      font-weight: 500;
       min-width: 0;
+      font-size: 0.78rem;
+      color: #3a4250;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
     }
     .tile-child .tile-actions {
       margin-top: 0;
       flex-shrink: 0;
     }
 
-    /* ── Shared badge styles ── */
     .status,
     .readiness {
       display: inline-flex;
@@ -474,12 +261,11 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       padding: 0.18rem 0.48rem;
       border-radius: 999px;
       border: 1px solid #cbd1da;
-      background: rgba(255, 255, 255, 0.78);
+      background: rgba(255, 255, 255, 0.82);
       font-size: 0.64rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       line-height: 1;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .status { color: #2f855a; }
     .status.draft { color: #9a6700; }
@@ -490,24 +276,22 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     .readiness.bootstrap { color: #7c3aed; }
     .readiness.designed { color: #9a6700; }
 
-    /* ── Action buttons ── */
     .action-row {
       display: flex;
       gap: 0.45rem;
       flex-wrap: wrap;
     }
     .action-button {
-      padding: 0.28rem 0.7rem;
+      padding: 0.22rem 0.65rem;
       border: 1px solid #c8ccd4;
       background: transparent;
       color: #616875;
       font: inherit;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       cursor: pointer;
       text-decoration: none;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .action-button:hover,
     .action-button:focus-visible {
@@ -757,28 +541,19 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
     .footer code { color: #4f5664; }
 
     /* ── Responsive ── */
-    @media (max-width: 900px) {
-      .hero-grid,
-      .explain-grid {
-        grid-template-columns: 1fr;
-      }
-      .catalog-header {
+    @media (max-width: 720px) {
+      .page { width: min(36rem, calc(100vw - 1rem)); }
+      .catalog-head {
         align-items: start;
         flex-direction: column;
       }
-    }
-    @media (max-width: 720px) {
-      .page { width: min(72rem, calc(100vw - 1rem)); }
-      .hero-grid {
-        padding: 1rem;
+      .tile-child {
+        align-items: start;
+        flex-wrap: wrap;
       }
-      .proof-grid {
-        grid-template-columns: 1fr;
+      .tile-child .tile-actions {
+        width: 100%;
       }
-      .tile-grid {
-        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-      }
-      .tile.is-expanded { grid-column: 1 / -1; }
       .form-grid.two-up { grid-template-columns: 1fr; }
     }
 
@@ -801,40 +576,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       </a>{{end}}
     </section>
 
-    <section class="hero-shell">
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <div class="hero-kicker">User- and agent-driven rapid software evolution</div>
-          <h1 class="hero-title">Software that can evolve <em>from within and from outside.</em></h1>
-          <p class="hero-body">AS is built for continuous evolution by both users and agents. Code may self-optimize, but purpose, design intent, and preserved decisions remain the guide rails. The root page should explain the thesis and expose the live system in the same place.</p>
-          <div class="hero-actions">
-            <a class="action-button is-primary" href="#catalog">Explore the live catalog</a>
-            <a class="action-button" href="{{if .GitHubURL}}{{.GitHubURL}}{{else}}https://github.com/splashkes/autosoftware{{end}}" target="_blank" rel="noopener">Read the repo</a>
-          </div>
-          <div class="hero-note">Use the sprout action to understand the purpose of a page, request improvements, or fork your own version on the same data or on a new dataset. Security, scale, and infrastructure stay centrally maintained while the software surface keeps changing.</div>
-        </div>
-        <div class="hero-side">
-          <div class="story-card">
-            <div class="story-label">Guide rails</div>
-            <p class="story-copy">Purpose docs, design docs, and legacy decisions are not side notes. They are part of the governing structure that keeps self-optimizing software aligned with what it is for.</p>
-          </div>
-          <div class="proof-grid">
-            <div class="proof-card">
-              <div class="proof-label">Active seeds</div>
-              <p class="proof-copy"><strong>{{len .Seeds}}</strong> live mutation tracks</p>
-            </div>
-            <div class="proof-card">
-              <div class="proof-label">Agent access</div>
-              <p class="proof-copy"><strong>{{.RunnableCount}}</strong> runnable surfaces, all designed to be API-addressable</p>
-            </div>
-          </div>
-          <div class="story-card">
-            <div class="story-label">Economic model</div>
-            <p class="story-copy">Evolution costs can be paid directly, crowdsourced through user fees, or executed with coding agents. The software can keep moving without requiring one owner to hand-author every change.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <p class="intro">The running kernel shows the actual seeds and realizations available right now. Inspect, grow, run, or plant a new seed from here.</p>
 
     <div class="console-meta">
       <span class="pill">{{len .Seeds}} seeds</span>
@@ -843,76 +585,16 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       <span class="pill">{{.RunnableCount}} runnable</span>
       {{if .RuntimeConfigured}}<span class="pill">runtime on</span>{{else}}<span class="pill">runtime off</span>{{end}}
       {{if .RemoteConfigured}}<span class="pill">remote on</span>{{else}}<span class="pill">remote off</span>{{end}}
-      <button class="action-button" id="registry-open" type="button">Registry</button>
     </div>
 
-    <section class="explain-grid">
-      <article class="explain-card">
-        <div class="section-kicker">Operating model</div>
-        <h2 class="section-title">Users, agents, code, and purpose in one loop.</h2>
-        <p class="section-copy">AS software is meant to evolve continuously. Users can ask for improvements, agents can execute them, code can be optimized, and the purpose and design documents remain the guides that keep the system coherent over time.</p>
-        <div class="process-list">
-          <div class="process-step">
-            <div class="process-index">01</div>
-            <div>
-              <div class="process-head">Understand</div>
-              <div class="process-text">The sprout action exists on the page itself so someone can understand the page purpose, request a change, or fork a new branch without leaving the running surface.</div>
-            </div>
-          </div>
-          <div class="process-step">
-            <div class="process-index">02</div>
-            <div>
-              <div class="process-head">Evolve</div>
-              <div class="process-text">Changes can be funded by users, paid directly, or executed with coding agents. Multiple realizations can compete against the same goals and contracts.</div>
-            </div>
-          </div>
-          <div class="process-step">
-            <div class="process-index">03</div>
-            <div>
-              <div class="process-head">Operate</div>
-              <div class="process-text">Security, scale, and shared infrastructure are maintained centrally while the application layer keeps improving, forking, and re-materializing.</div>
-            </div>
-          </div>
+    <section class="catalog-shell" id="catalog">
+      <div class="catalog-head">
+        <div class="catalog-copy">
+          <h2 class="catalog-title">Live seeds and realizations</h2>
+          <p class="catalog-text">Grouped by seed and wired into the same inspect, grow, run, and registry flows exposed at the root domain.</p>
         </div>
-      </article>
-      <article class="explain-card">
-        <div class="section-kicker">Registry model</div>
-        <h2 class="section-title">Rollback, replay, and re-realization are built in.</h2>
-        <p class="section-copy">An immutable object registry plus an evolving claims and schema ledger means the system can be inspected, replayed, and rolled back when access to the underlying objects is available. As technology improves, realizations can be rerun against the same goals.</p>
-        <div class="difference-list">
-          <div class="difference-item">
-            <div class="difference-badge">API</div>
-            <div>
-              <div class="difference-head">The interface is optional</div>
-              <div class="difference-text">Every AS system is meant to be accessible through agent-scoped APIs, so direct agent use is a first-class surface rather than an afterthought.</div>
-            </div>
-          </div>
-          <div class="difference-item">
-            <div class="difference-badge">Registry</div>
-            <div>
-              <div class="difference-head">History stays replayable</div>
-              <div class="difference-text">Objects remain durable while claims and schema evolve, which keeps accepted behavior traceable and lets older or newer interpretations coexist.</div>
-            </div>
-          </div>
-          <div class="difference-item">
-            <div class="difference-badge">Future</div>
-            <div>
-              <div class="difference-head">Realizations can be rerun</div>
-              <div class="difference-text">As tools and models improve, the same software can be realized again from preserved purpose, contracts, and data instead of being trapped in the limitations of its first implementation.</div>
-            </div>
-          </div>
-        </div>
-      </article>
-    </section>
-
-    <section class="catalog-header" id="catalog">
-      <div class="catalog-copy">
-        <div class="section-kicker">Live catalog</div>
-        <h2 class="catalog-title">Current seeds and realizations</h2>
-        <p class="catalog-text">These are the actual seeds and realizations this repo knows about right now. They are grouped by seed and wired into the same inspect, grow, run, and registry flows exposed at the root domain.</p>
+        <button class="action-button" id="registry-open" type="button">Registry</button>
       </div>
-      <button class="action-button" id="registry-open-catalog" type="button">Open registry</button>
-    </section>
 
     <section class="tile-grid" id="tile-grid">
       {{range .Seeds}}
@@ -977,6 +659,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
         </article>
       {{end}}
       {{end}}
+    </section>
     </section>
 
     <button class="sprout-fab" id="sprout-fab" type="button" aria-label="Plant a new seed" data-sprout-trigger>
@@ -1200,7 +883,7 @@ func consoleLoaderScript() string {
   var modalContent = document.getElementById("modal-content");
   var modalCloseBtn = document.getElementById("modal-close");
   var sproutFab = document.getElementById("sprout-fab");
-  var registryButtons = document.querySelectorAll("#registry-open, #registry-open-catalog");
+  var registryButtons = document.querySelectorAll("#registry-open");
   var status = document.getElementById("console-status");
   if (!grid || !backdrop || !modalContent) return;
 
