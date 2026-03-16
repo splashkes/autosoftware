@@ -191,44 +191,43 @@ jobs:
           kubectl -n "$AS_NAMESPACE" delete service as-execd --ignore-not-found
           kubectl -n "$AS_NAMESPACE" get deploy,pods,svc -o wide
 
-      - name: Verify Public Endpoints
-        env:
-          AS_WEB_HOST: ${{ vars.AS_WEB_HOST }}
-          AS_REGISTRY_HOST: ${{ vars.AS_REGISTRY_HOST }}
-          AS_API_HOST: ${{ vars.AS_API_HOST }}
-        run: |
-          set -euo pipefail
-          curl -fsS "https://${AS_WEB_HOST}" > /tmp/as-home.html
-          curl -fsS "https://${AS_REGISTRY_HOST}/healthz" > /tmp/as-registry.json
-          curl -fsS "https://${AS_API_HOST}/v1/contracts" > /tmp/as-contracts.json
-          grep -Eq 'Software that evolves from within|Explore the live catalog' /tmp/as-home.html
-          python3 - <<'PY'
-          import json
-          contracts = json.load(open('/tmp/as-contracts.json'))['contracts']
-          if len(contracts) < 1:
-              raise SystemExit('expected at least one contract')
-          print(f"contracts={len(contracts)}")
-          print(open('/tmp/as-registry.json').read().strip())
-          PY
-
-      - name: Verify Internal Runtime Health
+      - name: Verify Cluster Service Endpoints
         env:
           AS_NAMESPACE: ${{ vars.AS_NAMESPACE }}
         run: |
           set -euo pipefail
-          kubectl -n "$AS_NAMESPACE" port-forward --address 127.0.0.1 service/as-apid 28092:80 >/tmp/as-port-forward.log 2>&1 &
-          pf_pid=$!
+          kubectl -n "$AS_NAMESPACE" port-forward --address 127.0.0.1 service/as-webd 28090:80 >/tmp/as-webd-port-forward.log 2>&1 &
+          pf_webd=$!
+          kubectl -n "$AS_NAMESPACE" port-forward --address 127.0.0.1 service/as-registryd 28093:80 >/tmp/as-registryd-port-forward.log 2>&1 &
+          pf_registryd=$!
+          kubectl -n "$AS_NAMESPACE" port-forward --address 127.0.0.1 service/as-apid 28092:80 >/tmp/as-apid-port-forward.log 2>&1 &
+          pf_apid=$!
           cleanup() {
-            kill "$pf_pid" 2>/dev/null || true
-            wait "$pf_pid" 2>/dev/null || true
+            kill "$pf_webd" "$pf_registryd" "$pf_apid" 2>/dev/null || true
+            wait "$pf_webd" "$pf_registryd" "$pf_apid" 2>/dev/null || true
           }
           trap cleanup EXIT
           for _ in $(seq 1 20); do
-            if curl -fsS "http://127.0.0.1:28092/v1/runtime/health" >/tmp/as-runtime-health.json 2>/dev/null; then
-              cat /tmp/as-runtime-health.json
+            if \
+              curl -fsS "http://127.0.0.1:28090/" >/tmp/as-home.html 2>/dev/null && \
+              curl -fsS "http://127.0.0.1:28093/healthz" >/tmp/as-registry.json 2>/dev/null && \
+              curl -fsS "http://127.0.0.1:28092/v1/contracts" >/tmp/as-contracts.json 2>/dev/null && \
+              curl -fsS "http://127.0.0.1:28092/v1/runtime/health" >/tmp/as-runtime-health.json 2>/dev/null; then
+              grep -Eq 'Software that evolves from within|Explore the live catalog' /tmp/as-home.html
+              python3 - <<'PY'
+              import json
+              contracts = json.load(open('/tmp/as-contracts.json'))['contracts']
+              if len(contracts) < 1:
+                  raise SystemExit('expected at least one contract')
+              print(f"contracts={len(contracts)}")
+              print(open('/tmp/as-registry.json').read().strip())
+              print(open('/tmp/as-runtime-health.json').read().strip())
+              PY
               exit 0
             fi
             sleep 1
           done
-          cat /tmp/as-port-forward.log >&2 || true
+          cat /tmp/as-webd-port-forward.log >&2 || true
+          cat /tmp/as-registryd-port-forward.log >&2 || true
+          cat /tmp/as-apid-port-forward.log >&2 || true
           exit 1
