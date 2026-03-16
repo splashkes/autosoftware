@@ -12,6 +12,12 @@ import (
 
 func newMockRegistry() *httptest.Server {
 	mux := http.NewServeMux()
+	realizationHash := strings.Repeat("1", 64)
+	commandCreateHash := strings.Repeat("2", 64)
+	commandUpdateHash := strings.Repeat("3", 64)
+	projectionHash := strings.Repeat("4", 64)
+	objectHash := strings.Repeat("5", 64)
+	schemaHash := strings.Repeat("6", 64)
 
 	mux.HandleFunc("GET /v1/registry/catalog", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
@@ -76,10 +82,13 @@ func newMockRegistry() *httptest.Server {
 					Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive",
 					AuthModes: []string{"anonymous"}, Capabilities: []string{"search_documents"},
-					Objects:     []ResourceLink{{Kind: "shared_note"}},
-					Commands:    []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
-					Projections: []ResourceLink{{Name: "notes.room"}},
-					Self:        "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
+					Objects:      []ResourceLink{{Kind: "shared_note"}},
+					Commands:     []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
+					Projections:  []ResourceLink{{Name: "notes.room"}},
+					Self:         "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
+					CanonicalURL: "/contracts/0001-notepad%2Fa-go-htmx",
+					PermalinkURL: "/@sha256-" + realizationHash + "/contracts/0001-notepad%2Fa-go-htmx",
+					ContentHash:  realizationHash,
 				},
 			})
 			return
@@ -117,12 +126,19 @@ func newMockRegistry() *httptest.Server {
 				path = "/v1/commands/0001-notepad/notes.update"
 				self = "/v1/registry/command?reference=0001-notepad%2Fa-go-htmx&name=notes.update"
 			}
+			contentHash := commandCreateHash
+			if name == "notes.update" {
+				contentHash = commandUpdateHash
+			}
 			json.NewEncoder(w).Encode(map[string]any{
 				"command": CommandDetail{
 					Reference: ref, SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Name: name, Summary: summary, Path: path,
 					AuthModes: []string{"anonymous"}, Idempotency: "required", Consistency: "read_your_writes",
-					Self: self,
+					Self:         self,
+					CanonicalURL: "/actions/0001-notepad%2Fa-go-htmx/" + name,
+					PermalinkURL: "/@sha256-" + contentHash + "/actions/0001-notepad%2Fa-go-htmx/" + name,
+					ContentHash:  contentHash,
 				},
 			})
 			return
@@ -155,8 +171,11 @@ func newMockRegistry() *httptest.Server {
 				"projection": ProjectionDetail{
 					Reference: ref, SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Name: "notes.room", Summary: "Note room view", Path: "/v1/projections/0001-notepad/notes.room",
-					Freshness: "materialized",
-					Self:      "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
+					Freshness:    "materialized",
+					Self:         "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
+					CanonicalURL: "/read-models/0001-notepad%2Fa-go-htmx/notes.room",
+					PermalinkURL: "/@sha256-" + projectionHash + "/read-models/0001-notepad%2Fa-go-htmx/notes.room",
+					ContentHash:  projectionHash,
 				},
 			})
 			return
@@ -194,7 +213,10 @@ func newMockRegistry() *httptest.Server {
 					Realizations: []ObjectRealization{
 						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive"},
 					},
-					Self: "/v1/registry/object?seed_id=0001-notepad&kind=shared_note",
+					Self:         "/v1/registry/object?seed_id=0001-notepad&kind=shared_note",
+					CanonicalURL: "/objects/0001-notepad/shared_note",
+					PermalinkURL: "/@sha256-" + objectHash + "/objects/0001-notepad/shared_note",
+					ContentHash:  objectHash,
 				},
 			})
 			return
@@ -222,7 +244,10 @@ func newMockRegistry() *httptest.Server {
 					ObjectUses: []SchemaObjectUse{
 						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Kind: "shared_note", Summary: "A shared note"},
 					},
-					Self: "/v1/registry/schema?ref=seeds%2F0001-notepad%2Fdesign.md",
+					Self:         "/v1/registry/schema?ref=seeds%2F0001-notepad%2Fdesign.md",
+					CanonicalURL: "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md",
+					PermalinkURL: "/@sha256-" + schemaHash + "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md",
+					ContentHash:  schemaHash,
 				},
 			})
 			return
@@ -239,7 +264,7 @@ func newTestApp(registryURL string) *App {
 	return app
 }
 
-func newTestMux(app *App) *http.ServeMux {
+func newTestMux(app *App) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", app.handleHealthz)
 	mux.HandleFunc("GET /{$}", app.handleHome)
@@ -263,7 +288,7 @@ func newTestMux(app *App) *http.ServeMux {
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
-	return mux
+	return app.permalinkMiddleware(mux)
 }
 
 // --- Read-only enforcement ---
@@ -585,6 +610,55 @@ func TestCommandDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "required") {
 		t.Error("command detail missing idempotency")
+	}
+}
+
+func TestCommandDetailPermalinkPage(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	hash := strings.Repeat("2", 64)
+	req := httptest.NewRequest("GET", "/@sha256-"+hash+"/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
+	req.URL.Path = "/@sha256-" + hash + "/commands/0001-notepad/a-go-htmx/notes.create"
+	req.URL.RawPath = "/@sha256-" + hash + "/commands/0001-notepad%2Fa-go-htmx/notes.create"
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("command permalink returned %d", rec.Code)
+	}
+	if got := rec.Header().Get("ETag"); got != `"sha256-`+hash+`"` {
+		t.Fatalf("unexpected ETag %q", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<link rel="canonical" href="/actions/0001-notepad%2Fa-go-htmx/notes.create">`) {
+		t.Fatal("command permalink page missing canonical link tag")
+	}
+	if !strings.Contains(body, "/@sha256-"+hash+"/actions/0001-notepad%2Fa-go-htmx/notes.create") {
+		t.Fatal("command permalink page missing rendered permalink")
+	}
+}
+
+func TestCommandDetailPermalinkMismatchReturnsNotFound(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	badHash := strings.Repeat("9", 64)
+	req := httptest.NewRequest("GET", "/@sha256-"+badHash+"/commands/0001-notepad%2Fa-go-htmx/notes.create", nil)
+	req.URL.Path = "/@sha256-" + badHash + "/commands/0001-notepad/a-go-htmx/notes.create"
+	req.URL.RawPath = "/@sha256-" + badHash + "/commands/0001-notepad%2Fa-go-htmx/notes.create"
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for mismatched command permalink, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "does not match the current accepted registry state") {
+		t.Fatal("mismatched command permalink should explain the hash mismatch")
 	}
 }
 

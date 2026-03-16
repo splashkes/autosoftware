@@ -79,6 +79,9 @@ type RealizationDetail struct {
 	Projections   []ResourceLink `json:"projections"`
 	Contract      string         `json:"contract"`
 	Self          string         `json:"self"`
+	CanonicalURL  string         `json:"canonical_url"`
+	PermalinkURL  string         `json:"permalink_url"`
+	ContentHash   string         `json:"content_hash"`
 }
 
 type CommandSummary struct {
@@ -114,6 +117,9 @@ type CommandDetail struct {
 	ContractFile    string   `json:"contract_file"`
 	Contract        string   `json:"contract"`
 	Self            string   `json:"self"`
+	CanonicalURL    string   `json:"canonical_url"`
+	PermalinkURL    string   `json:"permalink_url"`
+	ContentHash     string   `json:"content_hash"`
 }
 
 type ProjectionSummary struct {
@@ -139,6 +145,9 @@ type ProjectionDetail struct {
 	ContractFile  string   `json:"contract_file"`
 	Contract      string   `json:"contract"`
 	Self          string   `json:"self"`
+	CanonicalURL  string   `json:"canonical_url"`
+	PermalinkURL  string   `json:"permalink_url"`
+	ContentHash   string   `json:"content_hash"`
 }
 
 type ObjectSummary struct {
@@ -164,6 +173,9 @@ type ObjectDetail struct {
 	Commands     []CommandDetail     `json:"commands"`
 	Projections  []ProjectionDetail  `json:"projections"`
 	Self         string              `json:"self"`
+	CanonicalURL string              `json:"canonical_url"`
+	PermalinkURL string              `json:"permalink_url"`
+	ContentHash  string              `json:"content_hash"`
 }
 
 type ObjectRealization struct {
@@ -199,6 +211,9 @@ type SchemaDetail struct {
 	CommandInputs  []SchemaCommandUse `json:"command_inputs"`
 	CommandResults []SchemaCommandUse `json:"command_results"`
 	Self           string             `json:"self"`
+	CanonicalURL   string             `json:"canonical_url"`
+	PermalinkURL   string             `json:"permalink_url"`
+	ContentHash    string             `json:"content_hash"`
 }
 
 type SchemaObjectUse struct {
@@ -496,6 +511,138 @@ func (app *App) renderError(w http.ResponseWriter, status int, msg string) {
 <body><div class="container"><h1>%d</h1><p>%s</p><p><a href="/">Back to home</a></p></div></body></html>`, status, template.HTMLEscapeString(msg))
 }
 
+type permalinkContextKey string
+
+const requestedPermalinkContextKey permalinkContextKey = "requested_permalink_hash"
+
+func (app *App) permalinkMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hash, trimmed, ok := trimPermalinkRequest(r)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx := context.WithValue(trimmed.Context(), requestedPermalinkContextKey, hash)
+		next.ServeHTTP(w, trimmed.WithContext(ctx))
+	})
+}
+
+func trimPermalinkRequest(r *http.Request) (string, *http.Request, bool) {
+	if r == nil || r.URL == nil {
+		return "", r, false
+	}
+	path := strings.TrimSpace(r.URL.Path)
+	if !strings.HasPrefix(path, "/@sha256-") {
+		return "", r, false
+	}
+	rest := strings.TrimPrefix(path, "/")
+	segment, _, ok := strings.Cut(rest, "/")
+	if !ok {
+		return "", r, false
+	}
+	hash := strings.TrimPrefix(segment, "@sha256-")
+	if !isSHA256Hex(hash) {
+		return "", r, false
+	}
+	prefix := "/" + segment
+	r2 := r.Clone(r.Context())
+	r2.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+	if r2.URL.Path == "" {
+		r2.URL.Path = "/"
+	}
+	if r.URL.RawPath != "" {
+		r2.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, prefix)
+		if r2.URL.RawPath == "" {
+			r2.URL.RawPath = "/"
+		}
+	}
+	escapedPath := r2.URL.EscapedPath()
+	if escapedPath == "" {
+		escapedPath = r2.URL.Path
+	}
+	if !isPermalinkablePath(escapedPath) {
+		return "", r, false
+	}
+	return hash, r2, true
+}
+
+func isPermalinkablePath(path string) bool {
+	switch {
+	case strings.HasPrefix(path, "/contracts/"):
+		return path != "/contracts/"
+	case strings.HasPrefix(path, "/realizations/"):
+		return path != "/realizations/"
+	case strings.HasPrefix(path, "/actions/"):
+		return path != "/actions/"
+	case strings.HasPrefix(path, "/commands/"):
+		return path != "/commands/"
+	case strings.HasPrefix(path, "/read-models/"):
+		return path != "/read-models/"
+	case strings.HasPrefix(path, "/projections/"):
+		return path != "/projections/"
+	case strings.HasPrefix(path, "/objects/"):
+		return path != "/objects/"
+	case strings.HasPrefix(path, "/schemas/detail"):
+		return true
+	default:
+		return false
+	}
+}
+
+func isSHA256Hex(value string) bool {
+	if len(strings.TrimSpace(value)) != 64 {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'f':
+		case r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func requestedPermalinkHash(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	value, _ := r.Context().Value(requestedPermalinkContextKey).(string)
+	return strings.TrimSpace(value)
+}
+
+func matchesRequestedPermalink(r *http.Request, contentHash string) bool {
+	requested := requestedPermalinkHash(r)
+	if requested == "" {
+		return true
+	}
+	return strings.EqualFold(requested, strings.TrimSpace(contentHash))
+}
+
+func withResourceIdentity(data map[string]any, canonicalURL, permalinkURL, contentHash string) map[string]any {
+	data["CanonicalURL"] = canonicalURL
+	data["PermalinkURL"] = permalinkURL
+	data["ContentHash"] = contentHash
+	return data
+}
+
+func setResourceIdentityHeaders(w http.ResponseWriter, canonicalURL, permalinkURL, contentHash string) {
+	if w == nil {
+		return
+	}
+	if hash := strings.TrimSpace(contentHash); hash != "" {
+		w.Header().Set("ETag", `"sha256-`+hash+`"`)
+	}
+	if canonical := strings.TrimSpace(canonicalURL); canonical != "" {
+		w.Header().Add("Link", "<"+canonical+">; rel=\"canonical\"")
+	}
+	if permalink := strings.TrimSpace(permalinkURL); permalink != "" {
+		w.Header().Add("Link", "<"+permalink+">; rel=\"alternate\"")
+	}
+}
+
 func parseSinglePathParam(r *http.Request, prefix string) (string, bool) {
 	if r == nil || prefix == "" {
 		return "", false
@@ -681,13 +828,18 @@ func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("contract schemas error: %v", err)
 	}
-	app.render(w, "realization_detail", map[string]any{
+	if !matchesRequestedPermalink(r, item.ContentHash) {
+		app.renderError(w, http.StatusNotFound, "This contract permalink does not match the current accepted registry state.")
+		return
+	}
+	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
+	app.render(w, "realization_detail", withResourceIdentity(map[string]any{
 		"Title":       item.RealizationID,
 		"Nav":         "contracts",
 		"Realization": item,
 		"Schemas":     schemas,
 		"APIRoute":    item.Self,
-	})
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
 
 func (app *App) handleCommands(w http.ResponseWriter, r *http.Request) {
@@ -726,12 +878,17 @@ func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
 		log.Printf("command detail error: %v", err)
 		return
 	}
-	app.render(w, "command_detail", map[string]any{
+	if !matchesRequestedPermalink(r, item.ContentHash) {
+		app.renderError(w, http.StatusNotFound, "This action permalink does not match the current accepted registry state.")
+		return
+	}
+	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
+	app.render(w, "command_detail", withResourceIdentity(map[string]any{
 		"Title":    item.Name,
 		"Nav":      "actions",
 		"Command":  item,
 		"APIRoute": item.Self,
-	})
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
 
 func (app *App) handleProjections(w http.ResponseWriter, r *http.Request) {
@@ -770,12 +927,17 @@ func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
 		log.Printf("projection detail error: %v", err)
 		return
 	}
-	app.render(w, "projection_detail", map[string]any{
+	if !matchesRequestedPermalink(r, item.ContentHash) {
+		app.renderError(w, http.StatusNotFound, "This read model permalink does not match the current accepted registry state.")
+		return
+	}
+	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
+	app.render(w, "projection_detail", withResourceIdentity(map[string]any{
 		"Title":      item.Name,
 		"Nav":        "read-models",
 		"Projection": item,
 		"APIRoute":   item.Self,
-	})
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
 
 func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
@@ -815,12 +977,17 @@ func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
 		log.Printf("object detail error: %v", err)
 		return
 	}
-	app.render(w, "object_detail", map[string]any{
+	if !matchesRequestedPermalink(r, item.ContentHash) {
+		app.renderError(w, http.StatusNotFound, "This governed thing permalink does not match the current accepted registry state.")
+		return
+	}
+	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
+	app.render(w, "object_detail", withResourceIdentity(map[string]any{
 		"Title":    item.Kind,
 		"Nav":      "objects",
 		"Object":   item,
 		"APIRoute": item.Self,
-	})
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
 
 func (app *App) handleSchemas(w http.ResponseWriter, r *http.Request) {
@@ -854,12 +1021,17 @@ func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
 		log.Printf("schema detail error: %v", err)
 		return
 	}
-	app.render(w, "schema_detail", map[string]any{
+	if !matchesRequestedPermalink(r, item.ContentHash) {
+		app.renderError(w, http.StatusNotFound, "This schema permalink does not match the current accepted registry state.")
+		return
+	}
+	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
+	app.render(w, "schema_detail", withResourceIdentity(map[string]any{
 		"Title":    item.Ref,
 		"Nav":      "contracts",
 		"Schema":   item,
 		"APIRoute": item.Self,
-	})
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
 
 func (app *App) handleRegistryInternals(w http.ResponseWriter, r *http.Request) {
@@ -1193,7 +1365,7 @@ func main() {
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
 
-	handler := logMiddleware(mux)
+	handler := logMiddleware(app.permalinkMiddleware(mux))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
