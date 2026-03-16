@@ -25,6 +25,8 @@ jobs:
   build-and-push:
     if: ${{ github.event_name == 'push' || inputs.image_ref == '' }}
     runs-on: ubuntu-latest
+    environment:
+      name: as-production
     outputs:
       image_ref: ${{ steps.image.outputs.image_ref }}
       image_digest: ${{ steps.image.outputs.image_digest }}
@@ -38,7 +40,7 @@ jobs:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          : "${IMAGE_REPOSITORY:?Repository variable AS_IMAGE_REPOSITORY is required}"
+          : "${IMAGE_REPOSITORY:?Environment variable AS_IMAGE_REPOSITORY is required}"
           : "${DIGITALOCEAN_ACCESS_TOKEN:?Repository secret DIGITALOCEAN_ACCESS_TOKEN is required}"
 
       - name: Set Up Buildx
