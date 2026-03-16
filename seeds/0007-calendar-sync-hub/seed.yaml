@@ -1,0 +1,4 @@
+seed_id: 0007-calendar-sync-hub
+version: 1
+summary: Docs-first seed for a calendar sync hub that ingests, normalizes, and propagates event data across external calendar systems.
+status: proposed
