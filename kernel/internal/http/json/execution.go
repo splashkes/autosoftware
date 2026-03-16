@@ -352,7 +352,7 @@ func syncActiveRouteBindings(ctx context.Context, service *interactions.RuntimeS
 	if service == nil {
 		return errors.New("runtime service unavailable")
 	}
-	if err := service.DeleteStableRouteBindingsForSeed(ctx, execRow.SeedID); err != nil {
+	if err := service.DeleteStableRouteBindingsForReference(ctx, execRow.Reference); err != nil {
 		return err
 	}
 	bindings := []interactions.RealizationRouteBindingInput{
