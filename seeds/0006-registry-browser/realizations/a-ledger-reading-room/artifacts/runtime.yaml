@@ -8,4 +8,4 @@ run:
   args: [run, .]
 notes:
   - AS_ADDR and AS_REGISTRY_URL are injected by the kernel execution backend at launch time.
-  - AS_REGISTRY_URL points at the running kernel registry catalog surface.
+  - AS_REGISTRY_URL points at the running kernel registry base URL.
