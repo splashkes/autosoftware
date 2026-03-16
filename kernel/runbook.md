@@ -74,6 +74,19 @@ In DOKS, keep `webd` and `execd` in the same pod and set
 `autosoftware.app` can launch realizations and bind their preview and stable
 routes.
 
+Launch health checks are owned by `execd`, not by the browser. Use
+`AS_EXECUTION_HEALTH_TIMEOUT_SECONDS` to control how long `execd` waits for a
+new realization to become healthy before marking the launch failed. The current
+DOKS manifest sets this to `180`.
+
+Healthy realizations are kept hot until one of these happens:
+
+- an operator explicitly stops the execution
+- the process exits or is terminated by execution budget enforcement
+- the pod restarts and `execd` reconciles runtime state on startup
+
+There is no separate idle timeout that shuts down healthy realizations.
+
 ## Production Release
 
 The AS production stack is released from GitHub Actions, not from an operator's

@@ -12,12 +12,12 @@ import (
 func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	options := []materializer.RealizationOption{
 		{
-			Reference:     "0001-shared-notepad/a-go-htmx-room",
-			SeedID:        "0001-shared-notepad",
-			SeedSummary:   "Shared notepad",
+			Reference:     "0003-customer-service-app/a-web-mvp",
+			SeedID:        "0003-customer-service-app",
+			SeedSummary:   "Customer service app",
 			SeedStatus:    "accepted",
-			RealizationID: "a-go-htmx-room",
-			Summary:       "Shared notepad room",
+			RealizationID: "a-web-mvp",
+			Summary:       "Customer service app",
 			Status:        "accepted",
 			Readiness: realizations.ReadinessInfo{
 				HasContract:    true,
@@ -26,7 +26,7 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 				Label:          "Runnable",
 				Stage:          "runnable",
 			},
-			PathPrefix: "/notepad/",
+			PathPrefix: "/support/",
 		},
 		{
 			Reference:     "0006-registry-browser/a-authoritative-browser",
@@ -59,10 +59,10 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	}
 
 	view := newBootPageView(options, map[string]executionBootState{
-		"0001-shared-notepad/a-go-htmx-room": {
-			ExecutionID: "exec_notepad",
+		"0003-customer-service-app/a-web-mvp": {
+			ExecutionID: "exec_support",
 			Status:      "healthy",
-			OpenPath:    "/__runs/exec_notepad/",
+			OpenPath:    "/support/",
 		},
 	}, true, false, false, "", "")
 
@@ -79,21 +79,21 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 		t.Fatalf("expected 1 runnable realization, got %d", view.RunnableCount)
 	}
 
-	notepad := view.Seeds[0]
-	if notepad.SeedID != "0001-shared-notepad" {
-		t.Fatalf("expected first seed to be 0001-shared-notepad, got %q", notepad.SeedID)
+	support := view.Seeds[0]
+	if support.SeedID != "0003-customer-service-app" {
+		t.Fatalf("expected first seed to be 0003-customer-service-app, got %q", support.SeedID)
 	}
-	if !notepad.InitiallyOpen {
+	if !support.InitiallyOpen {
 		t.Fatal("expected first seed to be initially open")
 	}
-	if !notepad.IsSingleRealization {
-		t.Fatal("expected notepad seed to have a single realization")
+	if !support.IsSingleRealization {
+		t.Fatal("expected support seed to have a single realization")
 	}
-	if notepad.RunnableCount != 1 {
-		t.Fatalf("expected notepad runnable count 1, got %d", notepad.RunnableCount)
+	if support.RunnableCount != 1 {
+		t.Fatalf("expected support runnable count 1, got %d", support.RunnableCount)
 	}
-	if got := notepad.Realizations[0].ExecutionOpenPath; got != "/__runs/exec_notepad/" {
-		t.Fatalf("expected notepad execution open path /__runs/exec_notepad/, got %q", got)
+	if got := support.Realizations[0].ExecutionOpenPath; got != "/support/" {
+		t.Fatalf("expected support execution open path /support/, got %q", got)
 	}
 
 	registryBrowser := view.Seeds[1]
@@ -108,6 +108,57 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	}
 	if registryBrowser.GrowthReadyCount != 2 {
 		t.Fatalf("expected registry browser growth-ready count 2, got %d", registryBrowser.GrowthReadyCount)
+	}
+}
+
+func TestNewBootPageViewSkipsArchivedSeeds(t *testing.T) {
+	options := []materializer.RealizationOption{
+		{
+			Reference:     "0001-shared-notepad/a-go-htmx-room",
+			SeedID:        "0001-shared-notepad",
+			SeedSummary:   "Shared notepad",
+			SeedStatus:    "archived",
+			RealizationID: "a-go-htmx-room",
+			Summary:       "Legacy prototype",
+			Status:        "retired",
+			Readiness: realizations.ReadinessInfo{
+				HasContract:    true,
+				HasRuntime:     true,
+				CanRun:         true,
+				CanLaunchLocal: true,
+				Label:          "Runnable",
+				Stage:          "runnable",
+			},
+		},
+		{
+			Reference:     "0006-registry-browser/a-authoritative-browser",
+			SeedID:        "0006-registry-browser",
+			SeedSummary:   "Registry browser",
+			SeedStatus:    "defined",
+			RealizationID: "a-authoritative-browser",
+			Summary:       "Authoritative registry browser",
+			Status:        "draft",
+			Readiness: realizations.ReadinessInfo{
+				HasContract: true,
+				Label:       "Defined",
+				Stage:       "defined",
+			},
+		},
+	}
+
+	view := newBootPageView(options, nil, true, false, false, "", "")
+
+	if len(view.Seeds) != 1 {
+		t.Fatalf("expected 1 visible seed, got %d", len(view.Seeds))
+	}
+	if view.Seeds[0].SeedID != "0006-registry-browser" {
+		t.Fatalf("expected registry browser to remain visible, got %q", view.Seeds[0].SeedID)
+	}
+	if view.RealizationCount != 1 {
+		t.Fatalf("expected 1 visible realization, got %d", view.RealizationCount)
+	}
+	if view.RunnableCount != 0 {
+		t.Fatalf("expected archived runnable realization to be excluded, got %d runnable", view.RunnableCount)
 	}
 }
 
@@ -149,6 +200,22 @@ func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
 	for _, want := range wantContains {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected rewritten HTML to contain %q, got %q", want, got)
+		}
+	}
+}
+
+func TestMountedRealizationContentSecurityPolicyAllowsCurrentRealizationAssets(t *testing.T) {
+	csp := mountedRealizationContentSecurityPolicy()
+
+	wantContains := []string{
+		"default-src 'self'",
+		"img-src 'self' data: https:",
+		"script-src 'self' 'unsafe-inline' https://unpkg.com",
+		"style-src 'self' 'unsafe-inline'",
+	}
+	for _, want := range wantContains {
+		if !strings.Contains(csp, want) {
+			t.Fatalf("expected mounted realization CSP to contain %q, got %q", want, csp)
 		}
 	}
 }

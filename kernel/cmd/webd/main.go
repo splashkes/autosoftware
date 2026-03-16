@@ -812,6 +812,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
 	mux.Handle("GET /assets/", sproutAssetHandler())
+	mux.Handle("GET /__sprout-assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
 	jsontransport.NewRegistryCatalogAPI(registryReader).Register(mux)
 	if bootExecutionEnabled {
@@ -1322,6 +1323,7 @@ func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.R
 func proxyToMountedRealization(route realizationRoute, mountPrefix string, w http.ResponseWriter, r *http.Request) {
 	seedID, realizationID := realizations.SplitReference(route.Reference)
 	mountPrefix = normalizeRoutePrefix(mountPrefix)
+	w.Header().Set("Content-Security-Policy", mountedRealizationContentSecurityPolicy())
 
 	if isUnixSocketAddr(route.ProxyAddr) {
 		target, _ := url.Parse("http://unix")
@@ -1389,6 +1391,11 @@ func externalRequestScheme(r *http.Request) string {
 }
 
 func rewriteMountedResponse(res *http.Response, mountPrefix string) error {
+	contentType := strings.ToLower(res.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "text/html") {
+		res.Header.Set("Content-Security-Policy", mountedRealizationContentSecurityPolicy())
+	}
+
 	mountPrefix = normalizeRoutePrefix(mountPrefix)
 	if mountPrefix == "" {
 		return nil
@@ -1405,7 +1412,7 @@ func rewriteMountedResponse(res *http.Response, mountPrefix string) error {
 		}
 	}
 
-	if !strings.Contains(strings.ToLower(res.Header.Get("Content-Type")), "text/html") {
+	if !strings.Contains(contentType, "text/html") {
 		return nil
 	}
 
@@ -1513,6 +1520,22 @@ func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
 	).Replace(rewritten)
 
 	return []byte(rewritten)
+}
+
+func mountedRealizationContentSecurityPolicy() string {
+	return strings.Join([]string{
+		"default-src 'self'",
+		"base-uri 'self'",
+		"connect-src 'self'",
+		"font-src 'self' data:",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+		"img-src 'self' data: https:",
+		"manifest-src 'self'",
+		"object-src 'none'",
+		"script-src 'self' 'unsafe-inline' https://unpkg.com",
+		"style-src 'self' 'unsafe-inline'",
+	}, "; ")
 }
 
 func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w http.ResponseWriter, r *http.Request) bool {

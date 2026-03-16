@@ -24,8 +24,8 @@ import (
 const (
 	pathBoot      = "/__kernel/boot/status"
 	pathIncidents = "/__kernel/feedback-loop/incidents"
-	pathPlant     = "/__sprout/plant"
-	pathAssets    = "/__sprout-assets"
+	pathPlant     = "/sprout/plant"
+	pathAssets    = "/assets"
 	maxBodyBytes  = 64 << 10
 )
 

@@ -16,6 +16,8 @@ import (
 	"as/kernel/internal/realizations"
 )
 
+const DefaultHealthWaitTimeout = 3 * time.Minute
+
 type CapabilityURLs struct {
 	RegistryBaseURL    string
 	PublicAPIBaseURL   string
@@ -202,11 +204,11 @@ func WaitForHealthy(ctx context.Context, upstreamAddr string) error {
 	deadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, DefaultHealthWaitTimeout)
 		defer cancel()
 	}
 	if deadline.IsZero() {
-		deadline = time.Now().Add(60 * time.Second)
+		deadline = time.Now().Add(DefaultHealthWaitTimeout)
 	}
 
 	candidates := []string{"http://" + upstreamAddr + "/healthz", "http://" + upstreamAddr + "/"}

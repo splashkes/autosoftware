@@ -19,16 +19,17 @@ const (
 )
 
 type LocalWorker struct {
-	RepoRoot     string
-	Runtime      *interactions.RuntimeService
-	Capabilities CapabilityURLs
-	WorkerName   string
-	AutoActivate bool
-	executor     *LocalExecutor
-	Budgets      ResourceBudgets
-	lastSampleAt time.Time
-	lastPrunedAt time.Time
-	breachCounts map[string]int
+	RepoRoot            string
+	Runtime             *interactions.RuntimeService
+	Capabilities        CapabilityURLs
+	WorkerName          string
+	AutoActivate        bool
+	LaunchHealthTimeout time.Duration
+	executor            *LocalExecutor
+	Budgets             ResourceBudgets
+	lastSampleAt        time.Time
+	lastPrunedAt        time.Time
+	breachCounts        map[string]int
 }
 
 type ResourceBudgets struct {
@@ -45,11 +46,12 @@ type ResourceBudgets struct {
 
 func NewLocalWorker(repoRoot string, runtime *interactions.RuntimeService, capabilities CapabilityURLs, workerName string, autoActivate bool) *LocalWorker {
 	worker := &LocalWorker{
-		RepoRoot:     repoRoot,
-		Runtime:      runtime,
-		Capabilities: capabilities,
-		WorkerName:   workerName,
-		AutoActivate: autoActivate,
+		RepoRoot:            repoRoot,
+		Runtime:             runtime,
+		Capabilities:        capabilities,
+		WorkerName:          workerName,
+		AutoActivate:        autoActivate,
+		LaunchHealthTimeout: DefaultHealthWaitTimeout,
 		Budgets: ResourceBudgets{
 			MaxRSSBytes:         512 * 1024 * 1024,
 			MaxCPUPercent:       250,
@@ -150,6 +152,16 @@ func (w *LocalWorker) handleLaunch(ctx context.Context, job interactions.Job) er
 		})
 		return err
 	}
+	_, _ = w.Runtime.RecordRealizationExecutionEvent(ctx, interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: executionID,
+		Name:        "launch_spec_resolved",
+		Data: map[string]interface{}{
+			"preview_path_prefix": spec.PreviewPathPrefix,
+			"route_path_prefix":   spec.RoutePathPrefix,
+			"route_subdomain":     spec.RouteSubdomain,
+			"upstream_addr":       spec.UpstreamAddr,
+		},
+	})
 
 	logPath, err := w.executor.Launch(ctx, spec)
 	if err != nil {
@@ -178,8 +190,29 @@ func (w *LocalWorker) handleLaunch(ctx context.Context, job interactions.Job) er
 	if err != nil {
 		return err
 	}
+	_, _ = w.Runtime.RecordRealizationExecutionEvent(ctx, interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: executionID,
+		Name:        "process_started",
+		Data: map[string]interface{}{
+			"log_file":            logPath,
+			"preview_path_prefix": spec.PreviewPathPrefix,
+			"upstream_addr":       spec.UpstreamAddr,
+		},
+	})
 
-	healthCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	launchHealthTimeout := w.LaunchHealthTimeout
+	if launchHealthTimeout <= 0 {
+		launchHealthTimeout = DefaultHealthWaitTimeout
+	}
+	_, _ = w.Runtime.RecordRealizationExecutionEvent(ctx, interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: executionID,
+		Name:        "health_check_started",
+		Data: map[string]interface{}{
+			"timeout_seconds": int(launchHealthTimeout / time.Second),
+			"upstream_addr":   spec.UpstreamAddr,
+		},
+	})
+	healthCtx, cancel := context.WithTimeout(ctx, launchHealthTimeout)
 	defer cancel()
 	if err := WaitForHealthy(healthCtx, spec.UpstreamAddr); err != nil {
 		_, _ = w.Runtime.UpdateRealizationExecution(ctx, executionID, interactions.UpdateRealizationExecutionInput{

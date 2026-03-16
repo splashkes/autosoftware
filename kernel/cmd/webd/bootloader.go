@@ -430,6 +430,83 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       font-size: 0.82rem;
       line-height: 1.6;
     }
+    .launch-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+    }
+    .launch-panel {
+      width: min(32rem, calc(100vw - 3rem));
+      display: grid;
+      gap: 0.78rem;
+      padding: 1.15rem 1.2rem;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #d4d8df;
+      box-shadow: 0 1.4rem 3rem rgba(28, 35, 48, 0.22);
+      color: #222730;
+    }
+    .launch-heading {
+      display: grid;
+      gap: 0.18rem;
+    }
+    .launch-kicker {
+      font-size: 0.66rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a818d;
+    }
+    .launch-name {
+      margin: 0;
+      font-size: 0.98rem;
+      line-height: 1.35;
+      letter-spacing: 0;
+      color: #222730;
+    }
+    .launch-progress {
+      height: 0.26rem;
+      overflow: hidden;
+      background: #e6ebf0;
+    }
+    .launch-progress-fill {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: #22a05a;
+      transition: width 0.12s linear;
+    }
+    .launch-progress.is-failed .launch-progress-fill {
+      background: #c4475d;
+    }
+    .launch-progress.is-ready .launch-progress-fill {
+      background: #178243;
+    }
+    .launch-step {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      line-height: 1.4;
+      color: #222730;
+    }
+    .launch-copy {
+      margin: 0;
+      color: #69707c;
+      font-size: 0.78rem;
+      line-height: 1.6;
+    }
+    .launch-debug {
+      margin: 0;
+      padding: 0.62rem 0.72rem;
+      border: 1px solid #d4d8df;
+      background: rgba(244, 246, 248, 0.98);
+      color: #59606b;
+      font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .empty {
       margin: 0;
       color: #69707c;
@@ -748,6 +825,10 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 	growthReadyCount := 0
 
 	for _, option := range options {
+		if !seedVisibleOnBootPage(option.SeedStatus) {
+			continue
+		}
+
 		index, ok := seen[option.SeedID]
 		if !ok {
 			index = len(seeds)
@@ -804,7 +885,7 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 
 	return bootPageView{
 		Seeds:             seeds,
-		RealizationCount:  len(options),
+		RealizationCount:  growthReadyCount + countDesignedOnlyRealizations(seeds),
 		GrowthReadyCount:  growthReadyCount,
 		RunnableCount:     runnableCount,
 		ExecutionEnabled:  executionEnabled,
@@ -814,6 +895,23 @@ func newBootPageView(options []materializer.RealizationOption, executions map[st
 		CSPNonce:          nonce,
 		LoaderScript:      template.JS(consoleLoaderScript()),
 		FeedbackScript:    template.JS(feedbackScript),
+	}
+}
+
+func countDesignedOnlyRealizations(seeds []seedBootView) int {
+	total := 0
+	for _, seed := range seeds {
+		total += seed.Count - seed.GrowthReadyCount
+	}
+	return total
+}
+
+func seedVisibleOnBootPage(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "archived", "deprecated", "retired":
+		return false
+	default:
+		return true
 	}
 }
 
@@ -889,11 +987,17 @@ func consoleLoaderScript() string {
 
   var expandedTile = null;
   var modalOpen = false;
+  var launchView = null;
+  var activeLaunchToken = 0;
 
   function escapeHTML(v) {
     return String(v).replace(/[&<>"]/g, function (c) {
       return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
     });
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
   function setStatus(copy) {
@@ -911,39 +1015,297 @@ func consoleLoaderScript() string {
     }
   }
 
-  async function waitForExecution(projectionPath, label) {
-    for (var attempt = 0; attempt < 60; attempt++) {
-      var response = await fetch(projectionPath, {
-        method: "GET",
-        credentials: "same-origin",
-        headers: { "Accept": "application/json" }
-      });
-      var result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || ("Execution poll failed: " + response.status));
-      }
-      var session = result.session || {};
-      if (session.status === "healthy" && session.open_path) {
-        setStatus("Running " + label + ".");
-        window.location.assign(session.open_path);
-        return session;
-      }
-      if (session.status === "failed" || session.status === "stopped" || session.status === "terminated") {
-        throw new Error(session.last_error || ("Execution " + session.status));
-      }
-      setStatus("Launching " + label + " (" + (session.status || "starting") + ")...");
-      await new Promise(function (resolve) { setTimeout(resolve, 500); });
+  function isTerminalExecutionStatus(statusValue) {
+    return statusValue === "failed" || statusValue === "stopped" || statusValue === "terminated";
+  }
+
+  function latestExecutionEvent(events) {
+    return Array.isArray(events) && events.length ? events[0] : null;
+  }
+
+  function hasExecutionEvent(events, name) {
+    if (!Array.isArray(events)) return false;
+    for (var i = 0; i < events.length; i++) {
+      if (events[i] && events[i].name === name) return true;
     }
-    throw new Error("Execution timed out before becoming healthy.");
+    return false;
+  }
+
+  function formatElapsed(ms) {
+    var totalMs = Math.max(0, ms || 0);
+    if (totalMs < 60000) {
+      return (totalMs / 1000).toFixed(1) + "s";
+    }
+    var totalSeconds = Math.round(totalMs / 1000);
+    var minutes = Math.floor(totalSeconds / 60);
+    var seconds = totalSeconds % 60;
+    return minutes + "m" + seconds + "s";
+  }
+
+  function launchStepLabel(session, events) {
+    var statusValue = session && session.status ? session.status : "";
+    if (statusValue === "launch_requested") return "Queued in kernel runtime";
+    if (statusValue === "healthy") return session && session.open_path ? "Route ready" : "Registering route";
+    if (statusValue === "failed") return "Launch failed";
+    if (statusValue === "stopped") return "Launch stopped";
+    if (statusValue === "terminated") return "Process terminated";
+    if (hasExecutionEvent(events, "route_registered")) return "Route registered";
+    if (hasExecutionEvent(events, "health_check_started")) return "Waiting for health check";
+    if (hasExecutionEvent(events, "process_started")) return "Process started";
+    if (hasExecutionEvent(events, "launch_spec_resolved")) return "Runtime manifest resolved";
+    if (hasExecutionEvent(events, "launch_started")) return "Worker claimed launch";
+    return "Starting execution";
+  }
+
+  function launchCopyText(session, events, label, elapsedMs, transientError) {
+    if (transientError) {
+      return "Status polling was interrupted. Retrying against the runtime projection without abandoning the launch.";
+    }
+    var statusValue = session && session.status ? session.status : "";
+    if (statusValue === "launch_requested") {
+      if (elapsedMs > 15000) {
+        return "Still waiting for the execution worker to claim the launch job and begin process startup.";
+      }
+      return "Writing the launch job into the runtime queue and waiting for the worker to claim it.";
+    }
+    if (statusValue === "healthy") {
+      if (session && session.open_path) {
+        return "The realization is healthy and routed. Opening " + session.open_path + " as soon as the launch trace settles.";
+      }
+      return "The realization is healthy. Waiting for the canonical route to finish registering.";
+    }
+    if (isTerminalExecutionStatus(statusValue)) {
+      return (session && session.last_error) || ((label || "This realization") + " did not become runnable.");
+    }
+    if (hasExecutionEvent(events, "health_check_started")) {
+      return "The process is running. Waiting for it to answer health checks on /healthz or its root route.";
+    }
+    if (hasExecutionEvent(events, "process_started")) {
+      return "The process has started. Beginning health checks and route registration.";
+    }
+    if (hasExecutionEvent(events, "launch_spec_resolved")) {
+      return "Runtime manifest resolved. Starting the process with kernel-provided capability URLs.";
+    }
+    if (hasExecutionEvent(events, "launch_started")) {
+      return "The execution worker claimed the launch and is preparing the runtime.";
+    }
+    return "Preparing the runtime process, route bindings, and health checks.";
+  }
+
+  function launchMinimumProgressCap(launchContext, elapsedMs) {
+    var minimumDisplayMs = Math.max(0, Number(launchContext.minimumDisplayMs) || 0);
+    if (minimumDisplayMs <= 0 || elapsedMs >= minimumDisplayMs) {
+      return 100;
+    }
+    return 8 + ((96 - 8) * (elapsedMs / minimumDisplayMs));
+  }
+
+  function minimumLaunchDisplayRemaining(launchContext) {
+    var minimumDisplayMs = Math.max(0, Number(launchContext.minimumDisplayMs) || 0);
+    return Math.max(0, minimumDisplayMs - (Date.now() - launchContext.requestedAt));
+  }
+
+  function launchProgressPercent(session, events, elapsedMs) {
+    var statusValue = session && session.status ? session.status : "";
+    if (statusValue === "healthy") {
+      return session && session.open_path ? 100 : 94;
+    }
+    if (isTerminalExecutionStatus(statusValue)) {
+      return 100;
+    }
+
+    var progress = 8;
+    if (statusValue === "launch_requested" || hasExecutionEvent(events, "launch_requested")) progress = 12;
+    if (hasExecutionEvent(events, "launch_started")) progress = 24;
+    if (hasExecutionEvent(events, "launch_spec_resolved")) progress = 42;
+    if (hasExecutionEvent(events, "process_started") || (session && session.upstream_addr)) progress = 62;
+    if (hasExecutionEvent(events, "health_check_started")) progress = 78 + Math.min(14, Math.floor(elapsedMs / 1500));
+    if (hasExecutionEvent(events, "health_passed")) progress = 90;
+    if (hasExecutionEvent(events, "route_registered") || (session && session.open_path)) progress = 96;
+    return Math.max(8, Math.min(progress, 97));
+  }
+
+  function launchDisplayedProgress(session, events, launchContext, elapsedMs, allowCompletion) {
+    var targetProgress = launchProgressPercent(session, events, elapsedMs);
+    if (allowCompletion) {
+      return 100;
+    }
+    if (isTerminalExecutionStatus(session && session.status ? session.status : "")) {
+      return 100;
+    }
+    return Math.max(8, Math.min(targetProgress, Math.round(launchMinimumProgressCap(launchContext, elapsedMs))));
+  }
+
+  function launchDebugLine(session, events, launchContext, elapsedMs, transientError) {
+    var latestEvent = latestExecutionEvent(events);
+    var parts = [];
+    parts.push("step=" + launchStepLabel(session, events));
+    parts.push("status=" + ((session && session.status) || "unknown"));
+    if (launchContext.jobID) parts.push("job=" + launchContext.jobID);
+    if (session && session.execution_id) parts.push("exec=" + session.execution_id);
+    if (latestEvent && latestEvent.name) parts.push("event=" + latestEvent.name);
+    if (session && session.upstream_addr) parts.push("upstream=" + session.upstream_addr);
+    if (session && session.route_path_prefix) parts.push("route=" + session.route_path_prefix);
+    if (session && session.open_path) parts.push("open=" + session.open_path);
+    parts.push("elapsed=" + formatElapsed(elapsedMs));
+    if (transientError) parts.push("transport=" + transientError);
+    return parts.join(" | ");
+  }
+
+  function resetLaunchView() {
+    launchView = null;
+  }
+
+  function ensureLaunchView(label) {
+    if (launchView && modalContent.contains(launchView.root)) {
+      return launchView;
+    }
+    modalContent.innerHTML = [
+      '<div class="launch-screen">',
+      '  <div class="launch-panel">',
+      '    <div class="launch-heading">',
+      '      <div class="launch-kicker">Launching</div>',
+      '      <h2 class="launch-name"></h2>',
+      '    </div>',
+      '    <div class="launch-progress" role="progressbar" aria-label="Launch progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">',
+      '      <span class="launch-progress-fill"></span>',
+      '    </div>',
+      '    <p class="launch-step"></p>',
+      '    <p class="launch-copy"></p>',
+      '    <p class="launch-debug"></p>',
+      '  </div>',
+      '</div>'
+    ].join("");
+    var root = modalContent.querySelector(".launch-screen");
+    launchView = {
+      root: root,
+      title: root.querySelector(".launch-name"),
+      bar: root.querySelector(".launch-progress"),
+      fill: root.querySelector(".launch-progress-fill"),
+      step: root.querySelector(".launch-step"),
+      copy: root.querySelector(".launch-copy"),
+      debug: root.querySelector(".launch-debug")
+    };
+    launchView.title.textContent = label || "Launching realization";
+    return launchView;
+  }
+
+  function renderLaunchState(snapshot, launchContext, transientError, allowCompletion) {
+    var session = snapshot && snapshot.session ? snapshot.session : {};
+    var events = snapshot && Array.isArray(snapshot.events) ? snapshot.events : [];
+    var elapsedMs = Date.now() - launchContext.requestedAt;
+    var view = ensureLaunchView(launchContext.label);
+    var stepLabel = launchStepLabel(session, events);
+    var progress = launchDisplayedProgress(session, events, launchContext, elapsedMs, !!allowCompletion);
+
+    view.title.textContent = launchContext.label;
+    view.step.textContent = stepLabel;
+    view.copy.textContent = launchCopyText(session, events, launchContext.label, elapsedMs, transientError);
+    view.debug.textContent = launchDebugLine(session, events, launchContext, elapsedMs, transientError);
+    view.bar.setAttribute("aria-valuenow", String(progress));
+    view.bar.classList.toggle("is-failed", isTerminalExecutionStatus(session.status));
+    view.bar.classList.toggle("is-ready", session.status === "healthy" && !!session.open_path);
+    view.fill.style.width = progress + "%";
+
+    if (session.status === "healthy" && session.open_path && allowCompletion) {
+      setStatus("Opening " + launchContext.label + "...");
+      return;
+    }
+    if (isTerminalExecutionStatus(session.status)) {
+      setStatus("Launch failed for " + launchContext.label + ".");
+      return;
+    }
+    setStatus("Launching " + launchContext.label + " [" + stepLabel + "]...");
+  }
+
+  async function waitForMinimumLaunchDisplay(launchContext, snapshot) {
+    while (launchContext.token === activeLaunchToken) {
+      var remainingMs = minimumLaunchDisplayRemaining(launchContext);
+      if (remainingMs <= 0) {
+        return;
+      }
+      renderLaunchState(snapshot, launchContext, "", false);
+      await sleep(Math.min(80, remainingMs));
+    }
+  }
+
+  async function waitForExecution(projectionPath, launchContext) {
+    var pollDelay = Math.max(150, Number(launchContext.pollAfterMs) || 350);
+    var consecutivePollErrors = 0;
+    var snapshot = { session: { status: "launch_requested" }, events: [] };
+
+    while (launchContext.token === activeLaunchToken) {
+      try {
+        var response = await fetch(projectionPath, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Accept": "application/json" }
+        });
+        var result = await readJSONResponse(response);
+        if (!response.ok) {
+          var projectionError = new Error(result.error || ("Execution poll failed: " + response.status));
+          projectionError.terminal = response.status >= 400 && response.status < 500;
+          throw projectionError;
+        }
+
+        snapshot = {
+          session: result.session || {},
+          events: Array.isArray(result.events) ? result.events : []
+        };
+        consecutivePollErrors = 0;
+        renderLaunchState(snapshot, launchContext, "");
+
+        var session = snapshot.session || {};
+        if (session.status === "healthy" && session.open_path) {
+          await waitForMinimumLaunchDisplay(launchContext, snapshot);
+          if (launchContext.token !== activeLaunchToken) {
+            return null;
+          }
+          renderLaunchState(snapshot, launchContext, "", true);
+          window.location.assign(session.open_path);
+          return session;
+        }
+        if (isTerminalExecutionStatus(session.status)) {
+          var terminalError = new Error(session.last_error || ("Execution " + session.status));
+          terminalError.terminal = true;
+          throw terminalError;
+        }
+
+        await sleep(pollDelay);
+      } catch (err) {
+        if (launchContext.token !== activeLaunchToken) {
+          return null;
+        }
+        renderLaunchState(snapshot, launchContext, err && err.message ? err.message : String(err));
+        if (err && err.terminal) {
+          throw err;
+        }
+        consecutivePollErrors++;
+        if (consecutivePollErrors >= 20) {
+          throw err;
+        }
+        await sleep(Math.min(2000, 250 * consecutivePollErrors));
+      }
+    }
+
+    return null;
   }
 
   async function launchRealization(reference, label) {
+    var launchContext = {
+      token: ++activeLaunchToken,
+      label: label || reference,
+      reference: reference,
+      requestedAt: Date.now(),
+      jobID: "",
+      pollAfterMs: 350,
+      minimumDisplayMs: 3000
+    };
+
+    resetLaunchView();
     ensureModal(true);
-    modalContent.innerHTML =
-      '<div class="indicator">' +
-      '<div class="indicator-title">Launching</div>' +
-      '<p class="indicator-copy">Starting ' + escapeHTML(label || reference) + ' through the kernel execution layer.</p></div>';
-    setStatus("Launching " + (label || reference) + "...");
+    renderLaunchState({ session: { status: "launch_requested", reference: reference }, events: [] }, launchContext, "");
 
     var response = await fetch("/boot/commands/realizations.launch", {
       method: "POST",
@@ -955,7 +1317,16 @@ func consoleLoaderScript() string {
     if (!response.ok) {
       throw new Error(result.error || ("Launch failed: " + response.status));
     }
-    return waitForExecution(result.projection, label || reference);
+    if (launchContext.token !== activeLaunchToken) {
+      return null;
+    }
+
+    launchContext.jobID = result.job && result.job.job_id ? result.job.job_id : "";
+    if (result.poll_after_ms) {
+      launchContext.pollAfterMs = result.poll_after_ms;
+    }
+    renderLaunchState({ session: result.execution || { status: "launch_requested" }, events: [] }, launchContext, "");
+    return waitForExecution(result.projection, launchContext);
   }
 
   /* ── Tile expand / collapse (State 0 ↔ 1) ── */
@@ -997,6 +1368,8 @@ func consoleLoaderScript() string {
 
   function openModal(action, reference, label) {
     var isRun = action === "run";
+    activeLaunchToken++;
+    resetLaunchView();
     ensureModal(isRun);
 
     modalContent.innerHTML =
@@ -1014,6 +1387,8 @@ func consoleLoaderScript() string {
   }
 
   function closeModal() {
+    activeLaunchToken++;
+    resetLaunchView();
     backdrop.classList.remove("is-visible", "is-run-mode");
     backdrop.setAttribute("aria-hidden", "true");
     setTimeout(function () {
@@ -1027,6 +1402,7 @@ func consoleLoaderScript() string {
   /* ── Partial loading into modal ── */
 
   async function loadPartialIntoModal(action, reference, label) {
+    resetLaunchView();
     var path;
     if (action === "inspect") {
       path = "/partials/materialization?reference=" + encodeURIComponent(reference);
@@ -1067,6 +1443,7 @@ func consoleLoaderScript() string {
   /* ── Mutation wizard (loaded into modal) ── */
 
   async function loadMutationWizard(reference, label) {
+    resetLaunchView();
     var path = "/partials/mutate";
     if (reference) path += "?reference=" + encodeURIComponent(reference);
     setStatus(reference ? "Loading mutation wizard for " + (label || reference) + "..." : "Starting new seed wizard...");
@@ -1204,6 +1581,8 @@ func consoleLoaderScript() string {
   }
 
   async function stopExecution(executionID, label) {
+    activeLaunchToken++;
+    resetLaunchView();
     ensureModal(true);
     modalContent.innerHTML =
       '<div class="indicator">' +
@@ -1248,6 +1627,8 @@ func consoleLoaderScript() string {
             actionBtn.getAttribute("data-reference"),
             actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")
           ).catch(function (err) {
+            if (!modalOpen) return;
+            resetLaunchView();
             modalContent.innerHTML =
               '<div class="stack"><div class="indicator-title">Launch Failed</div><p class="indicator-copy">' +
               escapeHTML(err && err.message ? err.message : String(err)) +
