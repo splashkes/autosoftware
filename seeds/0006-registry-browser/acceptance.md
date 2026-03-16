@@ -44,3 +44,21 @@ Later realizations should additionally satisfy:
     sets, and rows backed by their real authoritative routes.
 13. When claim detail exists, it makes supersession and governing schema
     version explicit.
+
+## Refinement Realization Criteria (a-ledger-reading-room)
+
+The ledger reading room realization must additionally satisfy:
+
+14. The default entry point leads with systems and their plain-language
+    purpose before listing ontology buckets such as realizations, commands,
+    projections, or schemas.
+15. Human-facing list pages expose summaries and relationship context before
+    raw API route strings or stable identifiers.
+16. The realization distinguishes lifecycle status, runtime availability, and
+    surface kind as separate concepts instead of collapsing them into one flat
+    meta row.
+17. Registry-internal meta resources are placed in a clearly separated
+    section rather than mixed into the same default browse layer as domain
+    software.
+18. Every human-facing grouping remains traceable back to the authoritative
+    registry routes that currently exist today.

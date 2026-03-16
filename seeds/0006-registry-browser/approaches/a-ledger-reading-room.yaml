@@ -1,0 +1,11 @@
+approach_id: a-ledger-reading-room
+summary: Human-first registry reading room that reorganizes accepted registry state around systems, governed things, actions, read models, and contracts while preserving authoritative API parity.
+status: proposed
+strategy:
+  implementation_style: refinement
+  review_style: comprehension-first
+  interface_bias: human-ledger-reading-room
+realizer:
+  model: codex-gpt-5
+  prompt_profile: human-legibility-registry-browser
+  coding_ruleset: seed-local-refinement-only

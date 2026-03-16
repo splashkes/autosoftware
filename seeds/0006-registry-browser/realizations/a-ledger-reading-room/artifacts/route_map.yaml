@@ -1,0 +1,61 @@
+view_groups:
+  systems:
+    primary_sources:
+      - /v1/registry/catalog
+      - /v1/registry/realizations
+      - /v1/registry/objects
+      - /v1/registry/commands
+      - /v1/registry/projections
+      - /v1/registry/schemas
+    grouping_key: seed_id
+    notes:
+      - system summaries are derived by grouping accepted catalog resources by seed identity
+      - no new authoritative route is implied by this grouping
+  governed_things:
+    primary_sources:
+      - /v1/registry/objects
+      - /v1/registry/object?seed_id={seed_id}&kind={kind}
+      - /v1/registry/commands
+      - /v1/registry/projections
+      - /v1/registry/realizations
+      - /v1/registry/schemas
+    human_label: governed things
+  actions:
+    primary_sources:
+      - /v1/registry/commands
+      - /v1/registry/command?reference={reference}&name={name}
+      - /v1/registry/projections
+      - /v1/registry/objects
+      - /v1/registry/realizations
+      - /v1/registry/schemas
+    human_label: actions
+    authoritative_label: commands
+  read_models:
+    primary_sources:
+      - /v1/registry/projections
+      - /v1/registry/projection?reference={reference}&name={name}
+      - /v1/registry/objects
+      - /v1/registry/commands
+      - /v1/registry/realizations
+    human_label: read models
+    authoritative_label: projections
+  contracts:
+    primary_sources:
+      - /v1/registry/realizations
+      - /v1/registry/realization?reference={reference}
+      - /v1/registry/schemas
+      - /v1/registry/schema?ref={ref}
+      - /v1/registry/commands
+      - /v1/registry/projections
+      - /v1/registry/objects
+    notes:
+      - contracts join realization and schema surfaces for human comprehension
+      - underlying authoritative routes remain unchanged
+  registry_internals:
+    primary_sources:
+      - /v1/registry/objects
+      - /v1/registry/commands
+      - /v1/registry/projections
+      - /v1/registry/realizations
+      - /v1/registry/schemas
+    filter_hint: seed_id=0006-registry-browser

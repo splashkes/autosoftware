@@ -74,6 +74,22 @@ and side-by-side comparisons.
 This may become a later realization, but should not be the first pass because
 it risks making the trust surface harder to understand.
 
+### C. Ledger Reading Room
+
+A refinement realization that keeps the same authoritative routes and read-only
+trust posture, but changes the human-facing information architecture.
+
+This realization should:
+
+- lead with systems and plain-language purpose before ontology buckets
+- treat commands as actions and projections as read models in human-facing copy
+- separate domain software from registry-internal meta resources
+- show lifecycle, availability, and surface kind as distinct axes
+- place summaries, relationships, and provenance ahead of raw route strings
+
+This should be a later refinement of the seed, not a replacement for the first
+authoritative browser.
+
 ## Scope
 
 Included in this seed:
