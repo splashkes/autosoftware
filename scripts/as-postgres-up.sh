@@ -19,7 +19,7 @@ cd "$repo_root"
 docker compose up -d postgres
 
 docker compose exec -T postgres sh -lc '
-  until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
+  until pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
     sleep 1
   done
 '
@@ -29,6 +29,7 @@ for file in "$repo_root"/kernel/db/runtime/*.sql; do
 
   docker compose exec -T postgres psql \
     -v ON_ERROR_STOP=1 \
+    -h 127.0.0.1 \
     -U "$db_user" \
     -d "$db_name" \
     -f "/workspace/kernel/db/runtime/$(basename "$file")"

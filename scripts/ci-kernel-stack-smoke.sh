@@ -94,7 +94,7 @@ assert_http_contains() {
   local body
 
   body=$(curl -fsS "$url")
-  if ! printf '%s' "$body" | rg -q "$pattern"; then
+  if ! grep -Eq "$pattern" <<<"$body"; then
     printf 'Expected %s (%s) to contain %s\n' "$label" "$url" "$pattern" >&2
     printf '%s\n' "$body" >&2
     return 1
@@ -125,7 +125,6 @@ require_command curl
 require_command docker
 require_command go
 require_command python3
-require_command rg
 
 mkdir -p "$log_dir"
 

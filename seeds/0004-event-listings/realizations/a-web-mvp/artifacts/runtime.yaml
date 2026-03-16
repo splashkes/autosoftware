@@ -9,10 +9,9 @@ run:
     - run
     - .
 environment:
-  AS_ADDR: /tmp/as-realizations/0004-event-listings--a-web-mvp.sock
   AS_ADMIN_PASSWORD: admin
   AS_DATA_FILE: data/events.json
 notes:
-  - Manual boot only for now.
+  - AS_ADDR is injected by the kernel execution backend at launch time.
   - Organizer login uses AS_ADMIN_PASSWORD and defaults to admin for local development.
   - Event data persists to AS_DATA_FILE and survives restarts.

@@ -37,14 +37,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: kernel/go.mod
+          cache-dependency-path: kernel/go.sum
 
       - name: Run seed Go tests
         run: ./scripts/ci-seed-go-tests.sh
 
   kernel-stack-smoke:
     runs-on: ubuntu-latest
-    env:
-      AS_CI_LOG_DIR: ${{ runner.temp }}/kernel-stack-logs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +55,8 @@ jobs:
           cache-dependency-path: kernel/go.sum
 
       - name: Run kernel stack smoke
+        env:
+          AS_CI_LOG_DIR: ${{ runner.temp }}/kernel-stack-logs
         run: ./scripts/ci-kernel-stack-smoke.sh
 
       - name: Upload kernel smoke logs

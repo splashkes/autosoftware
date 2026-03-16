@@ -13,9 +13,13 @@ seed folder on disk
        ↓
   worker produces artifacts ← (human, agent, or pipeline)
        ↓
-  realization becomes runnable
+  realization becomes launchable
        ↓
-  process launched, kernel proxies traffic
+  execution command enqueued
+       ↓
+  executor launches process, records route bindings
+       ↓
+  kernel proxies traffic from live execution state
        ↓
   registry records acceptance ← (append-only ledger)
 ```
@@ -50,8 +54,8 @@ with metadata:
 - Loads seed docs (brief, acceptance, design)
 - Loads interaction contract if present
 - Finds and parses `runtime.yaml` if present
-- Extracts `AS_ADDR` for proxy routing
-- Classifies readiness stage
+- Validates whether the runtime manifest is launchable on the available backend
+- Classifies readiness stage and launch capability
 
 The boot console at `http://localhost:8090/` renders tiles grouped by seed.
 Each tile shows status, readiness, and available actions.
@@ -71,9 +75,12 @@ The kernel determines what stage a realization is in automatically:
 | **Accepted** | Runnable + status accepted | Inspect, Grow, Run |
 
 Each stage unlocks more actions. A realization that only has docs can be
-inspected and grown. One with a runtime manifest can also be run.
+inspected and grown. One with a runtime manifest can surface a Run action, but
+actual launch depends on executor validation instead of a guessed socket path
+from repo metadata.
 
 **Code:** `kernel/internal/realizations/meta.go` — `classifyReadiness()`
+**Code:** `kernel/internal/realizations/runtime_launch.go`
 
 ## 5. Growth
 
@@ -106,42 +113,58 @@ A runnable realization has:
 
 ```
 realizations/<id>/artifacts/
-├── runtime.yaml          # how to boot
+├── runtime.yaml          # author-owned launch recipe
 └── <app>/                # implementation code
 ```
 
-The `runtime.yaml` declares everything the kernel needs to launch:
+The `runtime.yaml` declares what the realization needs to start, but it does
+not own kernel-assigned values such as upstream addresses or kernel capability
+URLs.
 
 ```yaml
 kind: runtime
 version: 1
 runtime: go
-entrypoint: main.go
-working_directory: artifacts/<app>
-run_command: go run .
+entrypoint: artifacts/app/main.go
+working_directory: artifacts/app
+run:
+  command: go
+  args:
+    - run
+    - .
 environment:
-  AS_ADDR: /tmp/as-realizations/<seed-id>--<realization-id>.sock
+  AS_DATA_FILE: data/events.json
 ```
 
 Once this file exists, the readiness stage advances to **Runnable** and the
-Run action becomes available on the boot console.
+Run action becomes available on the boot console when the executor can validate
+the manifest for the active backend.
 
 ## 7. Running
 
-Today, running is manual. The boot console shows the runtime recipe — command,
-environment, working directory — and the operator launches it. The kernel does
-not yet manage processes directly.
+Running is now a kernel-managed local execution flow:
 
-Once the realization process is listening on its `AS_ADDR`, the kernel's
-routing middleware proxies traffic to it via unix domain socket:
+1. The boot console posts `realizations.launch`.
+2. The kernel records a realization execution session in Postgres.
+3. `execd` claims the queued launch job.
+4. The executor assigns the upstream address and injects kernel-owned
+   environment such as `AS_ADDR`, `AS_REGISTRY_URL`, `AS_PUBLIC_API_URL`,
+   `AS_INTERNAL_API_URL`, `AS_EXECUTION_ID`, `AS_SEED_ID`, and
+   `AS_REALIZATION_ID`.
+5. After the process is healthy, the executor records live route bindings.
+6. `webd` proxies requests from those route bindings instead of deriving routes
+   from repo metadata at startup.
 
-- **Subdomain routing:** `notepad.localhost:8090` → `/tmp/as-realizations/<seed>--<realization>.sock`
-- **Path prefix routing:** `localhost:8090/notepad/` → `/tmp/as-realizations/<seed>--<realization>.sock`
+Preview routes are execution-scoped:
 
-The kernel injects `X-AS-Seed-ID` and `X-AS-Realization-ID` headers so the
-realization knows its own identity.
+- `localhost:8090/__runs/<execution-id>/`
 
-**Code:** `kernel/cmd/webd/main.go` — `realizationRoutingMiddleware()`
+Stable subdomain and path routes only exist when a healthy execution is
+activated and its bindings are recorded in runtime state.
+
+**Code:** `kernel/cmd/execd/main.go`
+**Code:** `kernel/internal/execution/local_worker.go`
+**Code:** `kernel/cmd/webd/main.go` — `dynamicRealizationRoutingMiddleware()`
 
 ## 8. Registry and Acceptance
 
@@ -167,7 +190,7 @@ application is always a projection of accepted history.
 | Author | Human | Write seed docs: brief, acceptance, design | Designed |
 | Define | Human or agent | Write `interaction_contract.yaml` | Defined |
 | Grow | Agent or human | Produce code + `runtime.yaml` | Runnable |
-| Run | Operator | Launch process, kernel proxies | Runnable (running) |
+| Run | Kernel executor | Launch process, bind routes, track health | Runnable (running) |
 | Validate | Agent or human | Test against acceptance criteria | Runnable (validated) |
 | Accept | Reviewer | Approve, record in registry | Accepted |
 
@@ -181,9 +204,9 @@ contract and the implementation in one pass.
 - Boot console with tile grid, status, readiness
 - Inspect action (materializes snapshot to disk)
 - Growth job enqueueing with full seed packet
-- Routing middleware (subdomain + path prefix proxying)
-- Manual process launch from runtime recipe
+- Local kernel-managed execution via `realizations.launch`
+- Runtime-backed route bindings for preview and activated routes
 - Feedback loop (incidents, request events, test runs to Postgres)
 
-**Not yet automated:** agent workers claiming growth jobs, process management,
-validation execution, registry write-back on acceptance.
+**Not yet automated:** shared packaged execution backends, agent workers
+claiming growth jobs, validation execution, registry write-back on acceptance.

@@ -9,9 +9,8 @@ run:
     - run
     - .
 environment:
-  AS_ADDR: /tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock
   AS_SEEDS_DIR: ""
 notes:
-  - Manual boot only for now.
+  - AS_ADDR is injected by the kernel execution backend at launch time.
   - Set AS_SEEDS_DIR to the repo seeds/ directory to enable seed creation from the sprout modal.
-  - This artifact is intended to become input to later kernel-managed boot.
+  - The kernel execution backend can launch this realization locally from the runtime manifest.

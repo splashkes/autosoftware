@@ -49,6 +49,9 @@ func TestLoadRealizationMetaClassifiesReadiness(t *testing.T) {
 	if !runnableMeta.Readiness.CanRun {
 		t.Fatal("expected runnable realization to be runnable")
 	}
+	if !runnableMeta.Readiness.CanLaunchLocal {
+		t.Fatal("expected runnable realization to be launchable on the local backend")
+	}
 	if !runnableMeta.Readiness.HasRuntime {
 		t.Fatal("expected runnable realization to have a runtime artifact")
 	}

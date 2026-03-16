@@ -378,6 +378,30 @@ func (s *RuntimeService) ClaimJobs(ctx context.Context, input JobClaimInput) ([]
 	return items, wrapErr("claim jobs", rows.Err())
 }
 
+func (s *RuntimeService) ResetRunningJobs(ctx context.Context, queue, reason string) error {
+	pool, err := expectReady(s)
+	if err != nil {
+		return err
+	}
+	queue = strings.TrimSpace(queue)
+	if queue == "" {
+		return errors.New("queue is required")
+	}
+
+	_, err = pool.Exec(ctx, `
+		update runtime_jobs
+		set status = 'pending',
+		    locked_at = null,
+		    locked_by = null,
+		    last_error = case
+		      when $2 <> '' and coalesce(last_error, '') = '' then $2
+		      else last_error
+		    end
+		where queue = $1 and status = 'running'
+	`, queue, strings.TrimSpace(reason))
+	return wrapErr("reset running jobs", err)
+}
+
 func (s *RuntimeService) CompleteJob(ctx context.Context, jobID string, input JobCompleteInput) (Job, error) {
 	pool, err := expectReady(s)
 	if err != nil {
@@ -393,7 +417,7 @@ func (s *RuntimeService) CompleteJob(ctx context.Context, jobID string, input Jo
 		set status = 'completed',
 		    locked_at = null,
 		    locked_by = null,
-		    finished_at = $2
+		    finished_at = $2::timestamptz
 		where job_id = $1
 		returning job_id, queue, kind, dedupe_key, status, priority, run_at, locked_at,
 		          locked_by, attempts, max_attempts, payload::text, last_error, created_at, finished_at
@@ -426,8 +450,8 @@ func (s *RuntimeService) FailJob(ctx context.Context, jobID string, input JobFai
 		    last_error = $2,
 		    locked_at = null,
 		    locked_by = null,
-		    run_at = case when attempts + 1 >= max_attempts then run_at else $3 end,
-		    finished_at = case when attempts + 1 >= max_attempts then $4 else null end,
+		    run_at = case when attempts + 1 >= max_attempts then run_at else $3::timestamptz end,
+		    finished_at = case when attempts + 1 >= max_attempts then $4::timestamptz else null end,
 		    status = case when attempts + 1 >= max_attempts then 'failed' else 'pending' end
 		where job_id = $1
 		returning job_id, queue, kind, dedupe_key, status, priority, run_at, locked_at,

@@ -10,8 +10,12 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os/signal"
 	"sort"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"as/kernel/internal/boot"
 	"as/kernel/internal/config"
@@ -23,6 +27,7 @@ import (
 	"as/kernel/internal/realizations"
 	registrycatalog "as/kernel/internal/registry"
 	runtimedb "as/kernel/internal/runtime"
+	"as/kernel/internal/telemetry"
 )
 
 var materializationTemplate = template.Must(template.New("materialization").Parse(`
@@ -169,7 +174,7 @@ var growthTemplate = template.Must(template.New("growth").Parse(`
       <button class="action-button is-primary" type="submit">Queue Growth Job</button>
       <button class="action-button" type="button" data-action="inspect" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}">Inspect Instead</button>
       {{if .Packet.Readiness.CanRun}}
-      <button class="action-button" type="button" data-action="run" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}">Show Run</button>
+      <button class="action-button" type="button" data-action="run" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}"{{if and .ExecutionEnabled .Packet.Readiness.CanLaunchLocal}} data-launchable="true"{{end}}{{if .Current.OpenPath}} data-open-path="{{.Current.OpenPath}}"{{end}}>{{if .Current.OpenPath}}Open{{else if and .ExecutionEnabled .Packet.Readiness.CanLaunchLocal}}Run{{else}}Show Run{{end}}</button>
       {{end}}
     </div>
   </form>
@@ -211,14 +216,18 @@ var runTemplate = template.Must(template.New("run").Parse(`
 <div class="stack">
   <div class="row">
     <div>
-      {{if .Packet.Readiness.CanRun}}
+      {{if .Packet.Readiness.CanLaunchLocal}}
       <div class="readiness runnable">Runnable</div>
+      {{else if .Packet.Readiness.CanRun}}
+      <div class="readiness defined">Runtime Defined</div>
       {{else}}
       <div class="readiness designed">Not Runnable</div>
       {{end}}
       <h2 style="margin:0.6rem 0 0.15rem;font-size:1.2rem;">Run {{.Packet.Reference}}</h2>
-      {{if .Packet.Readiness.CanRun}}
-      <p class="empty">This realization carries a runtime manifest. Treat this panel as the launch recipe until the kernel grows a first-class process manager.</p>
+      {{if and .ExecutionEnabled .Packet.Readiness.CanLaunchLocal}}
+      <p class="empty">This realization can be launched by the local kernel execution backend. The kernel assigns the upstream address and injects kernel capability URLs at launch time.</p>
+      {{else if .Packet.Readiness.CanRun}}
+      <p class="empty">This realization carries a runtime manifest, but it is not yet launchable through the currently enabled execution backend.</p>
       {{else}}
       <p class="empty">This realization does not yet carry a runtime artifact. Use <strong>Grow</strong> to move it toward a runnable state.</p>
       {{end}}
@@ -227,7 +236,7 @@ var runTemplate = template.Must(template.New("run").Parse(`
 
   {{if .Packet.Readiness.CanRun}}
   <div class="source">
-    <h3>Runtime Instructions</h3>
+    <h3>Runtime Manifest</h3>
     <p class="pathline">{{.Packet.Readiness.RuntimeFile}}</p>
     {{range .Packet.RuntimeDocs}}
     <pre>{{.Preview}}</pre>
@@ -235,11 +244,166 @@ var runTemplate = template.Must(template.New("run").Parse(`
   </div>
   {{end}}
 
+  {{if .Current.ExecutionID}}
+  <div class="source">
+    <h3>Current Execution</h3>
+    <div class="pathline">{{.Current.ExecutionID}} :: {{.Current.Status}}</div>
+    {{if .Current.OpenPath}}<p class="subtle">Preview route: <code>{{.Current.OpenPath}}</code></p>{{end}}
+    {{if .Current.LastError}}<pre>{{.Current.LastError}}</pre>{{end}}
+  </div>
+  {{end}}
+
+  {{if .Current.Suspended}}
+  <div class="source">
+    <h3>Suspended</h3>
+    <div class="pathline">{{.Current.SuspensionReason}}</div>
+    {{if .Current.SuspensionMessage}}<pre>{{.Current.SuspensionMessage}}</pre>{{end}}
+    {{if .Current.RemediationTarget}}<p class="subtle">Target branch: <code>{{.Current.RemediationTarget}}</code></p>{{end}}
+    {{if .Current.RemediationHint}}<p class="subtle">{{.Current.RemediationHint}}</p>{{end}}
+  </div>
+  {{end}}
+
   <div class="action-row">
+    {{if .Current.OpenPath}}<a class="action-button is-primary" href="{{.Current.OpenPath}}" target="_blank" rel="noopener">Open Preview</a>{{end}}
+    {{if and .ExecutionEnabled .Packet.Readiness.CanLaunchLocal}}<button class="action-button" type="button" data-action="run" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}" data-launchable="true">{{if .Current.ExecutionID}}Relaunch{{else}}Launch{{end}}</button>{{end}}
+    {{if and .ExecutionEnabled .Current.CanStop}}<button class="action-button" type="button" data-stop-execution="{{.Current.ExecutionID}}" data-label="{{.Packet.Summary}}">Stop</button>{{end}}
     <button class="action-button" type="button" data-action="grow" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}">Grow</button>
     <button class="action-button" type="button" data-action="inspect" data-reference="{{.Packet.Reference}}" data-label="{{.Packet.Summary}}">Inspect</button>
   </div>
 </div>
+`))
+
+var realizationUnavailableTemplate = template.Must(template.New("realization-unavailable").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Realization unavailable</title>
+  <style nonce="{{.CSPNonce}}">
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(217, 119, 6, 0.14), transparent 26rem),
+        linear-gradient(180deg, #f4f0e8 0%, #ede7dc 100%);
+      color: #1f2933;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    .shell {
+      width: min(54rem, calc(100vw - 2rem));
+      margin: 0 auto;
+      padding: 2.5rem 0 3rem;
+    }
+    .card {
+      border: 1px solid rgba(185, 174, 158, 0.92);
+      background: rgba(255, 252, 247, 0.9);
+      box-shadow: 0 1.4rem 3rem rgba(58, 49, 37, 0.08);
+      padding: 1.6rem;
+    }
+    .eyebrow {
+      color: #9a5a0a;
+      font: 700 0.74rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0.65rem 0 0.35rem;
+      font-size: clamp(2rem, 5vw, 3.6rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+      color: #181c24;
+    }
+    .copy,
+    .meta,
+    .list,
+    .hint {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .copy {
+      margin: 0.65rem 0 0;
+      color: #47515f;
+      font-size: 1rem;
+      line-height: 1.75;
+      max-width: 40rem;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin: 1rem 0 1.1rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d7ccb8;
+      background: rgba(255, 255, 255, 0.74);
+      padding: 0.28rem 0.65rem;
+      border-radius: 999px;
+      color: #7a4c12;
+      font-size: 0.73rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .panel {
+      margin-top: 1rem;
+      border: 1px solid rgba(210, 201, 188, 0.9);
+      background: rgba(255, 255, 255, 0.62);
+      padding: 1rem;
+    }
+    .panel h2 {
+      margin: 0 0 0.55rem;
+      font: 700 0.86rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #5b6573;
+    }
+    .list {
+      margin: 0;
+      padding-left: 1.15rem;
+      color: #334155;
+      line-height: 1.7;
+    }
+    .hint {
+      margin-top: 1rem;
+      color: #596373;
+      font-size: 0.94rem;
+      line-height: 1.7;
+    }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.92em;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <div class="eyebrow">Execution halted</div>
+      <h1>{{.Reference}}</h1>
+      <p class="copy">{{.Message}}</p>
+      <div class="meta">
+        {{if .Status}}<span class="pill">{{.Status}}</span>{{end}}
+        {{if .ReasonCode}}<span class="pill">{{.ReasonCode}}</span>{{end}}
+        {{if .ExecutionID}}<span class="pill">{{.ExecutionID}}</span>{{end}}
+      </div>
+
+      <div class="panel">
+        <h2>What happened</h2>
+        <ul class="list">
+          {{if .RouteDescription}}<li>Route: <code>{{.RouteDescription}}</code></li>{{end}}
+          <li>The kernel stopped this realization and removed its live route.</li>
+          {{if .RemediationTarget}}<li>Fix the issue on <code>{{.RemediationTarget}}</code> and relaunch after the change lands.</li>{{end}}
+        </ul>
+      </div>
+
+      {{if .RemediationHint}}
+      <p class="hint">{{.RemediationHint}}</p>
+      {{end}}
+    </section>
+  </main>
+</body>
+</html>
 `))
 
 var mutateTemplate = template.Must(template.New("mutate").Parse(`
@@ -567,18 +731,50 @@ type partialView struct {
 }
 
 type growthView struct {
-	Packet realizations.GrowthContext
+	Packet           realizations.GrowthContext
+	ExecutionEnabled bool
+	Current          executionModalState
 }
 
 type runView struct {
-	Packet realizations.GrowthContext
+	Packet           realizations.GrowthContext
+	ExecutionEnabled bool
+	Current          executionModalState
+}
+
+type executionModalState struct {
+	ExecutionID       string
+	Status            string
+	OpenPath          string
+	LastError         string
+	CanStop           bool
+	Suspended         bool
+	SuspensionReason  string
+	SuspensionMessage string
+	RemediationTarget string
+	RemediationHint   string
 }
 
 type registryView struct {
 	Catalog registrycatalog.Catalog
 }
 
+type realizationUnavailableView struct {
+	CSPNonce          string
+	Reference         string
+	ExecutionID       string
+	Status            string
+	ReasonCode        string
+	Message           string
+	RemediationTarget string
+	RemediationHint   string
+	RouteDescription  string
+}
+
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	repoRoot, err := config.RepoRootFromEnvOrWD()
 	if err != nil {
 		log.Fatal(err)
@@ -594,35 +790,41 @@ func main() {
 	var runtimeService *interactions.RuntimeService
 	runtimeConfig := config.LoadRuntimeConfigFromEnv()
 	if runtimeConfig.Enabled() {
-		pool, err := runtimedb.OpenPool(context.Background(), runtimeConfig.DatabaseURL)
+		pool, err := runtimedb.OpenPool(ctx, runtimeConfig.DatabaseURL)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer pool.Close()
 		if runtimeConfig.AutoMigrate {
-			if err := runtimedb.RunMigrations(context.Background(), pool, repoRoot); err != nil {
+			if err := runtimedb.RunMigrations(ctx, pool, repoRoot); err != nil {
 				log.Fatal(err)
 			}
 		}
 		runtimeService = interactions.NewRuntimeService(pool)
 		store = feedbackloop.NewPostgresStore(pool)
 		log.Print("feedback loop: persisting to runtime database")
+		telemetry.NewServiceMonitor("webd", runtimeService).Start(ctx)
 	}
+	bootExecutionEnabled := runtimeService != nil && boolEnv("AS_BOOT_EXECUTION_ENABLED", false)
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
 	jsontransport.NewRegistryCatalogAPI(registryReader).Register(mux)
+	if bootExecutionEnabled {
+		jsontransport.NewExecutionAPI(repoRoot, runtimeService).RegisterPrefix(mux, "/boot")
+	}
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		options, err := service.ListRealizations(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		executions := latestExecutionStateByReference(r.Context(), runtimeService)
 
 		requestMeta := server.RequestMetadataFromContext(r.Context())
-		view := newBootPageView(options, service.Remote != nil, runtimeService != nil, server.CSPNonceFromContext(r.Context()), boot.ClientFeedbackLoopScript(boot.FeedbackLoopScriptConfig{
+		view := newBootPageView(options, executions, bootExecutionEnabled, service.Remote != nil, runtimeService != nil, server.CSPNonceFromContext(r.Context()), boot.ClientFeedbackLoopScript(boot.FeedbackLoopScriptConfig{
 			EndpointPath: "/feedback/incidents",
 			Request:      requestMeta,
 			Selection: boot.PinnedSelection{
@@ -670,7 +872,11 @@ func main() {
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := growthTemplate.Execute(w, growthView{Packet: packet}); err != nil {
+		if err := growthTemplate.Execute(w, growthView{
+			Packet:           packet,
+			ExecutionEnabled: bootExecutionEnabled,
+			Current:          latestExecutionModalState(r.Context(), runtimeService, packet.Reference),
+		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -684,7 +890,11 @@ func main() {
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := runTemplate.Execute(w, runView{Packet: packet}); err != nil {
+		if err := runTemplate.Execute(w, runView{
+			Packet:           packet,
+			ExecutionEnabled: bootExecutionEnabled,
+			Current:          latestExecutionModalState(r.Context(), runtimeService, packet.Reference),
+		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -721,25 +931,22 @@ func main() {
 		}
 	})
 
-	// Build realization route table for subdomain/path-prefix proxying.
-	routeOptions, routeErr := service.ListRealizations(context.Background())
-	if routeErr != nil {
-		log.Printf("warning: could not discover realization routes: %v", routeErr)
-	}
-	routes := buildRouteTable(routeOptions)
 	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
-	if len(routes) > 0 {
-		log.Printf("realization routes: %d active (base domain %s)", len(routes), baseDomain)
-	}
-
-	handler := realizationRoutingMiddleware(routes, baseDomain, http.Handler(mux))
+	handler := buildRoutingHandler(ctx, runtimeService, baseDomain, http.Handler(mux))
 	if runtimeService != nil {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
 	}
 
 	addr := config.EnvOrDefault("AS_WEBD_ADDR", "127.0.0.1:8090")
 	log.Printf("webd listening on %s (repo root %s)", addr, repoRoot)
-	if err := http.ListenAndServe(addr, server.DefaultMiddlewareStack(handler)); err != nil {
+	httpServer := &http.Server{Addr: addr, Handler: server.DefaultMiddlewareStack(handler)}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdownCtx)
+	}()
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }
@@ -753,6 +960,131 @@ func remoteClient() *materializer.RemoteRegistryClient {
 	return &materializer.RemoteRegistryClient{BaseURL: baseURL}
 }
 
+func boolEnv(key string, fallback bool) bool {
+	raw := strings.TrimSpace(config.EnvOrDefault(key, ""))
+	if raw == "" {
+		return fallback
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func latestExecutionStateByReference(ctx context.Context, runtimeService *interactions.RuntimeService) map[string]executionBootState {
+	if runtimeService == nil {
+		return map[string]executionBootState{}
+	}
+	openPaths := activeRoutePathsByExecution(ctx, runtimeService)
+	items, err := runtimeService.ListRealizationExecutions(ctx, "", 200)
+	if err != nil {
+		log.Printf("warning: could not list realization executions: %v", err)
+		return map[string]executionBootState{}
+	}
+	out := make(map[string]executionBootState)
+	for _, item := range items {
+		state := executionBootState{
+			ExecutionID: item.ExecutionID,
+			Status:      item.Status,
+			OpenPath:    strings.TrimSpace(openPaths[item.ExecutionID]),
+		}
+		existing, ok := out[item.Reference]
+		if !ok {
+			out[item.Reference] = state
+			continue
+		}
+		if existing.OpenPath == "" && state.OpenPath != "" {
+			out[item.Reference] = state
+		}
+	}
+	return out
+}
+
+func latestExecutionModalState(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) executionModalState {
+	if runtimeService == nil || strings.TrimSpace(reference) == "" {
+		return executionModalState{}
+	}
+	openPaths := activeRoutePathsByExecution(ctx, runtimeService)
+	items, err := runtimeService.ListRealizationExecutions(ctx, reference, 20)
+	if err != nil || len(items) == 0 {
+		return executionModalState{}
+	}
+	item := items[0]
+	for _, candidate := range items {
+		if strings.TrimSpace(openPaths[candidate.ExecutionID]) != "" {
+			item = candidate
+			break
+		}
+	}
+	state := executionModalState{
+		ExecutionID: item.ExecutionID,
+		Status:      item.Status,
+		OpenPath:    strings.TrimSpace(openPaths[item.ExecutionID]),
+		LastError:   strings.TrimSpace(item.LastError),
+		CanStop:     canStopExecutionStatus(item.Status),
+	}
+	suspension, err := runtimeService.GetActiveRealizationSuspension(ctx, reference)
+	if err == nil {
+		state.Suspended = true
+		state.SuspensionReason = strings.TrimSpace(suspension.ReasonCode)
+		state.SuspensionMessage = strings.TrimSpace(suspension.Message)
+		state.RemediationTarget = strings.TrimSpace(suspension.RemediationTarget)
+		state.RemediationHint = strings.TrimSpace(suspension.RemediationHint)
+		if state.LastError == "" {
+			state.LastError = state.SuspensionMessage
+		}
+	}
+	return state
+}
+
+func activeRoutePathsByExecution(ctx context.Context, runtimeService *interactions.RuntimeService) map[string]string {
+	if runtimeService == nil {
+		return map[string]string{}
+	}
+	bindings, err := runtimeService.ListRealizationRouteBindings(ctx, true)
+	if err != nil {
+		log.Printf("warning: could not list runtime route bindings: %v", err)
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(bindings))
+	for _, binding := range bindings {
+		executionID := strings.TrimSpace(binding.ExecutionID)
+		if executionID == "" {
+			continue
+		}
+		candidate := strings.TrimSpace(binding.PathPrefix)
+		if candidate == "" {
+			continue
+		}
+		if existing := strings.TrimSpace(out[executionID]); existing != "" && binding.BindingKind != "preview_path" {
+			continue
+		}
+		out[executionID] = candidate
+	}
+	return out
+}
+
+func buildRoutingHandler(ctx context.Context, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
+	if runtimeService == nil {
+		log.Printf("realization routes: runtime service disabled; dynamic execution routing unavailable")
+		return fallback
+	}
+
+	routeSource := newRuntimeRouteSource(runtimeService)
+	suspensionSource := newRuntimeSuspensionSource(runtimeService)
+	if routes, err := routeSource.routes(ctx); err == nil && len(routes) > 0 {
+		log.Printf("realization routes: %d runtime (base domain %s)", len(routes), baseDomain)
+	}
+	if suspensions, err := suspensionSource.suspensions(ctx); err == nil && len(suspensions) > 0 {
+		log.Printf("realization suspensions: %d active", len(suspensions))
+	}
+	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, baseDomain, fallback)
+}
+
 // --- Realization routing (subdomain + path prefix) ---
 
 type realizationRoute struct {
@@ -762,27 +1094,95 @@ type realizationRoute struct {
 	ProxyAddr  string
 }
 
-func buildRouteTable(options []materializer.RealizationOption) []realizationRoute {
-	var routes []realizationRoute
-	for _, opt := range options {
-		if opt.ProxyAddr == "" {
-			continue
-		}
-		if opt.Subdomain == "" && opt.PathPrefix == "" {
+type runtimeRouteSource struct {
+	service  *interactions.RuntimeService
+	mu       sync.Mutex
+	cachedAt time.Time
+	cached   []realizationRoute
+}
+
+type runtimeSuspensionSource struct {
+	service  *interactions.RuntimeService
+	mu       sync.Mutex
+	cachedAt time.Time
+	cached   []interactions.RealizationSuspension
+}
+
+func newRuntimeRouteSource(service *interactions.RuntimeService) *runtimeRouteSource {
+	return &runtimeRouteSource{service: service}
+}
+
+func newRuntimeSuspensionSource(service *interactions.RuntimeService) *runtimeSuspensionSource {
+	return &runtimeSuspensionSource{service: service}
+}
+
+func (s *runtimeRouteSource) routes(ctx context.Context) ([]realizationRoute, error) {
+	s.mu.Lock()
+	if time.Since(s.cachedAt) < 500*time.Millisecond && len(s.cached) > 0 {
+		out := append([]realizationRoute(nil), s.cached...)
+		s.mu.Unlock()
+		return out, nil
+	}
+	s.mu.Unlock()
+
+	if s.service == nil {
+		return nil, nil
+	}
+	bindings, err := s.service.ListRealizationRouteBindings(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	routes := make([]realizationRoute, 0, len(bindings))
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.UpstreamAddr) == "" {
 			continue
 		}
 		routes = append(routes, realizationRoute{
-			Reference:  opt.Reference,
-			Subdomain:  strings.TrimSpace(opt.Subdomain),
-			PathPrefix: strings.TrimSpace(opt.PathPrefix),
-			ProxyAddr:  strings.TrimSpace(opt.ProxyAddr),
+			Reference:  binding.Reference,
+			Subdomain:  strings.TrimSpace(binding.Subdomain),
+			PathPrefix: strings.TrimSpace(binding.PathPrefix),
+			ProxyAddr:  strings.TrimSpace(binding.UpstreamAddr),
 		})
 	}
-	// Longest path prefix first so more specific routes match before shorter ones.
 	sort.Slice(routes, func(i, j int) bool {
 		return len(routes[i].PathPrefix) > len(routes[j].PathPrefix)
 	})
-	return routes
+
+	s.mu.Lock()
+	s.cached = append([]realizationRoute(nil), routes...)
+	s.cachedAt = time.Now()
+	s.mu.Unlock()
+	return routes, nil
+}
+
+func (s *runtimeSuspensionSource) suspensions(ctx context.Context) ([]interactions.RealizationSuspension, error) {
+	s.mu.Lock()
+	if time.Since(s.cachedAt) < 500*time.Millisecond && len(s.cached) > 0 {
+		out := append([]interactions.RealizationSuspension(nil), s.cached...)
+		s.mu.Unlock()
+		return out, nil
+	}
+	s.mu.Unlock()
+
+	if s.service == nil {
+		return nil, nil
+	}
+	items, err := s.service.ListRealizationSuspensions(ctx, interactions.ListRealizationSuspensionsInput{
+		ActiveOnly: true,
+		Limit:      500,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return len(items[i].RoutePathPrefix) > len(items[j].RoutePathPrefix)
+	})
+
+	s.mu.Lock()
+	s.cached = append([]interactions.RealizationSuspension(nil), items...)
+	s.cachedAt = time.Now()
+	s.mu.Unlock()
+	return items, nil
 }
 
 func extractSubdomain(host, baseDomain string) string {
@@ -802,11 +1202,17 @@ func extractSubdomain(host, baseDomain string) string {
 	return ""
 }
 
-func realizationRoutingMiddleware(routes []realizationRoute, baseDomain string, fallback http.Handler) http.Handler {
+func realizationRoutingMiddleware(routes []realizationRoute, suspensions []interactions.RealizationSuspension, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
 	subdomainMap := make(map[string]realizationRoute)
 	for _, r := range routes {
 		if r.Subdomain != "" {
 			subdomainMap[strings.ToLower(r.Subdomain)] = r
+		}
+	}
+	suspensionSubdomainMap := make(map[string]interactions.RealizationSuspension)
+	for _, item := range suspensions {
+		if subdomain := strings.ToLower(strings.TrimSpace(item.RouteSubdomain)); subdomain != "" {
+			suspensionSubdomainMap[subdomain] = item
 		}
 	}
 
@@ -815,6 +1221,10 @@ func realizationRoutingMiddleware(routes []realizationRoute, baseDomain string, 
 		if sub := extractSubdomain(r.Host, baseDomain); sub != "" {
 			if route, ok := subdomainMap[sub]; ok {
 				proxyToRealization(route, w, r)
+				return
+			}
+			if suspension, ok := suspensionSubdomainMap[sub]; ok {
+				renderSuspensionPage(w, r, suspension)
 				return
 			}
 		}
@@ -833,7 +1243,38 @@ func realizationRoutingMiddleware(routes []realizationRoute, baseDomain string, 
 			}
 		}
 
+		if strings.HasPrefix(r.URL.Path, "/__runs/") {
+			if renderInactiveExecutionPage(runtimeService, w, r) {
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+		for _, suspension := range suspensions {
+			pathPrefix := strings.TrimSpace(suspension.RoutePathPrefix)
+			if pathPrefix != "" && strings.HasPrefix(r.URL.Path, pathPrefix) {
+				renderSuspensionPage(w, r, suspension)
+				return
+			}
+		}
+
 		fallback.ServeHTTP(w, r)
+	})
+}
+
+func dynamicRealizationRoutingMiddleware(routeSource *runtimeRouteSource, suspensionSource *runtimeSuspensionSource, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routes, err := routeSource.routes(r.Context())
+		if err != nil {
+			log.Printf("warning: could not load runtime routes: %v", err)
+			fallback.ServeHTTP(w, r)
+			return
+		}
+		suspensions, err := suspensionSource.suspensions(r.Context())
+		if err != nil {
+			log.Printf("warning: could not load realization suspensions: %v", err)
+		}
+		realizationRoutingMiddleware(routes, suspensions, runtimeService, baseDomain, fallback).ServeHTTP(w, r)
 	})
 }
 
@@ -866,4 +1307,114 @@ func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.R
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ServeHTTP(w, r)
+}
+
+func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w http.ResponseWriter, r *http.Request) bool {
+	if runtimeService == nil {
+		return false
+	}
+	executionID := previewExecutionID(r.URL.Path)
+	if executionID == "" {
+		return false
+	}
+	suspension, err := runtimeService.GetRealizationSuspensionByExecution(r.Context(), executionID)
+	if err == nil {
+		renderSuspensionPage(w, r, suspension)
+		return true
+	}
+	if err != nil && !errors.Is(err, interactions.ErrNotFound) {
+		log.Printf("warning: could not load realization suspension for %s: %v", executionID, err)
+	}
+	execution, err := runtimeService.GetRealizationExecution(r.Context(), executionID)
+	if err != nil {
+		if !errors.Is(err, interactions.ErrNotFound) {
+			log.Printf("warning: could not load realization execution %s: %v", executionID, err)
+		}
+		return false
+	}
+	if !isTerminalExecutionStatus(execution.Status) {
+		return false
+	}
+	renderUnavailablePage(w, r, realizationUnavailableView{
+		CSPNonce:    server.CSPNonceFromContext(r.Context()),
+		Reference:   execution.Reference,
+		ExecutionID: execution.ExecutionID,
+		Status:      execution.Status,
+		ReasonCode:  "execution_" + strings.TrimSpace(execution.Status),
+		Message: firstNonEmpty(
+			strings.TrimSpace(execution.LastError),
+			"This realization is not currently running. Fix the issue and relaunch it through the kernel.",
+		),
+		RouteDescription: strings.TrimSpace(execution.PreviewPathPrefix),
+	})
+	return true
+}
+
+func renderSuspensionPage(w http.ResponseWriter, r *http.Request, item interactions.RealizationSuspension) {
+	routeDescription := strings.TrimSpace(item.RoutePathPrefix)
+	if routeDescription == "" {
+		routeDescription = strings.TrimSpace(item.RouteSubdomain)
+	}
+	renderUnavailablePage(w, r, realizationUnavailableView{
+		CSPNonce:          server.CSPNonceFromContext(r.Context()),
+		Reference:         item.Reference,
+		ExecutionID:       item.ExecutionID,
+		Status:            "suspended",
+		ReasonCode:        item.ReasonCode,
+		Message:           firstNonEmpty(strings.TrimSpace(item.Message), "This realization was shut down by the kernel."),
+		RemediationTarget: strings.TrimSpace(item.RemediationTarget),
+		RemediationHint:   strings.TrimSpace(item.RemediationHint),
+		RouteDescription:  routeDescription,
+	})
+}
+
+func renderUnavailablePage(w http.ResponseWriter, _ *http.Request, view realizationUnavailableView) {
+	if view.Reference == "" {
+		view.Reference = "Unknown realization"
+	}
+	if view.Message == "" {
+		view.Message = "This realization is not currently available."
+	}
+	var body bytes.Buffer
+	if err := realizationUnavailableTemplate.Execute(&body, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Robots-Tag", "noindex")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = body.WriteTo(w)
+}
+
+func previewExecutionID(path string) string {
+	if !strings.HasPrefix(path, "/__runs/") {
+		return ""
+	}
+	trimmed := strings.TrimPrefix(path, "/__runs/")
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.Index(trimmed, "/"); idx >= 0 {
+		return strings.TrimSpace(trimmed[:idx])
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func canStopExecutionStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "", "failed", "stopped", "terminated":
+		return false
+	default:
+		return true
+	}
+}
+
+func isTerminalExecutionStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "failed", "stopped", "terminated":
+		return true
+	default:
+		return false
+	}
 }

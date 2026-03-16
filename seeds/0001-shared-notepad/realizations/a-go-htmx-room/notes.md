@@ -6,4 +6,4 @@
   kernel/internal/feedback_loop/reporter.go.
 - The sprout modal creates real seed directory structures when AS_SEEDS_DIR is
   set, enabling software change requests from the running interface.
-- The first runtime target is manual boot, not yet kernel-managed launch.
+- The runtime manifest is now compatible with kernel-managed local launch.
