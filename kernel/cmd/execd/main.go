@@ -45,9 +45,9 @@ func main() {
 
 	service := interactions.NewRuntimeService(pool)
 	worker := execution.NewLocalWorker(repoRoot, service, execution.CapabilityURLs{
-		RegistryBaseURL:    "http://" + config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093"),
-		PublicAPIBaseURL:   "http://" + config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092"),
-		InternalAPIBaseURL: "http://" + config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092"),
+		RegistryBaseURL:    httpBaseURLFromAddr(config.EnvOrDefault("AS_REGISTRYD_ADDR", "127.0.0.1:8093")),
+		PublicAPIBaseURL:   httpBaseURLFromAddr(config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092")),
+		InternalAPIBaseURL: httpBaseURLFromAddr(config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092")),
 	}, config.EnvOrDefault("AS_EXECD_WORKER", "execd-local"), true)
 	worker.Budgets.MaxRSSBytes = int64Env("AS_EXECUTION_MAX_RSS_BYTES", worker.Budgets.MaxRSSBytes)
 	worker.Budgets.MaxLogBytes = int64Env("AS_EXECUTION_MAX_LOG_BYTES", worker.Budgets.MaxLogBytes)
@@ -130,4 +130,18 @@ func float64Env(key string, fallback float64) float64 {
 		return fallback
 	}
 	return value
+}
+
+func httpBaseURLFromAddr(addr string) string {
+	trimmed := strings.TrimSpace(addr)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.Contains(trimmed, "://") {
+		return strings.TrimRight(trimmed, "/")
+	}
+	if strings.HasPrefix(trimmed, ":") {
+		trimmed = "127.0.0.1" + trimmed
+	}
+	return "http://" + trimmed
 }

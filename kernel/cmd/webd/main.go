@@ -1533,7 +1533,7 @@ func mountedRealizationContentSecurityPolicy() string {
 		"img-src 'self' data: https:",
 		"manifest-src 'self'",
 		"object-src 'none'",
-		"script-src 'self' 'unsafe-inline' https://unpkg.com",
+		"script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com",
 		"style-src 'self' 'unsafe-inline'",
 	}, "; ")
 }

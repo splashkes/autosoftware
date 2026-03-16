@@ -221,7 +221,7 @@ func WaitForHealthy(ctx context.Context, upstreamAddr string) error {
 			resp, err := client.Do(req)
 			if err == nil {
 				_ = resp.Body.Close()
-				if resp.StatusCode >= 200 && resp.StatusCode < 500 {
+				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 					return nil
 				}
 			}
