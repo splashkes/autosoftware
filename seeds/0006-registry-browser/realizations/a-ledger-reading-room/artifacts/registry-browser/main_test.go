@@ -562,6 +562,21 @@ func TestRealizationDetailPageAcceptsEncodedReferencePath(t *testing.T) {
 	}
 }
 
+func TestRealizationDetailPageAcceptsTrailingSlash(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/realizations/0001-notepad/a-go-htmx/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("trailing-slash realization detail returned %d", rec.Code)
+	}
+}
+
 func TestRealizationDetailNotFound(t *testing.T) {
 	mock := newMockRegistry()
 	defer mock.Close()
@@ -640,6 +655,21 @@ func TestCommandDetailPageAcceptsEncodedReferencePath(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("encoded command detail returned %d", rec.Code)
+	}
+}
+
+func TestCommandDetailPageAcceptsTrailingSlash(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/commands/0001-notepad/a-go-htmx/notes.create/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("trailing-slash command detail returned %d", rec.Code)
 	}
 }
 
@@ -745,6 +775,21 @@ func TestProjectionDetailPageAcceptsEncodedReferencePath(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("encoded projection detail returned %d", rec.Code)
+	}
+}
+
+func TestProjectionDetailPageAcceptsTrailingSlash(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/projections/0001-notepad/a-go-htmx/notes.room/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("trailing-slash projection detail returned %d", rec.Code)
 	}
 }
 
