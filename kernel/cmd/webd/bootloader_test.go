@@ -135,8 +135,8 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	if registryBrowser.GrowthReadyCount != 2 {
 		t.Fatalf("expected registry browser growth-ready count 2, got %d", registryBrowser.GrowthReadyCount)
 	}
-	if registryBrowser.Metrics.Total != 5 {
-		t.Fatalf("expected registry browser metrics total 5, got %d", registryBrowser.Metrics.Total)
+	if registryBrowser.Metrics.Total != 6 {
+		t.Fatalf("expected registry browser metrics total 6, got %d", registryBrowser.Metrics.Total)
 	}
 }
 
