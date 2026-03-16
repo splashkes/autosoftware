@@ -76,10 +76,10 @@ func newMockRegistry() *httptest.Server {
 					Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive",
 					AuthModes: []string{"anonymous"}, Capabilities: []string{"search_documents"},
-					Objects:    []ResourceLink{{Kind: "shared_note"}},
-					Commands:   []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
+					Objects:     []ResourceLink{{Kind: "shared_note"}},
+					Commands:    []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
 					Projections: []ResourceLink{{Name: "notes.room"}},
-					Self: "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
+					Self:        "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
 				},
 			})
 			return
@@ -241,6 +241,7 @@ func newTestApp(registryURL string) *App {
 
 func newTestMux(app *App) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", app.handleHealthz)
 	mux.HandleFunc("GET /{$}", app.handleHome)
 	mux.HandleFunc("GET /systems", app.handleSystems)
 	mux.HandleFunc("GET /systems/{seed_id}", app.handleSystemDetail)
@@ -266,6 +267,44 @@ func newTestMux(app *App) *http.ServeMux {
 }
 
 // --- Read-only enforcement ---
+
+func TestNormalizeRegistryBaseURL(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "base host", in: "https://autosoftware.app", want: "https://autosoftware.app"},
+		{name: "registry prefix", in: "https://autosoftware.app/v1/registry", want: "https://autosoftware.app"},
+		{name: "catalog route", in: "https://autosoftware.app/v1/registry/catalog", want: "https://autosoftware.app"},
+		{name: "trailing slash", in: "https://autosoftware.app/", want: "https://autosoftware.app"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeRegistryBaseURL(tt.in); got != tt.want {
+				t.Fatalf("normalizeRegistryBaseURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHealthzReturnsOK(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("healthz returned %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Fatalf("healthz body = %q, want status ok", rec.Body.String())
+	}
+}
 
 func TestNoMutationRoutes(t *testing.T) {
 	mock := newMockRegistry()
