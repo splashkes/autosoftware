@@ -94,7 +94,7 @@ assert_http_contains() {
   local body
 
   body=$(curl -fsS "$url")
-  if ! printf '%s' "$body" | grep -Eq "$pattern"; then
+  if ! grep -Eq "$pattern" <<<"$body"; then
     printf 'Expected %s (%s) to contain %s\n' "$label" "$url" "$pattern" >&2
     printf '%s\n' "$body" >&2
     return 1

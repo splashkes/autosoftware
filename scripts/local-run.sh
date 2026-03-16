@@ -95,7 +95,12 @@ show_http_match() {
   local pattern=$3
 
   printf '\n==> %s\n' "$label"
-  curl -fsS "$url" | rg -n "$pattern"
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" <<<"$(curl -fsS "$url")"
+    return
+  fi
+
+  grep -En "$pattern" <<<"$(curl -fsS "$url")"
   printf '\n'
 }
 
@@ -133,7 +138,6 @@ require_command docker
 require_command curl
 require_command go
 require_command python3
-require_command rg
 
 printf '==> Local run log directory: %s\n' "$log_dir"
 printf '==> Runtime database URL: %s\n' "$runtime_database_url"
