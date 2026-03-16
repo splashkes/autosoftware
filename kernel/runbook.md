@@ -58,6 +58,22 @@ The script starts all kernel services, runs tests, and verifies endpoints.
 If a runtime database is configured, it bootstraps that first.
 On exit it stops Go services.
 
+## Boot Execution
+
+The homepage only renders a real `Run` action when both of these are true:
+
+- `AS_RUNTIME_DATABASE_URL` is set so runtime state is available
+- `AS_BOOT_EXECUTION_ENABLED=true` is present for `webd`
+
+If `AS_BOOT_EXECUTION_ENABLED` is missing, runnable realizations degrade to
+`Show Run`, the launch route is not registered, and no preview path under
+`/__runs/<execution_id>/` can be created from the homepage.
+
+In DOKS, keep `webd` and `execd` in the same pod and set
+`AS_BOOT_EXECUTION_ENABLED=true` in the shared runtime config so
+`autosoftware.app` can launch realizations and bind their preview and stable
+routes.
+
 ## Planned Operational Flow
 
 1. Prepare the founding seed and kernel configuration.
