@@ -40,7 +40,7 @@
   <ul class="resource-list">
     {{range $o.Realizations}}
     <li class="resource-item">
-      <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+      <a href="{{realizationPath .Reference}}" class="name">{{.RealizationID}}</a>
       <div class="meta">
         <span>{{.Status}}</span>
         <span>{{.SurfaceKind}}</span>
@@ -58,7 +58,7 @@
   <ul class="resource-list">
     {{range $o.Commands}}
     <li class="resource-item">
-      <a href="/actions/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{commandPath .Reference .Name}}" class="name">{{.Name}}</a>
       <div class="meta">
         <span>{{.RealizationID}}</span>
         {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
@@ -76,7 +76,7 @@
   <ul class="resource-list">
     {{range $o.Projections}}
     <li class="resource-item">
-      <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{projectionPath .Reference .Name}}" class="name">{{.Name}}</a>
       <div class="meta">
         <span>{{.RealizationID}}</span>
         <span>{{.Freshness}}</span>

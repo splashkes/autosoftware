@@ -11,7 +11,7 @@
   <table class="field-table">
     <tr><td>Name</td><td>{{$p.Name}}</td></tr>
     <tr><td>Seed</td><td>{{$p.SeedID}}</td></tr>
-    <tr><td>Contract</td><td><a href="/contracts/{{pathEscape $p.Reference}}">{{$p.RealizationID}}</a></td></tr>
+    <tr><td>Contract</td><td><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></td></tr>
     <tr><td>Path</td><td><code>{{$p.Path}}</code></td></tr>
     <tr><td>Freshness</td><td>{{$p.Freshness}}</td></tr>
     <tr><td>Contract</td><td><a href="{{$p.Contract}}">{{$p.ContractFile}}</a></td></tr>

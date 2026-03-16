@@ -126,7 +126,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if catalogPayload.Realizations[0].Self != "/v1/registry/realization?reference=1234-demo%2Fa-test" {
 		t.Fatalf("unexpected realization self %q", catalogPayload.Realizations[0].Self)
 	}
-	if catalogPayload.Realizations[0].CanonicalURL != "/contracts/1234-demo%2Fa-test" {
+	if catalogPayload.Realizations[0].CanonicalURL != "/contracts/1234-demo/a-test" {
 		t.Fatalf("unexpected realization canonical url %q", catalogPayload.Realizations[0].CanonicalURL)
 	}
 	if !strings.HasPrefix(catalogPayload.Realizations[0].PermalinkURL, "/@sha256-") || !strings.HasSuffix(catalogPayload.Realizations[0].PermalinkURL, catalogPayload.Realizations[0].CanonicalURL) {
@@ -138,7 +138,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if catalogPayload.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
 		t.Fatalf("unexpected command self %q", catalogPayload.Commands[0].Self)
 	}
-	if catalogPayload.Commands[0].CanonicalURL != "/actions/1234-demo%2Fa-test/tickets.create" {
+	if catalogPayload.Commands[0].CanonicalURL != "/actions/1234-demo/a-test/tickets.create" {
 		t.Fatalf("unexpected command canonical url %q", catalogPayload.Commands[0].CanonicalURL)
 	}
 	if catalogPayload.Commands[0].ContentHash == "" {
@@ -147,7 +147,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if catalogPayload.Projections[0].Self != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
 		t.Fatalf("unexpected projection self %q", catalogPayload.Projections[0].Self)
 	}
-	if catalogPayload.Projections[0].CanonicalURL != "/read-models/1234-demo%2Fa-test/tickets.detail" {
+	if catalogPayload.Projections[0].CanonicalURL != "/read-models/1234-demo/a-test/tickets.detail" {
 		t.Fatalf("unexpected projection canonical url %q", catalogPayload.Projections[0].CanonicalURL)
 	}
 	if catalogPayload.Objects[0].Self != "/v1/registry/object?seed_id=1234-demo&kind=ticket" {
@@ -184,7 +184,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if realizationPayload.Realization.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
 		t.Fatalf("unexpected realization command self %q", realizationPayload.Realization.Commands[0].Self)
 	}
-	if realizationPayload.Realization.CanonicalURL != "/contracts/1234-demo%2Fa-test" {
+	if realizationPayload.Realization.CanonicalURL != "/contracts/1234-demo/a-test" {
 		t.Fatalf("unexpected realization detail canonical url %q", realizationPayload.Realization.CanonicalURL)
 	}
 	if realizationPayload.Realization.ContentHash != catalogPayload.Realizations[0].ContentHash {
@@ -219,7 +219,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if commandPayload.Command.ProjectionSelf != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
 		t.Fatalf("unexpected projection self %q", commandPayload.Command.ProjectionSelf)
 	}
-	if commandPayload.Command.CanonicalURL != "/actions/1234-demo%2Fa-test/tickets.create" {
+	if commandPayload.Command.CanonicalURL != "/actions/1234-demo/a-test/tickets.create" {
 		t.Fatalf("unexpected command detail canonical url %q", commandPayload.Command.CanonicalURL)
 	}
 	if commandPayload.Command.ContentHash != catalogPayload.Commands[0].ContentHash {

@@ -455,6 +455,9 @@ func (app *App) loadTemplates() {
 		"pathEscape": func(s string) string {
 			return url.PathEscape(s)
 		},
+		"realizationPath": browseRealizationPath,
+		"commandPath":     browseCommandPath,
+		"projectionPath":  browseProjectionPath,
 		"queryEscape": func(s string) string {
 			return url.QueryEscape(s)
 		},
@@ -665,6 +668,38 @@ func parseSinglePathParam(r *http.Request, prefix string) (string, bool) {
 	return value, true
 }
 
+func parseReferencePathParam(r *http.Request, prefix string) (string, bool) {
+	if r == nil || prefix == "" {
+		return "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", false
+	}
+	rest = strings.TrimPrefix(rest, prefix)
+	parts := strings.Split(rest, "/")
+	switch len(parts) {
+	case 1:
+		value, err := url.PathUnescape(parts[0])
+		if err != nil || value == "" {
+			return "", false
+		}
+		return value, true
+	case 2:
+		left, err1 := url.PathUnescape(parts[0])
+		right, err2 := url.PathUnescape(parts[1])
+		if err1 != nil || err2 != nil || left == "" || right == "" {
+			return "", false
+		}
+		return left + "/" + right, true
+	default:
+		return "", false
+	}
+}
+
 func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
 	if r == nil || prefix == "" {
 		return "", "", false
@@ -687,6 +722,76 @@ func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
 		return "", "", false
 	}
 	return left, right, true
+}
+
+func parseReferenceNamePathParam(r *http.Request, prefix string) (string, string, bool) {
+	if r == nil || prefix == "" {
+		return "", "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", "", false
+	}
+	rest = strings.TrimPrefix(rest, prefix)
+	parts := strings.Split(rest, "/")
+	switch len(parts) {
+	case 2:
+		reference, err1 := url.PathUnescape(parts[0])
+		name, err2 := url.PathUnescape(parts[1])
+		if err1 != nil || err2 != nil || reference == "" || name == "" {
+			return "", "", false
+		}
+		return reference, name, true
+	case 3:
+		seedID, err1 := url.PathUnescape(parts[0])
+		realizationID, err2 := url.PathUnescape(parts[1])
+		name, err3 := url.PathUnescape(parts[2])
+		if err1 != nil || err2 != nil || err3 != nil || seedID == "" || realizationID == "" || name == "" {
+			return "", "", false
+		}
+		return seedID + "/" + realizationID, name, true
+	default:
+		return "", "", false
+	}
+}
+
+func browseRealizationPath(reference string) string {
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/contracts/" + url.PathEscape(reference)
+	}
+	return "/contracts/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID)
+}
+
+func browseCommandPath(reference, name string) string {
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	}
+	return "/actions/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+}
+
+func browseProjectionPath(reference, name string) string {
+	seedID, realizationID, ok := splitBrowseReference(reference)
+	if !ok {
+		return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+	}
+	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+}
+
+func splitBrowseReference(reference string) (string, string, bool) {
+	reference = strings.Trim(strings.TrimSpace(reference), "/")
+	if reference == "" {
+		return "", "", false
+	}
+	parts := strings.Split(reference, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
 }
 
 // --- Handlers ---
@@ -810,9 +915,9 @@ func (app *App) handleRealizations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) {
-	reference, ok := parseSinglePathParam(r, "/realizations/")
+	reference, ok := parseReferencePathParam(r, "/realizations/")
 	if !ok {
-		reference, ok = parseSinglePathParam(r, "/contracts/")
+		reference, ok = parseReferencePathParam(r, "/contracts/")
 	}
 	if !ok {
 		app.renderError(w, http.StatusNotFound, "Realization not found.")
@@ -864,9 +969,9 @@ func (app *App) handleCommands(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
-	reference, name, ok := parsePairPathParam(r, "/actions/")
+	reference, name, ok := parseReferenceNamePathParam(r, "/actions/")
 	if !ok {
-		reference, name, ok = parsePairPathParam(r, "/commands/")
+		reference, name, ok = parseReferenceNamePathParam(r, "/commands/")
 	}
 	if !ok {
 		app.renderError(w, http.StatusNotFound, "Command not found.")
@@ -913,9 +1018,9 @@ func (app *App) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
-	reference, name, ok := parsePairPathParam(r, "/read-models/")
+	reference, name, ok := parseReferenceNamePathParam(r, "/read-models/")
 	if !ok {
-		reference, name, ok = parsePairPathParam(r, "/projections/")
+		reference, name, ok = parseReferenceNamePathParam(r, "/projections/")
 	}
 	if !ok {
 		app.renderError(w, http.StatusNotFound, "Projection not found.")

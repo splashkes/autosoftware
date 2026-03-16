@@ -52,7 +52,7 @@
   <ul class="resource-list">
     {{range $r.Commands}}
     <li class="resource-item">
-      <a href="/actions/{{pathEscape $r.Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{commandPath $r.Reference .Name}}" class="name">{{.Name}}</a>
     </li>
     {{end}}
   </ul>
@@ -65,7 +65,7 @@
   <ul class="resource-list">
     {{range $r.Projections}}
     <li class="resource-item">
-      <a href="/read-models/{{pathEscape $r.Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{projectionPath $r.Reference .Name}}" class="name">{{.Name}}</a>
     </li>
     {{end}}
   </ul>
