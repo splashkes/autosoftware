@@ -21,6 +21,7 @@ import (
 
 	"as/kernel/internal/boot"
 	"as/kernel/internal/config"
+	"as/kernel/internal/execution"
 	feedbackloop "as/kernel/internal/feedback_loop"
 	jsontransport "as/kernel/internal/http/json"
 	"as/kernel/internal/http/server"
@@ -935,7 +936,7 @@ func main() {
 	})
 
 	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
-	handler := buildRoutingHandler(ctx, runtimeService, baseDomain, http.Handler(mux))
+	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, http.Handler(mux))
 	if runtimeService != nil {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
 	}
@@ -1102,7 +1103,14 @@ func normalizeRoutePrefix(prefix string) string {
 	return prefix
 }
 
-func buildRoutingHandler(ctx context.Context, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
+func buildRoutingHandler(
+	ctx context.Context,
+	repoRoot string,
+	catalogService *materializer.Service,
+	runtimeService *interactions.RuntimeService,
+	baseDomain string,
+	fallback http.Handler,
+) http.Handler {
 	if runtimeService == nil {
 		log.Printf("realization routes: runtime service disabled; dynamic execution routing unavailable")
 		return fallback
@@ -1116,7 +1124,7 @@ func buildRoutingHandler(ctx context.Context, runtimeService *interactions.Runti
 	if suspensions, err := suspensionSource.suspensions(ctx); err == nil && len(suspensions) > 0 {
 		log.Printf("realization suspensions: %d active", len(suspensions))
 	}
-	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, baseDomain, fallback)
+	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, repoRoot, catalogService, baseDomain, fallback)
 }
 
 // --- Realization routing (subdomain + path prefix) ---
@@ -1236,7 +1244,15 @@ func extractSubdomain(host, baseDomain string) string {
 	return ""
 }
 
-func realizationRoutingMiddleware(routes []realizationRoute, suspensions []interactions.RealizationSuspension, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
+func realizationRoutingMiddleware(
+	routes []realizationRoute,
+	suspensions []interactions.RealizationSuspension,
+	runtimeService *interactions.RuntimeService,
+	repoRoot string,
+	catalogService *materializer.Service,
+	baseDomain string,
+	fallback http.Handler,
+) http.Handler {
 	subdomainMap := make(map[string]realizationRoute)
 	for _, r := range routes {
 		if r.Subdomain != "" {
@@ -1292,11 +1308,40 @@ func realizationRoutingMiddleware(routes []realizationRoute, suspensions []inter
 			}
 		}
 
+		if runtimeService != nil && catalogService != nil && r.URL.Path != "" {
+			reference, matchedPrefix := realizationReferenceForPath(r.Context(), catalogService, r.URL.Path)
+			if reference != "" {
+				targetPath := ""
+				if existingLaunchPath := activeOrQueuedLaunchPath(r.Context(), runtimeService, reference); existingLaunchPath != "" {
+					targetPath = launchRedirectPath(existingLaunchPath, r.URL.Path, matchedPrefix)
+				} else if newLaunchPath, err := enqueueLaunchForMissingPath(r.Context(), runtimeService, repoRoot, reference, r); err == nil && newLaunchPath != "" {
+					targetPath = launchRedirectPath(newLaunchPath, r.URL.Path, matchedPrefix)
+				} else if err != nil {
+					log.Printf("warning: could not auto-launch %s for path %s: %v", reference, r.URL.Path, err)
+				}
+				if targetPath != "" {
+					if r.URL.RawQuery != "" {
+						targetPath += "?" + r.URL.RawQuery
+					}
+					http.Redirect(w, r, targetPath, http.StatusFound)
+					return
+				}
+			}
+		}
+
 		fallback.ServeHTTP(w, r)
 	})
 }
 
-func dynamicRealizationRoutingMiddleware(routeSource *runtimeRouteSource, suspensionSource *runtimeSuspensionSource, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
+func dynamicRealizationRoutingMiddleware(
+	routeSource *runtimeRouteSource,
+	suspensionSource *runtimeSuspensionSource,
+	runtimeService *interactions.RuntimeService,
+	repoRoot string,
+	catalogService *materializer.Service,
+	baseDomain string,
+	fallback http.Handler,
+) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		routes, err := routeSource.routes(r.Context())
 		if err != nil {
@@ -1308,8 +1353,150 @@ func dynamicRealizationRoutingMiddleware(routeSource *runtimeRouteSource, suspen
 		if err != nil {
 			log.Printf("warning: could not load realization suspensions: %v", err)
 		}
-		realizationRoutingMiddleware(routes, suspensions, runtimeService, baseDomain, fallback).ServeHTTP(w, r)
+		realizationRoutingMiddleware(routes, suspensions, runtimeService, repoRoot, catalogService, baseDomain, fallback).ServeHTTP(w, r)
 	})
+}
+
+func realizationReferenceForPath(ctx context.Context, catalogService *materializer.Service, rawPath string) (string, string) {
+	if catalogService == nil {
+		return "", ""
+	}
+	targetPath := strings.TrimSpace(rawPath)
+	if targetPath == "" || targetPath == "/" {
+		return "", ""
+	}
+	if !strings.HasPrefix(targetPath, "/") {
+		targetPath = "/" + targetPath
+	}
+	lookupPath := targetPath
+	if !strings.HasSuffix(lookupPath, "/") {
+		lookupPath += "/"
+	}
+
+	options, err := catalogService.ListRealizations(ctx)
+	if err != nil {
+		log.Printf("warning: could not list realizations for path launch fallback: %v", err)
+		return "", ""
+	}
+	bestPrefix := ""
+	bestReference := ""
+	for _, option := range options {
+		pathPrefix := normalizeRoutePrefix(strings.TrimSpace(option.PathPrefix))
+		if pathPrefix == "" {
+			continue
+		}
+		if strings.HasPrefix(lookupPath, pathPrefix) && len(pathPrefix) > len(bestPrefix) {
+			bestPrefix = pathPrefix
+			bestReference = strings.TrimSpace(option.Reference)
+		}
+	}
+	return bestReference, bestPrefix
+}
+
+func launchRedirectPath(openPath, requestPath, matchedPrefix string) string {
+	matchedPrefix = strings.TrimSpace(matchedPrefix)
+	if matchedPrefix == "" || strings.TrimSpace(openPath) == "" {
+		return strings.TrimSpace(openPath)
+	}
+	matchedPath := strings.TrimSpace(requestPath)
+	if matchedPath == "" {
+		return strings.TrimSpace(openPath)
+	}
+	if !strings.HasSuffix(matchedPath, "/") {
+		matchedPath += "/"
+	}
+	remainder := strings.TrimPrefix(matchedPath, matchedPrefix)
+	remainder = strings.TrimPrefix(remainder, "/")
+	if remainder == "" {
+		return strings.TrimSpace(openPath)
+	}
+	if strings.HasSuffix(openPath, "/") {
+		return strings.TrimSpace(openPath) + remainder
+	}
+	return strings.TrimSpace(openPath) + "/" + remainder
+}
+
+func activeOrQueuedLaunchPath(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) string {
+	execItems, err := runtimeService.ListRealizationExecutions(ctx, strings.TrimSpace(reference), 20)
+	if err != nil || len(execItems) == 0 {
+		return ""
+	}
+	openPaths := activeRoutePathsByExecution(ctx, runtimeService)
+	for _, item := range execItems {
+		if isTerminalExecutionStatus(item.Status) {
+			continue
+		}
+		if openPath := strings.TrimSpace(openPaths[item.ExecutionID]); openPath != "" {
+			return openPath
+		}
+		if previewPath := strings.TrimSpace(item.PreviewPathPrefix); previewPath != "" {
+			return previewPath
+		}
+	}
+	return ""
+}
+
+func enqueueLaunchForMissingPath(ctx context.Context, runtimeService *interactions.RuntimeService, repoRoot, reference string, r *http.Request) (string, error) {
+	packet, err := realizations.LoadGrowthContext(repoRoot, strings.TrimSpace(reference))
+	if err != nil {
+		return "", err
+	}
+	if !packet.Readiness.CanLaunchLocal {
+		return "", errors.New("realization is not launchable through local execution backend")
+	}
+
+	requestMeta := server.RequestMetadataFromContext(ctx)
+	resolvedSession, _ := server.SessionFromContext(ctx)
+
+	executionID := "exec_" + strings.ReplaceAll(strings.ReplaceAll(packet.Reference, "/", "_"), "-", "_")
+	suffix := strings.TrimSpace(requestMeta.RequestID)
+	if len(suffix) > 6 {
+		suffix = suffix[len(suffix)-6:]
+	}
+	if suffix == "" {
+		suffix = strconv.FormatInt(time.Now().UnixNano()%1000000, 10)
+	}
+	executionID = executionID + "_" + suffix
+	previewPath := execution.PreviewPath(executionID)
+
+	execRow, err := runtimeService.CreateRealizationExecution(ctx, interactions.CreateRealizationExecutionInput{
+		ExecutionID:           executionID,
+		Reference:             packet.Reference,
+		SeedID:                packet.SeedID,
+		RealizationID:         packet.RealizationID,
+		Backend:               execution.LocalBackendName,
+		Mode:                  "preview",
+		Status:                "launch_requested",
+		RouteSubdomain:        packet.Subdomain,
+		RoutePathPrefix:       packet.PathPrefix,
+		PreviewPathPrefix:     previewPath,
+		LaunchedByPrincipalID: resolvedSession.PrincipalID,
+		LaunchedBySessionID:   resolvedSession.SessionID,
+		RequestID:             requestMeta.RequestID,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	job, err := runtimeService.EnqueueJob(ctx, interactions.EnqueueJobInput{
+		Queue:    "realization-execution",
+		Kind:     "realizations.launch",
+		Priority: 120,
+		Payload: map[string]interface{}{
+			"execution_id": execRow.ExecutionID,
+			"reference":    packet.Reference,
+			"seed_id":      packet.SeedID,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	_, _ = runtimeService.RecordRealizationExecutionEvent(ctx, interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: execRow.ExecutionID,
+		Name:        "launch_requested",
+		Data:        map[string]interface{}{"job_id": job.JobID},
+	})
+	return previewPath, nil
 }
 
 func isUnixSocketAddr(addr string) bool {

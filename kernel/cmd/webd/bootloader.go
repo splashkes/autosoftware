@@ -507,6 +507,32 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .launch-sprout {
+      width: 9rem;
+      margin: 0 auto;
+      cursor: default;
+    }
+    .launch-meta-row {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      font-size: 0.67rem;
+      color: #6f7783;
+    }
+    .launch-meta-item {
+      border: 1px solid #d5d9e1;
+      border-radius: 999px;
+      padding: 0.22rem 0.58rem;
+      background: rgba(255, 255, 255, 0.82);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .launch-timer {
+      margin: 0;
+      color: #59606b;
+      font-size: 0.8rem;
+      letter-spacing: 0.01em;
+    }
     .empty {
       margin: 0;
       color: #69707c;
@@ -1042,6 +1068,49 @@ func consoleLoaderScript() string {
     return minutes + "m" + seconds + "s";
   }
 
+  function launchMetadataKey(reference) {
+    return "as-launch-metadata:" + String(reference || "unknown");
+  }
+
+  function launchMetadataLoad(reference) {
+    var key = launchMetadataKey(reference);
+    if (typeof localStorage === "undefined") return {};
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return {};
+      return parsed;
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function launchMetadataPersist(reference, openPath) {
+    var key = launchMetadataKey(reference);
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        lastLoadedAt: Date.now(),
+        openPath: openPath || ""
+      }));
+    } catch (err) {}
+  }
+
+  function launchMetadataText(reference) {
+    var metadata = launchMetadataLoad(reference);
+    if (!metadata || !metadata.lastLoadedAt) {
+      return "Last time this was loaded: never";
+    }
+    return "Last time this was loaded: " + new Date(Number(metadata.lastLoadedAt)).toLocaleString();
+  }
+
+  function launchInitSprout(root) {
+    if (typeof window.ASSproutLogo === "object" && window.ASSproutLogo && typeof window.ASSproutLogo.init === "function") {
+      window.ASSproutLogo.init(root);
+    }
+  }
+
   function launchStepLabel(session, events) {
     var statusValue = session && session.status ? session.status : "";
     if (statusValue === "launch_requested") return "Queued in kernel runtime";
@@ -1156,13 +1225,14 @@ func consoleLoaderScript() string {
     launchView = null;
   }
 
-  function ensureLaunchView(label) {
+  function ensureLaunchView(label, reference) {
     if (launchView && modalContent.contains(launchView.root)) {
       return launchView;
     }
     modalContent.innerHTML = [
       '<div class="launch-screen">',
       '  <div class="launch-panel">',
+      '    <div class="sprout-logo-shell launch-sprout" data-sprout-logo aria-hidden="true"></div>',
       '    <div class="launch-heading">',
       '      <div class="launch-kicker">Launching</div>',
       '      <h2 class="launch-name"></h2>',
@@ -1170,6 +1240,11 @@ func consoleLoaderScript() string {
       '    <div class="launch-progress" role="progressbar" aria-label="Launch progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">',
       '      <span class="launch-progress-fill"></span>',
       '    </div>',
+      '    <p class="launch-meta-row">',
+      '      <span class="launch-meta-item" data-launch-last-loaded></span>',
+      '      <span class="launch-meta-item" data-launch-route></span>',
+      '    </p>',
+      '    <p class="launch-timer"></p>',
       '    <p class="launch-step"></p>',
       '    <p class="launch-copy"></p>',
       '    <p class="launch-debug"></p>',
@@ -1182,11 +1257,21 @@ func consoleLoaderScript() string {
       title: root.querySelector(".launch-name"),
       bar: root.querySelector(".launch-progress"),
       fill: root.querySelector(".launch-progress-fill"),
+      lastLoaded: root.querySelector("[data-launch-last-loaded]"),
+      routeLine: root.querySelector("[data-launch-route]"),
+      timer: root.querySelector(".launch-timer"),
       step: root.querySelector(".launch-step"),
       copy: root.querySelector(".launch-copy"),
       debug: root.querySelector(".launch-debug")
     };
+    launchInitSprout(root);
     launchView.title.textContent = label || "Launching realization";
+    if (launchView.lastLoaded) {
+      launchView.lastLoaded.textContent = launchMetadataText(reference || label || "unknown");
+    }
+    if (launchView.routeLine) {
+      launchView.routeLine.textContent = "";
+    }
     return launchView;
   }
 
@@ -1194,12 +1279,27 @@ func consoleLoaderScript() string {
     var session = snapshot && snapshot.session ? snapshot.session : {};
     var events = snapshot && Array.isArray(snapshot.events) ? snapshot.events : [];
     var elapsedMs = Date.now() - launchContext.requestedAt;
-    var view = ensureLaunchView(launchContext.label);
+    var view = ensureLaunchView(launchContext.label, launchContext.reference);
     var stepLabel = launchStepLabel(session, events);
     var progress = launchDisplayedProgress(session, events, launchContext, elapsedMs, !!allowCompletion);
 
     view.title.textContent = launchContext.label;
     view.step.textContent = stepLabel;
+    if (view.timer) {
+      view.timer.textContent = "Elapsed " + formatElapsed(elapsedMs);
+    }
+    if (view.routeLine) {
+      var openPath = "";
+      if (session && session.open_path) {
+        openPath = session.open_path;
+      } else if (launchContext.openPath) {
+        openPath = launchContext.openPath;
+      }
+      view.routeLine.textContent = openPath ? ("Route: " + openPath) : "";
+    }
+    if (view.lastLoaded) {
+      view.lastLoaded.textContent = launchMetadataText(launchContext.reference || launchContext.label || "");
+    }
     view.copy.textContent = launchCopyText(session, events, launchContext.label, elapsedMs, transientError);
     view.debug.textContent = launchDebugLine(session, events, launchContext, elapsedMs, transientError);
     view.bar.setAttribute("aria-valuenow", String(progress));
@@ -1253,11 +1353,17 @@ func consoleLoaderScript() string {
           session: result.session || {},
           events: Array.isArray(result.events) ? result.events : []
         };
+        if (snapshot.session && snapshot.session.open_path) {
+          launchContext.openPath = snapshot.session.open_path;
+          launchMetadataPersist(launchContext.reference, snapshot.session.open_path);
+        }
         consecutivePollErrors = 0;
         renderLaunchState(snapshot, launchContext, "");
 
         var session = snapshot.session || {};
         if (session.status === "healthy" && session.open_path) {
+          launchContext.openPath = session.open_path;
+          launchMetadataPersist(launchContext.reference, session.open_path);
           await waitForMinimumLaunchDisplay(launchContext, snapshot);
           if (launchContext.token !== activeLaunchToken) {
             return null;
@@ -1297,6 +1403,7 @@ func consoleLoaderScript() string {
       token: ++activeLaunchToken,
       label: label || reference,
       reference: reference,
+      openPath: "",
       requestedAt: Date.now(),
       jobID: "",
       pollAfterMs: 350,
@@ -1324,6 +1431,10 @@ func consoleLoaderScript() string {
     launchContext.jobID = result.job && result.job.job_id ? result.job.job_id : "";
     if (result.poll_after_ms) {
       launchContext.pollAfterMs = result.poll_after_ms;
+    }
+    if (result.open_path) {
+      launchContext.openPath = result.open_path;
+      launchMetadataPersist(reference, result.open_path);
     }
     renderLaunchState({ session: result.execution || { status: "launch_requested" }, events: [] }, launchContext, "");
     return waitForExecution(result.projection, launchContext);
