@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Read Models</h2>
+  <p>Read models are the views a system serves so people and agents can see current state. This page emphasizes the question each model answers before the raw route shape.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/read-models">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search read models...">
+  {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
+  <button type="submit">Search</button>
+</form>
+
+{{if .Projections}}
+<ul class="resource-list">
+  {{range .Projections}}
+  <li class="resource-item">
+    <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    <div class="meta">
+      <span>{{.SeedID}}</span>
+      <span>{{.RealizationID}}</span>
+      <span>{{.Freshness}}</span>
+    </div>
+    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{else}}<div class="summary">Read model exposed through the registry catalog.</div>{{end}}
+    {{if .Path}}<div class="read-only-notice">Authoritative route: <span class="api-route">{{.Path}}</span></div>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No read models found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

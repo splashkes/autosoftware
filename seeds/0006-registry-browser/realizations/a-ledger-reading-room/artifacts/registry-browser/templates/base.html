@@ -1,0 +1,37 @@
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} - Ledger Reading Room</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1><a href="/">Ledger Reading Room</a></h1>
+      <nav>
+        <a class="{{if eq .Nav "systems"}}active{{end}}" href="/systems">Systems</a>
+        <a class="{{if eq .Nav "objects"}}active{{end}}" href="/objects">Governed Things</a>
+        <a class="{{if eq .Nav "actions"}}active{{end}}" href="/actions">Actions</a>
+        <a class="{{if eq .Nav "read-models"}}active{{end}}" href="/read-models">Read Models</a>
+        <a class="{{if eq .Nav "contracts"}}active{{end}}" href="/contracts">Contracts</a>
+        <a class="{{if eq .Nav "registry-internals"}}active{{end}}" href="/registry-internals">Registry Internals</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      {{template "content" .}}
+    </div>
+  </main>
+  <footer>
+    <div class="container">
+      <p>Read-only human-facing view of accepted registry state. Agents should use the <a href="/v1/registry/catalog">authoritative API</a> directly.</p>
+    </div>
+  </footer>
+</body>
+</html>
+{{end}}
+
+{{define "content"}}{{end}}

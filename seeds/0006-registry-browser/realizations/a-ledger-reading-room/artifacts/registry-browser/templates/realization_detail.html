@@ -1,0 +1,92 @@
+{{define "content"}}
+{{$r := .Realization}}
+<div class="page-head">
+  <h2>{{$r.RealizationID}}</h2>
+  <p>{{$r.Summary}}</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>Contract Identity</h3>
+  <table class="field-table">
+    <tr><td>Reference</td><td>{{$r.Reference}}</td></tr>
+    <tr><td>Seed</td><td>{{$r.SeedID}}</td></tr>
+    <tr><td>Realization</td><td>{{$r.RealizationID}}</td></tr>
+    <tr><td>Approach</td><td>{{$r.ApproachID}}</td></tr>
+    <tr><td>Status</td><td>{{$r.Status}}</td></tr>
+    <tr><td>Surface Kind</td><td>{{$r.SurfaceKind}}</td></tr>
+    <tr><td>Contract</td><td><a href="{{$r.Contract}}">{{$r.ContractFile}}</a></td></tr>
+  </table>
+</div>
+
+{{if $r.AuthModes}}
+<div class="detail-section">
+  <h3>Auth Modes</h3>
+  {{range $r.AuthModes}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+{{if $r.Capabilities}}
+<div class="detail-section">
+  <h3>Capabilities</h3>
+  {{range $r.Capabilities}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+{{if $r.Objects}}
+<div class="detail-section">
+  <h3>Governed Things</h3>
+  <ul class="resource-list">
+    {{range $r.Objects}}
+    <li class="resource-item">
+      <a href="/objects/{{pathEscape $r.SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $r.Commands}}
+<div class="detail-section">
+  <h3>Actions</h3>
+  <ul class="resource-list">
+    {{range $r.Commands}}
+    <li class="resource-item">
+      <a href="/actions/{{pathEscape $r.Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $r.Projections}}
+<div class="detail-section">
+  <h3>Read Models</h3>
+  <ul class="resource-list">
+    {{range $r.Projections}}
+    <li class="resource-item">
+      <a href="/read-models/{{pathEscape $r.Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .Schemas}}
+<div class="detail-section">
+  <h3>Governing Schemas</h3>
+  <ul class="resource-list">
+    {{range .Schemas}}
+    <li class="resource-item">
+      <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+      <div class="meta">
+        <span>{{.ObjectUseCount}} object uses</span>
+        <span>{{.CommandInputCount}} command inputs</span>
+        <span>{{.CommandResultCount}} command results</span>
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

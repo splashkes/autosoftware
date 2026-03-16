@@ -1,0 +1,89 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Ledger Reading Room</h2>
+  <p>The registry is a ledger of software systems, the things they govern, the actions they permit, the read models they expose, and the contracts that define them. Everything here is read-only.</p>
+</div>
+
+<div class="card-grid">
+  <a href="/systems" class="card">
+    <div class="count">{{len .DomainSystems}}</div>
+    <div class="label">{{plural (len .DomainSystems) "System" "Systems"}}</div>
+  </a>
+  <a href="/objects" class="card">
+    <div class="count">{{.Summary.Objects}}</div>
+    <div class="label">Governed Things</div>
+  </a>
+  <a href="/actions" class="card">
+    <div class="count">{{.Summary.Commands}}</div>
+    <div class="label">Actions</div>
+  </a>
+  <a href="/read-models" class="card">
+    <div class="count">{{.Summary.Projections}}</div>
+    <div class="label">Read Models</div>
+  </a>
+  <a href="/contracts" class="card">
+    <div class="count">{{.Summary.Realizations}}</div>
+    <div class="label">Contracts</div>
+  </a>
+  <a href="/registry-internals" class="card">
+    <div class="count">{{len .InternalSystems}}</div>
+    <div class="label">Registry Internals</div>
+  </a>
+</div>
+
+{{if .DomainSystems}}
+<div class="detail-section">
+  <h3>Systems</h3>
+  <ul class="resource-list">
+    {{range .DomainSystems}}
+    <li class="resource-item">
+      <a href="/systems/{{pathEscape .SeedID}}" class="name">{{.Title}}</a>
+      <div class="meta">
+        <span>{{.SeedID}}</span>
+        {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}
+        <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+        <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
+        <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
+      </div>
+      <div class="summary">{{.Summary}}</div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .InternalSystems}}
+<div class="detail-section">
+  <h3>Registry Internals</h3>
+  <p class="read-only-notice">The registry also describes itself. Those meta resources are separated here so they do not overwhelm the default browse layer.</p>
+  <ul class="resource-list">
+    {{range .InternalSystems}}
+    <li class="resource-item">
+      <a href="/registry-internals" class="name">{{.Title}}</a>
+      <div class="meta">
+        <span>{{.SeedID}}</span>
+        <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+        <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
+        <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
+      </div>
+      <div class="summary">{{.Summary}}</div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+<div class="agent-box">
+  <h3>For Agents</h3>
+  <p>Do not scrape this browser. Use the registry API directly:</p>
+  <pre>GET /v1/registry/catalog</pre>
+  <p>The catalog returns all available resources with discovery links. From there, follow the list and detail routes for each resource type:</p>
+  <pre>GET /v1/registry/objects
+GET /v1/registry/object?seed_id=...&amp;kind=...
+GET /v1/registry/schemas
+GET /v1/registry/schema?ref=...
+GET /v1/registry/realizations
+GET /v1/registry/realization?reference=...</pre>
+  <p>When stricter ledger-backed routes exist, use <code>GET /v1/registry/status</code> as the discovery root instead.</p>
+</div>
+{{end}}

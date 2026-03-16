@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="page-head">
+  <h2>Schemas</h2>
+  <p>Schemas define the structure and meaning of registry objects and command payloads.</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<form class="search-bar" method="get" action="/schemas">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search schemas...">
+  {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
+  <button type="submit">Search</button>
+</form>
+
+{{if .Schemas}}
+<ul class="resource-list">
+  {{range .Schemas}}
+  <li class="resource-item">
+    <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+    <div class="meta">
+      <span>{{.ObjectUseCount}} {{plural .ObjectUseCount "object use" "object uses"}}</span>
+      <span>{{.CommandInputCount}} {{plural .CommandInputCount "command input" "command inputs"}}</span>
+      <span>{{.CommandResultCount}} {{plural .CommandResultCount "command result" "command results"}}</span>
+    </div>
+    {{if .Anchor}}<div class="summary">Anchor: {{.Anchor}}</div>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="empty">No schemas found.{{if .Query}} Try a different search.{{end}}</div>
+{{end}}
+{{end}}

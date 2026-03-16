@@ -1,0 +1,69 @@
+{{define "content"}}
+{{$s := .Schema}}
+<div class="page-head">
+  <h2>{{$s.Ref}}</h2>
+  {{if $s.Anchor}}<p>Anchor: {{$s.Anchor}}</p>{{end}}
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>Identity</h3>
+  <table class="field-table">
+    <tr><td>Ref</td><td>{{$s.Ref}}</td></tr>
+    <tr><td>Path</td><td>{{$s.Path}}</td></tr>
+    {{if $s.Anchor}}<tr><td>Anchor</td><td>{{$s.Anchor}}</td></tr>{{end}}
+  </table>
+</div>
+
+{{if $s.ObjectUses}}
+<div class="detail-section">
+  <h3>Object Uses</h3>
+  <ul class="resource-list">
+    {{range $s.ObjectUses}}
+    <li class="resource-item">
+      <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <div class="meta">
+        <span>{{.SeedID}}</span>
+        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.CommandInputs}}
+<div class="detail-section">
+  <h3>Command Inputs</h3>
+  <ul class="resource-list">
+    {{range $s.CommandInputs}}
+    <li class="resource-item">
+      <a href="/commands/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.SeedID}}</span>
+        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $s.CommandResults}}
+<div class="detail-section">
+  <h3>Command Results</h3>
+  <ul class="resource-list">
+    {{range $s.CommandResults}}
+    <li class="resource-item">
+      <a href="/commands/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.SeedID}}</span>
+        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

@@ -1,6 +1,6 @@
 # Ledger Reading Room Realization
 
-This realization is a refinement of the registry browser seed.
+This realization is a runnable refinement of the registry browser seed.
 
 It keeps the current authoritative browser intact and proposes a second,
 human-first reading room built on the same accepted registry state.

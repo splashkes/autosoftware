@@ -1,0 +1,50 @@
+{{define "content"}}
+{{$c := .Command}}
+<div class="page-head">
+  <h2>{{$c.Name}}</h2>
+  <p>{{$c.Summary}}</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>What This Action Is</h3>
+  <table class="field-table">
+    <tr><td>Name</td><td>{{$c.Name}}</td></tr>
+    <tr><td>Seed</td><td>{{$c.SeedID}}</td></tr>
+    <tr><td>Contract</td><td><a href="/contracts/{{pathEscape $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
+    <tr><td>Path</td><td><code>{{$c.Path}}</code></td></tr>
+    <tr><td>Idempotency</td><td>{{$c.Idempotency}}</td></tr>
+    <tr><td>Consistency</td><td>{{$c.Consistency}}</td></tr>
+    <tr><td>Contract</td><td><a href="{{$c.Contract}}">{{$c.ContractFile}}</a></td></tr>
+  </table>
+</div>
+
+{{if $c.AuthModes}}
+<div class="detail-section">
+  <h3>Auth Modes</h3>
+  {{range $c.AuthModes}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+{{if $c.Capabilities}}
+<div class="detail-section">
+  <h3>Capabilities</h3>
+  {{range $c.Capabilities}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+<div class="detail-section">
+  <h3>Schemas</h3>
+  <table class="field-table">
+    {{if $c.InputSchemaRef}}<tr><td>Input Schema</td><td><a href="/schemas/detail?ref={{queryEscape $c.InputSchemaRef}}">{{$c.InputSchemaRef}}</a></td></tr>{{end}}
+    {{if $c.ResultSchemaRef}}<tr><td>Result Schema</td><td><a href="/schemas/detail?ref={{queryEscape $c.ResultSchemaRef}}">{{$c.ResultSchemaRef}}</a></td></tr>{{end}}
+  </table>
+</div>
+
+{{if $c.Projection}}
+<div class="detail-section">
+  <h3>Resulting Read Model</h3>
+  <p><a href="/read-models/{{pathEscape $c.Reference}}/{{pathEscape $c.Projection}}">{{$c.Projection}}</a></p>
+</div>
+{{end}}
+{{end}}

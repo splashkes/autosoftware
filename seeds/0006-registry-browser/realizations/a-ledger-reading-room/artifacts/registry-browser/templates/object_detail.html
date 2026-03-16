@@ -1,0 +1,91 @@
+{{define "content"}}
+{{$o := .Object}}
+<div class="page-head">
+  <h2>{{$o.Kind}}</h2>
+  <p>{{$o.Summary}}</p>
+  <span class="api-route">GET {{.APIRoute}}</span>
+</div>
+
+<div class="detail-section">
+  <h3>What This Thing Is</h3>
+  <table class="field-table">
+    <tr><td>Seed</td><td>{{$o.SeedID}}</td></tr>
+    <tr><td>Kind</td><td>{{$o.Kind}}</td></tr>
+  </table>
+</div>
+
+{{if $o.Capabilities}}
+<div class="detail-section">
+  <h3>Capabilities</h3>
+  {{range $o.Capabilities}}<span class="tag">{{.}}</span>{{end}}
+</div>
+{{end}}
+
+{{if $o.Schemas}}
+<div class="detail-section">
+  <h3>Governing Schemas</h3>
+  <ul class="resource-list">
+    {{range $o.Schemas}}
+    <li class="resource-item">
+      <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Realizations}}
+<div class="detail-section">
+  <h3>Contracts</h3>
+  <ul class="resource-list">
+    {{range $o.Realizations}}
+    <li class="resource-item">
+      <a href="/contracts/{{pathEscape .Reference}}" class="name">{{.RealizationID}}</a>
+      <div class="meta">
+        <span>{{.Status}}</span>
+        <span>{{.SurfaceKind}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Commands}}
+<div class="detail-section">
+  <h3>Actions</h3>
+  <ul class="resource-list">
+    {{range $o.Commands}}
+    <li class="resource-item">
+      <a href="/actions/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.Projections}}
+<div class="detail-section">
+  <h3>Read Models</h3>
+  <ul class="resource-list">
+    {{range $o.Projections}}
+    <li class="resource-item">
+      <a href="/read-models/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <div class="meta">
+        <span>{{.RealizationID}}</span>
+        <span>{{.Freshness}}</span>
+        {{if .Path}}<span class="api-route">{{.Path}}</span>{{end}}
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}
