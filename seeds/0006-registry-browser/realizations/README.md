@@ -2,9 +2,12 @@
 
 `realizations/` holds compiled intent for the registry browser seed.
 
-The first planned realization is `a-authoritative-browser`, a read-only
-browser that makes authoritative registry state understandable to both humans
-and agents.
+Current planned realizations:
+
+- `a-authoritative-browser`, a direct read-only catalog browser that keeps the
+  authoritative routes close to the surface
+- `a-ledger-reading-room`, a refinement realization that reorganizes the same
+  registry state for human understanding without changing kernel behavior
 
 Every realization intended to run must include:
 

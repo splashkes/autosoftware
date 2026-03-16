@@ -17,3 +17,9 @@ Primary surfaces in this seed:
 - explicit API guidance so agents can use the same information without
   scraping HTML
 
+Current planned realizations:
+
+- `a-authoritative-browser` as the direct catalog browser
+- `a-ledger-reading-room` as a human-first refinement that reorganizes the
+  same accepted registry state around systems, governed things, actions, read
+  models, contracts, and registry internals

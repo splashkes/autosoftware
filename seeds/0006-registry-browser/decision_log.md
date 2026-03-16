@@ -91,3 +91,22 @@ Reason:
 Rejected alternative:
 
 - silent omission with no visibility explanation
+
+## Human Legibility Gets Its Own Refinement Realization
+
+The seed should keep the direct catalog browser and add a second realization
+that behaves like a public ledger reading room.
+
+Reason:
+
+- people first ask what software exists and what it governs, not which
+  realization or projection names exist
+- trust comes from understandable relationships and provenance, not from raw
+  route density
+- the direct authoritative browser remains useful for exact catalog inspection
+  and agent parity
+
+Rejected alternative:
+
+- replacing the current realization instead of preserving it and adding a
+  refinement
