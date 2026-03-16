@@ -79,6 +79,12 @@ Launch health checks are owned by `execd`, not by the browser. Use
 new realization to become healthy before marking the launch failed. The current
 DOKS manifest sets this to `180`.
 
+Because `registryd` and `apid` run as separate services in DOKS, launched
+realizations must receive service-reachable capability URLs rather than the raw
+listener addresses. The production stack now sets
+`AS_EXECD_REGISTRY_BASE_URL`, `AS_EXECD_PUBLIC_API_BASE_URL`, and
+`AS_EXECD_INTERNAL_API_BASE_URL` for `execd`.
+
 Healthy realizations are kept hot until one of these happens:
 
 - an operator explicitly stops the execution

@@ -22,3 +22,25 @@ func TestHTTPBaseURLFromAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestCapabilityBaseURLPrefersExplicitURL(t *testing.T) {
+	t.Setenv("AS_EXECD_REGISTRY_BASE_URL", "http://as-registryd.autosoftware.svc.cluster.local")
+	t.Setenv("AS_REGISTRYD_ADDR", ":8093")
+
+	got := capabilityBaseURL("AS_EXECD_REGISTRY_BASE_URL", "AS_REGISTRYD_ADDR", "127.0.0.1:8093")
+	want := "http://as-registryd.autosoftware.svc.cluster.local"
+	if got != want {
+		t.Fatalf("capabilityBaseURL(explicit) = %q, want %q", got, want)
+	}
+}
+
+func TestCapabilityBaseURLFallsBackToAddress(t *testing.T) {
+	t.Setenv("AS_EXECD_REGISTRY_BASE_URL", "")
+	t.Setenv("AS_REGISTRYD_ADDR", ":8093")
+
+	got := capabilityBaseURL("AS_EXECD_REGISTRY_BASE_URL", "AS_REGISTRYD_ADDR", "127.0.0.1:8093")
+	want := "http://127.0.0.1:8093"
+	if got != want {
+		t.Fatalf("capabilityBaseURL(addr) = %q, want %q", got, want)
+	}
+}
