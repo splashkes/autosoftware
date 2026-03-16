@@ -179,7 +179,7 @@ func (w *LocalWorker) handleLaunch(ctx context.Context, job interactions.Job) er
 		return err
 	}
 
-	healthCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	healthCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	if err := WaitForHealthy(healthCtx, spec.UpstreamAddr); err != nil {
 		_, _ = w.Runtime.UpdateRealizationExecution(ctx, executionID, interactions.UpdateRealizationExecutionInput{

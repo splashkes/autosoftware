@@ -202,11 +202,11 @@ func WaitForHealthy(ctx context.Context, upstreamAddr string) error {
 	deadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
 	}
 	if deadline.IsZero() {
-		deadline = time.Now().Add(15 * time.Second)
+		deadline = time.Now().Add(60 * time.Second)
 	}
 
 	candidates := []string{"http://" + upstreamAddr + "/healthz", "http://" + upstreamAddr + "/"}
