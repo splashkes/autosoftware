@@ -60,7 +60,6 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ vars.AS_IMAGE_REPOSITORY }}:main
             ${{ vars.AS_IMAGE_REPOSITORY }}:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -80,6 +79,12 @@ jobs:
           echo "image_ref=${IMAGE_REPOSITORY}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "image_digest=${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           printf 'Built image: %s@%s\n' "$IMAGE_REPOSITORY" "$IMAGE_DIGEST"
+          {
+            echo "## AS Production Image"
+            echo
+            echo "- tag: \`${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}\`"
+            echo "- digest: \`${IMAGE_REPOSITORY}@${IMAGE_DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-as-production:
     needs:
