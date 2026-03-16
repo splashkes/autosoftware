@@ -93,16 +93,28 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 			Realizations int `json:"realizations"`
 		} `json:"summary"`
 		Realizations []struct {
-			Self string `json:"self"`
+			Self         string `json:"self"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
 		} `json:"realizations"`
 		Commands []struct {
-			Self string `json:"self"`
+			Self         string `json:"self"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
 		} `json:"commands"`
 		Projections []struct {
-			Self string `json:"self"`
+			Self         string `json:"self"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
 		} `json:"projections"`
 		Objects []struct {
-			Self string `json:"self"`
+			Self         string `json:"self"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
 		} `json:"objects"`
 	}
 	if err := json.Unmarshal(catalogRec.Body.Bytes(), &catalogPayload); err != nil {
@@ -114,14 +126,35 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if catalogPayload.Realizations[0].Self != "/v1/registry/realization?reference=1234-demo%2Fa-test" {
 		t.Fatalf("unexpected realization self %q", catalogPayload.Realizations[0].Self)
 	}
+	if catalogPayload.Realizations[0].CanonicalURL != "/contracts/1234-demo%2Fa-test" {
+		t.Fatalf("unexpected realization canonical url %q", catalogPayload.Realizations[0].CanonicalURL)
+	}
+	if !strings.HasPrefix(catalogPayload.Realizations[0].PermalinkURL, "/@sha256-") || !strings.HasSuffix(catalogPayload.Realizations[0].PermalinkURL, catalogPayload.Realizations[0].CanonicalURL) {
+		t.Fatalf("unexpected realization permalink %q", catalogPayload.Realizations[0].PermalinkURL)
+	}
+	if catalogPayload.Realizations[0].ContentHash == "" {
+		t.Fatal("expected realization content hash")
+	}
 	if catalogPayload.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
 		t.Fatalf("unexpected command self %q", catalogPayload.Commands[0].Self)
+	}
+	if catalogPayload.Commands[0].CanonicalURL != "/actions/1234-demo%2Fa-test/tickets.create" {
+		t.Fatalf("unexpected command canonical url %q", catalogPayload.Commands[0].CanonicalURL)
+	}
+	if catalogPayload.Commands[0].ContentHash == "" {
+		t.Fatal("expected command content hash")
 	}
 	if catalogPayload.Projections[0].Self != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
 		t.Fatalf("unexpected projection self %q", catalogPayload.Projections[0].Self)
 	}
+	if catalogPayload.Projections[0].CanonicalURL != "/read-models/1234-demo%2Fa-test/tickets.detail" {
+		t.Fatalf("unexpected projection canonical url %q", catalogPayload.Projections[0].CanonicalURL)
+	}
 	if catalogPayload.Objects[0].Self != "/v1/registry/object?seed_id=1234-demo&kind=ticket" {
 		t.Fatalf("unexpected object self %q", catalogPayload.Objects[0].Self)
+	}
+	if catalogPayload.Objects[0].CanonicalURL != "/objects/1234-demo/ticket" {
+		t.Fatalf("unexpected object canonical url %q", catalogPayload.Objects[0].CanonicalURL)
 	}
 
 	realizationReq := httptest.NewRequest(http.MethodGet, "/v1/registry/realization?reference=1234-demo%2Fa-test", nil)
@@ -133,8 +166,11 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 
 	var realizationPayload struct {
 		Realization struct {
-			Reference string `json:"reference"`
-			Commands  []struct {
+			Reference    string `json:"reference"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
+			Commands     []struct {
 				Self string `json:"self"`
 			} `json:"commands"`
 		} `json:"realization"`
@@ -148,6 +184,15 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if realizationPayload.Realization.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
 		t.Fatalf("unexpected realization command self %q", realizationPayload.Realization.Commands[0].Self)
 	}
+	if realizationPayload.Realization.CanonicalURL != "/contracts/1234-demo%2Fa-test" {
+		t.Fatalf("unexpected realization detail canonical url %q", realizationPayload.Realization.CanonicalURL)
+	}
+	if realizationPayload.Realization.ContentHash != catalogPayload.Realizations[0].ContentHash {
+		t.Fatalf("realization detail hash %q does not match catalog hash %q", realizationPayload.Realization.ContentHash, catalogPayload.Realizations[0].ContentHash)
+	}
+	if realizationPayload.Realization.PermalinkURL != catalogPayload.Realizations[0].PermalinkURL {
+		t.Fatalf("realization detail permalink %q does not match catalog permalink %q", realizationPayload.Realization.PermalinkURL, catalogPayload.Realizations[0].PermalinkURL)
+	}
 
 	commandReq := httptest.NewRequest(http.MethodGet, "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create", nil)
 	commandRec := httptest.NewRecorder()
@@ -160,6 +205,9 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 		Command struct {
 			Name           string `json:"name"`
 			ProjectionSelf string `json:"projection_self"`
+			CanonicalURL   string `json:"canonical_url"`
+			PermalinkURL   string `json:"permalink_url"`
+			ContentHash    string `json:"content_hash"`
 		} `json:"command"`
 	}
 	if err := json.Unmarshal(commandRec.Body.Bytes(), &commandPayload); err != nil {
@@ -171,6 +219,12 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if commandPayload.Command.ProjectionSelf != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
 		t.Fatalf("unexpected projection self %q", commandPayload.Command.ProjectionSelf)
 	}
+	if commandPayload.Command.CanonicalURL != "/actions/1234-demo%2Fa-test/tickets.create" {
+		t.Fatalf("unexpected command detail canonical url %q", commandPayload.Command.CanonicalURL)
+	}
+	if commandPayload.Command.ContentHash != catalogPayload.Commands[0].ContentHash {
+		t.Fatalf("command detail hash %q does not match catalog hash %q", commandPayload.Command.ContentHash, catalogPayload.Commands[0].ContentHash)
+	}
 
 	objectReq := httptest.NewRequest(http.MethodGet, "/v1/registry/object?seed_id=1234-demo&kind=ticket", nil)
 	objectRec := httptest.NewRecorder()
@@ -181,8 +235,11 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 
 	var objectPayload struct {
 		Object struct {
-			Kind    string `json:"kind"`
-			Schemas []struct {
+			Kind         string `json:"kind"`
+			CanonicalURL string `json:"canonical_url"`
+			PermalinkURL string `json:"permalink_url"`
+			ContentHash  string `json:"content_hash"`
+			Schemas      []struct {
 				Self string `json:"self"`
 			} `json:"schemas"`
 			Commands []struct {
@@ -202,6 +259,12 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if objectPayload.Object.Schemas[0].Self != "/v1/registry/schema?ref=seeds%2F1234-demo%2Fdesign.md%23ticket" {
 		t.Fatalf("unexpected schema self %q", objectPayload.Object.Schemas[0].Self)
 	}
+	if objectPayload.Object.CanonicalURL != "/objects/1234-demo/ticket" {
+		t.Fatalf("unexpected object detail canonical url %q", objectPayload.Object.CanonicalURL)
+	}
+	if objectPayload.Object.ContentHash != catalogPayload.Objects[0].ContentHash {
+		t.Fatalf("object detail hash %q does not match catalog hash %q", objectPayload.Object.ContentHash, catalogPayload.Objects[0].ContentHash)
+	}
 
 	schemaReq := httptest.NewRequest(http.MethodGet, "/v1/registry/schema?ref=seeds%2F1234-demo%2Fdesign.md%23ticket-input", nil)
 	schemaRec := httptest.NewRecorder()
@@ -213,6 +276,9 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	var schemaPayload struct {
 		Schema struct {
 			Ref           string `json:"ref"`
+			CanonicalURL  string `json:"canonical_url"`
+			PermalinkURL  string `json:"permalink_url"`
+			ContentHash   string `json:"content_hash"`
 			CommandInputs []struct {
 				Name string `json:"name"`
 			} `json:"command_inputs"`
@@ -226,6 +292,12 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	}
 	if len(schemaPayload.Schema.CommandInputs) != 1 {
 		t.Fatalf("expected 1 input use, got %d", len(schemaPayload.Schema.CommandInputs))
+	}
+	if schemaPayload.Schema.CanonicalURL != "/schemas/detail?ref=seeds%2F1234-demo%2Fdesign.md%23ticket-input" {
+		t.Fatalf("unexpected schema detail canonical url %q", schemaPayload.Schema.CanonicalURL)
+	}
+	if schemaPayload.Schema.ContentHash == "" {
+		t.Fatal("expected schema content hash")
 	}
 }
 
