@@ -210,7 +210,7 @@ func TestMountedRealizationContentSecurityPolicyAllowsCurrentRealizationAssets(t
 	wantContains := []string{
 		"default-src 'self'",
 		"img-src 'self' data: https:",
-		"script-src 'self' 'unsafe-inline' https://unpkg.com",
+		"script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com",
 		"style-src 'self' 'unsafe-inline'",
 	}
 	for _, want := range wantContains {
