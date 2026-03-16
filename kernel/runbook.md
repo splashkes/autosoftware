@@ -74,6 +74,80 @@ In DOKS, keep `webd` and `execd` in the same pod and set
 `autosoftware.app` can launch realizations and bind their preview and stable
 routes.
 
+Launch health checks are owned by `execd`, not by the browser. Use
+`AS_EXECUTION_HEALTH_TIMEOUT_SECONDS` to control how long `execd` waits for a
+new realization to become healthy before marking the launch failed. The current
+DOKS manifest sets this to `180`.
+
+Healthy realizations are kept hot until one of these happens:
+
+- an operator explicitly stops the execution
+- the process exits or is terminated by execution budget enforcement
+- the pod restarts and `execd` reconciles runtime state on startup
+
+There is no separate idle timeout that shuts down healthy realizations.
+
+## Production Release
+
+The AS production stack is released from GitHub Actions, not from an operator's
+local shell.
+
+Canonical workflow:
+
+- merge to `main` through a PR
+- GitHub Actions builds one kernel image with `docker buildx`
+- the workflow pushes a SHA-tagged image to the configured registry repository
+- the workflow records the immutable digest and deploys by digest
+- Kubernetes manifests are rendered from templates in `deploy/doks/`
+- the deploy job verifies cluster services through Kubernetes port-forwards
+  instead of probing the public Cloudflare edge
+
+Workflow file:
+
+- `.github/workflows/as-prod-release.yml`
+
+### GitHub configuration split
+
+Keep production config out of the repo.
+
+Environment secrets:
+
+- `DIGITALOCEAN_ACCESS_TOKEN`
+- `AS_KUBECONFIG_B64`
+- `AS_RUNTIME_DATABASE_URL`
+
+Environment vars:
+
+- `AS_IMAGE_REPOSITORY`
+- `AS_NAMESPACE`
+- `AS_BASE_DOMAIN`
+- `AS_WEB_HOST`
+- `AS_REGISTRY_HOST`
+- `AS_API_HOST`
+- `AS_GITHUB_URL`
+- `AS_IMAGE_PULL_SECRET`
+- `AS_EDGE_TLS_SECRET`
+
+Future additions that should also live in environment secrets:
+
+- `AS_INTERNAL_API_TOKEN`
+- TLS key material if certificate automation is added
+- realization-specific secret environment for shared deployments
+
+### DOKS topology
+
+The current AS deployment shape is:
+
+- `as-apid` Deployment + ClusterIP Service
+- `as-registryd` Deployment + ClusterIP Service
+- `as-materializerd` Deployment + ClusterIP Service
+- `as-webd` Deployment + ClusterIP Service
+- `webd` and `execd` run in the same `as-webd` pod
+
+`execd` is colocated with `webd` because the current shared execution path is
+still localhost-backed and source-launched. This is transitional. The longer-
+term target is packaged realization runtimes launched as separate workloads.
+
 ## Planned Operational Flow
 
 1. Prepare the founding seed and kernel configuration.

@@ -166,6 +166,26 @@ activated and its bindings are recorded in runtime state.
 **Code:** `kernel/internal/execution/local_worker.go`
 **Code:** `kernel/cmd/webd/main.go` — `dynamicRealizationRoutingMiddleware()`
 
+### Shared deployment note
+
+The current AS DOKS deployment still uses this same execution model in a
+transitional form:
+
+- the runtime image contains the repo tree
+- the runtime image contains the Go toolchain
+- `execd` is colocated with `webd` so localhost-backed upstreams are reachable
+- realizations are launched from source rather than from sealed packages
+
+This works, and it is now good enough for live execution, but it is not the
+final shared-environment architecture.
+
+The long-term target remains:
+
+- packaged realization artifacts or small per-realization images
+- separate workload identity per execution
+- executor-assigned capabilities and secret injection at launch time
+- no dependency on raw seed-authored `go run` in shared production
+
 ## 8. Registry and Acceptance
 
 The registry is not in the critical path of getting a realization running.
@@ -205,6 +225,7 @@ contract and the implementation in one pass.
 - Inspect action (materializes snapshot to disk)
 - Growth job enqueueing with full seed packet
 - Local kernel-managed execution via `realizations.launch`
+- Shared DOKS execution using the source-backed transitional executor model
 - Runtime-backed route bindings for preview and activated routes
 - Feedback loop (incidents, request events, test runs to Postgres)
 

@@ -56,6 +56,7 @@ func main() {
 	worker.Budgets.ConsecutiveBreaches = intEnv("AS_EXECUTION_BUDGET_STRIKES", worker.Budgets.ConsecutiveBreaches)
 	worker.Budgets.RemediationTarget = config.EnvOrDefault("AS_EXECUTION_REMEDIATION_TARGET", worker.Budgets.RemediationTarget)
 	worker.Budgets.RemediationHint = config.EnvOrDefault("AS_EXECUTION_REMEDIATION_HINT", worker.Budgets.RemediationHint)
+	worker.LaunchHealthTimeout = time.Duration(intEnv("AS_EXECUTION_HEALTH_TIMEOUT_SECONDS", int(worker.LaunchHealthTimeout/time.Second))) * time.Second
 
 	telemetry.NewServiceMonitor("execd", service).Start(ctx)
 

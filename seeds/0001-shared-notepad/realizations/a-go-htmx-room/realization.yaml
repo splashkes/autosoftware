@@ -1,12 +1,11 @@
 realization_id: a-go-htmx-room
 seed_id: 0001-shared-notepad
 approach_id: a-go-htmx-room
-summary: Boot surface with kernel dot, feedback loop, and sprout seed planting.
-status: draft
+summary: Retired legacy prototype that no longer represents the intended shared-notepad realization.
+status: retired
 subdomain: notepad
 path_prefix: /notepad/
 artifacts:
-  - artifacts/runtime.yaml
   - artifacts/notepad-app/go.mod
   - artifacts/notepad-app/main.go
   - artifacts/notepad-app/README.md

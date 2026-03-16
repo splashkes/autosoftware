@@ -137,6 +137,33 @@ A runtime database (Postgres) is optional and only needed for identity,
 sessions, and communications features. See [kernel/runbook.md](kernel/runbook.md)
 for configuration.
 
+## Production Shape
+
+`main` now includes a production release workflow for the AS stack:
+
+- build on push to `main` after PR merge
+- build one kernel image with `docker buildx`
+- push a SHA-tagged image to the configured registry repository
+- deploy by immutable image digest, not by mutable tag
+- keep deployment config in GitHub environment vars and secrets, not in the repo
+
+The production topology currently deployed from `main` is:
+
+- `as-webd`
+- `as-registryd`
+- `as-apid`
+- `as-materializerd`
+- `execd` colocated with `webd` in the same pod
+
+That last point matters. Realization execution in shared deployment is still
+source-backed today: the runtime image contains the repo tree and Go toolchain,
+and realizations are launched from source rather than from sealed per-
+realization images.
+
+See [kernel/runbook.md](kernel/runbook.md) for the operational release flow and
+[docs/seed_execution_model.md](docs/seed_execution_model.md) for the current
+execution model and its remaining gap to packaged realization runtimes.
+
 ## Learn More
 
 - [seeds/README.md](seeds/README.md) — seed model and authoring guide

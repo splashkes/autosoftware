@@ -62,6 +62,7 @@ func (api *ExecutionAPI) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	var input LaunchRealizationInput
 	if !decodeJSON(w, r, &input) {
 		return
@@ -136,11 +137,12 @@ func (api *ExecutionAPI) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	})
 
 	respondJSON(w, http.StatusOK, map[string]any{
-		"command":    "realizations.launch",
-		"job":        job,
-		"execution":  api.executionProjection(execRow, ""),
-		"projection": api.path("/projections/realization-execution/sessions/" + executionID),
-		"open_path":  previewPath,
+		"command":       "realizations.launch",
+		"job":           job,
+		"execution":     api.executionProjection(execRow, ""),
+		"projection":    api.path("/projections/realization-execution/sessions/" + executionID),
+		"open_path":     previewPath,
+		"poll_after_ms": 350,
 	})
 }
 
@@ -223,6 +225,7 @@ func (api *ExecutionAPI) handleSessions(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	items, err := api.Service.ListRealizationExecutions(r.Context(), strings.TrimSpace(r.URL.Query().Get("reference")), 50)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -241,6 +244,7 @@ func (api *ExecutionAPI) handleSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	item, err := api.Service.GetRealizationExecution(r.Context(), r.PathValue("execution_id"))
 	if err != nil {
 		writeRuntimeResult(w, nil, err)
@@ -263,6 +267,7 @@ func (api *ExecutionAPI) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	items, err := api.Service.ListRealizationRouteBindings(r.Context(), true)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
