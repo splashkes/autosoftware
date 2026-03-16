@@ -39,8 +39,8 @@ create index if not exists runtime_realization_execution_events_execution_idx
   on runtime_realization_execution_events (execution_id, occurred_at desc);
 
 create table if not exists runtime_realization_activation (
-  seed_id text primary key,
-  reference text not null,
+  reference text primary key,
+  seed_id text not null,
   execution_id text references runtime_realization_executions(execution_id) on delete set null,
   activated_by_principal_id text,
   activated_by_session_id text,
@@ -48,6 +48,15 @@ create table if not exists runtime_realization_activation (
   metadata jsonb not null default '{}'::jsonb,
   activated_at timestamptz not null default now()
 );
+
+alter table runtime_realization_activation
+  drop constraint if exists runtime_realization_activation_pkey;
+
+alter table runtime_realization_activation
+  add constraint runtime_realization_activation_pkey primary key (reference);
+
+create index if not exists runtime_realization_activation_seed_idx
+  on runtime_realization_activation (seed_id, activated_at desc);
 
 create index if not exists runtime_realization_activation_reference_idx
   on runtime_realization_activation (reference, activated_at desc);
@@ -72,6 +81,9 @@ create index if not exists runtime_realization_route_bindings_active_idx
 
 create index if not exists runtime_realization_route_bindings_execution_idx
   on runtime_realization_route_bindings (execution_id, status, updated_at desc);
+
+create index if not exists runtime_realization_route_bindings_reference_idx
+  on runtime_realization_route_bindings (reference, status, updated_at desc);
 
 create table if not exists runtime_process_samples (
   sample_id text primary key,

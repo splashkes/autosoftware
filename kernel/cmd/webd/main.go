@@ -1282,12 +1282,7 @@ func realizationRoutingMiddleware(
 		// Path prefix fallback.
 		for _, route := range routes {
 			if route.PathPrefix != "" && strings.HasPrefix(r.URL.Path, route.PathPrefix) {
-				r2 := r.Clone(r.Context())
-				r2.URL.Path = strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(route.PathPrefix, "/"))
-				if r2.URL.Path == "" {
-					r2.URL.Path = "/"
-				}
-				r2.URL.RawPath = ""
+				r2 := trimMountedRequestPrefix(r, route.PathPrefix)
 				proxyToMountedRealization(route, route.PathPrefix, w, r2)
 				return
 			}
@@ -1564,6 +1559,22 @@ func proxyToMountedRealization(route realizationRoute, mountPrefix string, w htt
 		},
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+func trimMountedRequestPrefix(r *http.Request, mountPrefix string) *http.Request {
+	r2 := r.Clone(r.Context())
+	trimmedPrefix := strings.TrimSuffix(mountPrefix, "/")
+	r2.URL.Path = strings.TrimPrefix(r.URL.Path, trimmedPrefix)
+	if r2.URL.Path == "" {
+		r2.URL.Path = "/"
+	}
+	if r.URL.RawPath != "" {
+		r2.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, trimmedPrefix)
+		if r2.URL.RawPath == "" {
+			r2.URL.RawPath = "/"
+		}
+	}
+	return r2
 }
 
 func externalRequestScheme(r *http.Request) string {

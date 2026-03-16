@@ -246,12 +246,12 @@ func (w *LocalWorker) handleLaunch(ctx context.Context, job interactions.Job) er
 	})
 
 	if w.AutoActivate {
-		if _, err := w.Runtime.GetRealizationActivation(ctx, execution.SeedID); errors.Is(err, interactions.ErrNotFound) {
+		if _, err := w.Runtime.GetRealizationActivation(ctx, execution.Reference); errors.Is(err, interactions.ErrNotFound) {
 			_, _ = w.Runtime.ActivateRealization(ctx, interactions.ActivateRealizationInput{
 				SeedID:      execution.SeedID,
 				Reference:   execution.Reference,
 				ExecutionID: execution.ExecutionID,
-				Metadata:    map[string]interface{}{"reason": "first_healthy_execution"},
+				Metadata:    map[string]interface{}{"reason": "first_healthy_execution_for_reference"},
 			})
 		}
 	}
@@ -284,10 +284,10 @@ func (w *LocalWorker) handleStop(ctx context.Context, job interactions.Job) erro
 	if err != nil {
 		return err
 	}
-	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.SeedID); err == nil && activation.ExecutionID == executionID {
-		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.SeedID)
+	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.Reference); err == nil && activation.ExecutionID == executionID {
+		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.Reference)
 	}
-	_ = w.Runtime.DeleteStableRouteBindingsForSeed(ctx, execution.SeedID)
+	_ = w.Runtime.DeleteStableRouteBindingsForReference(ctx, execution.Reference)
 	_ = w.Runtime.DeleteRealizationRouteBindings(ctx, executionID)
 	delete(w.breachCounts, executionID)
 	return nil
@@ -306,9 +306,9 @@ func (w *LocalWorker) syncBindings(ctx context.Context, execution interactions.R
 		},
 	}
 
-	activation, err := w.Runtime.GetRealizationActivation(ctx, execution.SeedID)
+	activation, err := w.Runtime.GetRealizationActivation(ctx, execution.Reference)
 	if err == nil && activation.ExecutionID == execution.ExecutionID {
-		_ = w.Runtime.DeleteStableRouteBindingsForSeed(ctx, execution.SeedID)
+		_ = w.Runtime.DeleteStableRouteBindingsForReference(ctx, execution.Reference)
 		if spec.RouteSubdomain != "" {
 			bindings = append(bindings, interactions.RealizationRouteBindingInput{
 				ExecutionID:  execution.ExecutionID,
@@ -381,9 +381,9 @@ func (w *LocalWorker) handleProcessExit(executionID string, err error) {
 		},
 	})
 	_ = w.Runtime.DeleteRealizationRouteBindings(ctx, executionID)
-	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.SeedID); err == nil && activation.ExecutionID == executionID {
-		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.SeedID)
-		_ = w.Runtime.DeleteStableRouteBindingsForSeed(ctx, execution.SeedID)
+	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.Reference); err == nil && activation.ExecutionID == executionID {
+		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.Reference)
+		_ = w.Runtime.DeleteStableRouteBindingsForReference(ctx, execution.Reference)
 	}
 	_, _ = w.Runtime.UpsertRealizationSuspension(ctx, interactions.UpsertRealizationSuspensionInput{
 		SeedID:            execution.SeedID,
@@ -521,9 +521,9 @@ func (w *LocalWorker) terminateExecution(ctx context.Context, execution interact
 		RemediationHint:   firstNonEmpty(strings.TrimSpace(w.Budgets.RemediationHint), "Fix the realization, open a PR, and relaunch once merged."),
 		Metadata:          metadata,
 	})
-	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.SeedID); err == nil && activation.ExecutionID == execution.ExecutionID {
-		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.SeedID)
-		_ = w.Runtime.DeleteStableRouteBindingsForSeed(ctx, execution.SeedID)
+	if activation, err := w.Runtime.GetRealizationActivation(ctx, execution.Reference); err == nil && activation.ExecutionID == execution.ExecutionID {
+		_ = w.Runtime.DeleteRealizationActivation(ctx, execution.Reference)
+		_ = w.Runtime.DeleteStableRouteBindingsForReference(ctx, execution.Reference)
 	}
 	_ = w.Runtime.DeleteRealizationRouteBindings(ctx, execution.ExecutionID)
 	delete(w.breachCounts, execution.ExecutionID)

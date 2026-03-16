@@ -209,13 +209,13 @@ func (s *RuntimeService) ActivateRealization(ctx context.Context, input Activate
 	}
 	row := pool.QueryRow(ctx, `
 		insert into runtime_realization_activation (
-		  seed_id, reference, execution_id, activated_by_principal_id,
+		  reference, seed_id, execution_id, activated_by_principal_id,
 		  activated_by_session_id, request_id, metadata, activated_at
 		)
 		values ($1, $2, $3, $4, $5, $6, $7::jsonb, now())
-		on conflict (seed_id)
+		on conflict (reference)
 		do update set
-		  reference = excluded.reference,
+		  seed_id = excluded.seed_id,
 		  execution_id = excluded.execution_id,
 		  activated_by_principal_id = excluded.activated_by_principal_id,
 		  activated_by_session_id = excluded.activated_by_session_id,
@@ -224,13 +224,13 @@ func (s *RuntimeService) ActivateRealization(ctx context.Context, input Activate
 		  activated_at = excluded.activated_at
 		returning seed_id, reference, execution_id, activated_by_principal_id,
 		          activated_by_session_id, request_id, metadata::text, activated_at
-	`, input.SeedID, input.Reference, input.ExecutionID, nullString(input.ActivatedByPrincipalID),
+	`, input.Reference, input.SeedID, input.ExecutionID, nullString(input.ActivatedByPrincipalID),
 		nullString(input.ActivatedBySessionID), nullString(input.RequestID), jsonBytes(input.Metadata))
 	item, err := scanRealizationActivation(row)
 	return item, wrapErr("activate realization", err)
 }
 
-func (s *RuntimeService) GetRealizationActivation(ctx context.Context, seedID string) (RealizationActivation, error) {
+func (s *RuntimeService) GetRealizationActivation(ctx context.Context, reference string) (RealizationActivation, error) {
 	pool, err := expectReady(s)
 	if err != nil {
 		return RealizationActivation{}, err
@@ -239,18 +239,18 @@ func (s *RuntimeService) GetRealizationActivation(ctx context.Context, seedID st
 		select seed_id, reference, execution_id, activated_by_principal_id,
 		       activated_by_session_id, request_id, metadata::text, activated_at
 		from runtime_realization_activation
-		where seed_id = $1
-	`, strings.TrimSpace(seedID))
+		where reference = $1
+	`, strings.TrimSpace(reference))
 	item, err := scanRealizationActivation(row)
 	return item, wrapErr("get realization activation", err)
 }
 
-func (s *RuntimeService) DeleteRealizationActivation(ctx context.Context, seedID string) error {
+func (s *RuntimeService) DeleteRealizationActivation(ctx context.Context, reference string) error {
 	pool, err := expectReady(s)
 	if err != nil {
 		return err
 	}
-	_, err = pool.Exec(ctx, `delete from runtime_realization_activation where seed_id = $1`, strings.TrimSpace(seedID))
+	_, err = pool.Exec(ctx, `delete from runtime_realization_activation where reference = $1`, strings.TrimSpace(reference))
 	return wrapErr("delete realization activation", err)
 }
 
@@ -307,15 +307,15 @@ func (s *RuntimeService) ReplaceRealizationRouteBindings(ctx context.Context, ex
 	return items, nil
 }
 
-func (s *RuntimeService) DeleteStableRouteBindingsForSeed(ctx context.Context, seedID string) error {
+func (s *RuntimeService) DeleteStableRouteBindingsForReference(ctx context.Context, reference string) error {
 	pool, err := expectReady(s)
 	if err != nil {
 		return err
 	}
 	_, err = pool.Exec(ctx, `
 		delete from runtime_realization_route_bindings
-		where seed_id = $1 and binding_kind in ('stable_subdomain', 'stable_path')
-	`, strings.TrimSpace(seedID))
+		where reference = $1 and binding_kind in ('stable_subdomain', 'stable_path')
+	`, strings.TrimSpace(reference))
 	return wrapErr("delete stable route bindings", err)
 }
 

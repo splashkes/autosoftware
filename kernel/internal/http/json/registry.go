@@ -1,6 +1,9 @@
 package jsontransport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -272,6 +275,9 @@ type registryRealizationSummary struct {
 	CommandCount    int      `json:"command_count"`
 	ProjectionCount int      `json:"projection_count"`
 	Self            string   `json:"self"`
+	CanonicalURL    string   `json:"canonical_url"`
+	PermalinkURL    string   `json:"permalink_url"`
+	ContentHash     string   `json:"content_hash"`
 }
 
 type registryCommandSummary struct {
@@ -283,6 +289,9 @@ type registryCommandSummary struct {
 	InputSchemaRef  string `json:"input_schema_ref"`
 	ResultSchemaRef string `json:"result_schema_ref"`
 	Self            string `json:"self"`
+	CanonicalURL    string `json:"canonical_url"`
+	PermalinkURL    string `json:"permalink_url"`
+	ContentHash     string `json:"content_hash"`
 }
 
 type registryProjectionSummary struct {
@@ -293,6 +302,9 @@ type registryProjectionSummary struct {
 	Path          string `json:"path"`
 	Freshness     string `json:"freshness"`
 	Self          string `json:"self"`
+	CanonicalURL  string `json:"canonical_url"`
+	PermalinkURL  string `json:"permalink_url"`
+	ContentHash   string `json:"content_hash"`
 }
 
 type registryObjectSummary struct {
@@ -305,6 +317,9 @@ type registryObjectSummary struct {
 	CommandCount     int      `json:"command_count"`
 	ProjectionCount  int      `json:"projection_count"`
 	Self             string   `json:"self"`
+	CanonicalURL     string   `json:"canonical_url"`
+	PermalinkURL     string   `json:"permalink_url"`
+	ContentHash      string   `json:"content_hash"`
 }
 
 type registrySchemaSummary struct {
@@ -315,11 +330,15 @@ type registrySchemaSummary struct {
 	CommandInputCount  int    `json:"command_input_count"`
 	CommandResultCount int    `json:"command_result_count"`
 	Self               string `json:"self"`
+	CanonicalURL       string `json:"canonical_url"`
+	PermalinkURL       string `json:"permalink_url"`
+	ContentHash        string `json:"content_hash"`
 }
 
 func summarizeRealizations(items []registry.CatalogRealization) []registryRealizationSummary {
 	out := make([]registryRealizationSummary, 0, len(items))
 	for _, item := range items {
+		locator := realizationLocator(item)
 		out = append(out, registryRealizationSummary{
 			Reference:       item.Reference,
 			SeedID:          item.SeedID,
@@ -332,6 +351,9 @@ func summarizeRealizations(items []registry.CatalogRealization) []registryRealiz
 			CommandCount:    len(item.CommandNames),
 			ProjectionCount: len(item.Projections),
 			Self:            realizationSelfPath(item.Reference),
+			CanonicalURL:    locator.CanonicalURL,
+			PermalinkURL:    locator.PermalinkURL,
+			ContentHash:     locator.ContentHash,
 		})
 	}
 	return out
@@ -340,6 +362,7 @@ func summarizeRealizations(items []registry.CatalogRealization) []registryRealiz
 func summarizeCommands(items []registry.CatalogCommand) []registryCommandSummary {
 	out := make([]registryCommandSummary, 0, len(items))
 	for _, item := range items {
+		locator := commandLocator(item)
 		out = append(out, registryCommandSummary{
 			Reference:       item.Reference,
 			SeedID:          item.SeedID,
@@ -349,6 +372,9 @@ func summarizeCommands(items []registry.CatalogCommand) []registryCommandSummary
 			InputSchemaRef:  item.InputSchemaRef,
 			ResultSchemaRef: item.ResultSchemaRef,
 			Self:            commandSelfPath(item.Reference, item.Name),
+			CanonicalURL:    locator.CanonicalURL,
+			PermalinkURL:    locator.PermalinkURL,
+			ContentHash:     locator.ContentHash,
 		})
 	}
 	return out
@@ -357,6 +383,7 @@ func summarizeCommands(items []registry.CatalogCommand) []registryCommandSummary
 func summarizeProjections(items []registry.CatalogProjection) []registryProjectionSummary {
 	out := make([]registryProjectionSummary, 0, len(items))
 	for _, item := range items {
+		locator := projectionLocator(item)
 		out = append(out, registryProjectionSummary{
 			Reference:     item.Reference,
 			SeedID:        item.SeedID,
@@ -365,6 +392,9 @@ func summarizeProjections(items []registry.CatalogProjection) []registryProjecti
 			Path:          item.Path,
 			Freshness:     item.Freshness,
 			Self:          projectionSelfPath(item.Reference, item.Name),
+			CanonicalURL:  locator.CanonicalURL,
+			PermalinkURL:  locator.PermalinkURL,
+			ContentHash:   locator.ContentHash,
 		})
 	}
 	return out
@@ -373,6 +403,7 @@ func summarizeProjections(items []registry.CatalogProjection) []registryProjecti
 func summarizeObjects(items []registry.CatalogObject) []registryObjectSummary {
 	out := make([]registryObjectSummary, 0, len(items))
 	for _, item := range items {
+		locator := objectLocator(item)
 		out = append(out, registryObjectSummary{
 			SeedID:           item.SeedID,
 			Kind:             item.Kind,
@@ -383,6 +414,9 @@ func summarizeObjects(items []registry.CatalogObject) []registryObjectSummary {
 			CommandCount:     len(item.Commands),
 			ProjectionCount:  len(item.Projections),
 			Self:             objectSelfPath(item.SeedID, item.Kind),
+			CanonicalURL:     locator.CanonicalURL,
+			PermalinkURL:     locator.PermalinkURL,
+			ContentHash:      locator.ContentHash,
 		})
 	}
 	return out
@@ -391,6 +425,7 @@ func summarizeObjects(items []registry.CatalogObject) []registryObjectSummary {
 func summarizeSchemas(items []registry.CatalogSchema) []registrySchemaSummary {
 	out := make([]registrySchemaSummary, 0, len(items))
 	for _, item := range items {
+		locator := schemaLocator(item)
 		out = append(out, registrySchemaSummary{
 			Ref:                item.Ref,
 			Path:               item.Path,
@@ -399,12 +434,16 @@ func summarizeSchemas(items []registry.CatalogSchema) []registrySchemaSummary {
 			CommandInputCount:  len(item.CommandInputs),
 			CommandResultCount: len(item.CommandResults),
 			Self:               schemaSelfPath(item.Ref),
+			CanonicalURL:       locator.CanonicalURL,
+			PermalinkURL:       locator.PermalinkURL,
+			ContentHash:        locator.ContentHash,
 		})
 	}
 	return out
 }
 
 func detailRealization(item registry.CatalogRealization) map[string]any {
+	locator := realizationLocator(item)
 	objectLinks := make([]map[string]string, 0, len(item.ObjectKinds))
 	for _, kind := range item.ObjectKinds {
 		objectLinks = append(objectLinks, map[string]string{
@@ -446,10 +485,14 @@ func detailRealization(item registry.CatalogRealization) map[string]any {
 		"projections":    projectionLinks,
 		"contract":       "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
 		"self":           realizationSelfPath(item.Reference),
+		"canonical_url":  locator.CanonicalURL,
+		"permalink_url":  locator.PermalinkURL,
+		"content_hash":   locator.ContentHash,
 	}
 }
 
 func detailCommand(item registry.CatalogCommand) map[string]any {
+	locator := commandLocator(item)
 	inputSchema := ""
 	if item.InputSchemaRef != "" {
 		inputSchema = schemaSelfPath(item.InputSchemaRef)
@@ -483,10 +526,14 @@ func detailCommand(item registry.CatalogCommand) map[string]any {
 		"contract_file":     item.ContractFile,
 		"contract":          "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
 		"self":              commandSelfPath(item.Reference, item.Name),
+		"canonical_url":     locator.CanonicalURL,
+		"permalink_url":     locator.PermalinkURL,
+		"content_hash":      locator.ContentHash,
 	}
 }
 
 func detailProjection(item registry.CatalogProjection) map[string]any {
+	locator := projectionLocator(item)
 	return map[string]any{
 		"reference":      item.Reference,
 		"seed_id":        item.SeedID,
@@ -499,10 +546,14 @@ func detailProjection(item registry.CatalogProjection) map[string]any {
 		"contract_file":  item.ContractFile,
 		"contract":       "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
 		"self":           projectionSelfPath(item.Reference, item.Name),
+		"canonical_url":  locator.CanonicalURL,
+		"permalink_url":  locator.PermalinkURL,
+		"content_hash":   locator.ContentHash,
 	}
 }
 
 func detailObject(item registry.CatalogObject) map[string]any {
+	locator := objectLocator(item)
 	realizations := make([]map[string]any, 0, len(item.Realizations))
 	for _, entry := range item.Realizations {
 		realizations = append(realizations, map[string]any{
@@ -542,20 +593,24 @@ func detailObject(item registry.CatalogObject) map[string]any {
 	}
 
 	return map[string]any{
-		"seed_id":      item.SeedID,
-		"kind":         item.Kind,
-		"summary":      item.Summary,
-		"capabilities": item.Capabilities,
-		"schema_refs":  item.SchemaRefs,
-		"schemas":      schemaLinks,
-		"realizations": realizations,
-		"commands":     commands,
-		"projections":  projections,
-		"self":         objectSelfPath(item.SeedID, item.Kind),
+		"seed_id":       item.SeedID,
+		"kind":          item.Kind,
+		"summary":       item.Summary,
+		"capabilities":  item.Capabilities,
+		"schema_refs":   item.SchemaRefs,
+		"schemas":       schemaLinks,
+		"realizations":  realizations,
+		"commands":      commands,
+		"projections":   projections,
+		"self":          objectSelfPath(item.SeedID, item.Kind),
+		"canonical_url": locator.CanonicalURL,
+		"permalink_url": locator.PermalinkURL,
+		"content_hash":  locator.ContentHash,
 	}
 }
 
 func detailSchema(item registry.CatalogSchema) map[string]any {
+	locator := schemaLocator(item)
 	objectUses := make([]map[string]any, 0, len(item.ObjectUses))
 	for _, use := range item.ObjectUses {
 		objectUses = append(objectUses, map[string]any{
@@ -589,6 +644,9 @@ func detailSchema(item registry.CatalogSchema) map[string]any {
 		"command_inputs":  commandInputs,
 		"command_results": commandResults,
 		"self":            schemaSelfPath(item.Ref),
+		"canonical_url":   locator.CanonicalURL,
+		"permalink_url":   locator.PermalinkURL,
+		"content_hash":    locator.ContentHash,
 	}
 }
 
@@ -605,6 +663,56 @@ func detailSchemaCommandUse(use registry.CatalogSchemaCommandUse) map[string]any
 		"realization":    realizationSelfPath(use.Reference),
 		"contract":       "/v1/contracts/" + use.SeedID + "/" + use.RealizationID,
 	}
+}
+
+type registryResourceLocator struct {
+	CanonicalURL string
+	PermalinkURL string
+	ContentHash  string
+}
+
+func realizationLocator(item registry.CatalogRealization) registryResourceLocator {
+	return resourceLocator("realization", browseRealizationPath(item.Reference), item)
+}
+
+func commandLocator(item registry.CatalogCommand) registryResourceLocator {
+	return resourceLocator("command", browseCommandPath(item.Reference, item.Name), item)
+}
+
+func projectionLocator(item registry.CatalogProjection) registryResourceLocator {
+	return resourceLocator("projection", browseProjectionPath(item.Reference, item.Name), item)
+}
+
+func objectLocator(item registry.CatalogObject) registryResourceLocator {
+	return resourceLocator("object", browseObjectPath(item.SeedID, item.Kind), item)
+}
+
+func schemaLocator(item registry.CatalogSchema) registryResourceLocator {
+	return resourceLocator("schema", browseSchemaPath(item.Ref), item)
+}
+
+func resourceLocator(kind, canonicalURL string, payload any) registryResourceLocator {
+	contentHash := resourceContentHash(kind, payload)
+	return registryResourceLocator{
+		CanonicalURL: canonicalURL,
+		PermalinkURL: permalinkBrowsePath(canonicalURL, contentHash),
+		ContentHash:  contentHash,
+	}
+}
+
+func resourceContentHash(kind string, payload any) string {
+	raw, err := json.Marshal(struct {
+		Kind    string `json:"kind"`
+		Payload any    `json:"payload"`
+	}{
+		Kind:    strings.TrimSpace(kind),
+		Payload: payload,
+	})
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func registryDiscoveryPaths() map[string]string {
@@ -628,18 +736,45 @@ func realizationSelfPath(reference string) string {
 	return "/v1/registry/realization?reference=" + url.QueryEscape(reference)
 }
 
+func browseRealizationPath(reference string) string {
+	return "/contracts/" + url.PathEscape(reference)
+}
+
 func commandSelfPath(reference, name string) string {
 	return "/v1/registry/command?reference=" + url.QueryEscape(reference) + "&name=" + url.QueryEscape(name)
+}
+
+func browseCommandPath(reference, name string) string {
+	return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
 }
 
 func projectionSelfPath(reference, name string) string {
 	return "/v1/registry/projection?reference=" + url.QueryEscape(reference) + "&name=" + url.QueryEscape(name)
 }
 
+func browseProjectionPath(reference, name string) string {
+	return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+}
+
 func objectSelfPath(seedID, kind string) string {
 	return "/v1/registry/object?seed_id=" + url.QueryEscape(seedID) + "&kind=" + url.QueryEscape(kind)
 }
 
+func browseObjectPath(seedID, kind string) string {
+	return "/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind)
+}
+
 func schemaSelfPath(ref string) string {
 	return "/v1/registry/schema?ref=" + url.QueryEscape(ref)
+}
+
+func browseSchemaPath(ref string) string {
+	return "/schemas/detail?ref=" + url.QueryEscape(ref)
+}
+
+func permalinkBrowsePath(canonicalURL, contentHash string) string {
+	if strings.TrimSpace(canonicalURL) == "" || strings.TrimSpace(contentHash) == "" {
+		return ""
+	}
+	return "/@sha256-" + contentHash + canonicalURL
 }
