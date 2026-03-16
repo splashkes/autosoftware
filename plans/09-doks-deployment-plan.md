@@ -1,5 +1,30 @@
 # DOKS Deployment Plan
 
+## Status On `main`
+
+This document started as a no-action deployment plan. Parts of it are now
+implemented on `main`.
+
+Current canonical state:
+
+- GitHub Actions builds on push to `main`
+- the release workflow pushes a SHA-tagged image and deploys by digest
+- deployment config lives in GitHub environment vars and secrets, not in the repo
+- the live kernel topology is `as-apid`, `as-registryd`, `as-materializerd`,
+  and `as-webd`
+- `execd` runs alongside `webd` in the `as-webd` pod
+- public ingress is Cloudflare-fronted and origin-locked
+
+This document therefore serves two purposes:
+
+- record the intended deployment boundary and safety rules
+- record the still-transitional parts of the current implementation
+
+For the operational release path, also see:
+
+- `.github/workflows/as-prod-release.yml`
+- `kernel/runbook.md`
+
 ## Purpose
 
 This document defines the first production-style deployment plan for
@@ -14,8 +39,8 @@ The goals are:
 - avoid accidental interference with existing clusters, databases, load
   balancers, or VPC resources
 
-This is a no-action planning document. It defines what should be created later,
-not what has already been provisioned.
+This is still primarily a planning document, but some sections now describe the
+implemented baseline on `main` rather than purely hypothetical future state.
 
 ---
 
@@ -55,17 +80,17 @@ The current codebase is not yet a full cluster-native runtime manager.
 - `webd`, `apid`, `registryd`, and `materializerd` are normal Go HTTP
   processes.
 - the services expect access to the repo tree via `AS_REPO_ROOT`
-- realization execution is still manual and unix-socket oriented
+- realization execution in shared deployment is currently source-backed and
+  transitional
 - `apid` currently mixes public and internal route families
 
-This means the first deployment should focus on:
+This means the current deployment should focus on:
 
 - the kernel services
 - public registry and web surfaces
 - durable runtime storage
 
-It should not promise fully automated in-cluster realization process
-management yet.
+It should not be described as a final packaged realization runtime model yet.
 
 ---
 
@@ -101,6 +126,13 @@ Each should be its own Deployment and ClusterIP Service.
 
 Even if all four run from the same image, keep them as separate Kubernetes
 workloads so failure domains stay clean.
+
+The current implementation also runs:
+
+- `execd` as a second container in the `as-webd` pod
+
+This is intentional for the present source-backed execution model, because
+realization upstreams are localhost-backed.
 
 ---
 
@@ -198,6 +230,13 @@ Increase size later only when actual load or storage warrants it.
 
 Use the existing DigitalOcean registry for now.
 
+On `main`, the canonical release behavior is:
+
+- build on push to `main`
+- tag image as `sha-<merge-commit>`
+- deploy by immutable digest
+- avoid mutable deployment tags in the release path
+
 To minimize repository sprawl:
 
 - use a single new repository for AS kernel images
@@ -232,6 +271,9 @@ The services do not run as pure stateless binaries yet.
 
 They read repo content at runtime, so the image needs the repository tree, not
 just the compiled executables.
+
+For shared realization execution today, the image also needs the Go toolchain,
+because realizations are still launched from source.
 
 ---
 
@@ -416,7 +458,7 @@ Contents:
 
 ## Rollout Order
 
-Use this order later during actual execution:
+Use this order for fresh environment creation or disaster recovery:
 
 1. Create the new DigitalOcean project.
 2. Create the new VPC.
