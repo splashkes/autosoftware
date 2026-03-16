@@ -4,10 +4,11 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const value = button.getAttribute("data-copy");
-  if (!value) {
+  const rawValue = button.getAttribute("data-copy");
+  if (!rawValue) {
     return;
   }
+  const value = new URL(rawValue, window.location.href).toString();
 
   try {
     await navigator.clipboard.writeText(value);

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1051,21 +1053,52 @@ func activeRoutePathsByExecution(ctx context.Context, runtimeService *interactio
 		return map[string]string{}
 	}
 	out := make(map[string]string, len(bindings))
+	priorities := make(map[string]int, len(bindings))
 	for _, binding := range bindings {
 		executionID := strings.TrimSpace(binding.ExecutionID)
 		if executionID == "" {
 			continue
 		}
-		candidate := strings.TrimSpace(binding.PathPrefix)
-		if candidate == "" {
+		candidate, priority := preferredOpenPathForBinding(binding)
+		if candidate == "" || priority == 0 {
 			continue
 		}
-		if existing := strings.TrimSpace(out[executionID]); existing != "" && binding.BindingKind != "preview_path" {
+		if existing, ok := priorities[executionID]; ok && existing >= priority {
 			continue
 		}
 		out[executionID] = candidate
+		priorities[executionID] = priority
 	}
 	return out
+}
+
+func preferredOpenPathForBinding(binding interactions.RealizationRouteBinding) (string, int) {
+	pathPrefix := normalizeRoutePrefix(binding.PathPrefix)
+	if pathPrefix == "" {
+		return "", 0
+	}
+	switch strings.TrimSpace(binding.BindingKind) {
+	case "stable_path":
+		return pathPrefix, 30
+	case "preview_path":
+		return pathPrefix, 20
+	default:
+		return pathPrefix, 10
+	}
+}
+
+func normalizeRoutePrefix(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return ""
+	}
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	return prefix
 }
 
 func buildRoutingHandler(ctx context.Context, runtimeService *interactions.RuntimeService, baseDomain string, fallback http.Handler) http.Handler {
@@ -1238,7 +1271,7 @@ func realizationRoutingMiddleware(routes []realizationRoute, suspensions []inter
 					r2.URL.Path = "/"
 				}
 				r2.URL.RawPath = ""
-				proxyToRealization(route, w, r2)
+				proxyToMountedRealization(route, route.PathPrefix, w, r2)
 				return
 			}
 		}
@@ -1283,16 +1316,35 @@ func isUnixSocketAddr(addr string) bool {
 }
 
 func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.Request) {
+	proxyToMountedRealization(route, "", w, r)
+}
+
+func proxyToMountedRealization(route realizationRoute, mountPrefix string, w http.ResponseWriter, r *http.Request) {
 	seedID, realizationID := realizations.SplitReference(route.Reference)
-	r.Header.Set("X-AS-Seed-ID", seedID)
-	r.Header.Set("X-AS-Realization-ID", realizationID)
+	mountPrefix = normalizeRoutePrefix(mountPrefix)
 
 	if isUnixSocketAddr(route.ProxyAddr) {
 		target, _ := url.Parse("http://unix")
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		proxy.Transport = &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", route.ProxyAddr)
+		proxy := &httputil.ReverseProxy{
+			Rewrite: func(pr *httputil.ProxyRequest) {
+				pr.SetURL(target)
+				pr.SetXForwarded()
+				pr.Out.Host = pr.In.Host
+				pr.Out.Header.Set("X-AS-Seed-ID", seedID)
+				pr.Out.Header.Set("X-AS-Realization-ID", realizationID)
+				pr.Out.Header.Set("X-Forwarded-Proto", externalRequestScheme(pr.In))
+				pr.Out.Header.Set("X-Forwarded-Host", pr.In.Host)
+				if mountPrefix != "" {
+					pr.Out.Header.Set("X-Forwarded-Prefix", strings.TrimSuffix(mountPrefix, "/"))
+				}
+			},
+			ModifyResponse: func(res *http.Response) error {
+				return rewriteMountedResponse(res, mountPrefix)
+			},
+			Transport: &http.Transport{
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+					return net.Dial("unix", route.ProxyAddr)
+				},
 			},
 		}
 		proxy.ServeHTTP(w, r)
@@ -1305,8 +1357,162 @@ func proxyToRealization(route realizationRoute, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.SetXForwarded()
+			pr.Out.Host = pr.In.Host
+			pr.Out.Header.Set("X-AS-Seed-ID", seedID)
+			pr.Out.Header.Set("X-AS-Realization-ID", realizationID)
+			pr.Out.Header.Set("X-Forwarded-Proto", externalRequestScheme(pr.In))
+			pr.Out.Header.Set("X-Forwarded-Host", pr.In.Host)
+			if mountPrefix != "" {
+				pr.Out.Header.Set("X-Forwarded-Prefix", strings.TrimSuffix(mountPrefix, "/"))
+			}
+		},
+		ModifyResponse: func(res *http.Response) error {
+			return rewriteMountedResponse(res, mountPrefix)
+		},
+	}
 	proxy.ServeHTTP(w, r)
+}
+
+func externalRequestScheme(r *http.Request) string {
+	switch forwarded := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))); forwarded {
+	case "http", "https":
+		return forwarded
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
+}
+
+func rewriteMountedResponse(res *http.Response, mountPrefix string) error {
+	mountPrefix = normalizeRoutePrefix(mountPrefix)
+	if mountPrefix == "" {
+		return nil
+	}
+
+	if location := strings.TrimSpace(res.Header.Get("Location")); location != "" {
+		res.Header.Set("Location", prefixedMountedPath(location, mountPrefix))
+	}
+
+	if values := res.Header.Values("Set-Cookie"); len(values) > 0 {
+		res.Header.Del("Set-Cookie")
+		for _, value := range values {
+			res.Header.Add("Set-Cookie", rewriteMountedCookiePath(value, mountPrefix))
+		}
+	}
+
+	if !strings.Contains(strings.ToLower(res.Header.Get("Content-Type")), "text/html") {
+		return nil
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	if err := res.Body.Close(); err != nil {
+		return err
+	}
+
+	rewritten := rewriteMountedHTML(body, mountPrefix)
+	res.Body = io.NopCloser(bytes.NewReader(rewritten))
+	res.ContentLength = int64(len(rewritten))
+	res.Header.Set("Content-Length", strconv.Itoa(len(rewritten)))
+	return nil
+}
+
+func prefixedMountedPath(path, mountPrefix string) string {
+	if mountPrefix == "" {
+		return path
+	}
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.HasPrefix(path, "/__") {
+		return path
+	}
+	if path == "/" {
+		return mountPrefix
+	}
+	mountBase := strings.TrimSuffix(mountPrefix, "/")
+	if strings.HasPrefix(path, mountPrefix) || path == mountBase {
+		return path
+	}
+	return mountBase + path
+}
+
+func rewriteMountedCookiePath(raw, mountPrefix string) string {
+	lower := strings.ToLower(raw)
+	idx := strings.Index(lower, "path=/")
+	if idx < 0 {
+		return raw
+	}
+	after := idx + len("path=/")
+	if after < len(raw) && raw[after] != ';' {
+		return raw
+	}
+	return raw[:idx] + "Path=" + mountPrefix + raw[after:]
+}
+
+func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
+	mountPrefix = normalizeRoutePrefix(mountPrefix)
+	if mountPrefix == "" {
+		return body
+	}
+
+	prefix := strings.TrimSuffix(mountPrefix, "/") + "/"
+	rewritten := strings.NewReplacer(
+		`href="/`, `href="`+prefix,
+		`href='/`, `href='`+prefix,
+		`src="/`, `src="`+prefix,
+		`src='/`, `src='`+prefix,
+		`action="/`, `action="`+prefix,
+		`action='/`, `action='`+prefix,
+		`formaction="/`, `formaction="`+prefix,
+		`formaction='/`, `formaction='`+prefix,
+		`hx-get="/`, `hx-get="`+prefix,
+		`hx-get='/`, `hx-get='`+prefix,
+		`hx-post="/`, `hx-post="`+prefix,
+		`hx-post='/`, `hx-post='`+prefix,
+		`hx-put="/`, `hx-put="`+prefix,
+		`hx-put='/`, `hx-put='`+prefix,
+		`hx-delete="/`, `hx-delete="`+prefix,
+		`hx-delete='/`, `hx-delete='`+prefix,
+		`hx-patch="/`, `hx-patch="`+prefix,
+		`hx-patch='/`, `hx-patch='`+prefix,
+		`sse-connect="/`, `sse-connect="`+prefix,
+		`sse-connect='/`, `sse-connect='`+prefix,
+		`data-copy="/`, `data-copy="`+prefix,
+		`data-copy='/`, `data-copy='`+prefix,
+	).Replace(string(body))
+
+	reserved := strings.TrimSuffix(mountPrefix, "/") + "/__"
+	rewritten = strings.NewReplacer(
+		`href="`+reserved, `href="/__`,
+		`href='`+reserved, `href='/__`,
+		`src="`+reserved, `src="/__`,
+		`src='`+reserved, `src='/__`,
+		`action="`+reserved, `action="/__`,
+		`action='`+reserved, `action='/__`,
+		`formaction="`+reserved, `formaction="/__`,
+		`formaction='`+reserved, `formaction='/__`,
+		`hx-get="`+reserved, `hx-get="/__`,
+		`hx-get='`+reserved, `hx-get='/__`,
+		`hx-post="`+reserved, `hx-post="/__`,
+		`hx-post='`+reserved, `hx-post='/__`,
+		`hx-put="`+reserved, `hx-put="/__`,
+		`hx-put='`+reserved, `hx-put='/__`,
+		`hx-delete="`+reserved, `hx-delete="/__`,
+		`hx-delete='`+reserved, `hx-delete='/__`,
+		`hx-patch="`+reserved, `hx-patch="/__`,
+		`hx-patch='`+reserved, `hx-patch='/__`,
+		`sse-connect="`+reserved, `sse-connect="/__`,
+		`sse-connect='`+reserved, `sse-connect='/__`,
+		`data-copy="`+reserved, `data-copy="/__`,
+		`data-copy='`+reserved, `data-copy='/__`,
+	).Replace(rewritten)
+
+	return []byte(rewritten)
 }
 
 func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w http.ResponseWriter, r *http.Request) bool {

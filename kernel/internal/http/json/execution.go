@@ -303,21 +303,44 @@ func activeRoutePathsByExecution(ctx context.Context, service *interactions.Runt
 		return map[string]string{}
 	}
 	out := make(map[string]string, len(bindings))
+	priorities := make(map[string]int, len(bindings))
 	for _, binding := range bindings {
 		executionID := strings.TrimSpace(binding.ExecutionID)
 		if executionID == "" {
 			continue
 		}
-		candidate := strings.TrimSpace(binding.PathPrefix)
-		if candidate == "" {
+		candidate, priority := preferredExecutionOpenPath(binding)
+		if candidate == "" || priority == 0 {
 			continue
 		}
-		if existing := strings.TrimSpace(out[executionID]); existing != "" && binding.BindingKind != "preview_path" {
+		if existing, ok := priorities[executionID]; ok && existing >= priority {
 			continue
 		}
 		out[executionID] = candidate
+		priorities[executionID] = priority
 	}
 	return out
+}
+
+func preferredExecutionOpenPath(binding interactions.RealizationRouteBinding) (string, int) {
+	pathPrefix := strings.TrimSpace(binding.PathPrefix)
+	if pathPrefix == "" {
+		return "", 0
+	}
+	if !strings.HasPrefix(pathPrefix, "/") {
+		pathPrefix = "/" + pathPrefix
+	}
+	if !strings.HasSuffix(pathPrefix, "/") {
+		pathPrefix += "/"
+	}
+	switch strings.TrimSpace(binding.BindingKind) {
+	case "stable_path":
+		return pathPrefix, 30
+	case "preview_path":
+		return pathPrefix, 20
+	default:
+		return pathPrefix, 10
+	}
 }
 
 func syncActiveRouteBindings(ctx context.Context, service *interactions.RuntimeService, execRow interactions.RealizationExecution) error {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
+	"as/kernel/internal/interactions"
 	"as/kernel/internal/materializer"
 	"as/kernel/internal/realizations"
 )
@@ -115,5 +117,38 @@ func TestHumanizeSeedID(t *testing.T) {
 	}
 	if got := humanizeSeedID("custom_seed_name"); got != "Custom Seed Name" {
 		t.Fatalf("expected Custom Seed Name, got %q", got)
+	}
+}
+
+func TestPreferredOpenPathForBindingPrefersStablePath(t *testing.T) {
+	stable, stablePriority := preferredOpenPathForBinding(interactions.RealizationRouteBinding{
+		BindingKind: "stable_path",
+		PathPrefix:  "/event-listings/",
+	})
+	preview, previewPriority := preferredOpenPathForBinding(interactions.RealizationRouteBinding{
+		BindingKind: "preview_path",
+		PathPrefix:  "/__runs/exec_event/",
+	})
+
+	if stable != "/event-listings/" || stablePriority <= previewPriority {
+		t.Fatalf("expected stable path to outrank preview path, got %q (%d) vs %q (%d)", stable, stablePriority, preview, previewPriority)
+	}
+}
+
+func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
+	body := []byte(`<link rel="stylesheet" href="/assets/app.css"><a href="/calendar">Calendar</a><form action="/admin/login"></form><div hx-post="/chat/123"></div><script src="/__sprout-assets/sprout-logo.js"></script>`)
+	got := string(rewriteMountedHTML(body, "/event-listings/"))
+
+	wantContains := []string{
+		`href="/event-listings/assets/app.css"`,
+		`href="/event-listings/calendar"`,
+		`action="/event-listings/admin/login"`,
+		`hx-post="/event-listings/chat/123"`,
+		`src="/__sprout-assets/sprout-logo.js"`,
+	}
+	for _, want := range wantContains {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected rewritten HTML to contain %q, got %q", want, got)
+		}
 	}
 }

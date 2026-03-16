@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -149,5 +150,28 @@ func TestStorePersistsCreatedEvent(t *testing.T) {
 	}
 	if found.Title != "Persistence Check" {
 		t.Fatalf("unexpected persisted title: %q", found.Title)
+	}
+}
+
+func TestToEventViewDoesNotBakeEnvironmentHost(t *testing.T) {
+	start := time.Date(2026, 4, 10, 18, 0, 0, 0, loadLocationOrUTC("America/Toronto"))
+	end := start.Add(2 * time.Hour)
+
+	view := toEventView(&eventRecord{
+		ID:       "evt_test",
+		Slug:     "spring-market",
+		Title:    "Spring Market",
+		Summary:  "A spring market.",
+		Status:   statusPublished,
+		Timezone: "America/Toronto",
+		Start:    start,
+		End:      end,
+	})
+
+	if strings.Contains(view.AbsoluteURL, "://") {
+		t.Fatalf("expected share URL to stay relative, got %q", view.AbsoluteURL)
+	}
+	if view.AbsoluteURL != "/events/spring-market" {
+		t.Fatalf("unexpected share URL: %q", view.AbsoluteURL)
 	}
 }

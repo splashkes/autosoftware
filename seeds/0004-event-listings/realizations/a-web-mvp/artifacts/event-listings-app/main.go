@@ -1519,6 +1519,7 @@ func toEventView(event *eventRecord) *eventView {
 	loc := loadLocationOrUTC(event.Timezone)
 	start := event.Start.In(loc)
 	end := event.End.In(loc)
+	publicURL := "/events/" + event.Slug
 	return &eventView{
 		ID:             event.ID,
 		Slug:           event.Slug,
@@ -1543,8 +1544,8 @@ func toEventView(event *eventRecord) *eventView {
 		CrowdLabel:     event.CrowdLabel,
 		AllDay:         event.AllDay,
 		Status:         string(event.Status),
-		PublicURL:      "/events/" + event.Slug,
-		AbsoluteURL:    "http://127.0.0.1:8096/events/" + event.Slug,
+		PublicURL:      publicURL,
+		AbsoluteURL:    publicURL,
 		StartISO:       event.Start.Format(time.RFC3339),
 		EndISO:         event.End.Format(time.RFC3339),
 		RangeLabel:     formatRange(start, end, event.AllDay, event.Timezone),

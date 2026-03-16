@@ -925,8 +925,7 @@ func consoleLoaderScript() string {
       var session = result.session || {};
       if (session.status === "healthy" && session.open_path) {
         setStatus("Running " + label + ".");
-        var launched = window.open(session.open_path, "_blank", "noopener");
-        if (!launched) window.location.assign(session.open_path);
+        window.location.assign(session.open_path);
         return session;
       }
       if (session.status === "failed" || session.status === "stopped" || session.status === "terminated") {
@@ -1240,8 +1239,7 @@ func consoleLoaderScript() string {
       if (actionBtn.getAttribute("data-action") === "run") {
         if (actionBtn.getAttribute("data-open-path")) {
           var openPath = actionBtn.getAttribute("data-open-path");
-          var launched = window.open(openPath, "_blank", "noopener");
-          if (!launched) window.location.assign(openPath);
+          window.location.assign(openPath);
           setStatus("Opening " + (actionBtn.getAttribute("data-label") || actionBtn.getAttribute("data-reference")) + "...");
           return;
         }
