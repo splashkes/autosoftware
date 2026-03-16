@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"as/kernel/internal/interactions"
 )
 
 func TestLaunchRedirectPathPreservesEncodedReference(t *testing.T) {
@@ -70,6 +72,56 @@ func TestRealizationRoutingMiddlewarePreservesRawPathForStableMount(t *testing.T
 
 func TestRealizationRoutingMiddlewarePreservesRawPathForPreviewMount(t *testing.T) {
 	testMountedRoutingPreservesRawPath(t, "/__runs/exec_demo_123/")
+}
+
+func TestSelectLaunchTargetPrefersRoutableExecutionOverNewerQueuedExecution(t *testing.T) {
+	items := []interactions.RealizationExecution{
+		{
+			ExecutionID: "exec_new",
+			Reference:   "0006-registry-browser/a-ledger-reading-room",
+			Status:      "launch_requested",
+		},
+		{
+			ExecutionID: "exec_ready",
+			Reference:   "0006-registry-browser/a-ledger-reading-room",
+			Status:      "starting",
+		},
+	}
+
+	got := selectLaunchTarget(items, map[string]string{
+		"exec_ready": "/__runs/exec_ready/",
+	})
+
+	if got.ExecutionID != "exec_ready" {
+		t.Fatalf("selected execution = %q, want %q", got.ExecutionID, "exec_ready")
+	}
+	if got.OpenPath != "/__runs/exec_ready/" {
+		t.Fatalf("selected open path = %q, want %q", got.OpenPath, "/__runs/exec_ready/")
+	}
+}
+
+func TestSelectLaunchTargetPrefersMostAdvancedPendingExecution(t *testing.T) {
+	items := []interactions.RealizationExecution{
+		{
+			ExecutionID: "exec_new",
+			Reference:   "0006-registry-browser/a-ledger-reading-room",
+			Status:      "launch_requested",
+		},
+		{
+			ExecutionID: "exec_starting",
+			Reference:   "0006-registry-browser/a-ledger-reading-room",
+			Status:      "starting",
+		},
+	}
+
+	got := selectLaunchTarget(items, map[string]string{})
+
+	if got.ExecutionID != "exec_starting" {
+		t.Fatalf("selected execution = %q, want %q", got.ExecutionID, "exec_starting")
+	}
+	if got.OpenPath != "" {
+		t.Fatalf("selected open path = %q, want empty", got.OpenPath)
+	}
 }
 
 func testMountedRoutingPreservesRawPath(t *testing.T, mountPrefix string) {

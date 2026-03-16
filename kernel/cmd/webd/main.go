@@ -282,6 +282,7 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Realization unavailable</title>
+  {{if .RefreshPath}}<meta http-equiv="refresh" content="{{if gt .RefreshAfter 0}}{{.RefreshAfter}}{{else}}2{{end}};url={{.RefreshPath}}">{{end}}
   <style nonce="{{.CSPNonce}}">
     * { box-sizing: border-box; }
     body {
@@ -395,13 +396,22 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
         <h2>What happened</h2>
         <ul class="list">
           {{if .RouteDescription}}<li>Route: <code>{{.RouteDescription}}</code></li>{{end}}
+          {{if .RefreshPath}}
+          <li>The kernel is still bringing this realization online.</li>
+          <li>This page will retry automatically without leaving the stable URL.</li>
+          {{else}}
           <li>The kernel stopped this realization and removed its live route.</li>
+          {{end}}
           {{if .RemediationTarget}}<li>Fix the issue on <code>{{.RemediationTarget}}</code> and relaunch after the change lands.</li>{{end}}
+          {{if .RefreshPath}}<li>Retry target: <code>{{.RefreshPath}}</code></li>{{end}}
         </ul>
       </div>
 
       {{if .RemediationHint}}
       <p class="hint">{{.RemediationHint}}</p>
+      {{end}}
+      {{if .RefreshPath}}
+      <p class="hint">Refreshing automatically while the launch finishes.</p>
       {{end}}
     </section>
   </main>
@@ -772,6 +782,8 @@ type realizationUnavailableView struct {
 	RemediationTarget string
 	RemediationHint   string
 	RouteDescription  string
+	RefreshPath       string
+	RefreshAfter      int
 }
 
 func main() {
@@ -1311,21 +1323,28 @@ func realizationRoutingMiddleware(
 		if runtimeService != nil && catalogService != nil && r.URL.Path != "" {
 			reference, matchedPrefix := realizationReferenceForPath(r.Context(), catalogService, r.URL.Path)
 			if reference != "" {
-				targetPath := ""
 				requestPath := requestRedirectPath(r)
-				if existingLaunchPath := activeOrQueuedLaunchPath(r.Context(), runtimeService, reference); existingLaunchPath != "" {
-					targetPath = launchRedirectPath(existingLaunchPath, requestPath, matchedPrefix)
-				} else if newLaunchPath, err := enqueueLaunchForMissingPath(r.Context(), runtimeService, repoRoot, reference, r); err == nil && newLaunchPath != "" {
-					targetPath = launchRedirectPath(newLaunchPath, requestPath, matchedPrefix)
+				if existingLaunch := preferredLaunchTarget(r.Context(), runtimeService, reference); existingLaunch.ExecutionID != "" {
+					if existingLaunch.OpenPath != "" {
+						targetPath := launchRedirectPath(existingLaunch.OpenPath, requestPath, matchedPrefix)
+						if r.URL.RawQuery != "" {
+							targetPath += "?" + r.URL.RawQuery
+						}
+						http.Redirect(w, r, targetPath, http.StatusFound)
+						return
+					}
+					renderLaunchingPage(w, r, existingLaunch, currentRequestTarget(r))
+					return
+				}
+				if launchExecution, err := enqueueLaunchForMissingPath(r.Context(), runtimeService, repoRoot, reference, r); err == nil {
+					renderLaunchingPage(w, r, launchTarget{
+						ExecutionID: launchExecution.ExecutionID,
+						Reference:   launchExecution.Reference,
+						Status:      launchExecution.Status,
+					}, currentRequestTarget(r))
+					return
 				} else if err != nil {
 					log.Printf("warning: could not auto-launch %s for path %s: %v", reference, r.URL.Path, err)
-				}
-				if targetPath != "" {
-					if r.URL.RawQuery != "" {
-						targetPath += "?" + r.URL.RawQuery
-					}
-					http.Redirect(w, r, targetPath, http.StatusFound)
-					return
 				}
 			}
 		}
@@ -1427,33 +1446,90 @@ func requestRedirectPath(r *http.Request) string {
 	return strings.TrimSpace(r.URL.Path)
 }
 
-func activeOrQueuedLaunchPath(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) string {
-	execItems, err := runtimeService.ListRealizationExecutions(ctx, strings.TrimSpace(reference), 20)
-	if err != nil || len(execItems) == 0 {
-		return ""
-	}
-	openPaths := activeRoutePathsByExecution(ctx, runtimeService)
-	for _, item := range execItems {
+type launchTarget struct {
+	ExecutionID string
+	Reference   string
+	Status      string
+	OpenPath    string
+}
+
+func selectLaunchTarget(items []interactions.RealizationExecution, openPaths map[string]string) launchTarget {
+	bestReady := launchTarget{}
+	bestPending := launchTarget{}
+	bestReadyPriority := 0
+	bestPendingPriority := 0
+
+	for _, item := range items {
 		if isTerminalExecutionStatus(item.Status) {
 			continue
 		}
-		if openPath := strings.TrimSpace(openPaths[item.ExecutionID]); openPath != "" {
-			return openPath
+		candidate := launchTarget{
+			ExecutionID: strings.TrimSpace(item.ExecutionID),
+			Reference:   strings.TrimSpace(item.Reference),
+			Status:      strings.TrimSpace(item.Status),
+			OpenPath:    strings.TrimSpace(openPaths[item.ExecutionID]),
 		}
-		if previewPath := strings.TrimSpace(item.PreviewPathPrefix); previewPath != "" {
-			return previewPath
+		if candidate.ExecutionID == "" {
+			continue
+		}
+		if candidate.OpenPath != "" {
+			priority := launchStatusPriority(candidate.Status)
+			if priority > bestReadyPriority {
+				bestReady = candidate
+				bestReadyPriority = priority
+			}
+			continue
+		}
+		priority := launchStatusPriority(candidate.Status)
+		if priority > bestPendingPriority {
+			bestPending = candidate
+			bestPendingPriority = priority
 		}
 	}
-	return ""
+
+	if bestReady.ExecutionID != "" {
+		return bestReady
+	}
+	return bestPending
 }
 
-func enqueueLaunchForMissingPath(ctx context.Context, runtimeService *interactions.RuntimeService, repoRoot, reference string, r *http.Request) (string, error) {
+func launchStatusPriority(status string) int {
+	switch strings.TrimSpace(status) {
+	case "healthy":
+		return 30
+	case "starting":
+		return 20
+	case "launch_requested":
+		return 10
+	default:
+		return 1
+	}
+}
+
+func currentRequestTarget(r *http.Request) string {
+	target := requestRedirectPath(r)
+	if r != nil && r.URL != nil && strings.TrimSpace(r.URL.RawQuery) != "" {
+		target += "?" + strings.TrimSpace(r.URL.RawQuery)
+	}
+	return target
+}
+
+func preferredLaunchTarget(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) launchTarget {
+	execItems, err := runtimeService.ListRealizationExecutions(ctx, strings.TrimSpace(reference), 20)
+	if err != nil || len(execItems) == 0 {
+		return launchTarget{}
+	}
+	openPaths := activeRoutePathsByExecution(ctx, runtimeService)
+	return selectLaunchTarget(execItems, openPaths)
+}
+
+func enqueueLaunchForMissingPath(ctx context.Context, runtimeService *interactions.RuntimeService, repoRoot, reference string, r *http.Request) (interactions.RealizationExecution, error) {
 	packet, err := realizations.LoadGrowthContext(repoRoot, strings.TrimSpace(reference))
 	if err != nil {
-		return "", err
+		return interactions.RealizationExecution{}, err
 	}
 	if !packet.Readiness.CanLaunchLocal {
-		return "", errors.New("realization is not launchable through local execution backend")
+		return interactions.RealizationExecution{}, errors.New("realization is not launchable through local execution backend")
 	}
 
 	requestMeta := server.RequestMetadataFromContext(ctx)
@@ -1486,7 +1562,7 @@ func enqueueLaunchForMissingPath(ctx context.Context, runtimeService *interactio
 		RequestID:             requestMeta.RequestID,
 	})
 	if err != nil {
-		return "", err
+		return interactions.RealizationExecution{}, err
 	}
 
 	job, err := runtimeService.EnqueueJob(ctx, interactions.EnqueueJobInput{
@@ -1500,14 +1576,14 @@ func enqueueLaunchForMissingPath(ctx context.Context, runtimeService *interactio
 		},
 	})
 	if err != nil {
-		return "", err
+		return interactions.RealizationExecution{}, err
 	}
 	_, _ = runtimeService.RecordRealizationExecutionEvent(ctx, interactions.RecordRealizationExecutionEventInput{
 		ExecutionID: execRow.ExecutionID,
 		Name:        "launch_requested",
 		Data:        map[string]interface{}{"job_id": job.JobID},
 	})
-	return previewPath, nil
+	return execRow, nil
 }
 
 func isUnixSocketAddr(addr string) bool {
@@ -1802,7 +1878,12 @@ func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w 
 		return false
 	}
 	if !isTerminalExecutionStatus(execution.Status) {
-		return false
+		renderLaunchingPage(w, r, launchTarget{
+			ExecutionID: execution.ExecutionID,
+			Reference:   execution.Reference,
+			Status:      execution.Status,
+		}, currentRequestTarget(r))
+		return true
 	}
 	renderUnavailablePage(w, r, realizationUnavailableView{
 		CSPNonce:    server.CSPNonceFromContext(r.Context()),
@@ -1837,6 +1918,28 @@ func renderSuspensionPage(w http.ResponseWriter, r *http.Request, item interacti
 	})
 }
 
+func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTarget, refreshPath string) {
+	reference := firstNonEmpty(strings.TrimSpace(target.Reference), "Unknown realization")
+	message := "The kernel is launching this realization. The stable URL will refresh automatically when the route is ready."
+	switch strings.TrimSpace(target.Status) {
+	case "starting":
+		message = "The kernel started this realization and is waiting for it to pass health checks before routing traffic."
+	case "launch_requested":
+		message = "The launch job is queued and waiting for the execution worker to finish startup."
+	}
+	renderUnavailablePage(w, r, realizationUnavailableView{
+		CSPNonce:         server.CSPNonceFromContext(r.Context()),
+		Reference:        reference,
+		ExecutionID:      strings.TrimSpace(target.ExecutionID),
+		Status:           firstNonEmpty(strings.TrimSpace(target.Status), "launch_requested"),
+		ReasonCode:       "launch_in_progress",
+		Message:          message,
+		RouteDescription: firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
+		RefreshPath:      firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
+		RefreshAfter:     2,
+	})
+}
+
 func renderUnavailablePage(w http.ResponseWriter, _ *http.Request, view realizationUnavailableView) {
 	if view.Reference == "" {
 		view.Reference = "Unknown realization"
@@ -1851,6 +1954,13 @@ func renderUnavailablePage(w http.ResponseWriter, _ *http.Request, view realizat
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Robots-Tag", "noindex")
+	if view.RefreshPath != "" {
+		retryAfter := view.RefreshAfter
+		if retryAfter <= 0 {
+			retryAfter = 2
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+	}
 	w.WriteHeader(http.StatusServiceUnavailable)
 	_, _ = body.WriteTo(w)
 }
