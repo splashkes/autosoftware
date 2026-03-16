@@ -658,6 +658,7 @@ func parseSinglePathParam(r *http.Request, prefix string) (string, bool) {
 		return "", false
 	}
 	path = strings.TrimPrefix(path, prefix)
+	path = strings.TrimSuffix(path, "/")
 	if path == "" || strings.Contains(path, "/") {
 		return "", false
 	}
@@ -680,6 +681,7 @@ func parseReferencePathParam(r *http.Request, prefix string) (string, bool) {
 		return "", false
 	}
 	rest = strings.TrimPrefix(rest, prefix)
+	rest = strings.TrimSuffix(rest, "/")
 	parts := strings.Split(rest, "/")
 	switch len(parts) {
 	case 1:
@@ -712,6 +714,7 @@ func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
 		return "", "", false
 	}
 	rest = strings.TrimPrefix(rest, prefix)
+	rest = strings.TrimSuffix(rest, "/")
 	parts := strings.Split(rest, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", false
@@ -736,6 +739,7 @@ func parseReferenceNamePathParam(r *http.Request, prefix string) (string, string
 		return "", "", false
 	}
 	rest = strings.TrimPrefix(rest, prefix)
+	rest = strings.TrimSuffix(rest, "/")
 	parts := strings.Split(rest, "/")
 	switch len(parts) {
 	case 2:
