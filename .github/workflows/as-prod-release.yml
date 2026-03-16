@@ -137,6 +137,11 @@ jobs:
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
           printf 'Deploying image: %s\n' "$image_ref"
 
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
