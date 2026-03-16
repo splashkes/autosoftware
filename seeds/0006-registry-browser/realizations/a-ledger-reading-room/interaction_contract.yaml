@@ -15,10 +15,6 @@ capabilities:
     summary: Searchable reading-room views over systems, objects, actions, read models, contracts, and registry internals.
   - name: search_facets
     summary: Facet filters that narrow registry material without forcing users to know internal implementation vocabulary first.
-  - name: explain_lifecycle
-    summary: Human-readable framing for acceptance status, runtime availability, and surface kind as separate concepts.
-  - name: trace_authority
-    summary: Every reading-room page links back to the authoritative routes that ground the current view.
 domain_objects:
   - kind: registry_system
     summary: Human-readable grouping of accepted registry resources that share one seed identity.
@@ -26,42 +22,34 @@ domain_objects:
     capabilities:
       - search_documents
       - search_facets
-      - explain_lifecycle
-      - trace_authority
   - kind: registry_object
     summary: Stable object identity exposed through the registry and explained in human-first browse flows.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
   - kind: registry_command
     summary: Command contract exposed as an action in human-facing reading-room copy.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
   - kind: registry_projection
     summary: Projection contract exposed as a read model in human-facing reading-room copy.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
   - kind: registry_realization
     summary: Realization contract exposed as part of the system and contract browse story.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
-      - explain_lifecycle
-      - trace_authority
   - kind: registry_schema
     summary: Schema reference exposed as part of the contract and governing-meaning story.
     schema_ref: ../../design.md
     capabilities:
       - search_documents
-      - trace_authority
 projections:
   - name: registry_reading_room.home
     summary: Human-first landing page that introduces the registry as a ledger of software systems and their accepted contracts.
@@ -75,8 +63,6 @@ projections:
       - registry_schema
     capabilities:
       - search_documents
-      - explain_lifecycle
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.systems
     summary: Systems index grouped by seed identity with purpose, maturity, governed objects, actions, and read models.
@@ -91,8 +77,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - explain_lifecycle
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.system_detail
     summary: One system view that explains what the software governs, how mature it is, and which authoritative routes back it.
@@ -106,8 +90,6 @@ projections:
       - registry_schema
     capabilities:
       - search_documents
-      - explain_lifecycle
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.objects
     summary: Governed-things index that emphasizes what exists, what can happen to it, and where it is seen.
@@ -121,7 +103,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.object_detail
     summary: Object detail that answers what the thing is, what governs it, which actions affect it, and which read models expose it.
@@ -134,7 +115,6 @@ projections:
       - registry_schema
     capabilities:
       - search_documents
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.actions
     summary: Commands index relabeled as actions with summaries, audience, and resulting read-model links shown before raw route details.
@@ -148,7 +128,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.action_detail
     summary: Action detail that emphasizes intent, authority, affected object kinds, and resulting read models before raw wire details.
@@ -161,7 +140,6 @@ projections:
       - registry_schema
     capabilities:
       - search_documents
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.read_models
     summary: Projections index relabeled as read models with the question each model answers made explicit.
@@ -174,7 +152,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.read_model_detail
     summary: Read-model detail that explains freshness, source system, governed things, and authoritative projection route.
@@ -186,7 +163,6 @@ projections:
       - registry_command
     capabilities:
       - search_documents
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.contracts
     summary: Contract index that joins realizations and schemas into one clearer browse surface for governing meaning and behavior.
@@ -200,8 +176,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - explain_lifecycle
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.contract_detail
     summary: Contract detail that connects one realization to its objects, actions, read models, schemas, and lifecycle state.
@@ -214,8 +188,6 @@ projections:
       - registry_object
     capabilities:
       - search_documents
-      - explain_lifecycle
-      - trace_authority
     freshness: materialized
   - name: registry_reading_room.registry_internals
     summary: Clearly separated browse surface for registry-internal meta resources and self-describing catalog machinery.
@@ -229,7 +201,6 @@ projections:
     capabilities:
       - search_documents
       - search_facets
-      - trace_authority
     freshness: materialized
 consistency:
   write_visibility: eventual
