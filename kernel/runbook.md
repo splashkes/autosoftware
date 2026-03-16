@@ -92,7 +92,6 @@ Healthy realizations are kept hot until one of these happens:
 - the pod restarts and `execd` reconciles runtime state on startup
 
 There is no separate idle timeout that shuts down healthy realizations.
-
 ## Production Release
 
 The AS production stack is released from GitHub Actions, not from an operator's
