@@ -66,10 +66,10 @@ func newMockRegistry() *httptest.Server {
 					Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive",
 					AuthModes: []string{"anonymous"}, Capabilities: []string{"search_documents"},
-					Objects:    []ResourceLink{{Kind: "shared_note"}},
-					Commands:   []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
+					Objects:     []ResourceLink{{Kind: "shared_note"}},
+					Commands:    []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
 					Projections: []ResourceLink{{Name: "notes.room"}},
-					Self: "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
+					Self:        "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
 				},
 			})
 			return
@@ -195,13 +195,13 @@ func newTestMux(app *App) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", app.handleHome)
 	mux.HandleFunc("GET /realizations", app.handleRealizations)
-	mux.HandleFunc("GET /realizations/{reference}", app.handleRealizationDetail)
+	mux.HandleFunc("GET /realizations/", app.handleRealizationDetail)
 	mux.HandleFunc("GET /commands", app.handleCommands)
-	mux.HandleFunc("GET /commands/{reference}/{name}", app.handleCommandDetail)
+	mux.HandleFunc("GET /commands/", app.handleCommandDetail)
 	mux.HandleFunc("GET /projections", app.handleProjections)
-	mux.HandleFunc("GET /projections/{reference}/{name}", app.handleProjectionDetail)
+	mux.HandleFunc("GET /projections/", app.handleProjectionDetail)
 	mux.HandleFunc("GET /objects", app.handleObjects)
-	mux.HandleFunc("GET /objects/{seed_id}/{kind}", app.handleObjectDetail)
+	mux.HandleFunc("GET /objects/", app.handleObjectDetail)
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)

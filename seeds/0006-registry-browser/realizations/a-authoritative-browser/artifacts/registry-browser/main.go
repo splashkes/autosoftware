@@ -27,13 +27,13 @@ var styleCSS []byte
 // --- Registry API response types ---
 
 type CatalogResponse struct {
-	Summary      CatalogSummary        `json:"summary"`
-	Realizations []RealizationSummary  `json:"realizations"`
-	Commands     []CommandSummary      `json:"commands"`
-	Projections  []ProjectionSummary   `json:"projections"`
-	Objects      []ObjectSummary       `json:"objects"`
-	Schemas      []SchemaSummary       `json:"schemas"`
-	Discovery    map[string]string     `json:"discovery"`
+	Summary      CatalogSummary       `json:"summary"`
+	Realizations []RealizationSummary `json:"realizations"`
+	Commands     []CommandSummary     `json:"commands"`
+	Projections  []ProjectionSummary  `json:"projections"`
+	Objects      []ObjectSummary      `json:"objects"`
+	Schemas      []SchemaSummary      `json:"schemas"`
+	Discovery    map[string]string    `json:"discovery"`
 }
 
 type CatalogSummary struct {
@@ -60,22 +60,22 @@ type RealizationSummary struct {
 }
 
 type RealizationDetail struct {
-	Reference      string              `json:"reference"`
-	SeedID         string              `json:"seed_id"`
-	RealizationID  string              `json:"realization_id"`
-	ApproachID     string              `json:"approach_id,omitempty"`
-	Summary        string              `json:"summary"`
-	Status         string              `json:"status"`
-	SurfaceKind    string              `json:"surface_kind"`
-	ContractFile   string              `json:"contract_file"`
-	AuthModes      []string            `json:"auth_modes"`
-	Capabilities   []string            `json:"capabilities"`
-	ObjectKinds    []string            `json:"object_kinds"`
-	Objects        []ResourceLink      `json:"objects"`
-	Commands       []ResourceLink      `json:"commands"`
-	Projections    []ResourceLink      `json:"projections"`
-	Contract       string              `json:"contract"`
-	Self           string              `json:"self"`
+	Reference     string         `json:"reference"`
+	SeedID        string         `json:"seed_id"`
+	RealizationID string         `json:"realization_id"`
+	ApproachID    string         `json:"approach_id,omitempty"`
+	Summary       string         `json:"summary"`
+	Status        string         `json:"status"`
+	SurfaceKind   string         `json:"surface_kind"`
+	ContractFile  string         `json:"contract_file"`
+	AuthModes     []string       `json:"auth_modes"`
+	Capabilities  []string       `json:"capabilities"`
+	ObjectKinds   []string       `json:"object_kinds"`
+	Objects       []ResourceLink `json:"objects"`
+	Commands      []ResourceLink `json:"commands"`
+	Projections   []ResourceLink `json:"projections"`
+	Contract      string         `json:"contract"`
+	Self          string         `json:"self"`
 }
 
 type CommandSummary struct {
@@ -148,16 +148,16 @@ type ObjectSummary struct {
 }
 
 type ObjectDetail struct {
-	SeedID       string                `json:"seed_id"`
-	Kind         string                `json:"kind"`
-	Summary      string                `json:"summary"`
-	Capabilities []string              `json:"capabilities"`
-	SchemaRefs   []string              `json:"schema_refs"`
-	Schemas      []ResourceLink        `json:"schemas"`
-	Realizations []ObjectRealization   `json:"realizations"`
-	Commands     []CommandDetail       `json:"commands"`
-	Projections  []ProjectionDetail    `json:"projections"`
-	Self         string                `json:"self"`
+	SeedID       string              `json:"seed_id"`
+	Kind         string              `json:"kind"`
+	Summary      string              `json:"summary"`
+	Capabilities []string            `json:"capabilities"`
+	SchemaRefs   []string            `json:"schema_refs"`
+	Schemas      []ResourceLink      `json:"schemas"`
+	Realizations []ObjectRealization `json:"realizations"`
+	Commands     []CommandDetail     `json:"commands"`
+	Projections  []ProjectionDetail  `json:"projections"`
+	Self         string              `json:"self"`
 }
 
 type ObjectRealization struct {
@@ -186,13 +186,13 @@ type SchemaSummary struct {
 }
 
 type SchemaDetail struct {
-	Ref            string              `json:"ref"`
-	Path           string              `json:"path"`
-	Anchor         string              `json:"anchor,omitempty"`
-	ObjectUses     []SchemaObjectUse   `json:"object_uses"`
-	CommandInputs  []SchemaCommandUse  `json:"command_inputs"`
-	CommandResults []SchemaCommandUse  `json:"command_results"`
-	Self           string              `json:"self"`
+	Ref            string             `json:"ref"`
+	Path           string             `json:"path"`
+	Anchor         string             `json:"anchor,omitempty"`
+	ObjectUses     []SchemaObjectUse  `json:"object_uses"`
+	CommandInputs  []SchemaCommandUse `json:"command_inputs"`
+	CommandResults []SchemaCommandUse `json:"command_results"`
+	Self           string             `json:"self"`
 }
 
 type SchemaObjectUse struct {
@@ -263,7 +263,9 @@ func (c *RegistryClient) Catalog() (*CatalogResponse, error) {
 
 func (c *RegistryClient) Realizations(seedID, q string) ([]RealizationSummary, error) {
 	params := buildQuery("seed_id", seedID, "q", q)
-	var resp struct{ Realizations []RealizationSummary `json:"realizations"` }
+	var resp struct {
+		Realizations []RealizationSummary `json:"realizations"`
+	}
 	if err := c.get("/v1/registry/realizations"+params, &resp); err != nil {
 		return nil, err
 	}
@@ -271,7 +273,9 @@ func (c *RegistryClient) Realizations(seedID, q string) ([]RealizationSummary, e
 }
 
 func (c *RegistryClient) Realization(reference string) (*RealizationDetail, error) {
-	var resp struct{ Realization RealizationDetail `json:"realization"` }
+	var resp struct {
+		Realization RealizationDetail `json:"realization"`
+	}
 	if err := c.get("/v1/registry/realization?reference="+url.QueryEscape(reference), &resp); err != nil {
 		return nil, err
 	}
@@ -280,7 +284,9 @@ func (c *RegistryClient) Realization(reference string) (*RealizationDetail, erro
 
 func (c *RegistryClient) Commands(seedID, reference, q string) ([]CommandSummary, error) {
 	params := buildQuery("seed_id", seedID, "reference", reference, "q", q)
-	var resp struct{ Commands []CommandSummary `json:"commands"` }
+	var resp struct {
+		Commands []CommandSummary `json:"commands"`
+	}
 	if err := c.get("/v1/registry/commands"+params, &resp); err != nil {
 		return nil, err
 	}
@@ -288,7 +294,9 @@ func (c *RegistryClient) Commands(seedID, reference, q string) ([]CommandSummary
 }
 
 func (c *RegistryClient) Command(reference, name string) (*CommandDetail, error) {
-	var resp struct{ Command CommandDetail `json:"command"` }
+	var resp struct {
+		Command CommandDetail `json:"command"`
+	}
 	path := "/v1/registry/command?reference=" + url.QueryEscape(reference) + "&name=" + url.QueryEscape(name)
 	if err := c.get(path, &resp); err != nil {
 		return nil, err
@@ -298,7 +306,9 @@ func (c *RegistryClient) Command(reference, name string) (*CommandDetail, error)
 
 func (c *RegistryClient) Projections(seedID, reference, q string) ([]ProjectionSummary, error) {
 	params := buildQuery("seed_id", seedID, "reference", reference, "q", q)
-	var resp struct{ Projections []ProjectionSummary `json:"projections"` }
+	var resp struct {
+		Projections []ProjectionSummary `json:"projections"`
+	}
 	if err := c.get("/v1/registry/projections"+params, &resp); err != nil {
 		return nil, err
 	}
@@ -306,7 +316,9 @@ func (c *RegistryClient) Projections(seedID, reference, q string) ([]ProjectionS
 }
 
 func (c *RegistryClient) Projection(reference, name string) (*ProjectionDetail, error) {
-	var resp struct{ Projection ProjectionDetail `json:"projection"` }
+	var resp struct {
+		Projection ProjectionDetail `json:"projection"`
+	}
 	path := "/v1/registry/projection?reference=" + url.QueryEscape(reference) + "&name=" + url.QueryEscape(name)
 	if err := c.get(path, &resp); err != nil {
 		return nil, err
@@ -316,7 +328,9 @@ func (c *RegistryClient) Projection(reference, name string) (*ProjectionDetail, 
 
 func (c *RegistryClient) Objects(seedID, schemaRef, q string) ([]ObjectSummary, error) {
 	params := buildQuery("seed_id", seedID, "schema_ref", schemaRef, "q", q)
-	var resp struct{ Objects []ObjectSummary `json:"objects"` }
+	var resp struct {
+		Objects []ObjectSummary `json:"objects"`
+	}
 	if err := c.get("/v1/registry/objects"+params, &resp); err != nil {
 		return nil, err
 	}
@@ -324,7 +338,9 @@ func (c *RegistryClient) Objects(seedID, schemaRef, q string) ([]ObjectSummary, 
 }
 
 func (c *RegistryClient) Object(seedID, kind string) (*ObjectDetail, error) {
-	var resp struct{ Object ObjectDetail `json:"object"` }
+	var resp struct {
+		Object ObjectDetail `json:"object"`
+	}
 	path := "/v1/registry/object?seed_id=" + url.QueryEscape(seedID) + "&kind=" + url.QueryEscape(kind)
 	if err := c.get(path, &resp); err != nil {
 		return nil, err
@@ -334,7 +350,9 @@ func (c *RegistryClient) Object(seedID, kind string) (*ObjectDetail, error) {
 
 func (c *RegistryClient) Schemas(seedID, q string) ([]SchemaSummary, error) {
 	params := buildQuery("seed_id", seedID, "q", q)
-	var resp struct{ Schemas []SchemaSummary `json:"schemas"` }
+	var resp struct {
+		Schemas []SchemaSummary `json:"schemas"`
+	}
 	if err := c.get("/v1/registry/schemas"+params, &resp); err != nil {
 		return nil, err
 	}
@@ -342,7 +360,9 @@ func (c *RegistryClient) Schemas(seedID, q string) ([]SchemaSummary, error) {
 }
 
 func (c *RegistryClient) Schema(ref string) (*SchemaDetail, error) {
-	var resp struct{ Schema SchemaDetail `json:"schema"` }
+	var resp struct {
+		Schema SchemaDetail `json:"schema"`
+	}
 	if err := c.get("/v1/registry/schema?ref="+url.QueryEscape(ref), &resp); err != nil {
 		return nil, err
 	}
@@ -430,6 +450,52 @@ func (app *App) renderError(w http.ResponseWriter, status int, msg string) {
 <body><div class="container"><h1>%d</h1><p>%s</p><p><a href="/">Back to home</a></p></div></body></html>`, status, template.HTMLEscapeString(msg))
 }
 
+func parseSinglePathParam(r *http.Request, prefix string) (string, bool) {
+	if r == nil || prefix == "" {
+		return "", false
+	}
+	path := r.URL.EscapedPath()
+	if path == "" {
+		path = r.URL.Path
+	}
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	path = strings.TrimPrefix(path, prefix)
+	if path == "" || strings.Contains(path, "/") {
+		return "", false
+	}
+	value, err := url.PathUnescape(path)
+	if err != nil || value == "" {
+		return "", false
+	}
+	return value, true
+}
+
+func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
+	if r == nil || prefix == "" {
+		return "", "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", "", false
+	}
+	rest = strings.TrimPrefix(rest, prefix)
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	left, err1 := url.PathUnescape(parts[0])
+	right, err2 := url.PathUnescape(parts[1])
+	if err1 != nil || err2 != nil || left == "" || right == "" {
+		return "", "", false
+	}
+	return left, right, true
+}
+
 // --- Handlers ---
 
 func (app *App) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -463,7 +529,11 @@ func (app *App) handleRealizations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
+	reference, ok := parseSinglePathParam(r, "/realizations/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Realization not found.")
+		return
+	}
 	item, err := app.registry.Realization(reference)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Realization not found.")
@@ -497,8 +567,11 @@ func (app *App) handleCommands(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
-	name := r.PathValue("name")
+	reference, name, ok := parsePairPathParam(r, "/commands/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Command not found.")
+		return
+	}
 	item, err := app.registry.Command(reference, name)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Command not found.")
@@ -532,8 +605,11 @@ func (app *App) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
-	name := r.PathValue("name")
+	reference, name, ok := parsePairPathParam(r, "/projections/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Projection not found.")
+		return
+	}
 	item, err := app.registry.Projection(reference, name)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Projection not found.")
@@ -561,19 +637,22 @@ func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
 	seedIDs := uniqueStrings(items, func(o ObjectSummary) string { return o.SeedID })
 
 	app.render(w, "objects", map[string]any{
-		"Title":         "Objects",
-		"Objects":       items,
-		"Query":         q,
-		"SeedID":        seedID,
-		"SchemaRef":     schemaRef,
-		"SeedIDs":       seedIDs,
-		"APIRoute":      "/v1/registry/objects",
+		"Title":     "Objects",
+		"Objects":   items,
+		"Query":     q,
+		"SeedID":    seedID,
+		"SchemaRef": schemaRef,
+		"SeedIDs":   seedIDs,
+		"APIRoute":  "/v1/registry/objects",
 	})
 }
 
 func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
-	seedID := r.PathValue("seed_id")
-	kind := r.PathValue("kind")
+	seedID, kind, ok := parsePairPathParam(r, "/objects/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Object not found.")
+		return
+	}
 	item, err := app.registry.Object(seedID, kind)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Object not found.")
@@ -688,13 +767,13 @@ func main() {
 
 	mux.HandleFunc("GET /{$}", app.handleHome)
 	mux.HandleFunc("GET /realizations", app.handleRealizations)
-	mux.HandleFunc("GET /realizations/{reference}", app.handleRealizationDetail)
+	mux.HandleFunc("GET /realizations/", app.handleRealizationDetail)
 	mux.HandleFunc("GET /commands", app.handleCommands)
-	mux.HandleFunc("GET /commands/{reference}/{name}", app.handleCommandDetail)
+	mux.HandleFunc("GET /commands/", app.handleCommandDetail)
 	mux.HandleFunc("GET /projections", app.handleProjections)
-	mux.HandleFunc("GET /projections/{reference}/{name}", app.handleProjectionDetail)
+	mux.HandleFunc("GET /projections/", app.handleProjectionDetail)
 	mux.HandleFunc("GET /objects", app.handleObjects)
-	mux.HandleFunc("GET /objects/{seed_id}/{kind}", app.handleObjectDetail)
+	mux.HandleFunc("GET /objects/", app.handleObjectDetail)
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)

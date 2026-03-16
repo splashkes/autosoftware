@@ -496,6 +496,52 @@ func (app *App) renderError(w http.ResponseWriter, status int, msg string) {
 <body><div class="container"><h1>%d</h1><p>%s</p><p><a href="/">Back to home</a></p></div></body></html>`, status, template.HTMLEscapeString(msg))
 }
 
+func parseSinglePathParam(r *http.Request, prefix string) (string, bool) {
+	if r == nil || prefix == "" {
+		return "", false
+	}
+	path := r.URL.EscapedPath()
+	if path == "" {
+		path = r.URL.Path
+	}
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	path = strings.TrimPrefix(path, prefix)
+	if path == "" || strings.Contains(path, "/") {
+		return "", false
+	}
+	value, err := url.PathUnescape(path)
+	if err != nil || value == "" {
+		return "", false
+	}
+	return value, true
+}
+
+func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
+	if r == nil || prefix == "" {
+		return "", "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", "", false
+	}
+	rest = strings.TrimPrefix(rest, prefix)
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	left, err1 := url.PathUnescape(parts[0])
+	right, err2 := url.PathUnescape(parts[1])
+	if err1 != nil || err2 != nil || left == "" || right == "" {
+		return "", "", false
+	}
+	return left, right, true
+}
+
 // --- Handlers ---
 
 func (app *App) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -542,7 +588,11 @@ func (app *App) handleSystems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleSystemDetail(w http.ResponseWriter, r *http.Request) {
-	seedID := r.PathValue("seed_id")
+	seedID, ok := parseSinglePathParam(r, "/systems/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "System not found.")
+		return
+	}
 	realizations, err := app.registry.Realizations(seedID, "")
 	if err != nil {
 		app.renderError(w, http.StatusBadGateway, "Could not fetch system contracts.")
@@ -613,7 +663,14 @@ func (app *App) handleRealizations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
+	reference, ok := parseSinglePathParam(r, "/realizations/")
+	if !ok {
+		reference, ok = parseSinglePathParam(r, "/contracts/")
+	}
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Realization not found.")
+		return
+	}
 	item, err := app.registry.Realization(reference)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Realization not found.")
@@ -655,8 +712,14 @@ func (app *App) handleCommands(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
-	name := r.PathValue("name")
+	reference, name, ok := parsePairPathParam(r, "/actions/")
+	if !ok {
+		reference, name, ok = parsePairPathParam(r, "/commands/")
+	}
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Command not found.")
+		return
+	}
 	item, err := app.registry.Command(reference, name)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Command not found.")
@@ -693,8 +756,14 @@ func (app *App) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
-	reference := r.PathValue("reference")
-	name := r.PathValue("name")
+	reference, name, ok := parsePairPathParam(r, "/read-models/")
+	if !ok {
+		reference, name, ok = parsePairPathParam(r, "/projections/")
+	}
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Projection not found.")
+		return
+	}
 	item, err := app.registry.Projection(reference, name)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Projection not found.")
@@ -735,8 +804,11 @@ func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
-	seedID := r.PathValue("seed_id")
-	kind := r.PathValue("kind")
+	seedID, kind, ok := parsePairPathParam(r, "/objects/")
+	if !ok {
+		app.renderError(w, http.StatusNotFound, "Object not found.")
+		return
+	}
 	item, err := app.registry.Object(seedID, kind)
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Object not found.")
@@ -1101,22 +1173,22 @@ func main() {
 	mux.HandleFunc("GET /healthz", app.handleHealthz)
 	mux.HandleFunc("GET /{$}", app.handleHome)
 	mux.HandleFunc("GET /systems", app.handleSystems)
-	mux.HandleFunc("GET /systems/{seed_id}", app.handleSystemDetail)
+	mux.HandleFunc("GET /systems/", app.handleSystemDetail)
 	mux.HandleFunc("GET /registry-internals", app.handleRegistryInternals)
 	mux.HandleFunc("GET /contracts", app.handleRealizations)
-	mux.HandleFunc("GET /contracts/{reference}", app.handleRealizationDetail)
+	mux.HandleFunc("GET /contracts/", app.handleRealizationDetail)
 	mux.HandleFunc("GET /actions", app.handleCommands)
-	mux.HandleFunc("GET /actions/{reference}/{name}", app.handleCommandDetail)
+	mux.HandleFunc("GET /actions/", app.handleCommandDetail)
 	mux.HandleFunc("GET /read-models", app.handleProjections)
-	mux.HandleFunc("GET /read-models/{reference}/{name}", app.handleProjectionDetail)
+	mux.HandleFunc("GET /read-models/", app.handleProjectionDetail)
 	mux.HandleFunc("GET /realizations", app.handleRealizations)
-	mux.HandleFunc("GET /realizations/{reference}", app.handleRealizationDetail)
+	mux.HandleFunc("GET /realizations/", app.handleRealizationDetail)
 	mux.HandleFunc("GET /commands", app.handleCommands)
-	mux.HandleFunc("GET /commands/{reference}/{name}", app.handleCommandDetail)
+	mux.HandleFunc("GET /commands/", app.handleCommandDetail)
 	mux.HandleFunc("GET /projections", app.handleProjections)
-	mux.HandleFunc("GET /projections/{reference}/{name}", app.handleProjectionDetail)
+	mux.HandleFunc("GET /projections/", app.handleProjectionDetail)
 	mux.HandleFunc("GET /objects", app.handleObjects)
-	mux.HandleFunc("GET /objects/{seed_id}/{kind}", app.handleObjectDetail)
+	mux.HandleFunc("GET /objects/", app.handleObjectDetail)
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
