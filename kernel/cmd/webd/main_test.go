@@ -8,6 +8,44 @@ import (
 	"testing"
 )
 
+func TestLaunchRedirectPathPreservesEncodedReference(t *testing.T) {
+	got := launchRedirectPath(
+		"/__runs/exec_demo_123/",
+		"/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply",
+		"/registry/reading-room/",
+	)
+
+	want := "/__runs/exec_demo_123/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply/"
+	if got != want {
+		t.Fatalf("launch redirect path = %q, want %q", got, want)
+	}
+}
+
+func TestLaunchRedirectPathPreservesPermalinkAndEncodedReference(t *testing.T) {
+	got := launchRedirectPath(
+		"/__runs/exec_demo_123/",
+		"/registry/reading-room/@sha256-abc123/contracts/0004-event-listings%2Fa-web-mvp",
+		"/registry/reading-room/",
+	)
+
+	want := "/__runs/exec_demo_123/@sha256-abc123/contracts/0004-event-listings%2Fa-web-mvp/"
+	if got != want {
+		t.Fatalf("launch redirect path = %q, want %q", got, want)
+	}
+}
+
+func TestRequestRedirectPathPrefersEscapedPath(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply", nil)
+	req.URL.Path = "/registry/reading-room/actions/0003-customer-service-app/a-web-mvp/tickets.reply"
+	req.URL.RawPath = "/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply"
+
+	got := requestRedirectPath(req)
+	want := "/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply"
+	if got != want {
+		t.Fatalf("request redirect path = %q, want %q", got, want)
+	}
+}
+
 func TestTrimMountedRequestPrefixPreservesEncodedReference(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply", nil)
 	req.URL.Path = "/registry/reading-room/actions/0003-customer-service-app/a-web-mvp/tickets.reply"

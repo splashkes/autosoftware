@@ -159,6 +159,10 @@ Preview routes are execution-scoped:
 
 - `localhost:8090/__runs/<execution-id>/`
 
+These preview URLs are operational launch surfaces only. They are valid places
+to inspect one execution, but they are not canonical, permanent, or suitable as
+public references when a stable route exists.
+
 Stable subdomain and path routes only exist when a healthy execution is
 activated and its bindings are recorded in runtime state.
 

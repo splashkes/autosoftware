@@ -130,7 +130,7 @@ projections:
       - search_facets
     freshness: materialized
   - name: registry_reading_room.action_detail
-    summary: Action detail that emphasizes intent, authority, affected object kinds, and resulting read models before raw wire details.
+    summary: Action detail that emphasizes intent, authority, affected object kinds, resulting read models, and canonical plus permalink URLs before raw wire details.
     path: /v1/projections/0006-registry-browser/reading-room/actions/{reference}/{name}
     object_kinds:
       - registry_command
@@ -154,7 +154,7 @@ projections:
       - search_facets
     freshness: materialized
   - name: registry_reading_room.read_model_detail
-    summary: Read-model detail that explains freshness, source system, governed things, and authoritative projection route.
+    summary: Read-model detail that explains freshness, source system, governed things, authoritative projection route, and canonical plus permalink URLs.
     path: /v1/projections/0006-registry-browser/reading-room/read-models/{reference}/{name}
     object_kinds:
       - registry_projection
@@ -178,7 +178,7 @@ projections:
       - search_facets
     freshness: materialized
   - name: registry_reading_room.contract_detail
-    summary: Contract detail that connects one realization to its objects, actions, read models, schemas, and lifecycle state.
+    summary: Contract detail that connects one realization to its objects, actions, read models, schemas, lifecycle state, and canonical plus permalink URLs.
     path: /v1/projections/0006-registry-browser/reading-room/contracts/{reference}
     object_kinds:
       - registry_realization
