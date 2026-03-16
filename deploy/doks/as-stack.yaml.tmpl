@@ -27,6 +27,9 @@ data:
   AS_REGISTRYD_ADDR: ":8093"
   AS_MATERIALIZER_ADDR: ":8091"
   AS_EXECD_ADDR: ":8094"
+  AS_EXECD_REGISTRY_BASE_URL: "http://as-registryd.${AS_NAMESPACE}.svc.cluster.local"
+  AS_EXECD_PUBLIC_API_BASE_URL: "http://as-apid.${AS_NAMESPACE}.svc.cluster.local"
+  AS_EXECD_INTERNAL_API_BASE_URL: "http://as-apid.${AS_NAMESPACE}.svc.cluster.local"
   AS_EXECUTION_HEALTH_TIMEOUT_SECONDS: "180"
 ---
 apiVersion: apps/v1
