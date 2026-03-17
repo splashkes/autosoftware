@@ -133,3 +133,71 @@ func TestRateLimitMiddlewareUsesPrincipalForResolvedSessions(t *testing.T) {
 		t.Fatalf("expected session auth state, got %#v", enforcer.input.Metadata["auth_state"])
 	}
 }
+
+func TestRateLimitMiddlewarePrefersCloudflareClientIP(t *testing.T) {
+	enforcer := &stubRateLimitEnforcer{}
+
+	handler := CorrelationMiddleware(RateLimitMiddleware(enforcer, RateLimitOptions{
+		Enabled:             true,
+		Window:              time.Minute,
+		BlockDuration:       time.Minute,
+		AnonymousReadLimit:  120,
+		AnonymousWriteLimit: 20,
+		SessionReadLimit:    240,
+		SessionWriteLimit:   60,
+		InternalLimit:       180,
+		WorkerLimit:         1200,
+		FeedbackLimit:       30,
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/v1/registry/catalog", nil)
+	req.RemoteAddr = "10.0.0.8:1234"
+	req.Header.Set("CF-Connecting-IP", "198.51.100.40")
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, 10.0.0.8")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	if enforcer.input.SubjectKey != "ip:198.51.100.40" {
+		t.Fatalf("expected Cloudflare IP subject key, got %q", enforcer.input.SubjectKey)
+	}
+}
+
+func TestRateLimitMiddlewareFallsBackToTrueClientIP(t *testing.T) {
+	enforcer := &stubRateLimitEnforcer{}
+
+	handler := CorrelationMiddleware(RateLimitMiddleware(enforcer, RateLimitOptions{
+		Enabled:             true,
+		Window:              time.Minute,
+		BlockDuration:       time.Minute,
+		AnonymousReadLimit:  120,
+		AnonymousWriteLimit: 20,
+		SessionReadLimit:    240,
+		SessionWriteLimit:   60,
+		InternalLimit:       180,
+		WorkerLimit:         1200,
+		FeedbackLimit:       30,
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/v1/registry/catalog", nil)
+	req.RemoteAddr = "10.0.0.8:1234"
+	req.Header.Set("True-Client-IP", "198.51.100.41")
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, 10.0.0.8")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	if enforcer.input.SubjectKey != "ip:198.51.100.41" {
+		t.Fatalf("expected True-Client-IP subject key, got %q", enforcer.input.SubjectKey)
+	}
+}
