@@ -99,8 +99,9 @@ func BuildGoPrebuiltArtifact(repoRoot string, entry realizations.LocalRealizatio
 	cmd := exec.Command("go", "build", "-o", tmpTarget, ".")
 	cmd.Dir = workingDir
 	cmd.Env = buildProcessEnvironment(map[string]string{
-		"GOOS":   targetGOOS,
-		"GOARCH": targetGOARCH,
+		"GOOS":        targetGOOS,
+		"GOARCH":      targetGOARCH,
+		"CGO_ENABLED": "0",
 	})
 	output, err := cmd.CombinedOutput()
 	if err != nil {
