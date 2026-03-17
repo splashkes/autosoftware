@@ -7,7 +7,7 @@
 </div>
 
 <div class="detail-section">
-  <h3>Contract Identity</h3>
+  <h3>Realization Identity</h3>
   <table class="field-table">
     <tr><td>Reference</td><td>{{$r.Reference}}</td></tr>
     <tr><td>Seed</td><td>{{$r.SeedID}}</td></tr>
@@ -15,7 +15,7 @@
     <tr><td>Approach</td><td>{{$r.ApproachID}}</td></tr>
     <tr><td>Status</td><td>{{$r.Status}}</td></tr>
     <tr><td>Surface Kind</td><td>{{$r.SurfaceKind}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{hrefURL $r.Contract}}">{{$r.ContractFile}}</a> · <a href="{{repoSourceURL $r.ContractFile}}">GitHub</a></td></tr>
+    <tr><td>Realization Definition</td><td><a href="{{hrefURL $r.Contract}}">{{$r.ContractFile}}</a> · <a href="{{repoSourceURL $r.ContractFile}}">GitHub</a></td></tr>
   </table>
 </div>
 
@@ -35,7 +35,7 @@
 
 {{if $r.Objects}}
 <div class="detail-section">
-  <h3>Governed Things</h3>
+  <h3>Objects</h3>
   <ul class="resource-list">
     {{range $r.Objects}}
     <li class="resource-item">
@@ -48,7 +48,7 @@
 
 {{if $r.Relations}}
 <div class="detail-section">
-  <h3>Graph Relations</h3>
+  <h3>Object Graph Relations</h3>
   <ul class="resource-list">
     {{range $r.Relations}}
     <li class="resource-item">
@@ -87,7 +87,7 @@
 
 {{if $r.Projections}}
 <div class="detail-section">
-  <h3>Read Models</h3>
+  <h3>Read Models (Projections)</h3>
   <ul class="resource-list">
     {{range $r.Projections}}
     <li class="resource-item">

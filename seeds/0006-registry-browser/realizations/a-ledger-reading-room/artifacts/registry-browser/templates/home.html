@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="page-head">
   <h2>Ledger Reading Room</h2>
-  <p>The registry is a ledger of software systems, the things they govern, the actions they permit, the read models they expose, and the contracts that define them. Everything here is read-only.</p>
+  <p>The registry is a ledger of software systems, their objects, actions, read models, and realizations. Everything here is read-only.</p>
 </div>
 
 <div class="card-grid">
@@ -11,7 +11,7 @@
   </a>
   <a href="/objects" class="card">
     <div class="count">{{.Summary.Objects}}</div>
-    <div class="label">Governed Things</div>
+    <div class="label">Objects</div>
   </a>
   <a href="/actions" class="card">
     <div class="count">{{.Summary.Commands}}</div>
@@ -23,7 +23,7 @@
   </a>
   <a href="/contracts" class="card">
     <div class="count">{{.Summary.Realizations}}</div>
-    <div class="label">Contracts</div>
+    <div class="label">Realizations</div>
   </a>
   <a href="/registry-internals" class="card">
     <div class="count">{{len .InternalSystems}}</div>
@@ -41,7 +41,7 @@
       <div class="meta">
         <span>{{.SeedID}}</span>
         {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}
-        <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+        <span>{{.ObjectCount}} {{plural .ObjectCount "object" "objects"}}</span>
         <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
         <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
       </div>
@@ -62,7 +62,7 @@
       <a href="/registry-internals" class="name">{{.Title}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
-        <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+        <span>{{.ObjectCount}} {{plural .ObjectCount "object" "objects"}}</span>
         <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
         <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
       </div>

@@ -1,12 +1,12 @@
 {{define "content"}}
 <div class="page-head">
-  <h2>Contracts</h2>
-  <p>Contracts are the concrete realizations that define behavior for a system. They tell you which actions and read models a system exposes right now.</p>
+  <h2>Realizations</h2>
+  <p>Realizations are concrete behavior contracts for a system, including the actions and read models it exposes right now.</p>
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
 <form class="search-bar" method="get" action="/contracts">
-  <input type="text" name="q" value="{{.Query}}" placeholder="Search contracts...">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search realizations...">
   <button type="submit">Search</button>
 </form>
 
@@ -28,6 +28,6 @@
   {{end}}
 </ul>
 {{else}}
-<div class="empty">No contracts found.{{if .Query}} Try a different search.{{end}}</div>
+<div class="empty">No realizations found.{{if .Query}} Try a different search.{{end}}</div>
 {{end}}
 {{end}}

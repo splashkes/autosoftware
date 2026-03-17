@@ -7,15 +7,15 @@
 </div>
 
 <div class="detail-section">
-  <h3>What This Read Model Is</h3>
+  <h3>Read Model Identity</h3>
   <table class="field-table">
     <tr><td>Name</td><td>{{$p.Name}}</td></tr>
     <tr><td>Seed</td><td>{{$p.SeedID}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></td></tr>
+    <tr><td>Realization</td><td><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></td></tr>
     <tr><td>Path</td><td><code>{{$p.Path}}</code></td></tr>
     <tr><td>Auth</td><td>{{if $p.AuthModes}}{{join $p.AuthModes ", "}}{{else}}Not declared{{end}}</td></tr>
     <tr><td>Freshness</td><td>{{$p.Freshness}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{hrefURL $p.Contract}}">{{$p.ContractFile}}</a> · <a href="{{repoSourceURL $p.ContractFile}}">GitHub</a></td></tr>
+    <tr><td>Realization Contract</td><td><a href="{{hrefURL $p.Contract}}">{{$p.ContractFile}}</a> · <a href="{{repoSourceURL $p.ContractFile}}">GitHub</a></td></tr>
   </table>
 </div>
 

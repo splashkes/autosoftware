@@ -7,12 +7,22 @@
 </div>
 
 <div class="detail-section">
-  <h3>What This Thing Is</h3>
+  <h3>Object Identity</h3>
   <table class="field-table">
     <tr><td>Seed</td><td>{{$o.SeedID}}</td></tr>
     <tr><td>Kind</td><td>{{$o.Kind}}</td></tr>
   </table>
 </div>
+
+{{if or $o.IncomingRelations $o.OutgoingRelations}}
+<div class="detail-section">
+  <h3>Traverse Related Objects</h3>
+  <div class="facets">
+    {{if $o.IncomingRelations}}<a href="{{relatedObjectsPath $o.SeedID $o.Kind "incoming" ""}}" class="facet-tag">Objects that point here</a>{{end}}
+    {{if $o.OutgoingRelations}}<a href="{{relatedObjectsPath $o.SeedID $o.Kind "outgoing" ""}}" class="facet-tag">Objects this object points to</a>{{end}}
+  </div>
+</div>
+{{end}}
 
 {{if hasDataLayout $o.DataLayout}}
 <div class="detail-section">
@@ -80,7 +90,7 @@
 
 {{if $o.OutgoingRelations}}
 <div class="detail-section">
-  <h3>Outgoing Relations</h3>
+  <h3>Objects This Object Points To</h3>
   <ul class="resource-list">
     {{range $o.OutgoingRelations}}
     <li class="resource-item">
@@ -97,6 +107,7 @@
         {{range $i, $target := .ToObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $target.Kind}}">{{$target.Kind}}</a>{{end}}
       </div>
       {{end}}
+      <div class="read-only-notice"><a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "outgoing" .Kind}}">Browse matching target objects</a></div>
       {{if .Attributes}}
       <table class="field-table">
         {{range .Attributes}}
@@ -112,7 +123,7 @@
 
 {{if $o.IncomingRelations}}
 <div class="detail-section">
-  <h3>Incoming Relations</h3>
+  <h3>Objects That Point Here</h3>
   <ul class="resource-list">
     {{range $o.IncomingRelations}}
     <li class="resource-item">
@@ -129,6 +140,7 @@
         {{range $i, $source := .FromObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $source.Kind}}">{{$source.Kind}}</a>{{end}}
       </div>
       {{end}}
+      <div class="read-only-notice"><a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "incoming" .Kind}}">Browse matching source objects</a></div>
       {{if .Attributes}}
       <table class="field-table">
         {{range .Attributes}}
@@ -164,7 +176,7 @@
 
 {{if $o.Realizations}}
 <div class="detail-section">
-  <h3>Contracts</h3>
+  <h3>Realizations</h3>
   <ul class="resource-list">
     {{range $o.Realizations}}
     <li class="resource-item">
