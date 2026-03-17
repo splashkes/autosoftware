@@ -266,6 +266,14 @@ type SchemaDetail struct {
 	ContentHash    string             `json:"content_hash"`
 }
 
+type HashLookupDetail struct {
+	ContentHash  string `json:"content_hash"`
+	ResourceKind string `json:"resource_kind"`
+	CanonicalURL string `json:"canonical_url"`
+	PermalinkURL string `json:"permalink_url"`
+	RedirectURL  string `json:"redirect_url"`
+}
+
 type SchemaObjectUse struct {
 	Reference     string `json:"reference"`
 	SeedID        string `json:"seed_id"`
@@ -490,6 +498,16 @@ func (c *RegistryClient) Schema(ref string) (*SchemaDetail, error) {
 	return &resp.Schema, nil
 }
 
+func (c *RegistryClient) Lookup(contentHash string) (*HashLookupDetail, error) {
+	var resp struct {
+		Lookup HashLookupDetail `json:"lookup"`
+	}
+	if err := c.get("/v1/registry/lookup?sha256="+url.QueryEscape(contentHash), &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Lookup, nil
+}
+
 func buildQuery(pairs ...string) string {
 	v := url.Values{}
 	for i := 0; i+1 < len(pairs); i += 2 {
@@ -657,6 +675,8 @@ func isPermalinkablePath(path string) bool {
 		return path != "/projections/"
 	case strings.HasPrefix(path, "/objects/"):
 		return path != "/objects/"
+	case strings.HasPrefix(path, "/schemas/"):
+		return path != "/schemas/"
 	case strings.HasPrefix(path, "/schemas/detail"):
 		return true
 	default:
@@ -665,6 +685,10 @@ func isPermalinkablePath(path string) bool {
 }
 
 func isSHA256Hex(value string) bool {
+	return registryIsSHA256Hex(value)
+}
+
+func registryIsSHA256Hex(value string) bool {
 	if len(strings.TrimSpace(value)) != 64 {
 		return false
 	}
@@ -893,7 +917,16 @@ func browseRelatedObjectsPath(seedID, kind, direction, relationKind string) temp
 }
 
 func browseSchemaPath(ref string) template.URL {
-	return trustedURL("/schemas/detail?ref=" + url.QueryEscape(strings.TrimSpace(ref)))
+	return trustedURL("/schemas/" + url.PathEscape(strings.TrimSpace(ref)))
+}
+
+func permalinkResolvePath(canonicalURL, contentHash string) string {
+	canonicalURL = strings.TrimSpace(canonicalURL)
+	contentHash = strings.ToLower(strings.TrimSpace(contentHash))
+	if canonicalURL == "" || contentHash == "" {
+		return ""
+	}
+	return "/@sha256-" + contentHash + canonicalURL
 }
 
 func trustedURL(value string) template.URL {
@@ -1356,7 +1389,22 @@ func (app *App) handleSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
-	ref := r.URL.Query().Get("ref")
+	ref, ok := parseSinglePathParam(r, "/schemas/")
+	if ok && strings.EqualFold(strings.TrimSpace(ref), "detail") {
+		ref = ""
+		ok = false
+	}
+	if !ok {
+		ref = strings.TrimSpace(r.URL.Query().Get("ref"))
+		if ref == "" {
+			app.renderError(w, http.StatusBadRequest, "Schema ref is required.")
+			return
+		}
+		if requestedPermalinkHash(r) == "" {
+			http.Redirect(w, r, string(browseSchemaPath(ref)), http.StatusMovedPermanently)
+			return
+		}
+	}
 	if ref == "" {
 		app.renderError(w, http.StatusBadRequest, "Schema ref is required.")
 		return
@@ -1378,6 +1426,35 @@ func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
 		"Schema":   item,
 		"APIRoute": item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+}
+
+func (app *App) handlePermalinkLookup(w http.ResponseWriter, r *http.Request) {
+	contentHash, ok := parseSinglePathParam(r, "/reg/")
+	if !ok || !registryIsSHA256Hex(contentHash) {
+		app.renderError(w, http.StatusNotFound, "Permalink not found.")
+		return
+	}
+
+	lookup, err := app.registry.Lookup(contentHash)
+	if err != nil {
+		if strings.Contains(err.Error(), "returned 404") {
+			app.renderError(w, http.StatusNotFound, "Permalink not found.")
+			return
+		}
+		app.renderError(w, http.StatusBadGateway, "Could not resolve registry permalink.")
+		log.Printf("registry permalink lookup error: %v", err)
+		return
+	}
+
+	redirectURL := strings.TrimSpace(lookup.RedirectURL)
+	if redirectURL == "" {
+		redirectURL = permalinkResolvePath(lookup.CanonicalURL, lookup.ContentHash)
+	}
+	if redirectURL == "" {
+		app.renderError(w, http.StatusNotFound, "Permalink not found.")
+		return
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func (app *App) handleRegistryInternals(w http.ResponseWriter, r *http.Request) {
@@ -1796,7 +1873,9 @@ func main() {
 	mux.HandleFunc("GET /objects", app.handleObjects)
 	mux.HandleFunc("GET /objects/", app.handleObjectDetail)
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
+	mux.HandleFunc("GET /schemas/", app.handleSchemaDetail)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
+	mux.HandleFunc("GET /reg/", app.handlePermalinkLookup)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
 
 	handler := logMiddleware(app.permalinkMiddleware(mux))

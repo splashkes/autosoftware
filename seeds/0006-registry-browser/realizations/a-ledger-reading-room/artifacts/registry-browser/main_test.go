@@ -95,7 +95,7 @@ func newMockRegistry() *httptest.Server {
 					Projections:  []ResourceLink{{Name: "notes.room"}},
 					Self:         "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
 					CanonicalURL: "/contracts/0001-notepad/a-go-htmx",
-					PermalinkURL: "/@sha256-" + realizationHash + "/contracts/0001-notepad/a-go-htmx",
+					PermalinkURL: "/reg/" + realizationHash,
 					ContentHash:  realizationHash,
 				},
 			})
@@ -145,7 +145,7 @@ func newMockRegistry() *httptest.Server {
 					AuthModes: []string{"anonymous"}, Idempotency: "required", Consistency: "read_your_writes",
 					Self:         self,
 					CanonicalURL: "/actions/0001-notepad/a-go-htmx/" + name,
-					PermalinkURL: "/@sha256-" + contentHash + "/actions/0001-notepad/a-go-htmx/" + name,
+					PermalinkURL: "/reg/" + contentHash,
 					ContentHash:  contentHash,
 				},
 			})
@@ -187,7 +187,7 @@ func newMockRegistry() *httptest.Server {
 					},
 					Self:         "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
 					CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
-					PermalinkURL: "/@sha256-" + projectionHash + "/read-models/0001-notepad/a-go-htmx/notes.room",
+					PermalinkURL: "/reg/" + projectionHash,
 					ContentHash:  projectionHash,
 				},
 			})
@@ -257,7 +257,7 @@ func newMockRegistry() *httptest.Server {
 					},
 					Self:         "/v1/registry/object?seed_id=0001-notepad&kind=shared_note",
 					CanonicalURL: "/objects/0001-notepad/shared_note",
-					PermalinkURL: "/@sha256-" + objectHash + "/objects/0001-notepad/shared_note",
+					PermalinkURL: "/reg/" + objectHash,
 					ContentHash:  objectHash,
 				},
 			})
@@ -287,14 +287,70 @@ func newMockRegistry() *httptest.Server {
 						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Kind: "shared_note", Summary: "A shared note"},
 					},
 					Self:         "/v1/registry/schema?ref=seeds%2F0001-notepad%2Fdesign.md",
-					CanonicalURL: "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md",
-					PermalinkURL: "/@sha256-" + schemaHash + "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md",
+					CanonicalURL: "/schemas/seeds%2F0001-notepad%2Fdesign.md",
+					PermalinkURL: "/reg/" + schemaHash,
 					ContentHash:  schemaHash,
 				},
 			})
 			return
 		}
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	})
+
+	mux.HandleFunc("GET /v1/registry/lookup", func(w http.ResponseWriter, r *http.Request) {
+		hash := r.URL.Query().Get("sha256")
+		switch hash {
+		case realizationHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "realization",
+				CanonicalURL: "/contracts/0001-notepad/a-go-htmx",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/contracts/0001-notepad/a-go-htmx",
+			}})
+		case commandCreateHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "command",
+				CanonicalURL: "/actions/0001-notepad/a-go-htmx/notes.create",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.create",
+			}})
+		case commandUpdateHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "command",
+				CanonicalURL: "/actions/0001-notepad/a-go-htmx/notes.update",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.update",
+			}})
+		case projectionHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "projection",
+				CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/read-models/0001-notepad/a-go-htmx/notes.room",
+			}})
+		case objectHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "object",
+				CanonicalURL: "/objects/0001-notepad/shared_note",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/objects/0001-notepad/shared_note",
+			}})
+		case schemaHash:
+			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
+				ContentHash:  hash,
+				ResourceKind: "schema",
+				CanonicalURL: "/schemas/seeds%2F0001-notepad%2Fdesign.md",
+				PermalinkURL: "/reg/" + hash,
+				RedirectURL:  "/@sha256-" + hash + "/schemas/seeds%2F0001-notepad%2Fdesign.md",
+			}})
+		default:
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		}
 	})
 
 	return httptest.NewServer(mux)
@@ -328,7 +384,9 @@ func newTestMux(app *App) http.Handler {
 	mux.HandleFunc("GET /objects", app.handleObjects)
 	mux.HandleFunc("GET /objects/", app.handleObjectDetail)
 	mux.HandleFunc("GET /schemas", app.handleSchemas)
+	mux.HandleFunc("GET /schemas/", app.handleSchemaDetail)
 	mux.HandleFunc("GET /schemas/detail", app.handleSchemaDetail)
+	mux.HandleFunc("GET /reg/", app.handlePermalinkLookup)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
 	return app.permalinkMiddleware(mux)
 }
@@ -740,7 +798,28 @@ func TestCommandDetailPermalinkPage(t *testing.T) {
 		t.Fatal("command permalink page missing canonical link tag")
 	}
 	if !strings.Contains(body, "/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create") {
-		t.Fatal("command permalink page missing rendered permalink")
+		if !strings.Contains(body, "/reg/"+hash) {
+			t.Fatal("command permalink page missing rendered short permalink")
+		}
+	}
+}
+
+func TestRegistryShortPermalinkRedirect(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	hash := strings.Repeat("2", 64)
+	req := httptest.NewRequest("GET", "/reg/"+hash, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("short permalink returned %d", rec.Code)
+	}
+	if got, want := rec.Header().Get("Location"), "/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create"; got != want {
+		t.Fatalf("short permalink redirect = %q, want %q", got, want)
 	}
 }
 
@@ -940,7 +1019,7 @@ func TestSchemasListPage(t *testing.T) {
 	if !strings.Contains(body, "seeds/0001-notepad/design.md") {
 		t.Error("schemas page missing design.md schema")
 	}
-	if !strings.Contains(body, `/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md`) {
+	if !strings.Contains(body, `/schemas/seeds%2F0001-notepad%2Fdesign.md`) {
 		t.Error("schemas page missing singly-escaped schema detail link")
 	}
 	if strings.Contains(body, `%252F`) {
@@ -954,7 +1033,7 @@ func TestSchemaDetailPage(t *testing.T) {
 	app := newTestApp(mock.URL)
 	mux := newTestMux(app)
 
-	req := httptest.NewRequest("GET", "/schemas/detail?ref=seeds/0001-notepad/design.md", nil)
+	req := httptest.NewRequest("GET", "/schemas/seeds%2F0001-notepad%2Fdesign.md", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -969,7 +1048,7 @@ func TestSchemaDetailPage(t *testing.T) {
 	if !strings.Contains(body, "shared_note") {
 		t.Error("schema detail missing object use")
 	}
-	if !strings.Contains(body, `href="/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md"`) {
+	if !strings.Contains(body, `href="/schemas/seeds%2F0001-notepad%2Fdesign.md"`) {
 		t.Error("schema detail missing singly-escaped canonical link")
 	}
 	if !strings.Contains(body, `https://github.com/splashkes/autosoftware/blob/main/seeds/0001-notepad/design.md`) {
@@ -997,7 +1076,7 @@ func TestSchemaDetailMissingRef(t *testing.T) {
 
 func TestBrowseSchemaPath(t *testing.T) {
 	got := string(browseSchemaPath("seeds/0001-notepad/design.md"))
-	want := "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md"
+	want := "/schemas/seeds%2F0001-notepad%2Fdesign.md"
 	if got != want {
 		t.Fatalf("browseSchemaPath() = %q, want %q", got, want)
 	}
