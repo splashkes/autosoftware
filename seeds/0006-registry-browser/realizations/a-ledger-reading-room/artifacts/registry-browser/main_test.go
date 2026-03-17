@@ -82,7 +82,15 @@ func newMockRegistry() *httptest.Server {
 					Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive",
 					AuthModes: []string{"anonymous"}, Capabilities: []string{"search_documents"},
-					Objects:      []ResourceLink{{Kind: "shared_note"}},
+					Objects: []ResourceLink{{Kind: "shared_note"}, {Kind: "actor"}},
+					Relations: []GraphRelation{{
+						Kind:        "note_edited_by",
+						Summary:     "Tracks who last edited the shared note.",
+						Cardinality: "many_to_one",
+						Visibility:  "mixed",
+						FromObjects: []ResourceLink{{Kind: "shared_note"}},
+						ToObjects:   []ResourceLink{{Kind: "actor"}},
+					}},
 					Commands:     []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
 					Projections:  []ResourceLink{{Name: "notes.room"}},
 					Self:         "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
@@ -171,8 +179,12 @@ func newMockRegistry() *httptest.Server {
 				"projection": ProjectionDetail{
 					Reference: ref, SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Name: "notes.room", Summary: "Note room view", Path: "/v1/projections/0001-notepad/notes.room",
-					AuthModes:    []string{"anonymous", "session"},
-					Freshness:    "materialized",
+					AuthModes: []string{"anonymous", "session"},
+					Freshness: "materialized",
+					DataViews: []DataView{
+						{AuthModes: []string{"anonymous"}, Sections: []string{"shared_metadata", "public_payload"}, Summary: "Anonymous readers get the public note."},
+						{AuthModes: []string{"session"}, Sections: []string{"shared_metadata", "public_payload", "private_payload"}, Summary: "Session readers get the fuller note."},
+					},
 					Self:         "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
 					CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
 					PermalinkURL: "/@sha256-" + projectionHash + "/read-models/0001-notepad/a-go-htmx/notes.room",
@@ -210,7 +222,36 @@ func newMockRegistry() *httptest.Server {
 				"object": ObjectDetail{
 					SeedID: seedID, Kind: kind, Summary: "A shared note",
 					Capabilities: []string{"search_documents"},
-					Schemas:      []ResourceLink{{Ref: "seeds/0001-notepad/design.md"}},
+					DataLayout: DataLayout{
+						SharedMetadata: DataSection{
+							Summary: "Stable note identity.",
+							Fields:  []DataField{{Name: "note_id", Type: "string", Summary: "Stable note id."}},
+						},
+						PublicPayload: DataSection{
+							Summary: "Public note content.",
+							Fields:  []DataField{{Name: "title", Type: "string", Summary: "Public title."}},
+						},
+						PrivatePayload: DataSection{
+							Summary: "Private note content.",
+							Fields:  []DataField{{Name: "draft_body", Type: "string", Summary: "Draft-only body."}},
+						},
+					},
+					OutgoingRelations: []GraphRelation{{
+						Kind:        "note_edited_by",
+						Summary:     "Tracks which actor last edited the note.",
+						Cardinality: "many_to_one",
+						Visibility:  "mixed",
+						ToObjects:   []ResourceLink{{Kind: "actor"}},
+						Attributes:  []DataField{{Name: "edited_at", Type: "RFC3339 timestamp", Summary: "Timestamp for the latest edit."}},
+					}},
+					IncomingRelations: []GraphRelation{{
+						Kind:        "note_forked_from",
+						Summary:     "Tracks notes that fork from this one.",
+						Cardinality: "one_to_many",
+						Visibility:  "public",
+						FromObjects: []ResourceLink{{Kind: "shared_note"}},
+					}},
+					Schemas: []ResourceLink{{Ref: "seeds/0001-notepad/design.md"}},
 					Realizations: []ObjectRealization{
 						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive"},
 					},
@@ -546,6 +587,9 @@ func TestRealizationDetailPage(t *testing.T) {
 	if !strings.Contains(body, "notes.room") {
 		t.Error("detail page missing projection link")
 	}
+	if !strings.Contains(body, "note_edited_by") || !strings.Contains(body, "Graph Relations") {
+		t.Error("detail page missing graph relation section")
+	}
 }
 
 func TestRealizationDetailPageAcceptsEncodedReferencePath(t *testing.T) {
@@ -765,6 +809,9 @@ func TestProjectionDetailPage(t *testing.T) {
 	if !strings.Contains(body, "materialized") {
 		t.Error("projection detail missing freshness")
 	}
+	if !strings.Contains(body, "Visible Data By Auth Mode") || !strings.Contains(body, "Shared Metadata") {
+		t.Error("projection detail missing data-view breakdown")
+	}
 }
 
 func TestProjectionDetailPageAcceptsEncodedReferencePath(t *testing.T) {
@@ -849,6 +896,12 @@ func TestObjectDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "/contracts/0001-notepad/a-go-htmx") {
 		t.Error("object detail missing contract link")
+	}
+	if !strings.Contains(body, "Data Layout") || !strings.Contains(body, "note_id") || !strings.Contains(body, "Private Payload") {
+		t.Error("object detail missing grouped data layout")
+	}
+	if !strings.Contains(body, "Outgoing Relations") || !strings.Contains(body, "note_edited_by") || !strings.Contains(body, "Incoming Relations") {
+		t.Error("object detail missing graph relation sections")
 	}
 }
 

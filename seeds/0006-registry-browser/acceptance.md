@@ -65,3 +65,11 @@ The ledger reading room realization must additionally satisfy:
 19. Human-facing detail pages expose a stable canonical URL and a hash-bound
     permalink URL for citation, and neither URL resolves through a preview-only
     `__runs` path.
+20. When a governed thing declares `shared_metadata`, `public_payload`,
+    `private_payload`, or `runtime_only` sections, the detail view renders that
+    grouping explicitly instead of burying it in prose.
+21. When a read model declares auth-mode-specific data visibility, the detail
+    view shows which data sections each auth mode can read.
+22. When a contract declares explicit domain relations, object and contract
+    detail views render that graph context explicitly instead of presenting each
+    governed thing as an isolated record.

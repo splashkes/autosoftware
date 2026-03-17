@@ -25,4 +25,23 @@
   {{range $p.Capabilities}}<span class="tag">{{.}}</span>{{end}}
 </div>
 {{end}}
+
+{{if $p.DataViews}}
+<div class="detail-section">
+  <h3>Visible Data By Auth Mode</h3>
+  <ul class="resource-list">
+    {{range $p.DataViews}}
+    <li class="resource-item">
+      <div class="meta">
+        <span>{{join .AuthModes ", "}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+      <div class="meta">
+        {{range .Sections}}<span>{{layoutSectionTitle .}}</span>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
 {{end}}
