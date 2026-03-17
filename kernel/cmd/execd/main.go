@@ -16,6 +16,7 @@ import (
 	"as/kernel/internal/interactions"
 	runtimedb "as/kernel/internal/runtime"
 	"as/kernel/internal/telemetry"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -64,7 +65,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go runWorkerLoop(ctx, worker)
+	go runWorkerLoop(ctx, worker, pool)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -93,9 +94,10 @@ func main() {
 	}
 }
 
-func runWorkerLoop(ctx context.Context, worker *execution.LocalWorker) {
+func runWorkerLoop(ctx context.Context, worker *execution.LocalWorker, pool *pgxpool.Pool) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+	wakeCh := startRuntimeJobWakeListener(ctx, pool, "realization-execution")
 	for {
 		if err := worker.Tick(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("execd worker tick failed: %v", err)
@@ -103,9 +105,71 @@ func runWorkerLoop(ctx context.Context, worker *execution.LocalWorker) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-wakeCh:
 		case <-ticker.C:
 		}
 	}
+}
+
+func startRuntimeJobWakeListener(ctx context.Context, pool *pgxpool.Pool, queue string) <-chan struct{} {
+	wakeCh := make(chan struct{}, 1)
+	go func() {
+		for ctx.Err() == nil {
+			if err := listenForRuntimeJobs(ctx, pool, queue, wakeCh); err != nil && ctx.Err() == nil {
+				log.Printf("execd runtime job listener failed: %v", err)
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+	}()
+	return wakeCh
+}
+
+func listenForRuntimeJobs(ctx context.Context, pool *pgxpool.Pool, queue string, wakeCh chan<- struct{}) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, "listen "+interactions.RuntimeJobsNotifyChannel); err != nil {
+		return err
+	}
+	defer func() {
+		unlistenCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, _ = conn.Exec(unlistenCtx, "unlisten "+interactions.RuntimeJobsNotifyChannel)
+	}()
+
+	for ctx.Err() == nil {
+		notification, err := conn.Conn().WaitForNotification(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if notification == nil {
+			continue
+		}
+		payload := strings.TrimSpace(notification.Payload)
+		if payload != "" && payload != queue {
+			continue
+		}
+		select {
+		case wakeCh <- struct{}{}:
+		default:
+		}
+	}
+	return nil
 }
 
 func intEnv(key string, fallback int) int {
