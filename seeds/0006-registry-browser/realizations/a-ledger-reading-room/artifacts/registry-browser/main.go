@@ -1701,7 +1701,7 @@ func buildSystemViewsFromCatalog(catalog *CatalogResponse) []SystemView {
 		))
 	}
 
-	sort.Slice(systems, func(i, j int) bool { return systems[i].SeedID < systems[j].SeedID })
+	sort.Slice(systems, func(i, j int) bool { return systems[i].SeedID > systems[j].SeedID })
 	return systems
 }
 
