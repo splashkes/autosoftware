@@ -22,6 +22,7 @@ type CapabilityURLs struct {
 	RegistryBaseURL    string
 	PublicAPIBaseURL   string
 	InternalAPIBaseURL string
+	RuntimeDatabaseURL string
 }
 
 type LocalSpec struct {
@@ -102,6 +103,9 @@ func BuildLocalSpec(repoRoot, reference, executionID string, urls CapabilityURLs
 	}
 	if strings.TrimSpace(urls.InternalAPIBaseURL) != "" {
 		envMap["AS_INTERNAL_API_URL"] = strings.TrimSpace(urls.InternalAPIBaseURL)
+	}
+	if strings.TrimSpace(urls.RuntimeDatabaseURL) != "" {
+		envMap["AS_RUNTIME_DATABASE_URL"] = strings.TrimSpace(urls.RuntimeDatabaseURL)
 	}
 
 	return LocalSpec{

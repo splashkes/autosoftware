@@ -49,6 +49,7 @@ func main() {
 		RegistryBaseURL:    capabilityBaseURL("AS_EXECD_REGISTRY_BASE_URL", "AS_REGISTRYD_ADDR", "127.0.0.1:8093"),
 		PublicAPIBaseURL:   capabilityBaseURL("AS_EXECD_PUBLIC_API_BASE_URL", "AS_APID_ADDR", "127.0.0.1:8092"),
 		InternalAPIBaseURL: capabilityBaseURL("AS_EXECD_INTERNAL_API_BASE_URL", "AS_APID_ADDR", "127.0.0.1:8092"),
+		RuntimeDatabaseURL: runtimeConfig.DatabaseURL,
 	}, config.EnvOrDefault("AS_EXECD_WORKER", "execd-local"), true)
 	worker.Budgets.MaxRSSBytes = int64Env("AS_EXECUTION_MAX_RSS_BYTES", worker.Budgets.MaxRSSBytes)
 	worker.Budgets.MaxLogBytes = int64Env("AS_EXECUTION_MAX_LOG_BYTES", worker.Budgets.MaxLogBytes)

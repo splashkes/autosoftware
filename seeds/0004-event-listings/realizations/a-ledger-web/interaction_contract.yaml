@@ -1,0 +1,133 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0004-event-listings
+realization_id: a-ledger-web
+summary: Ledger-backed web contract for durable event publishing, public discovery, and browsable accepted history.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+  - session
+  - service_token
+capabilities:
+  - name: activity_events
+    summary: Accepted event claims remain inspectable as ordered lifecycle activity.
+  - name: handles
+    summary: Stable public event handles survive edits and state transitions.
+  - name: publications
+    summary: Publish, unpublish, cancel, and archive changes shape public discovery surfaces.
+  - name: search_documents
+    summary: Materialized directory and detail read models stay queryable from the same event object state.
+  - name: search_facets
+    summary: Category, location, and date filters derive from the current accepted event snapshot.
+  - name: state_transitions
+    summary: Lifecycle state changes append claims rather than overwriting event identity.
+domain_objects:
+  - kind: event
+    summary: Durable event object with a stable identity, stable handle, append-only claims, and materialized read models.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - handles
+      - publications
+      - search_documents
+      - search_facets
+      - state_transitions
+commands:
+  - name: events.create
+    summary: Create a new durable event object with an initial snapshot and draft status claim.
+    path: /v1/commands/0004-event-listings/events.create
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, handles, state_transitions]
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.update
+    summary: Append a new event snapshot without changing the stable handle or object identity.
+    path: /v1/commands/0004-event-listings/events.update
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, handles, state_transitions]
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.publish
+    summary: Append a publish status claim so the event appears in public directory and calendar projections.
+    path: /v1/commands/0004-event-listings/events.publish
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, publications, search_documents, search_facets, state_transitions]
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.unpublish
+    summary: Append a draft status claim while preserving the object, handle, and claim history.
+    path: /v1/commands/0004-event-listings/events.unpublish
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, publications, state_transitions]
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.cancel
+    summary: Append a canceled status claim while keeping the public detail page reachable.
+    path: /v1/commands/0004-event-listings/events.cancel
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, publications, state_transitions]
+    projection: events.detail
+    consistency: read_your_writes
+  - name: events.archive
+    summary: Append an archived status claim while retaining the event ledger and stable URL.
+    path: /v1/commands/0004-event-listings/events.archive
+    object_kinds: [event]
+    auth_modes: [session, service_token]
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities: [activity_events, publications, state_transitions]
+    projection: events.ledger
+    consistency: read_your_writes
+projections:
+  - name: events.detail
+    summary: Canonical event detail projection keyed by the event handle used in public pages and third-party reads.
+    path: /v1/projections/0004-event-listings/events/{slug}
+    object_kinds: [event]
+    capabilities: [activity_events, handles, publications, search_documents, state_transitions]
+    freshness: materialized
+  - name: events.directory
+    summary: Public upcoming-events list projection with shared search and filter semantics.
+    path: /v1/projections/0004-event-listings/events
+    object_kinds: [event]
+    capabilities: [publications, search_documents, search_facets, state_transitions]
+    freshness: materialized
+  - name: events.calendar
+    summary: Month-calendar projection covering single-day and simple multi-day event rendering.
+    path: /v1/projections/0004-event-listings/calendar
+    object_kinds: [event]
+    capabilities: [publications, search_facets, state_transitions]
+    freshness: materialized
+  - name: events.ledger
+    summary: Ordered accepted claim history for one event object, including supersession and current-state materialization inputs.
+    path: /v1/projections/0004-event-listings/events/{event_id}/ledger
+    object_kinds: [event]
+    capabilities: [activity_events, handles, state_transitions]
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized
