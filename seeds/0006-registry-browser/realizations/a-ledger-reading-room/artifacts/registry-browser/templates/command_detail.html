@@ -11,11 +11,11 @@
   <table class="field-table">
     <tr><td>Name</td><td>{{$c.Name}}</td></tr>
     <tr><td>Seed</td><td>{{$c.SeedID}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{realizationPath $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
+    <tr><td>Realization</td><td><a href="{{realizationPath $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
     <tr><td>Path</td><td><code>{{$c.Path}}</code></td></tr>
     <tr><td>Idempotency</td><td>{{$c.Idempotency}}</td></tr>
     <tr><td>Consistency</td><td>{{$c.Consistency}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{hrefURL $c.Contract}}">{{$c.ContractFile}}</a> · <a href="{{repoSourceURL $c.ContractFile}}">GitHub</a></td></tr>
+    <tr><td>Realization Contract</td><td><a href="{{hrefURL $c.Contract}}">{{$c.ContractFile}}</a> · <a href="{{repoSourceURL $c.ContractFile}}">GitHub</a></td></tr>
   </table>
 </div>
 

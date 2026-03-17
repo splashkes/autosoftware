@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="page-head">
   <h2>Systems</h2>
-  <p>Systems are the clearest starting point for human readers. Each system groups the governed things, actions, read models, and contracts that share one seed identity.</p>
+  <p>Systems group related objects, actions, read models, and realizations under one seed identity.</p>
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
@@ -19,7 +19,7 @@
       <span>{{.SeedID}}</span>
       {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}
       {{if .SurfaceKinds}}<span>{{join .SurfaceKinds ", "}}</span>{{end}}
-      <span>{{.ObjectCount}} governed {{plural .ObjectCount "thing" "things"}}</span>
+      <span>{{.ObjectCount}} {{plural .ObjectCount "object" "objects"}}</span>
       <span>{{.ActionCount}} {{plural .ActionCount "action" "actions"}}</span>
       <span>{{.ReadModelCount}} {{plural .ReadModelCount "read model" "read models"}}</span>
     </div>

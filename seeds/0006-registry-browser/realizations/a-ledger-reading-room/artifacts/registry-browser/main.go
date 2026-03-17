@@ -317,6 +317,17 @@ type SystemView struct {
 	Schemas            []SchemaSummary
 }
 
+type ObjectRelationBrowseContext struct {
+	SeedID          string
+	Kind            string
+	Direction       string
+	DirectionLabel  string
+	RelationKind    string
+	MatchedKinds    []string
+	MatchedCount    int
+	ClearFiltersURL template.URL
+}
+
 // --- Registry client ---
 
 type RegistryClient struct {
@@ -507,13 +518,15 @@ func (app *App) loadTemplates() {
 		"pathEscape": func(s string) string {
 			return url.PathEscape(s)
 		},
-		"objectPath":      browseObjectPath,
-		"realizationPath": browseRealizationPath,
-		"commandPath":     browseCommandPath,
-		"projectionPath":  browseProjectionPath,
-		"schemaPath":      browseSchemaPath,
-		"hrefURL":         trustedURL,
-		"repoSourceURL":   repoSourceURL,
+		"objectPath":         browseObjectPath,
+		"objectsPath":        browseObjectsPath,
+		"relatedObjectsPath": browseRelatedObjectsPath,
+		"realizationPath":    browseRealizationPath,
+		"commandPath":        browseCommandPath,
+		"projectionPath":     browseProjectionPath,
+		"schemaPath":         browseSchemaPath,
+		"hrefURL":            trustedURL,
+		"repoSourceURL":      repoSourceURL,
 		"queryEscape": func(s string) string {
 			return url.QueryEscape(s)
 		},
@@ -845,6 +858,40 @@ func browseProjectionPath(reference, name string) string {
 	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
 }
 
+func browseObjectsPath(seedID, schemaRef, q, relatedSeedID, relatedKind, relationDirection, relationKind string) template.URL {
+	params := url.Values{}
+	if seedID = strings.TrimSpace(seedID); seedID != "" {
+		params.Set("seed_id", seedID)
+	}
+	if schemaRef = strings.TrimSpace(schemaRef); schemaRef != "" {
+		params.Set("schema_ref", schemaRef)
+	}
+	if q = strings.TrimSpace(q); q != "" {
+		params.Set("q", q)
+	}
+	if relatedSeedID = strings.TrimSpace(relatedSeedID); relatedSeedID != "" {
+		params.Set("related_seed_id", relatedSeedID)
+	}
+	if relatedKind = strings.TrimSpace(relatedKind); relatedKind != "" {
+		params.Set("related_kind", relatedKind)
+	}
+	if relationDirection = normalizeRelationDirection(relationDirection); relationDirection != "" {
+		params.Set("relation_direction", relationDirection)
+	}
+	if relationKind = strings.TrimSpace(relationKind); relationKind != "" {
+		params.Set("relation_kind", relationKind)
+	}
+	if len(params) == 0 {
+		return trustedURL("/objects")
+	}
+	return trustedURL("/objects?" + params.Encode())
+}
+
+func browseRelatedObjectsPath(seedID, kind, direction, relationKind string) template.URL {
+	seedID = strings.TrimSpace(seedID)
+	return browseObjectsPath(seedID, "", "", seedID, strings.TrimSpace(kind), direction, relationKind)
+}
+
 func browseSchemaPath(ref string) template.URL {
 	return trustedURL("/schemas/detail?ref=" + url.QueryEscape(strings.TrimSpace(ref)))
 }
@@ -1000,13 +1047,13 @@ func (app *App) handleSystemDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	realizations, err := app.registry.Realizations(seedID, "")
 	if err != nil {
-		app.renderError(w, http.StatusBadGateway, "Could not fetch system contracts.")
+		app.renderError(w, http.StatusBadGateway, "Could not fetch system realizations.")
 		log.Printf("system realizations error: %v", err)
 		return
 	}
 	objects, err := app.registry.Objects(seedID, "", "")
 	if err != nil {
-		app.renderError(w, http.StatusBadGateway, "Could not fetch governed things.")
+		app.renderError(w, http.StatusBadGateway, "Could not fetch objects.")
 		log.Printf("system objects error: %v", err)
 		return
 	}
@@ -1056,10 +1103,10 @@ func (app *App) handleRealizations(w http.ResponseWriter, r *http.Request) {
 			items[i].SchemaCount = counts[items[i].SeedID]
 		}
 	} else {
-		log.Printf("contracts schema count error: %v", err)
+		log.Printf("realization schema count error: %v", err)
 	}
 	app.render(w, "realizations", map[string]any{
-		"Title":        "Contracts",
+		"Title":        "Realizations",
 		"Nav":          "contracts",
 		"Realizations": items,
 		"Query":        q,
@@ -1084,10 +1131,10 @@ func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) 
 	}
 	schemas, err := app.registry.Schemas(item.SeedID, "")
 	if err != nil {
-		log.Printf("contract schemas error: %v", err)
+		log.Printf("realization schemas error: %v", err)
 	}
 	if !matchesRequestedPermalink(r, item.ContentHash) {
-		app.renderError(w, http.StatusNotFound, "This contract permalink does not match the current accepted registry state.")
+		app.renderError(w, http.StatusNotFound, "This realization permalink does not match the current accepted registry state.")
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
@@ -1202,6 +1249,13 @@ func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	seedID := r.URL.Query().Get("seed_id")
 	schemaRef := r.URL.Query().Get("schema_ref")
+	relatedSeedID := strings.TrimSpace(r.URL.Query().Get("related_seed_id"))
+	relatedKind := strings.TrimSpace(r.URL.Query().Get("related_kind"))
+	relationDirection := normalizeRelationDirection(r.URL.Query().Get("relation_direction"))
+	relationKind := strings.TrimSpace(r.URL.Query().Get("relation_kind"))
+	if seedID == "" && relatedSeedID != "" {
+		seedID = relatedSeedID
+	}
 	items, err := app.registry.Objects(seedID, schemaRef, q)
 	if err != nil {
 		app.renderError(w, http.StatusBadGateway, "Could not fetch objects.")
@@ -1209,17 +1263,51 @@ func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var relationBrowse *ObjectRelationBrowseContext
+	if relatedKind != "" {
+		if relatedSeedID == "" {
+			relatedSeedID = seedID
+		}
+		if relatedSeedID == "" {
+			app.renderError(w, http.StatusBadRequest, "Related object seed is required.")
+			return
+		}
+		anchor, err := app.registry.Object(relatedSeedID, relatedKind)
+		if err != nil {
+			app.renderError(w, http.StatusNotFound, "Related object not found.")
+			log.Printf("related object detail error: %v", err)
+			return
+		}
+		matchedKinds := collectRelatedObjectKinds(anchor, relationDirection, relationKind)
+		items = filterObjectSummariesByKindSet(items, matchedKinds)
+		relationBrowse = &ObjectRelationBrowseContext{
+			SeedID:          relatedSeedID,
+			Kind:            relatedKind,
+			Direction:       relationDirection,
+			DirectionLabel:  relationDirectionLabel(relationDirection),
+			RelationKind:    relationKind,
+			MatchedKinds:    matchedKinds,
+			MatchedCount:    len(items),
+			ClearFiltersURL: browseObjectsPath(seedID, schemaRef, q, "", "", "", ""),
+		}
+	}
+
 	seedIDs := uniqueStrings(items, func(o ObjectSummary) string { return o.SeedID })
 
 	app.render(w, "objects", map[string]any{
-		"Title":     "Governed Things",
-		"Nav":       "objects",
-		"Objects":   items,
-		"Query":     q,
-		"SeedID":    seedID,
-		"SchemaRef": schemaRef,
-		"SeedIDs":   seedIDs,
-		"APIRoute":  "/v1/registry/objects",
+		"Title":             "Objects",
+		"Nav":               "objects",
+		"Objects":           items,
+		"Query":             q,
+		"SeedID":            seedID,
+		"SchemaRef":         schemaRef,
+		"SeedIDs":           seedIDs,
+		"RelatedSeedID":     relatedSeedID,
+		"RelatedKind":       relatedKind,
+		"RelationDirection": relationDirection,
+		"RelationKind":      relationKind,
+		"RelationBrowse":    relationBrowse,
+		"APIRoute":          "/v1/registry/objects",
 	})
 }
 
@@ -1236,7 +1324,7 @@ func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !matchesRequestedPermalink(r, item.ContentHash) {
-		app.renderError(w, http.StatusNotFound, "This governed thing permalink does not match the current accepted registry state.")
+		app.renderError(w, http.StatusNotFound, "This object permalink does not match the current accepted registry state.")
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
@@ -1375,6 +1463,94 @@ func uniqueStrings[T any](items []T, fn func(T) string) []string {
 	return out
 }
 
+func normalizeRelationDirection(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "incoming":
+		return "incoming"
+	case "outgoing":
+		return "outgoing"
+	default:
+		return ""
+	}
+}
+
+func relationDirectionLabel(direction string) string {
+	switch normalizeRelationDirection(direction) {
+	case "incoming":
+		return "point to"
+	case "outgoing":
+		return "are pointed to by"
+	default:
+		return "relate to"
+	}
+}
+
+func collectRelatedObjectKinds(item *ObjectDetail, direction, relationKind string) []string {
+	if item == nil {
+		return nil
+	}
+
+	matchRelation := func(name string) bool {
+		if strings.TrimSpace(relationKind) == "" {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(relationKind))
+	}
+
+	seen := make(map[string]bool)
+	var out []string
+	addKind := func(kind string) {
+		kind = strings.TrimSpace(kind)
+		if kind == "" || seen[kind] {
+			return
+		}
+		seen[kind] = true
+		out = append(out, kind)
+	}
+	addRelationKinds := func(relations []GraphRelation, pick func(GraphRelation) []ResourceLink) {
+		for _, relation := range relations {
+			if !matchRelation(relation.Kind) {
+				continue
+			}
+			for _, object := range pick(relation) {
+				addKind(object.Kind)
+			}
+		}
+	}
+
+	switch normalizeRelationDirection(direction) {
+	case "incoming":
+		addRelationKinds(item.IncomingRelations, func(relation GraphRelation) []ResourceLink { return relation.FromObjects })
+	case "outgoing":
+		addRelationKinds(item.OutgoingRelations, func(relation GraphRelation) []ResourceLink { return relation.ToObjects })
+	default:
+		addRelationKinds(item.IncomingRelations, func(relation GraphRelation) []ResourceLink { return relation.FromObjects })
+		addRelationKinds(item.OutgoingRelations, func(relation GraphRelation) []ResourceLink { return relation.ToObjects })
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func filterObjectSummariesByKindSet(items []ObjectSummary, kinds []string) []ObjectSummary {
+	if len(kinds) == 0 {
+		return nil
+	}
+	allowed := make(map[string]bool, len(kinds))
+	for _, kind := range kinds {
+		if kind = strings.TrimSpace(kind); kind != "" {
+			allowed[kind] = true
+		}
+	}
+	var out []ObjectSummary
+	for _, item := range items {
+		if allowed[strings.TrimSpace(item.Kind)] {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 func splitSystems(systems []SystemView) ([]SystemView, []SystemView) {
 	var domain, internal []SystemView
 	for _, system := range systems {
@@ -1487,7 +1663,7 @@ func pickSystemSummary(seedID string, realizations []RealizationSummary, objects
 		}
 	}
 	if seedID == "0006-registry-browser" {
-		return "The registry describing itself: its objects, actions, read models, contracts, and schemas."
+		return "The registry describing itself: its objects, actions, read models, realizations, and schemas."
 	}
 	return "Accepted registry resources grouped under one seed identity."
 }

@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="page-head">
   <h2>Actions</h2>
-  <p>Actions are the operations a system permits against governed things. This page leads with intent first and leaves raw route details secondary.</p>
+  <p>Actions are the operations a system permits against its objects. This page leads with intent first and keeps route details secondary.</p>
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
@@ -19,9 +19,9 @@
     <div class="meta">
       <span>{{.SeedID}}</span>
       <span>{{.RealizationID}}</span>
-      {{if .Projection}}<span>shows in {{.Projection}}</span>{{end}}
+      {{if .Projection}}<span>Materializes as {{.Projection}}</span>{{end}}
     </div>
-    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{else}}<div class="summary">Action contract exposed through the registry catalog.</div>{{end}}
+    {{if .Summary}}<div class="summary">{{.Summary}}</div>{{else}}<div class="summary">Action surface exposed through the registry catalog.</div>{{end}}
     {{if .Path}}<div class="read-only-notice">Authoritative route: <span class="api-route">{{.Path}}</span></div>{{end}}
   </li>
   {{end}}

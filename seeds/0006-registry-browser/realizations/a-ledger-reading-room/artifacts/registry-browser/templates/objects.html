@@ -1,23 +1,41 @@
 {{define "content"}}
 <div class="page-head">
-  <h2>Governed Things</h2>
-  <p>Governed things are the stable identities a system acts on. Start here when you want to know what exists, what can happen to it, and where it is seen.</p>
+  <h2>Objects</h2>
+  <p>Objects are the stable identities a system acts on. Start here to discover available structures and action/projection touchpoints.</p>
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
 <form class="search-bar" method="get" action="/objects">
-  <input type="text" name="q" value="{{.Query}}" placeholder="Search governed things...">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search objects...">
   {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
   {{if .SchemaRef}}<input type="hidden" name="schema_ref" value="{{.SchemaRef}}">{{end}}
+  {{if .RelatedSeedID}}<input type="hidden" name="related_seed_id" value="{{.RelatedSeedID}}">{{end}}
+  {{if .RelatedKind}}<input type="hidden" name="related_kind" value="{{.RelatedKind}}">{{end}}
+  {{if .RelationDirection}}<input type="hidden" name="relation_direction" value="{{.RelationDirection}}">{{end}}
+  {{if .RelationKind}}<input type="hidden" name="relation_kind" value="{{.RelationKind}}">{{end}}
   <button type="submit">Search</button>
 </form>
+
+{{with .RelationBrowse}}
+<div class="detail-section">
+  <h3>Relation Filter</h3>
+  <p>Showing objects in <code>{{.SeedID}}</code> that {{.DirectionLabel}} <a href="{{objectPath .SeedID .Kind}}">{{.Kind}}</a>{{if .RelationKind}} via <code>{{.RelationKind}}</code>{{end}}.</p>
+  {{if .MatchedKinds}}
+  <div class="facets">
+    <span class="label">Matched kinds:</span>
+    {{range .MatchedKinds}}<span class="facet-tag active">{{.}}</span>{{end}}
+  </div>
+  {{end}}
+  <p class="read-only-notice"><a href="{{objectPath .SeedID .Kind}}">Back to {{.Kind}}</a> · <a href="{{.ClearFiltersURL}}">Clear relation filter</a></p>
+</div>
+{{end}}
 
 {{if .SeedIDs}}
 <div class="facets">
   <span class="label">Seed:</span>
-  <a href="/objects{{if .Query}}?q={{queryEscape .Query}}{{end}}" class="facet-tag{{if not .SeedID}} active{{end}}">All</a>
+  <a href="{{objectsPath "" .SchemaRef .Query .RelatedSeedID .RelatedKind .RelationDirection .RelationKind}}" class="facet-tag{{if not .SeedID}} active{{end}}">All</a>
   {{range .SeedIDs}}
-  <a href="/objects?seed_id={{queryEscape .}}{{if $.Query}}&q={{queryEscape $.Query}}{{end}}" class="facet-tag{{if eq . $.SeedID}} active{{end}}">{{.}}</a>
+  <a href="{{objectsPath . $.SchemaRef $.Query $.RelatedSeedID $.RelatedKind $.RelationDirection $.RelationKind}}" class="facet-tag{{if eq . $.SeedID}} active{{end}}">{{.}}</a>
   {{end}}
 </div>
 {{end}}
@@ -31,13 +49,13 @@
       <span>{{.SeedID}}</span>
       <span>{{.RealizationCount}} {{plural .RealizationCount "realization" "realizations"}}</span>
       <span>{{.CommandCount}} {{plural .CommandCount "command" "commands"}}</span>
-      <span>{{.ProjectionCount}} {{plural .ProjectionCount "projection" "projections"}}</span>
+      <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>
     </div>
     {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
   </li>
   {{end}}
 </ul>
 {{else}}
-<div class="empty">No governed things found.{{if .Query}} Try a different search.{{end}}</div>
+<div class="empty">No objects found.{{if .RelationBrowse}} Nothing in this slice of the graph matches the current relation filter.{{else if .Query}} Try a different search.{{end}}</div>
 {{end}}
 {{end}}

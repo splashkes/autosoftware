@@ -12,7 +12,7 @@
     <tr><td>Seed</td><td>{{$s.SeedID}}</td></tr>
     {{if $s.Statuses}}<tr><td>Lifecycle</td><td>{{join $s.Statuses ", "}}</td></tr>{{end}}
     {{if $s.SurfaceKinds}}<tr><td>Surface Kind</td><td>{{join $s.SurfaceKinds ", "}}</td></tr>{{end}}
-    <tr><td>Governed Things</td><td>{{$s.ObjectCount}}</td></tr>
+    <tr><td>Objects</td><td>{{$s.ObjectCount}}</td></tr>
     <tr><td>Actions</td><td>{{$s.ActionCount}}</td></tr>
     <tr><td>Read Models</td><td>{{$s.ReadModelCount}}</td></tr>
     <tr><td>Schemas</td><td>{{$s.SchemaCount}}</td></tr>
@@ -21,7 +21,7 @@
 
 {{if $s.Objects}}
 <div class="detail-section">
-  <h3>Governed Things</h3>
+  <h3>Objects</h3>
   <ul class="resource-list">
     {{range $s.Objects}}
     <li class="resource-item">
@@ -46,7 +46,7 @@
       <a href="{{commandPath .Reference .Name}}" class="name">{{.Name}}</a>
       <div class="meta">
         <span>{{.RealizationID}}</span>
-        {{if .Projection}}<span>shows in {{.Projection}}</span>{{end}}
+        {{if .Projection}}<span>Materializes as {{.Projection}}</span>{{end}}
       </div>
       {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
     </li>
@@ -57,7 +57,7 @@
 
 {{if $s.Projections}}
 <div class="detail-section">
-  <h3>Read Models</h3>
+  <h3>Read Models (Projections)</h3>
   <ul class="resource-list">
     {{range $s.Projections}}
     <li class="resource-item">
@@ -75,7 +75,7 @@
 
 {{if $s.Realizations}}
 <div class="detail-section">
-  <h3>Contracts</h3>
+  <h3>Realizations</h3>
   <ul class="resource-list">
     {{range $s.Realizations}}
     <li class="resource-item">
