@@ -3,6 +3,9 @@
 .claude
 .DS_Store
 materialized
+!materialized/
+!materialized/realizations/
+!materialized/realizations/**
 kernel/bin
 kernel/kernel
 kernel/asvalidate

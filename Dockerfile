@@ -21,7 +21,6 @@ RUN apk add --no-cache ca-certificates lsof procps tzdata
 
 WORKDIR /app
 
-COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=builder /out/apid /usr/local/bin/apid
 COPY --from=builder /out/registryd /usr/local/bin/registryd
 COPY --from=builder /out/materializerd /usr/local/bin/materializerd
@@ -33,7 +32,6 @@ RUN chown -R app:app /app
 
 USER app
 
-ENV PATH=/usr/local/go/bin:${PATH}
 ENV HOME=/home/app
 ENV AS_REPO_ROOT=/app
 

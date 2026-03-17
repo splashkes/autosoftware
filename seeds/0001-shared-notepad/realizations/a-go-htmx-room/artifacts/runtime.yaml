@@ -4,10 +4,8 @@ runtime: go
 entrypoint: artifacts/notepad-app/main.go
 working_directory: artifacts/notepad-app
 run:
-  command: go
-  args:
-    - run
-    - .
+  command: prebuilt
+  args: []
 environment:
   AS_SEEDS_DIR: ""
 notes:
