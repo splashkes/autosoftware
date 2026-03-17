@@ -14,7 +14,7 @@ import (
 	registrycatalog "as/kernel/internal/registry"
 )
 
-//go:embed assets/sprout-logo.css assets/sprout-logo.js
+//go:embed assets/sprout-logo.css assets/sprout-logo.js assets/launch-state.js
 var bootloaderAssets embed.FS
 
 var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype html>
@@ -989,6 +989,7 @@ Immutable object and schema history keeps rollback and replay possible.</pre>
     <p class="footer">Draft realizations materialize into <code>materialized/</code> for inspection. Growth requests enqueue agent-ready jobs in <code>runtime_jobs</code>, and accepted history stays replayable through the registry layer.</p>
 
     <script src="/assets/sprout-logo.js"></script>
+    <script src="/assets/launch-state.js"></script>
     <script nonce="{{.CSPNonce}}">{{.LoaderScript}}</script>
     <script nonce="{{.CSPNonce}}">{{.FeedbackScript}}</script>
   </main>
@@ -1481,7 +1482,18 @@ func consoleLoaderScript() string {
     }
   }
 
+  function launchStateAPI() {
+    if (typeof window.ASLaunchState === "object" && window.ASLaunchState) {
+      return window.ASLaunchState;
+    }
+    return null;
+  }
+
   function isTerminalExecutionStatus(statusValue) {
+    var api = launchStateAPI();
+    if (api && typeof api.isTerminalExecutionStatus === "function") {
+      return api.isTerminalExecutionStatus(statusValue);
+    }
     return statusValue === "failed" || statusValue === "stopped" || statusValue === "terminated";
   }
 
@@ -1552,6 +1564,10 @@ func consoleLoaderScript() string {
   }
 
   function launchStepLabel(session, events) {
+    var api = launchStateAPI();
+    if (api && typeof api.stepLabel === "function") {
+      return api.stepLabel(session, events);
+    }
     var statusValue = session && session.status ? session.status : "";
     if (statusValue === "launch_requested") return "Queued in kernel runtime";
     if (statusValue === "healthy") return session && session.open_path ? "Route ready" : "Registering route";
@@ -1568,6 +1584,10 @@ func consoleLoaderScript() string {
   }
 
   function launchCopyText(session, events, label, elapsedMs, transientError) {
+    var api = launchStateAPI();
+    if (api && typeof api.copyText === "function") {
+      return api.copyText(session, events, label, elapsedMs, transientError);
+    }
     if (transientError) {
       return "Status polling was interrupted. Retrying against the runtime projection without abandoning the launch.";
     }
@@ -1622,6 +1642,10 @@ func consoleLoaderScript() string {
   }
 
   function launchProgressPercent(session, events, elapsedMs) {
+    var api = launchStateAPI();
+    if (api && typeof api.progressPercent === "function") {
+      return api.progressPercent(session, events, elapsedMs);
+    }
     var statusValue = session && session.status ? session.status : "";
     if (statusValue === "healthy") {
       return session && session.open_path ? 100 : 94;
@@ -1654,6 +1678,10 @@ func consoleLoaderScript() string {
   }
 
   function launchDebugLine(session, events, launchContext, elapsedMs, transientError) {
+    var api = launchStateAPI();
+    if (api && typeof api.debugLine === "function") {
+      return api.debugLine(session, events, launchContext, elapsedMs, transientError);
+    }
     var latestEvent = latestExecutionEvent(events);
     var parts = [];
     parts.push("step=" + launchStepLabel(session, events));
@@ -1702,6 +1730,7 @@ func consoleLoaderScript() string {
     var root = modalContent.querySelector(".launch-screen");
     launchView = {
       root: root,
+      sprout: root.querySelector("[data-sprout-logo]"),
       title: root.querySelector(".launch-name"),
       bar: root.querySelector(".launch-progress"),
       fill: root.querySelector(".launch-progress-fill"),
@@ -1754,6 +1783,9 @@ func consoleLoaderScript() string {
     view.bar.classList.toggle("is-failed", isTerminalExecutionStatus(session.status));
     view.bar.classList.toggle("is-ready", session.status === "healthy" && !!session.open_path);
     view.fill.style.width = progress + "%";
+    if (view.sprout && window.ASSproutLogo && typeof window.ASSproutLogo.setProgress === "function") {
+      window.ASSproutLogo.setProgress(view.sprout, progress / 100);
+    }
 
     if (session.status === "healthy" && session.open_path && allowCompletion) {
       setStatus("Opening " + launchContext.label + "...");
