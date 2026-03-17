@@ -1,0 +1,11 @@
+approach_id: a-ledger-web
+summary: Registry-native event publishing with durable object identity, append-only claims, and materialized read models.
+status: active
+strategy:
+  implementation_style: registry-native
+  review_style: human-validated-first
+  interface_bias: server-rendered-web
+realizer:
+  model: codex-gpt-5
+  prompt_profile: seed-first-product-build
+  coding_ruleset: go-postgres-ledger-surface

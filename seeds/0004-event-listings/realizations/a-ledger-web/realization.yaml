@@ -1,0 +1,18 @@
+realization_id: a-ledger-web
+seed_id: 0004-event-listings
+approach_id: a-ledger-web
+summary: Ledger-backed web realization for durable event publishing and public discovery.
+status: draft
+subdomain: ledger-events
+path_prefix: /event-ledger/
+artifacts:
+  - artifacts/runtime.yaml
+  - artifacts/event-listings-app/go.mod
+  - artifacts/event-listings-app/go.sum
+  - artifacts/event-listings-app/main.go
+  - artifacts/event-listings-app/store.go
+  - artifacts/event-listings-app/main_test.go
+  - artifacts/event-listings-app/store_memory_test.go
+  - artifacts/event-listings-app/README.md
+  - artifacts/event-listings-app/assets/app.css
+  - artifacts/event-listings-app/assets/app.js

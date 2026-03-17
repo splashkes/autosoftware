@@ -1,0 +1,17 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/event-listings-app/main.go
+working_directory: artifacts/event-listings-app
+run:
+  command: go
+  args:
+    - run
+    - .
+environment:
+  AS_ADMIN_PASSWORD: admin
+notes:
+  - AS_ADDR is injected by the kernel execution backend at launch time.
+  - AS_RUNTIME_DATABASE_URL is injected by the kernel execution backend at launch time.
+  - Organizer login uses AS_ADMIN_PASSWORD and defaults to admin for local development.
+  - Event objects, claims, and materialized projections persist in the shared runtime database.
