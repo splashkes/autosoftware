@@ -883,6 +883,12 @@ func TestSchemasListPage(t *testing.T) {
 	if !strings.Contains(body, "seeds/0001-notepad/design.md") {
 		t.Error("schemas page missing design.md schema")
 	}
+	if !strings.Contains(body, `/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md`) {
+		t.Error("schemas page missing singly-escaped schema detail link")
+	}
+	if strings.Contains(body, `%252F`) {
+		t.Error("schemas page should not double-escape schema refs")
+	}
 }
 
 func TestSchemaDetailPage(t *testing.T) {
@@ -906,6 +912,12 @@ func TestSchemaDetailPage(t *testing.T) {
 	if !strings.Contains(body, "shared_note") {
 		t.Error("schema detail missing object use")
 	}
+	if !strings.Contains(body, `href="/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md"`) {
+		t.Error("schema detail missing singly-escaped canonical link")
+	}
+	if !strings.Contains(body, `https://github.com/splashkes/autosoftware/blob/main/seeds/0001-notepad/design.md`) {
+		t.Error("schema detail missing GitHub source link")
+	}
 }
 
 func TestSchemaDetailMissingRef(t *testing.T) {
@@ -920,6 +932,22 @@ func TestSchemaDetailMissingRef(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for missing ref, got %d", rec.Code)
+	}
+}
+
+func TestBrowseSchemaPath(t *testing.T) {
+	got := string(browseSchemaPath("seeds/0001-notepad/design.md"))
+	want := "/schemas/detail?ref=seeds%2F0001-notepad%2Fdesign.md"
+	if got != want {
+		t.Fatalf("browseSchemaPath() = %q, want %q", got, want)
+	}
+}
+
+func TestRepoSourceURLPreservesAnchor(t *testing.T) {
+	got := string(repoSourceURL("genesis/design.md#initial-objects-and-claims"))
+	want := "https://github.com/splashkes/autosoftware/blob/main/genesis/design.md#initial-objects-and-claims"
+	if got != want {
+		t.Fatalf("repoSourceURL() = %q, want %q", got, want)
 	}
 }
 

@@ -449,6 +449,8 @@ type App struct {
 	tmpl     map[string]*template.Template
 }
 
+const repoBlobBaseURL = "https://github.com/splashkes/autosoftware/blob/main/"
+
 func (app *App) loadTemplates() {
 	funcMap := template.FuncMap{
 		"join": strings.Join,
@@ -458,6 +460,9 @@ func (app *App) loadTemplates() {
 		"realizationPath": browseRealizationPath,
 		"commandPath":     browseCommandPath,
 		"projectionPath":  browseProjectionPath,
+		"schemaPath":      browseSchemaPath,
+		"hrefURL":         trustedURL,
+		"repoSourceURL":   repoSourceURL,
 		"queryEscape": func(s string) string {
 			return url.QueryEscape(s)
 		},
@@ -784,6 +789,31 @@ func browseProjectionPath(reference, name string) string {
 		return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
 	}
 	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+}
+
+func browseSchemaPath(ref string) template.URL {
+	return trustedURL("/schemas/detail?ref=" + url.QueryEscape(strings.TrimSpace(ref)))
+}
+
+func trustedURL(value string) template.URL {
+	return template.URL(strings.TrimSpace(value))
+}
+
+func repoSourceURL(path string) template.URL {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	filePath, fragment, _ := strings.Cut(path, "#")
+	filePath = strings.TrimPrefix(strings.TrimSpace(filePath), "/")
+	if filePath == "" {
+		return ""
+	}
+	link := repoBlobBaseURL + filePath
+	if fragment = strings.TrimSpace(fragment); fragment != "" {
+		link += "#" + fragment
+	}
+	return trustedURL(link)
 }
 
 func splitBrowseReference(reference string) (string, string, bool) {
