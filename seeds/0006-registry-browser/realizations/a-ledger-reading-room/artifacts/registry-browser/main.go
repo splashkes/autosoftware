@@ -63,25 +63,26 @@ type RealizationSummary struct {
 }
 
 type RealizationDetail struct {
-	Reference     string         `json:"reference"`
-	SeedID        string         `json:"seed_id"`
-	RealizationID string         `json:"realization_id"`
-	ApproachID    string         `json:"approach_id,omitempty"`
-	Summary       string         `json:"summary"`
-	Status        string         `json:"status"`
-	SurfaceKind   string         `json:"surface_kind"`
-	ContractFile  string         `json:"contract_file"`
-	AuthModes     []string       `json:"auth_modes"`
-	Capabilities  []string       `json:"capabilities"`
-	ObjectKinds   []string       `json:"object_kinds"`
-	Objects       []ResourceLink `json:"objects"`
-	Commands      []ResourceLink `json:"commands"`
-	Projections   []ResourceLink `json:"projections"`
-	Contract      string         `json:"contract"`
-	Self          string         `json:"self"`
-	CanonicalURL  string         `json:"canonical_url"`
-	PermalinkURL  string         `json:"permalink_url"`
-	ContentHash   string         `json:"content_hash"`
+	Reference     string          `json:"reference"`
+	SeedID        string          `json:"seed_id"`
+	RealizationID string          `json:"realization_id"`
+	ApproachID    string          `json:"approach_id,omitempty"`
+	Summary       string          `json:"summary"`
+	Status        string          `json:"status"`
+	SurfaceKind   string          `json:"surface_kind"`
+	ContractFile  string          `json:"contract_file"`
+	AuthModes     []string        `json:"auth_modes"`
+	Capabilities  []string        `json:"capabilities"`
+	ObjectKinds   []string        `json:"object_kinds"`
+	Objects       []ResourceLink  `json:"objects"`
+	Relations     []GraphRelation `json:"relations,omitempty"`
+	Commands      []ResourceLink  `json:"commands"`
+	Projections   []ResourceLink  `json:"projections"`
+	Contract      string          `json:"contract"`
+	Self          string          `json:"self"`
+	CanonicalURL  string          `json:"canonical_url"`
+	PermalinkURL  string          `json:"permalink_url"`
+	ContentHash   string          `json:"content_hash"`
 }
 
 type CommandSummary struct {
@@ -135,21 +136,22 @@ type ProjectionSummary struct {
 }
 
 type ProjectionDetail struct {
-	Reference     string   `json:"reference"`
-	SeedID        string   `json:"seed_id"`
-	RealizationID string   `json:"realization_id"`
-	Name          string   `json:"name"`
-	Summary       string   `json:"summary"`
-	Path          string   `json:"path"`
-	AuthModes     []string `json:"auth_modes"`
-	Capabilities  []string `json:"capabilities"`
-	Freshness     string   `json:"freshness"`
-	ContractFile  string   `json:"contract_file"`
-	Contract      string   `json:"contract"`
-	Self          string   `json:"self"`
-	CanonicalURL  string   `json:"canonical_url"`
-	PermalinkURL  string   `json:"permalink_url"`
-	ContentHash   string   `json:"content_hash"`
+	Reference     string     `json:"reference"`
+	SeedID        string     `json:"seed_id"`
+	RealizationID string     `json:"realization_id"`
+	Name          string     `json:"name"`
+	Summary       string     `json:"summary"`
+	Path          string     `json:"path"`
+	AuthModes     []string   `json:"auth_modes"`
+	Capabilities  []string   `json:"capabilities"`
+	Freshness     string     `json:"freshness"`
+	DataViews     []DataView `json:"data_views,omitempty"`
+	ContractFile  string     `json:"contract_file"`
+	Contract      string     `json:"contract"`
+	Self          string     `json:"self"`
+	CanonicalURL  string     `json:"canonical_url"`
+	PermalinkURL  string     `json:"permalink_url"`
+	ContentHash   string     `json:"content_hash"`
 }
 
 type ObjectSummary struct {
@@ -165,19 +167,22 @@ type ObjectSummary struct {
 }
 
 type ObjectDetail struct {
-	SeedID       string              `json:"seed_id"`
-	Kind         string              `json:"kind"`
-	Summary      string              `json:"summary"`
-	Capabilities []string            `json:"capabilities"`
-	SchemaRefs   []string            `json:"schema_refs"`
-	Schemas      []ResourceLink      `json:"schemas"`
-	Realizations []ObjectRealization `json:"realizations"`
-	Commands     []CommandDetail     `json:"commands"`
-	Projections  []ProjectionDetail  `json:"projections"`
-	Self         string              `json:"self"`
-	CanonicalURL string              `json:"canonical_url"`
-	PermalinkURL string              `json:"permalink_url"`
-	ContentHash  string              `json:"content_hash"`
+	SeedID            string              `json:"seed_id"`
+	Kind              string              `json:"kind"`
+	Summary           string              `json:"summary"`
+	Capabilities      []string            `json:"capabilities"`
+	SchemaRefs        []string            `json:"schema_refs"`
+	DataLayout        DataLayout          `json:"data_layout,omitempty"`
+	OutgoingRelations []GraphRelation     `json:"outgoing_relations,omitempty"`
+	IncomingRelations []GraphRelation     `json:"incoming_relations,omitempty"`
+	Schemas           []ResourceLink      `json:"schemas"`
+	Realizations      []ObjectRealization `json:"realizations"`
+	Commands          []CommandDetail     `json:"commands"`
+	Projections       []ProjectionDetail  `json:"projections"`
+	Self              string              `json:"self"`
+	CanonicalURL      string              `json:"canonical_url"`
+	PermalinkURL      string              `json:"permalink_url"`
+	ContentHash       string              `json:"content_hash"`
 }
 
 type ObjectRealization struct {
@@ -193,6 +198,49 @@ type ObjectRealization struct {
 	Capabilities  []string `json:"capabilities"`
 	Contract      string   `json:"contract"`
 	Realization   string   `json:"realization"`
+}
+
+type DataLayout struct {
+	SharedMetadata DataSection `json:"shared_metadata,omitempty"`
+	PublicPayload  DataSection `json:"public_payload,omitempty"`
+	PrivatePayload DataSection `json:"private_payload,omitempty"`
+	RuntimeOnly    DataSection `json:"runtime_only,omitempty"`
+}
+
+type DataSection struct {
+	Summary string      `json:"summary,omitempty"`
+	Fields  []DataField `json:"fields,omitempty"`
+}
+
+type DataField struct {
+	Name    string `json:"name"`
+	Type    string `json:"type,omitempty"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type DataView struct {
+	AuthModes []string `json:"auth_modes"`
+	Sections  []string `json:"sections"`
+	Summary   string   `json:"summary,omitempty"`
+}
+
+type GraphRelation struct {
+	Reference     string         `json:"reference"`
+	SeedID        string         `json:"seed_id"`
+	RealizationID string         `json:"realization_id"`
+	Kind          string         `json:"kind"`
+	Summary       string         `json:"summary"`
+	FromKinds     []string       `json:"from_kinds"`
+	ToKinds       []string       `json:"to_kinds"`
+	Cardinality   string         `json:"cardinality"`
+	Visibility    string         `json:"visibility"`
+	SchemaRef     string         `json:"schema_ref"`
+	Schema        string         `json:"schema,omitempty"`
+	Capabilities  []string       `json:"capabilities"`
+	Attributes    []DataField    `json:"attributes,omitempty"`
+	FromObjects   []ResourceLink `json:"from_objects"`
+	ToObjects     []ResourceLink `json:"to_objects"`
+	Contract      string         `json:"contract"`
 }
 
 type SchemaSummary struct {
@@ -459,6 +507,7 @@ func (app *App) loadTemplates() {
 		"pathEscape": func(s string) string {
 			return url.PathEscape(s)
 		},
+		"objectPath":      browseObjectPath,
 		"realizationPath": browseRealizationPath,
 		"commandPath":     browseCommandPath,
 		"projectionPath":  browseProjectionPath,
@@ -477,6 +526,9 @@ func (app *App) loadTemplates() {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"layoutSectionTitle": layoutSectionTitle,
+		"layoutShape":        layoutShape,
+		"hasDataLayout":      hasDataLayout,
 	}
 
 	pages := []string{
@@ -828,6 +880,71 @@ func splitBrowseReference(reference string) (string, string, bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+func layoutSectionTitle(name string) string {
+	switch strings.TrimSpace(name) {
+	case "shared_metadata":
+		return "Shared Metadata"
+	case "public_payload":
+		return "Public Payload"
+	case "private_payload":
+		return "Private Payload"
+	case "runtime_only":
+		return "Runtime-Only"
+	default:
+		return strings.ReplaceAll(strings.TrimSpace(name), "_", " ")
+	}
+}
+
+func browseObjectPath(seedID, kind string) string {
+	return "/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind)
+}
+
+func hasDataLayout(layout DataLayout) bool {
+	return len(layout.SharedMetadata.Fields) > 0 ||
+		len(layout.PublicPayload.Fields) > 0 ||
+		len(layout.PrivatePayload.Fields) > 0 ||
+		len(layout.RuntimeOnly.Fields) > 0 ||
+		strings.TrimSpace(layout.SharedMetadata.Summary) != "" ||
+		strings.TrimSpace(layout.PublicPayload.Summary) != "" ||
+		strings.TrimSpace(layout.PrivatePayload.Summary) != "" ||
+		strings.TrimSpace(layout.RuntimeOnly.Summary) != ""
+}
+
+func layoutShape(layout DataLayout) string {
+	sections := []struct {
+		name    string
+		section DataSection
+	}{
+		{name: "shared_metadata", section: layout.SharedMetadata},
+		{name: "public_payload", section: layout.PublicPayload},
+		{name: "private_payload", section: layout.PrivatePayload},
+		{name: "runtime_only", section: layout.RuntimeOnly},
+	}
+	lines := []string{"{"}
+	added := 0
+	for _, item := range sections {
+		if len(item.section.Fields) == 0 {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  %q: {", item.name))
+		for _, field := range item.section.Fields {
+			valueType := strings.TrimSpace(field.Type)
+			if valueType == "" {
+				valueType = "value"
+			}
+			lines = append(lines, fmt.Sprintf("    %q: %q,", field.Name, valueType))
+		}
+		lines = append(lines, "  },")
+		added++
+	}
+	if added == 0 {
+		lines = append(lines, "}")
+		return strings.Join(lines, "\n")
+	}
+	lines = append(lines, "}")
+	return strings.Join(lines, "\n")
 }
 
 // --- Handlers ---

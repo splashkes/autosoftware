@@ -272,6 +272,7 @@ type registryRealizationSummary struct {
 	Status          string   `json:"status"`
 	SurfaceKind     string   `json:"surface_kind"`
 	ObjectKinds     []string `json:"object_kinds"`
+	RelationCount   int      `json:"relation_count"`
 	CommandCount    int      `json:"command_count"`
 	ProjectionCount int      `json:"projection_count"`
 	Self            string   `json:"self"`
@@ -308,19 +309,64 @@ type registryProjectionSummary struct {
 	ContentHash   string   `json:"content_hash"`
 }
 
+type registryDataLayout struct {
+	SharedMetadata *registryDataSection `json:"shared_metadata,omitempty"`
+	PublicPayload  *registryDataSection `json:"public_payload,omitempty"`
+	PrivatePayload *registryDataSection `json:"private_payload,omitempty"`
+	RuntimeOnly    *registryDataSection `json:"runtime_only,omitempty"`
+}
+
+type registryDataSection struct {
+	Summary string              `json:"summary,omitempty"`
+	Fields  []registryDataField `json:"fields,omitempty"`
+}
+
+type registryDataField struct {
+	Name    string `json:"name"`
+	Type    string `json:"type,omitempty"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type registryDataView struct {
+	AuthModes []string `json:"auth_modes"`
+	Sections  []string `json:"sections"`
+	Summary   string   `json:"summary,omitempty"`
+}
+
 type registryObjectSummary struct {
-	SeedID           string   `json:"seed_id"`
-	Kind             string   `json:"kind"`
-	Summary          string   `json:"summary"`
-	SchemaRefs       []string `json:"schema_refs"`
-	Capabilities     []string `json:"capabilities"`
-	RealizationCount int      `json:"realization_count"`
-	CommandCount     int      `json:"command_count"`
-	ProjectionCount  int      `json:"projection_count"`
-	Self             string   `json:"self"`
-	CanonicalURL     string   `json:"canonical_url"`
-	PermalinkURL     string   `json:"permalink_url"`
-	ContentHash      string   `json:"content_hash"`
+	SeedID                string   `json:"seed_id"`
+	Kind                  string   `json:"kind"`
+	Summary               string   `json:"summary"`
+	SchemaRefs            []string `json:"schema_refs"`
+	Capabilities          []string `json:"capabilities"`
+	RealizationCount      int      `json:"realization_count"`
+	CommandCount          int      `json:"command_count"`
+	ProjectionCount       int      `json:"projection_count"`
+	OutgoingRelationCount int      `json:"outgoing_relation_count"`
+	IncomingRelationCount int      `json:"incoming_relation_count"`
+	Self                  string   `json:"self"`
+	CanonicalURL          string   `json:"canonical_url"`
+	PermalinkURL          string   `json:"permalink_url"`
+	ContentHash           string   `json:"content_hash"`
+}
+
+type registryRelationSummary struct {
+	Reference     string              `json:"reference"`
+	SeedID        string              `json:"seed_id"`
+	RealizationID string              `json:"realization_id"`
+	Kind          string              `json:"kind"`
+	Summary       string              `json:"summary"`
+	FromKinds     []string            `json:"from_kinds"`
+	ToKinds       []string            `json:"to_kinds"`
+	Cardinality   string              `json:"cardinality"`
+	Visibility    string              `json:"visibility"`
+	SchemaRef     string              `json:"schema_ref"`
+	Schema        string              `json:"schema,omitempty"`
+	Capabilities  []string            `json:"capabilities"`
+	Attributes    []registryDataField `json:"attributes,omitempty"`
+	FromObjects   []map[string]string `json:"from_objects"`
+	ToObjects     []map[string]string `json:"to_objects"`
+	Contract      string              `json:"contract"`
 }
 
 type registrySchemaSummary struct {
@@ -349,6 +395,7 @@ func summarizeRealizations(items []registry.CatalogRealization) []registryRealiz
 			Status:          item.Status,
 			SurfaceKind:     item.SurfaceKind,
 			ObjectKinds:     append([]string(nil), item.ObjectKinds...),
+			RelationCount:   len(item.Relations),
 			CommandCount:    len(item.CommandNames),
 			ProjectionCount: len(item.Projections),
 			Self:            realizationSelfPath(item.Reference),
@@ -407,18 +454,20 @@ func summarizeObjects(items []registry.CatalogObject) []registryObjectSummary {
 	for _, item := range items {
 		locator := objectLocator(item)
 		out = append(out, registryObjectSummary{
-			SeedID:           item.SeedID,
-			Kind:             item.Kind,
-			Summary:          item.Summary,
-			SchemaRefs:       append([]string(nil), item.SchemaRefs...),
-			Capabilities:     append([]string(nil), item.Capabilities...),
-			RealizationCount: len(item.Realizations),
-			CommandCount:     len(item.Commands),
-			ProjectionCount:  len(item.Projections),
-			Self:             objectSelfPath(item.SeedID, item.Kind),
-			CanonicalURL:     locator.CanonicalURL,
-			PermalinkURL:     locator.PermalinkURL,
-			ContentHash:      locator.ContentHash,
+			SeedID:                item.SeedID,
+			Kind:                  item.Kind,
+			Summary:               item.Summary,
+			SchemaRefs:            append([]string(nil), item.SchemaRefs...),
+			Capabilities:          append([]string(nil), item.Capabilities...),
+			RealizationCount:      len(item.Realizations),
+			CommandCount:          len(item.Commands),
+			ProjectionCount:       len(item.Projections),
+			OutgoingRelationCount: len(item.OutgoingRelations),
+			IncomingRelationCount: len(item.IncomingRelations),
+			Self:                  objectSelfPath(item.SeedID, item.Kind),
+			CanonicalURL:          locator.CanonicalURL,
+			PermalinkURL:          locator.PermalinkURL,
+			ContentHash:           locator.ContentHash,
 		})
 	}
 	return out
@@ -483,6 +532,7 @@ func detailRealization(item registry.CatalogRealization) map[string]any {
 		"capabilities":   item.Capabilities,
 		"object_kinds":   item.ObjectKinds,
 		"objects":        objectLinks,
+		"relations":      summarizeRelations(item.Relations),
 		"commands":       commandLinks,
 		"projections":    projectionLinks,
 		"contract":       "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
@@ -536,7 +586,7 @@ func detailCommand(item registry.CatalogCommand) map[string]any {
 
 func detailProjection(item registry.CatalogProjection) map[string]any {
 	locator := projectionLocator(item)
-	return map[string]any{
+	out := map[string]any{
 		"reference":      item.Reference,
 		"seed_id":        item.SeedID,
 		"realization_id": item.RealizationID,
@@ -546,6 +596,7 @@ func detailProjection(item registry.CatalogProjection) map[string]any {
 		"auth_modes":     item.AuthModes,
 		"capabilities":   item.Capabilities,
 		"freshness":      item.Freshness,
+		"data_views":     summarizeDataViews(item.DataViews),
 		"contract_file":  item.ContractFile,
 		"contract":       "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
 		"self":           projectionSelfPath(item.Reference, item.Name),
@@ -553,6 +604,10 @@ func detailProjection(item registry.CatalogProjection) map[string]any {
 		"permalink_url":  locator.PermalinkURL,
 		"content_hash":   locator.ContentHash,
 	}
+	if len(item.DataViews) > 0 {
+		out["data_views"] = summarizeDataViews(item.DataViews)
+	}
+	return out
 }
 
 func detailObject(item registry.CatalogObject) map[string]any {
@@ -595,21 +650,132 @@ func detailObject(item registry.CatalogObject) map[string]any {
 		})
 	}
 
-	return map[string]any{
-		"seed_id":       item.SeedID,
-		"kind":          item.Kind,
-		"summary":       item.Summary,
-		"capabilities":  item.Capabilities,
-		"schema_refs":   item.SchemaRefs,
-		"schemas":       schemaLinks,
-		"realizations":  realizations,
-		"commands":      commands,
-		"projections":   projections,
-		"self":          objectSelfPath(item.SeedID, item.Kind),
-		"canonical_url": locator.CanonicalURL,
-		"permalink_url": locator.PermalinkURL,
-		"content_hash":  locator.ContentHash,
+	out := map[string]any{
+		"seed_id":            item.SeedID,
+		"kind":               item.Kind,
+		"summary":            item.Summary,
+		"capabilities":       item.Capabilities,
+		"schema_refs":        item.SchemaRefs,
+		"schemas":            schemaLinks,
+		"realizations":       realizations,
+		"outgoing_relations": summarizeRelations(item.OutgoingRelations),
+		"incoming_relations": summarizeRelations(item.IncomingRelations),
+		"commands":           commands,
+		"projections":        projections,
+		"self":               objectSelfPath(item.SeedID, item.Kind),
+		"canonical_url":      locator.CanonicalURL,
+		"permalink_url":      locator.PermalinkURL,
+		"content_hash":       locator.ContentHash,
 	}
+	if hasCatalogDataLayout(item.DataLayout) {
+		out["data_layout"] = summarizeDataLayout(item.DataLayout)
+	}
+	return out
+}
+
+func summarizeDataLayout(layout registry.CatalogDataLayout) registryDataLayout {
+	return registryDataLayout{
+		SharedMetadata: summarizeDataSection(layout.SharedMetadata),
+		PublicPayload:  summarizeDataSection(layout.PublicPayload),
+		PrivatePayload: summarizeDataSection(layout.PrivatePayload),
+		RuntimeOnly:    summarizeDataSection(layout.RuntimeOnly),
+	}
+}
+
+func summarizeDataSection(section registry.CatalogDataSection) *registryDataSection {
+	if len(section.Fields) == 0 && strings.TrimSpace(section.Summary) == "" {
+		return nil
+	}
+	fields := make([]registryDataField, 0, len(section.Fields))
+	for _, item := range section.Fields {
+		fields = append(fields, registryDataField{
+			Name:    item.Name,
+			Type:    item.Type,
+			Summary: item.Summary,
+		})
+	}
+	out := &registryDataSection{
+		Summary: section.Summary,
+		Fields:  fields,
+	}
+	return out
+}
+
+func summarizeDataViews(items []registry.CatalogDataView) []registryDataView {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]registryDataView, 0, len(items))
+	for _, item := range items {
+		out = append(out, registryDataView{
+			AuthModes: append([]string(nil), item.AuthModes...),
+			Sections:  append([]string(nil), item.Sections...),
+			Summary:   item.Summary,
+		})
+	}
+	return out
+}
+
+func summarizeRelations(items []registry.CatalogRelation) []registryRelationSummary {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]registryRelationSummary, 0, len(items))
+	for _, item := range items {
+		attrs := make([]registryDataField, 0, len(item.Attributes))
+		for _, attr := range item.Attributes {
+			attrs = append(attrs, registryDataField{
+				Name:    attr.Name,
+				Type:    attr.Type,
+				Summary: attr.Summary,
+			})
+		}
+		schema := ""
+		if item.SchemaRef != "" {
+			schema = schemaSelfPath(item.SchemaRef)
+		}
+		out = append(out, registryRelationSummary{
+			Reference:     item.Reference,
+			SeedID:        item.SeedID,
+			RealizationID: item.RealizationID,
+			Kind:          item.Kind,
+			Summary:       item.Summary,
+			FromKinds:     append([]string(nil), item.FromKinds...),
+			ToKinds:       append([]string(nil), item.ToKinds...),
+			Cardinality:   item.Cardinality,
+			Visibility:    item.Visibility,
+			SchemaRef:     item.SchemaRef,
+			Schema:        schema,
+			Capabilities:  append([]string(nil), item.Capabilities...),
+			Attributes:    attrs,
+			FromObjects:   summarizeRelationKinds(item.SeedID, item.FromKinds),
+			ToObjects:     summarizeRelationKinds(item.SeedID, item.ToKinds),
+			Contract:      "/v1/contracts/" + item.SeedID + "/" + item.RealizationID,
+		})
+	}
+	return out
+}
+
+func summarizeRelationKinds(seedID string, kinds []string) []map[string]string {
+	out := make([]map[string]string, 0, len(kinds))
+	for _, kind := range kinds {
+		out = append(out, map[string]string{
+			"kind": kind,
+			"self": objectSelfPath(seedID, kind),
+		})
+	}
+	return out
+}
+
+func hasCatalogDataLayout(layout registry.CatalogDataLayout) bool {
+	return len(layout.SharedMetadata.Fields) > 0 ||
+		len(layout.PublicPayload.Fields) > 0 ||
+		len(layout.PrivatePayload.Fields) > 0 ||
+		len(layout.RuntimeOnly.Fields) > 0 ||
+		strings.TrimSpace(layout.SharedMetadata.Summary) != "" ||
+		strings.TrimSpace(layout.PublicPayload.Summary) != "" ||
+		strings.TrimSpace(layout.PrivatePayload.Summary) != "" ||
+		strings.TrimSpace(layout.RuntimeOnly.Summary) != ""
 }
 
 func detailSchema(item registry.CatalogSchema) map[string]any {

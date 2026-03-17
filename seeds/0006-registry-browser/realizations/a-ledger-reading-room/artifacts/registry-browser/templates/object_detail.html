@@ -14,6 +14,134 @@
   </table>
 </div>
 
+{{if hasDataLayout $o.DataLayout}}
+<div class="detail-section">
+  <h3>Data Layout</h3>
+  <p>This is the machine-readable shape that alternate clients should use when deciding what is shared, public, private, or runtime-only.</p>
+  <pre class="shape-block">{{layoutShape $o.DataLayout}}</pre>
+</div>
+
+{{with $o.DataLayout.SharedMetadata}}
+{{if .Fields}}
+<div class="detail-section">
+  <h3>{{layoutSectionTitle "shared_metadata"}}</h3>
+  {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+  <table class="field-table">
+    {{range .Fields}}
+    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{end}}
+
+{{with $o.DataLayout.PublicPayload}}
+{{if .Fields}}
+<div class="detail-section">
+  <h3>{{layoutSectionTitle "public_payload"}}</h3>
+  {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+  <table class="field-table">
+    {{range .Fields}}
+    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{end}}
+
+{{with $o.DataLayout.PrivatePayload}}
+{{if .Fields}}
+<div class="detail-section">
+  <h3>{{layoutSectionTitle "private_payload"}}</h3>
+  {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+  <table class="field-table">
+    {{range .Fields}}
+    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{end}}
+
+{{with $o.DataLayout.RuntimeOnly}}
+{{if .Fields}}
+<div class="detail-section">
+  <h3>{{layoutSectionTitle "runtime_only"}}</h3>
+  {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+  <table class="field-table">
+    {{range .Fields}}
+    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{if $o.OutgoingRelations}}
+<div class="detail-section">
+  <h3>Outgoing Relations</h3>
+  <ul class="resource-list">
+    {{range $o.OutgoingRelations}}
+    <li class="resource-item">
+      <div class="name">{{.Kind}}</div>
+      <div class="meta">
+        <span>{{.Cardinality}}</span>
+        <span>{{.Visibility}}</span>
+        <span>{{.RealizationID}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+      {{if .ToObjects}}
+      <div class="summary">
+        to:
+        {{range $i, $target := .ToObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $target.Kind}}">{{$target.Kind}}</a>{{end}}
+      </div>
+      {{end}}
+      {{if .Attributes}}
+      <table class="field-table">
+        {{range .Attributes}}
+        <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+        {{end}}
+      </table>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if $o.IncomingRelations}}
+<div class="detail-section">
+  <h3>Incoming Relations</h3>
+  <ul class="resource-list">
+    {{range $o.IncomingRelations}}
+    <li class="resource-item">
+      <div class="name">{{.Kind}}</div>
+      <div class="meta">
+        <span>{{.Cardinality}}</span>
+        <span>{{.Visibility}}</span>
+        <span>{{.RealizationID}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+      {{if .FromObjects}}
+      <div class="summary">
+        from:
+        {{range $i, $source := .FromObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $source.Kind}}">{{$source.Kind}}</a>{{end}}
+      </div>
+      {{end}}
+      {{if .Attributes}}
+      <table class="field-table">
+        {{range .Attributes}}
+        <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
+        {{end}}
+      </table>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
 {{if $o.Capabilities}}
 <div class="detail-section">
   <h3>Capabilities</h3>

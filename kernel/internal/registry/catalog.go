@@ -22,36 +22,75 @@ type CatalogSummary struct {
 	Realizations int `json:"realizations"`
 	Contracts    int `json:"contracts"`
 	Objects      int `json:"objects"`
+	Relations    int `json:"relations"`
 	Schemas      int `json:"schemas"`
 	Commands     int `json:"commands"`
 	Projections  int `json:"projections"`
 }
 
 type CatalogObject struct {
-	SeedID       string                     `json:"seed_id"`
-	Kind         string                     `json:"kind"`
-	Summary      string                     `json:"summary"`
-	Capabilities []string                   `json:"capabilities"`
-	SchemaRefs   []string                   `json:"schema_refs"`
-	Realizations []CatalogObjectRealization `json:"realizations"`
-	Commands     []CatalogCommand           `json:"commands"`
-	Projections  []CatalogProjection        `json:"projections"`
+	SeedID            string                     `json:"seed_id"`
+	Kind              string                     `json:"kind"`
+	Summary           string                     `json:"summary"`
+	Capabilities      []string                   `json:"capabilities"`
+	SchemaRefs        []string                   `json:"schema_refs"`
+	DataLayout        CatalogDataLayout          `json:"data_layout,omitempty"`
+	OutgoingRelations []CatalogRelation          `json:"outgoing_relations,omitempty"`
+	IncomingRelations []CatalogRelation          `json:"incoming_relations,omitempty"`
+	Realizations      []CatalogObjectRealization `json:"realizations"`
+	Commands          []CatalogCommand           `json:"commands"`
+	Projections       []CatalogProjection        `json:"projections"`
+}
+
+type CatalogDataLayout struct {
+	SharedMetadata CatalogDataSection `json:"shared_metadata,omitempty"`
+	PublicPayload  CatalogDataSection `json:"public_payload,omitempty"`
+	PrivatePayload CatalogDataSection `json:"private_payload,omitempty"`
+	RuntimeOnly    CatalogDataSection `json:"runtime_only,omitempty"`
+}
+
+type CatalogDataSection struct {
+	Summary string             `json:"summary,omitempty"`
+	Fields  []CatalogDataField `json:"fields,omitempty"`
+}
+
+type CatalogDataField struct {
+	Name    string `json:"name"`
+	Type    string `json:"type,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 type CatalogRealization struct {
-	Reference     string   `json:"reference"`
-	SeedID        string   `json:"seed_id"`
-	RealizationID string   `json:"realization_id"`
-	ApproachID    string   `json:"approach_id,omitempty"`
-	Summary       string   `json:"summary"`
-	Status        string   `json:"status"`
-	SurfaceKind   string   `json:"surface_kind"`
-	ContractFile  string   `json:"contract_file"`
-	AuthModes     []string `json:"auth_modes"`
-	Capabilities  []string `json:"capabilities"`
-	ObjectKinds   []string `json:"object_kinds"`
-	CommandNames  []string `json:"command_names"`
-	Projections   []string `json:"projections"`
+	Reference     string            `json:"reference"`
+	SeedID        string            `json:"seed_id"`
+	RealizationID string            `json:"realization_id"`
+	ApproachID    string            `json:"approach_id,omitempty"`
+	Summary       string            `json:"summary"`
+	Status        string            `json:"status"`
+	SurfaceKind   string            `json:"surface_kind"`
+	ContractFile  string            `json:"contract_file"`
+	AuthModes     []string          `json:"auth_modes"`
+	Capabilities  []string          `json:"capabilities"`
+	ObjectKinds   []string          `json:"object_kinds"`
+	Relations     []CatalogRelation `json:"relations,omitempty"`
+	CommandNames  []string          `json:"command_names"`
+	Projections   []string          `json:"projections"`
+}
+
+type CatalogRelation struct {
+	Reference     string             `json:"reference"`
+	SeedID        string             `json:"seed_id"`
+	RealizationID string             `json:"realization_id"`
+	Kind          string             `json:"kind"`
+	Summary       string             `json:"summary"`
+	FromKinds     []string           `json:"from_kinds"`
+	ToKinds       []string           `json:"to_kinds"`
+	Cardinality   string             `json:"cardinality"`
+	Visibility    string             `json:"visibility"`
+	SchemaRef     string             `json:"schema_ref"`
+	Capabilities  []string           `json:"capabilities"`
+	Attributes    []CatalogDataField `json:"attributes,omitempty"`
+	ContractFile  string             `json:"contract_file"`
 }
 
 type CatalogObjectRealization struct {
@@ -85,16 +124,23 @@ type CatalogCommand struct {
 }
 
 type CatalogProjection struct {
-	Reference     string   `json:"reference"`
-	SeedID        string   `json:"seed_id"`
-	RealizationID string   `json:"realization_id"`
-	Name          string   `json:"name"`
-	Summary       string   `json:"summary"`
-	Path          string   `json:"path"`
-	AuthModes     []string `json:"auth_modes"`
-	Capabilities  []string `json:"capabilities"`
-	Freshness     string   `json:"freshness"`
-	ContractFile  string   `json:"contract_file"`
+	Reference     string            `json:"reference"`
+	SeedID        string            `json:"seed_id"`
+	RealizationID string            `json:"realization_id"`
+	Name          string            `json:"name"`
+	Summary       string            `json:"summary"`
+	Path          string            `json:"path"`
+	AuthModes     []string          `json:"auth_modes"`
+	Capabilities  []string          `json:"capabilities"`
+	Freshness     string            `json:"freshness"`
+	DataViews     []CatalogDataView `json:"data_views,omitempty"`
+	ContractFile  string            `json:"contract_file"`
+}
+
+type CatalogDataView struct {
+	AuthModes []string `json:"auth_modes"`
+	Sections  []string `json:"sections"`
+	Summary   string   `json:"summary,omitempty"`
 }
 
 type CatalogSchema struct {
@@ -174,6 +220,10 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 			if detail.Summary == "" {
 				detail.Summary = strings.TrimSpace(object.Summary)
 			}
+			layout := copyDataLayout(object.DataLayout)
+			if catalogDataLayoutIsEmpty(detail.DataLayout) && !catalogDataLayoutIsEmpty(layout) {
+				detail.DataLayout = layout
+			}
 			addUnique(&detail.Capabilities, object.Capabilities...)
 
 			schemaRef := resolveContractRef(repoRoot, contractPath, object.SchemaRef)
@@ -202,6 +252,35 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 				SchemaRef:     schemaRef.Canonical,
 				Capabilities:  append([]string(nil), object.Capabilities...),
 			})
+		}
+
+		for _, relation := range item.Contract.DomainRelations {
+			entry := CatalogRelation{
+				Reference:     item.Reference,
+				SeedID:        item.SeedID,
+				RealizationID: item.RealizationID,
+				Kind:          strings.TrimSpace(relation.Kind),
+				Summary:       strings.TrimSpace(relation.Summary),
+				FromKinds:     append([]string(nil), relation.FromKinds...),
+				ToKinds:       append([]string(nil), relation.ToKinds...),
+				Cardinality:   strings.TrimSpace(relation.Cardinality),
+				Visibility:    strings.TrimSpace(relation.Visibility),
+				SchemaRef:     resolveContractRef(repoRoot, contractPath, relation.SchemaRef).Canonical,
+				Capabilities:  append([]string(nil), relation.Capabilities...),
+				Attributes:    copyRelationAttributes(relation.Attributes),
+				ContractFile:  contractFile,
+			}
+			realization.Relations = append(realization.Relations, entry)
+			catalog.Summary.Relations++
+
+			for _, kind := range relation.FromKinds {
+				detail := ensureObject(objectIndex, item.SeedID, kind)
+				detail.OutgoingRelations = append(detail.OutgoingRelations, entry)
+			}
+			for _, kind := range relation.ToKinds {
+				detail := ensureObject(objectIndex, item.SeedID, kind)
+				detail.IncomingRelations = append(detail.IncomingRelations, entry)
+			}
 		}
 
 		for _, command := range item.Contract.Commands {
@@ -284,6 +363,7 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 					AuthModes:     append([]string(nil), projection.AuthModes...),
 					Capabilities:  append([]string(nil), projection.Capabilities...),
 					Freshness:     strings.TrimSpace(projection.Freshness),
+					DataViews:     copyDataViews(projection.DataViews),
 					ContractFile:  contractFile,
 				})
 			}
@@ -297,6 +377,7 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 				AuthModes:     append([]string(nil), projection.AuthModes...),
 				Capabilities:  append([]string(nil), projection.Capabilities...),
 				Freshness:     strings.TrimSpace(projection.Freshness),
+				DataViews:     copyDataViews(projection.DataViews),
 				ContractFile:  contractFile,
 			})
 			addUnique(&realization.Projections, strings.TrimSpace(projection.Name))
@@ -428,6 +509,74 @@ func flattenObjects(index map[string]*CatalogObject) []CatalogObject {
 		return out[i].SeedID < out[j].SeedID
 	})
 	return out
+}
+
+func copyDataLayout(layout realizations.InteractionDataLayout) CatalogDataLayout {
+	return CatalogDataLayout{
+		SharedMetadata: copyDataSection(layout.SharedMetadata),
+		PublicPayload:  copyDataSection(layout.PublicPayload),
+		PrivatePayload: copyDataSection(layout.PrivatePayload),
+		RuntimeOnly:    copyDataSection(layout.RuntimeOnly),
+	}
+}
+
+func copyDataSection(section realizations.InteractionDataSection) CatalogDataSection {
+	out := CatalogDataSection{
+		Summary: strings.TrimSpace(section.Summary),
+	}
+	if len(section.Fields) == 0 {
+		return out
+	}
+	out.Fields = make([]CatalogDataField, 0, len(section.Fields))
+	for _, field := range section.Fields {
+		out.Fields = append(out.Fields, CatalogDataField{
+			Name:    strings.TrimSpace(field.Name),
+			Type:    strings.TrimSpace(field.Type),
+			Summary: strings.TrimSpace(field.Summary),
+		})
+	}
+	return out
+}
+
+func copyDataViews(items []realizations.InteractionDataView) []CatalogDataView {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]CatalogDataView, 0, len(items))
+	for _, item := range items {
+		out = append(out, CatalogDataView{
+			AuthModes: append([]string(nil), item.AuthModes...),
+			Sections:  append([]string(nil), item.Sections...),
+			Summary:   strings.TrimSpace(item.Summary),
+		})
+	}
+	return out
+}
+
+func copyRelationAttributes(items []realizations.InteractionDataField) []CatalogDataField {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]CatalogDataField, 0, len(items))
+	for _, item := range items {
+		out = append(out, CatalogDataField{
+			Name:    item.Name,
+			Type:    item.Type,
+			Summary: item.Summary,
+		})
+	}
+	return out
+}
+
+func catalogDataLayoutIsEmpty(layout CatalogDataLayout) bool {
+	return len(layout.SharedMetadata.Fields) == 0 &&
+		len(layout.PublicPayload.Fields) == 0 &&
+		len(layout.PrivatePayload.Fields) == 0 &&
+		len(layout.RuntimeOnly.Fields) == 0 &&
+		strings.TrimSpace(layout.SharedMetadata.Summary) == "" &&
+		strings.TrimSpace(layout.PublicPayload.Summary) == "" &&
+		strings.TrimSpace(layout.PrivatePayload.Summary) == "" &&
+		strings.TrimSpace(layout.RuntimeOnly.Summary) == ""
 }
 
 func flattenRealizations(items []CatalogRealization) []CatalogRealization {
@@ -683,6 +832,18 @@ func matchesObjectQuery(item CatalogObject, query string) bool {
 			return true
 		}
 	}
+	for _, relation := range append(append([]CatalogRelation(nil), item.OutgoingRelations...), item.IncomingRelations...) {
+		for _, candidate := range []string{relation.Kind, relation.Summary, relation.Cardinality, relation.Visibility, relation.SchemaRef} {
+			if containsFold(candidate, query) {
+				return true
+			}
+		}
+		for _, value := range append(append([]string(nil), relation.FromKinds...), relation.ToKinds...) {
+			if containsFold(value, query) {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -718,6 +879,13 @@ func matchesRealizationQuery(item CatalogRealization, query string) bool {
 	for _, value := range item.ObjectKinds {
 		if containsFold(value, query) {
 			return true
+		}
+	}
+	for _, relation := range item.Relations {
+		for _, candidate := range []string{relation.Kind, relation.Summary, relation.Cardinality, relation.Visibility} {
+			if containsFold(candidate, query) {
+				return true
+			}
 		}
 	}
 	for _, value := range item.CommandNames {

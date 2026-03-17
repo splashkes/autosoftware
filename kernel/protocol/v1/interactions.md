@@ -30,6 +30,13 @@ Do not treat first-party private screens as an exception to this rule.
 The public operational API should normalize the interaction contract, not erase
 the domain vocabulary.
 
+Model that vocabulary as a graph of stable domain objects and explicit
+relations, not as one large flattened record unless the seed is genuinely that
+simple.
+If the seed has meaningful related things such as versions, actors, venues,
+media assets, or attendee records, declare them as first-class domain objects or
+relation edges rather than hiding them inside one object's prose summary.
+
 Examples:
 
 - `tickets.reply`
@@ -67,9 +74,24 @@ contract-discovery endpoints.
 - supported `auth_modes`
 - declared kernel `capabilities`
 - seed-local `domain_objects`
+- seed-local `domain_relations` when the seed has meaningful graph edges
 - public `commands`
 - public `projections`
 - baseline `consistency` semantics
+
+When a seed depends on partially shared data boundaries, the contract should
+also declare:
+
+- object `data_layout`
+- projection `data_views`
+
+When a seed depends on graph traversal for reuse, the contract should also
+declare:
+
+- the related object kinds
+- the explicit edge kinds connecting them
+- the visibility of those edges when it differs between audiences
+- any meaningful relation attributes, such as role, position, or timestamps
 
 ## Surface Kinds
 
@@ -131,6 +153,73 @@ its schema, usually `design.md` or a dedicated schema document.
 This is the minimum proof that the API surface is traceable back to the seed
 docs a future agent starts from.
 
+Graph-first guidance:
+
+- model stable things as domain objects with stable IDs
+- when content-bearing objects have meaningful edit history, model immutable
+  version objects rather than silently overwriting one mutable record
+- when authorship or editorial provenance matters, model the related actor or
+  profile object explicitly
+- if a public route uses a slug or handle, keep a stable machine identity for
+  the underlying object
+- if historical pages must remain stable when related objects change, make the
+  snapshot-versus-reference rule explicit in the seed docs
+
+If the object has a meaningful public/private/runtime boundary, it should also
+declare `data_layout` using the seed-local `PUBLIC_PRIVATE_DATA.md` document or
+an equivalent boundary definition:
+
+- `shared_metadata`
+- `public_payload`
+- `private_payload`
+- `runtime_only`
+
+Each declared section should summarize the slice and list the named fields that
+belong to it.
+
+## Domain Relations
+
+When the seed has meaningful graph edges, `domain_relations` should declare
+them directly.
+
+Each relation entry should define:
+
+- `kind`
+- `summary`
+- `from_kinds`
+- `to_kinds`
+- `cardinality`
+- `visibility`
+- `schema_ref`
+- `capabilities`
+
+Optional relation metadata:
+
+- `attributes`
+
+Use relations for durable semantics such as:
+
+- object-to-version linkage
+- object-to-actor provenance
+- object-to-media attachment
+- object-to-venue or object-to-series membership
+- attendee, registration, or check-in edges when the seed carries participation
+  data
+
+If a query can be phrased as "what X are related to Y under rule Z", that is a
+strong signal the underlying model should include an explicit relation rather
+than forcing every client to rediscover it through ad hoc filtering.
+
+`visibility` is relation-level and may differ from node-level visibility:
+
+- `public`
+- `private`
+- `mixed`
+- `runtime_only`
+
+`attributes` should be used when the edge itself carries truth, such as media
+role, ordering, timestamps, or approval state.
+
 ## Commands
 
 Commands are the public write surface for normal app usage.
@@ -189,6 +278,15 @@ Freshness values:
 - `direct`
 - `eventual`
 
+If auth mode changes which object slices are visible, the projection should
+also declare `data_views`:
+
+- `auth_modes`
+- `sections`
+- `summary`
+
+`sections` should be a subset of the object's data-layout buckets.
+
 ## Private And Split Read Surfaces
 
 First-party private views are still part of the operational contract.
@@ -202,12 +300,29 @@ Rules:
   server-only code
 - if only a digest or very small metadata surface is public, declare that
   metadata-facing projection explicitly and keep the fuller projection private
+- if projection auth modes expose different data slices, declare that split in
+  `data_views` so the visibility boundary is machine-readable
 - if a public route is keyed by a mutable-friendly handle or slug, also expose
   a stable object-id projection so alternate clients are not forced to treat
   the handle as the primary identity
 
 This is the minimum shape needed for another UI, agent, or integration to
 reuse the same contracts and data boundary decisions as the first-party app.
+
+## Extensibility
+
+Seeds should evolve additively.
+
+Rules:
+
+- if multiple clients should rely on a new truth, add it to the canonical graph
+- if one realization needs extra structured truth that may later become shared,
+  prefer a namespaced extension field or a new graph node over an untyped blob
+- if a field exists only for rendering or transport convenience, keep it
+  `runtime_only`
+- do not silently repurpose an existing canonical field for a new meaning
+- document which optional subgraphs are deferred versus canonical-but-not-yet
+  fully operationalized
 
 ## Process For New Seeds
 
@@ -216,8 +331,9 @@ process is:
 
 1. Read `brief.md`, `design.md`, `acceptance.md`, and the selected
    `realization.yaml`.
-2. Identify the seed-local domain objects that must exist at runtime.
-3. Map those objects to shared kernel capabilities in
+2. Identify the seed-local domain objects and graph relations that must exist at
+   runtime.
+3. Map those objects and relations to shared kernel capabilities in
    `interaction_contract.yaml`.
 4. Declare the commands that both UI and third-party callers will use.
 5. Declare the projections those callers will read, including private or

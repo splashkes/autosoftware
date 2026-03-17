@@ -48,6 +48,35 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 		"    schema_ref: ../../design.md#ticket\n"+
 		"    capabilities:\n"+
 		"      - sessions\n"+
+		"    data_layout:\n"+
+		"      shared_metadata:\n"+
+		"        summary: Stable ticket identity.\n"+
+		"        fields:\n"+
+		"          - name: ticket_id\n"+
+		"            type: string\n"+
+		"            summary: Stable ticket id.\n"+
+		"      public_payload:\n"+
+		"        summary: Public ticket content.\n"+
+		"        fields:\n"+
+		"          - name: subject\n"+
+		"            type: string\n"+
+		"            summary: Public subject.\n"+
+		"domain_relations:\n"+
+		"  - kind: ticket_replies_to\n"+
+		"    summary: Connects a ticket to another ticket it replies to.\n"+
+		"    from_kinds:\n"+
+		"      - ticket\n"+
+		"    to_kinds:\n"+
+		"      - ticket\n"+
+		"    cardinality: many_to_one\n"+
+		"    visibility: mixed\n"+
+		"    schema_ref: ../../design.md#ticket\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    attributes:\n"+
+		"      - name: reply_role\n"+
+		"        type: string\n"+
+		"        summary: Explains how the child ticket relates to the parent.\n"+
 		"commands:\n"+
 		"  - name: tickets.create\n"+
 		"    summary: Create ticket.\n"+
@@ -74,6 +103,13 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"    freshness: materialized\n"+
+		"    data_views:\n"+
+		"      - auth_modes:\n"+
+		"          - session\n"+
+		"        sections:\n"+
+		"          - shared_metadata\n"+
+		"          - public_payload\n"+
+		"        summary: Session callers get the ticket payload.\n"+
 		"consistency:\n"+
 		"  write_visibility: read_your_writes\n"+
 		"  projection_freshness: materialized\n")
@@ -91,6 +127,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	var catalogPayload struct {
 		Summary struct {
 			Objects      int `json:"objects"`
+			Relations    int `json:"relations"`
 			Schemas      int `json:"schemas"`
 			Realizations int `json:"realizations"`
 		} `json:"summary"`
@@ -123,7 +160,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if err := json.Unmarshal(catalogRec.Body.Bytes(), &catalogPayload); err != nil {
 		t.Fatalf("unmarshal catalog: %v", err)
 	}
-	if catalogPayload.Summary.Objects != 1 || catalogPayload.Summary.Schemas != 3 || catalogPayload.Summary.Realizations != 1 {
+	if catalogPayload.Summary.Objects != 1 || catalogPayload.Summary.Relations != 1 || catalogPayload.Summary.Schemas != 3 || catalogPayload.Summary.Realizations != 1 {
 		t.Fatalf("unexpected summary %+v", catalogPayload.Summary)
 	}
 	if catalogPayload.Realizations[0].Self != "/v1/registry/realization?reference=1234-demo%2Fa-test" {
@@ -179,6 +216,9 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 			Commands     []struct {
 				Self string `json:"self"`
 			} `json:"commands"`
+			Relations []struct {
+				Kind string `json:"kind"`
+			} `json:"relations"`
 		} `json:"realization"`
 	}
 	if err := json.Unmarshal(realizationRec.Body.Bytes(), &realizationPayload); err != nil {
@@ -186,6 +226,9 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	}
 	if realizationPayload.Realization.Reference != "1234-demo/a-test" {
 		t.Fatalf("unexpected realization reference %q", realizationPayload.Realization.Reference)
+	}
+	if len(realizationPayload.Realization.Relations) != 1 || realizationPayload.Realization.Relations[0].Kind != "ticket_replies_to" {
+		t.Fatalf("unexpected realization relations %+v", realizationPayload.Realization.Relations)
 	}
 	if realizationPayload.Realization.Commands[0].Self != "/v1/registry/command?reference=1234-demo%2Fa-test&name=tickets.create" {
 		t.Fatalf("unexpected realization command self %q", realizationPayload.Realization.Commands[0].Self)
@@ -245,7 +288,22 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 			CanonicalURL string `json:"canonical_url"`
 			PermalinkURL string `json:"permalink_url"`
 			ContentHash  string `json:"content_hash"`
-			Schemas      []struct {
+			DataLayout   struct {
+				SharedMetadata struct {
+					Fields []struct {
+						Name string `json:"name"`
+					} `json:"fields"`
+				} `json:"shared_metadata"`
+			} `json:"data_layout"`
+			OutgoingRelations []struct {
+				Kind       string   `json:"kind"`
+				Visibility string   `json:"visibility"`
+				ToKinds    []string `json:"to_kinds"`
+			} `json:"outgoing_relations"`
+			IncomingRelations []struct {
+				Kind string `json:"kind"`
+			} `json:"incoming_relations"`
+			Schemas []struct {
 				Self string `json:"self"`
 			} `json:"schemas"`
 			Commands []struct {
@@ -268,8 +326,46 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if objectPayload.Object.CanonicalURL != "/objects/1234-demo/ticket" {
 		t.Fatalf("unexpected object detail canonical url %q", objectPayload.Object.CanonicalURL)
 	}
+	if len(objectPayload.Object.DataLayout.SharedMetadata.Fields) != 1 || objectPayload.Object.DataLayout.SharedMetadata.Fields[0].Name != "ticket_id" {
+		t.Fatalf("unexpected object data layout %+v", objectPayload.Object.DataLayout)
+	}
+	if len(objectPayload.Object.OutgoingRelations) != 1 || objectPayload.Object.OutgoingRelations[0].Kind != "ticket_replies_to" {
+		t.Fatalf("unexpected object outgoing relations %+v", objectPayload.Object.OutgoingRelations)
+	}
+	if objectPayload.Object.OutgoingRelations[0].Visibility != "mixed" {
+		t.Fatalf("unexpected relation visibility %+v", objectPayload.Object.OutgoingRelations[0])
+	}
+	if len(objectPayload.Object.IncomingRelations) != 1 || objectPayload.Object.IncomingRelations[0].Kind != "ticket_replies_to" {
+		t.Fatalf("unexpected object incoming relations %+v", objectPayload.Object.IncomingRelations)
+	}
 	if objectPayload.Object.ContentHash != catalogPayload.Objects[0].ContentHash {
 		t.Fatalf("object detail hash %q does not match catalog hash %q", objectPayload.Object.ContentHash, catalogPayload.Objects[0].ContentHash)
+	}
+
+	projectionReq := httptest.NewRequest(http.MethodGet, "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail", nil)
+	projectionRec := httptest.NewRecorder()
+	mux.ServeHTTP(projectionRec, projectionReq)
+	if projectionRec.Code != http.StatusOK {
+		t.Fatalf("projection status = %d, body = %s", projectionRec.Code, projectionRec.Body.String())
+	}
+
+	var projectionPayload struct {
+		Projection struct {
+			Name      string `json:"name"`
+			DataViews []struct {
+				Summary  string   `json:"summary"`
+				Sections []string `json:"sections"`
+			} `json:"data_views"`
+		} `json:"projection"`
+	}
+	if err := json.Unmarshal(projectionRec.Body.Bytes(), &projectionPayload); err != nil {
+		t.Fatalf("unmarshal projection: %v", err)
+	}
+	if projectionPayload.Projection.Name != "tickets.detail" {
+		t.Fatalf("unexpected projection name %q", projectionPayload.Projection.Name)
+	}
+	if len(projectionPayload.Projection.DataViews) != 1 || projectionPayload.Projection.DataViews[0].Sections[0] != "shared_metadata" {
+		t.Fatalf("unexpected projection data views %+v", projectionPayload.Projection.DataViews)
 	}
 
 	schemaReq := httptest.NewRequest(http.MethodGet, "/v1/registry/schema?ref=seeds%2F1234-demo%2Fdesign.md%23ticket-input", nil)

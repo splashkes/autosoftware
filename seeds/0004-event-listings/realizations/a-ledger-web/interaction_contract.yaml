@@ -17,6 +17,8 @@ capabilities:
     summary: Accepted event claims remain inspectable as ordered lifecycle activity.
   - name: handles
     summary: Stable public event handles survive edits and state transitions.
+  - name: principals
+    summary: Stable actor identities for organizer and edit provenance.
   - name: publications
     summary: Publish, unpublish, cancel, and archive changes shape public discovery surfaces.
   - name: search_documents
@@ -25,6 +27,8 @@ capabilities:
     summary: Category, location, and date filters derive from the current accepted event snapshot.
   - name: state_transitions
     summary: Lifecycle state changes append claims rather than overwriting event identity.
+  - name: uploads
+    summary: Media asset ingestion and attachment for event discovery surfaces.
 domain_objects:
   - kind: event
     summary: Durable event object with a stable identity, stable handle, append-only claims, and materialized read models.
@@ -35,6 +39,399 @@ domain_objects:
       - publications
       - search_documents
       - search_facets
+      - state_transitions
+    data_layout:
+      shared_metadata:
+        summary: Stable event identity and traversal metadata that alternate clients can rely on even when the full event is not anonymously readable.
+        fields:
+          - name: event_id
+            type: string
+            summary: Stable machine identity for the event object.
+          - name: slug
+            type: string
+            summary: Stable public handle that should survive edits.
+          - name: calendar_id
+            type: string
+            summary: Stable publication namespace identity that currently publishes the event.
+          - name: current_version_id
+            type: string
+            summary: Current event version identity used by organizer and public projections.
+          - name: status
+            type: enum(draft|published|canceled|archived)
+            summary: Lifecycle state controlling anonymous visibility.
+          - name: title
+            type: string
+            summary: Primary event label used across clients.
+          - name: start
+            type: RFC3339 timestamp
+            summary: Start instant in the event's own timezone.
+          - name: end
+            type: RFC3339 timestamp
+            summary: End instant in the event's own timezone.
+          - name: timezone
+            type: IANA timezone
+            summary: Authoritative timezone for rendering and filtering.
+          - name: all_day
+            type: boolean
+            summary: Indicates whether the event renders without clock times.
+          - name: category
+            type: string
+            summary: Classification label used for discovery now and mappable to a canonical taxonomy term later.
+          - name: location
+            type: string
+            summary: Human-facing city or locality.
+          - name: venue
+            type: string
+            summary: Public-facing venue or place name for the accepted event snapshot.
+          - name: neighborhood
+            type: string
+            summary: Secondary location hint for discovery.
+      public_payload:
+        summary: Content intended for anonymous discovery when the event is published, canceled, or archived.
+        fields:
+          - name: summary
+            type: string
+            summary: Short public synopsis for list and detail views.
+          - name: description
+            type: string
+            summary: Main public event description.
+          - name: venue_note
+            type: string
+            summary: Public arrival or atmosphere note for the venue.
+          - name: organizer_name
+            type: string
+            summary: Public organizer label carried as the current event snapshot.
+          - name: organizer_role
+            type: string
+            summary: Public role or organizer descriptor.
+          - name: organizer_url
+            type: URL
+            summary: Public organizer link when one exists for the accepted event snapshot.
+          - name: cover_image_url
+            type: URL
+            summary: Public visual URL used by event pages or listings for the accepted media snapshot.
+          - name: featured_blurb
+            type: string
+            summary: Extra public discovery copy for featured treatment.
+          - name: external_url
+            type: URL
+            summary: Public off-site event destination.
+          - name: tags
+            type: string[]
+            summary: Public search and filter keywords.
+          - name: crowd_label
+            type: string
+            summary: Public audience or vibe hint.
+          - name: share_count
+            type: integer
+            summary: Public-facing discovery metric carried with the event payload.
+          - name: save_count
+            type: integer
+            summary: Public-facing save metric carried with the event payload.
+      private_payload:
+        summary: Organizer-only visibility over unpublished lifecycle state and the current unpublished snapshot.
+        fields:
+          - name: draft_visibility
+            type: enum(organizer_only)
+            summary: Draft or unpublished state remains visible only to organizer-authenticated clients.
+          - name: unpublished_snapshot
+            type: event payload
+            summary: The current event payload while it is not anonymously readable.
+      runtime_only:
+        summary: Derived labels, route discovery helpers, and presentation hints that are not accepted registry content.
+        fields:
+          - name: range_label
+            type: string
+            summary: Pre-rendered human time label generated by the runtime.
+          - name: location_label
+            type: string
+            summary: Pre-rendered venue and location label generated by the runtime.
+          - name: status_label
+            type: string
+            summary: Pre-rendered lifecycle label for UI copy.
+          - name: theme_class
+            type: string
+            summary: Presentation hint for current styling.
+          - name: record_api_url
+            type: path
+            summary: Stable by-id route helper returned by the runtime.
+          - name: handle_api_url
+            type: path
+            summary: Stable handle-based route helper returned by the runtime.
+          - name: workspace_api_url
+            type: path
+            summary: Organizer workspace route helper returned by the runtime.
+  - kind: calendar
+    summary: Publication namespace that groups public event discovery.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - handles
+      - publications
+      - search_documents
+  - kind: event_version
+    summary: Immutable version of event content and provenance used to make edits transparent.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - principals
+      - state_transitions
+  - kind: series
+    summary: Stable series identity for connected events such as recurring meetups or seasonal programs.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - handles
+      - publications
+      - search_documents
+  - kind: series_version
+    summary: Immutable series content version carrying public or private editorial changes over time.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - principals
+      - state_transitions
+  - kind: venue
+    summary: Stable place identity reused by one or more events.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - handles
+      - publications
+      - search_documents
+      - search_facets
+  - kind: venue_version
+    summary: Immutable venue content version used for transparency and historical stability.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - principals
+      - state_transitions
+  - kind: organizer_profile
+    summary: Reusable organizer identity shared across event pages and alternate clients.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - handles
+      - publications
+      - search_documents
+  - kind: organizer_profile_version
+    summary: Immutable organizer profile version carrying public and private editorial changes.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - principals
+      - state_transitions
+  - kind: media_asset
+    summary: Stable reusable media identity attached to one or more events or series.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - uploads
+  - kind: media_asset_version
+    summary: Immutable media content version carrying accepted asset metadata and provenance.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - principals
+      - publications
+      - uploads
+  - kind: taxonomy_term
+    summary: Stable category or topic term used for search and discovery facets.
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - search_facets
+  - kind: actor
+    summary: Actor identity that created or edited versions in this event graph.
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - principals
+domain_relations:
+  - kind: calendar_publishes_event
+    summary: Connects the calendar namespace to the events it publishes publicly.
+    from_kinds:
+      - calendar
+    to_kinds:
+      - event
+    cardinality: one_to_many
+    visibility: public
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - handles
+      - publications
+  - kind: event_current_version
+    summary: Connects an event to the current version used by organizer and public read surfaces.
+    from_kinds:
+      - event
+    to_kinds:
+      - event_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+  - kind: series_current_version
+    summary: Connects a series to the current series version.
+    from_kinds:
+      - series
+    to_kinds:
+      - series_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+  - kind: venue_current_version
+    summary: Connects a venue to the current venue version.
+    from_kinds:
+      - venue
+    to_kinds:
+      - venue_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+  - kind: organizer_profile_current_version
+    summary: Connects an organizer profile to the current organizer profile version.
+    from_kinds:
+      - organizer_profile
+    to_kinds:
+      - organizer_profile_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+  - kind: media_asset_current_version
+    summary: Connects a media asset to the current accepted media version.
+    from_kinds:
+      - media_asset
+    to_kinds:
+      - media_asset_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - publications
+      - uploads
+  - kind: event_in_series
+    summary: Connects a concrete event to the series it belongs to when applicable.
+    from_kinds:
+      - event
+    to_kinds:
+      - series
+    cardinality: many_to_one
+    visibility: public
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - search_documents
+  - kind: event_at_venue
+    summary: Connects an event to its venue identity.
+    from_kinds:
+      - event
+    to_kinds:
+      - venue
+    cardinality: many_to_one
+    visibility: public
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - search_documents
+      - search_facets
+  - kind: event_hosted_by
+    summary: Connects an event to one or more organizer profiles.
+    from_kinds:
+      - event
+    to_kinds:
+      - organizer_profile
+    cardinality: many_to_many
+    visibility: public
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - search_documents
+  - kind: event_uses_media
+    summary: Connects an event to attached media assets rather than inferring attachment only from uploader provenance.
+    from_kinds:
+      - event
+    to_kinds:
+      - media_asset
+    cardinality: many_to_many
+    visibility: mixed
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - uploads
+    attributes:
+      - name: role
+        type: string
+        summary: Attachment role such as cover, gallery, or flyer.
+      - name: position
+        type: integer
+        summary: Stable display ordering for attached media.
+  - kind: event_tagged_with
+    summary: Connects an event to the taxonomy terms used for discovery.
+    from_kinds:
+      - event
+    to_kinds:
+      - taxonomy_term
+    cardinality: many_to_many
+    visibility: public
+    schema_ref: ../../design.md#canonical-graph
+    capabilities:
+      - publications
+      - search_facets
+  - kind: version_created_by
+    summary: Connects a version object to the actor that created it.
+    from_kinds:
+      - event_version
+      - series_version
+      - venue_version
+      - organizer_profile_version
+      - media_asset_version
+    to_kinds:
+      - actor
+    cardinality: many_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
+      - principals
+    attributes:
+      - name: change_summary
+        type: string
+        summary: Brief human-readable explanation of the change carried by the version.
+  - kind: version_supersedes
+    summary: Connects a newer version to the prior version it supersedes within the same version family.
+    from_kinds:
+      - event_version
+      - series_version
+      - venue_version
+      - organizer_profile_version
+      - media_asset_version
+    to_kinds:
+      - event_version
+      - series_version
+      - venue_version
+      - organizer_profile_version
+      - media_asset_version
+    cardinality: one_to_one
+    visibility: mixed
+    schema_ref: ../../design.md#versions-and-provenance
+    capabilities:
+      - activity_events
       - state_transitions
 commands:
   - name: events.create
@@ -111,6 +508,13 @@ projections:
     auth_modes: [anonymous, session, service_token]
     capabilities: [activity_events, handles, publications, search_documents, state_transitions]
     freshness: materialized
+    data_views:
+      - auth_modes: [anonymous]
+        sections: [shared_metadata, public_payload, runtime_only]
+        summary: Anonymous readers get the public event detail plus runtime convenience fields.
+      - auth_modes: [session, service_token]
+        sections: [shared_metadata, public_payload, private_payload, runtime_only]
+        summary: Organizer or service clients can also see unpublished event content through the same stable handle route.
   - name: events.directory
     summary: Public upcoming-events list projection with shared search and filter semantics.
     path: /v1/projections/0004-event-listings/events
@@ -118,6 +522,10 @@ projections:
     auth_modes: [anonymous, session, service_token]
     capabilities: [publications, search_documents, search_facets, state_transitions]
     freshness: materialized
+    data_views:
+      - auth_modes: [anonymous, session, service_token]
+        sections: [shared_metadata, public_payload, runtime_only]
+        summary: Directory results expose the reusable public event slice plus runtime discovery helpers.
   - name: events.calendar
     summary: Month-calendar projection covering single-day and simple multi-day event rendering.
     path: /v1/projections/0004-event-listings/calendar
@@ -125,6 +533,10 @@ projections:
     auth_modes: [anonymous, session, service_token]
     capabilities: [publications, search_facets, state_transitions]
     freshness: materialized
+    data_views:
+      - auth_modes: [anonymous, session, service_token]
+        sections: [shared_metadata, public_payload, runtime_only]
+        summary: Calendar entries expose the same shared and public event slices with runtime rendering helpers.
   - name: events.record
     summary: Stable by-ID event projection for alternate clients; public states are anonymous while draft reads require organizer auth.
     path: /v1/projections/0004-event-listings/events/by-id/{event_id}
@@ -132,6 +544,13 @@ projections:
     auth_modes: [anonymous, session, service_token]
     capabilities: [activity_events, handles, publications, search_documents, state_transitions]
     freshness: materialized
+    data_views:
+      - auth_modes: [anonymous]
+        sections: [shared_metadata, public_payload, runtime_only]
+        summary: Anonymous clients can read the stable by-id record only when the event is publicly visible.
+      - auth_modes: [session, service_token]
+        sections: [shared_metadata, public_payload, private_payload, runtime_only]
+        summary: Organizer or service clients can read the same object by id even while it is still draft-only.
   - name: events.workspace
     summary: Organizer workspace projection listing draft and public events through the same contract surfaced to alternate clients.
     path: /v1/projections/0004-event-listings/admin/events
@@ -139,6 +558,10 @@ projections:
     auth_modes: [session, service_token]
     capabilities: [activity_events, handles, publications, search_documents, search_facets, state_transitions]
     freshness: materialized
+    data_views:
+      - auth_modes: [session, service_token]
+        sections: [shared_metadata, public_payload, private_payload, runtime_only]
+        summary: The organizer workspace exposes the full contracted event shape, including draft-only content.
   - name: events.ledger
     summary: Ordered accepted claim history for one event object, including supersession and current-state materialization inputs.
     path: /v1/projections/0004-event-listings/events/by-id/{event_id}/ledger
