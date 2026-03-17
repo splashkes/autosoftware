@@ -95,11 +95,11 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	if len(view.ReadinessGroups) != 2 {
 		t.Fatalf("expected 2 readiness groups, got %d", len(view.ReadinessGroups))
 	}
-	if view.ReadinessGroups[0].Title != "Runnable Now" {
-		t.Fatalf("expected first readiness group to be Runnable Now, got %q", view.ReadinessGroups[0].Title)
+	if view.ReadinessGroups[0].Title != "Running Now" {
+		t.Fatalf("expected first readiness group to be Running Now, got %q", view.ReadinessGroups[0].Title)
 	}
 	if len(view.ReadinessGroups[0].Realizations) != 1 {
-		t.Fatalf("expected 1 runnable realization, got %d", len(view.ReadinessGroups[0].Realizations))
+		t.Fatalf("expected 1 running realization, got %d", len(view.ReadinessGroups[0].Realizations))
 	}
 
 	support := view.Seeds[0]
@@ -117,6 +117,9 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 	}
 	if got := support.Realizations[0].ExecutionOpenPath; got != "/support/" {
 		t.Fatalf("expected support execution open path /support/, got %q", got)
+	}
+	if got := support.Realizations[0].RuntimeStateLabel; got != "Running" {
+		t.Fatalf("expected support runtime state Running, got %q", got)
 	}
 	if support.Metrics.Total != 4 {
 		t.Fatalf("expected support metrics total 4, got %d", support.Metrics.Total)
@@ -188,6 +191,9 @@ func TestNewBootPageViewSkipsArchivedSeeds(t *testing.T) {
 	}
 	if len(view.ReadinessGroups[0].Realizations) != 1 {
 		t.Fatalf("expected 1 visible realization, got %d", len(view.ReadinessGroups[0].Realizations))
+	}
+	if view.ReadinessGroups[0].Title != "Ready To Grow" {
+		t.Fatalf("expected remaining readiness group to be Ready To Grow, got %q", view.ReadinessGroups[0].Title)
 	}
 }
 

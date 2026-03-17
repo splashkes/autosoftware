@@ -60,6 +60,28 @@ var materializationTemplate = template.Must(template.New("materialization").Pars
     {{if .Result.ApproachID}}<span class="pill">{{.Result.ApproachID}}</span>{{end}}
   </div>
 
+  {{if .Registry.Available}}
+  <article class="source">
+    <h3>Registry Footprint</h3>
+    <p class="subtle">Relative registry surface for this realization across objects, commands, projections, and schemas.</p>
+    <div class="footprint">
+      <div class="footprint-bar" aria-label="Registry footprint">
+        {{range .Registry.Segments}}
+        <span class="footprint-segment {{.ClassName}}" style="width: {{.Width}}%;" title="{{.Label}} {{.Count}}"></span>
+        {{end}}
+      </div>
+      <div class="footprint-legend">
+        {{range .Registry.Segments}}
+        <div class="footprint-legend-item">
+          <span class="footprint-swatch {{.ClassName}}"></span>
+          <span>{{.Label}} {{.Count}}</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </article>
+  {{end}}
+
   {{if .Result.Warnings}}
   <div class="source">
     {{range .Result.Warnings}}<div class="subtle">{{.}}</div>{{end}}
@@ -283,53 +305,64 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Realization unavailable</title>
   {{if .RefreshPath}}<meta http-equiv="refresh" content="{{if gt .RefreshAfter 0}}{{.RefreshAfter}}{{else}}2{{end}};url={{.RefreshPath}}">{{end}}
+  <link rel="stylesheet" href="/assets/sprout-logo.css">
   <style nonce="{{.CSPNonce}}">
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(217, 119, 6, 0.14), transparent 26rem),
-        linear-gradient(180deg, #f4f0e8 0%, #ede7dc 100%);
+      background: #eef0f3;
       color: #1f2933;
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     }
     .shell {
-      width: min(54rem, calc(100vw - 2rem));
+      width: min(42rem, calc(100vw - 2rem));
       margin: 0 auto;
-      padding: 2.5rem 0 3rem;
+      padding: 2.2rem 0 3rem;
     }
     .card {
-      border: 1px solid rgba(185, 174, 158, 0.92);
-      background: rgba(255, 252, 247, 0.9);
-      box-shadow: 0 1.4rem 3rem rgba(58, 49, 37, 0.08);
-      padding: 1.6rem;
+      border: 1px solid #d4d8df;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 1.4rem 3rem rgba(28, 35, 48, 0.14);
+      padding: 1.5rem;
+    }
+    .brand {
+      display: grid;
+      justify-items: center;
+      text-align: center;
+      gap: 0.45rem;
+      margin-bottom: 1.1rem;
     }
     .eyebrow {
-      color: #9a5a0a;
-      font: 700 0.74rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #7a818d;
+      font: 700 0.7rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
       letter-spacing: 0.14em;
       text-transform: uppercase;
     }
+    .sprout {
+      width: 7.5rem;
+      cursor: default;
+    }
     h1 {
-      margin: 0.65rem 0 0.35rem;
-      font-size: clamp(2rem, 5vw, 3.6rem);
-      line-height: 0.96;
-      letter-spacing: -0.05em;
+      margin: 0.4rem 0 0.25rem;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
       color: #181c24;
     }
     .copy,
     .meta,
     .list,
-    .hint {
+    .hint,
+    .status-copy {
       font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     .copy {
       margin: 0.65rem 0 0;
       color: #47515f;
-      font-size: 1rem;
+      font-size: 0.96rem;
       line-height: 1.75;
-      max-width: 40rem;
+      max-width: 34rem;
     }
     .meta {
       display: flex;
@@ -340,19 +373,48 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
     .pill {
       display: inline-flex;
       align-items: center;
-      border: 1px solid #d7ccb8;
-      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid #d7dce4;
+      background: rgba(255, 255, 255, 0.84);
       padding: 0.28rem 0.65rem;
       border-radius: 999px;
-      color: #7a4c12;
-      font-size: 0.73rem;
+      color: #5d6470;
+      font-size: 0.69rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
+    .pill.cause {
+      border-color: rgba(196, 71, 93, 0.24);
+      background: rgba(196, 71, 93, 0.08);
+      color: #b4233d;
+    }
+    .pill.loading {
+      border-color: rgba(37, 99, 235, 0.24);
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+    }
+    .progress {
+      height: 0.32rem;
+      overflow: hidden;
+      background: #e5e9ef;
+      margin: 1rem 0 0.95rem;
+    }
+    .progress > span {
+      display: block;
+      width: 34%;
+      height: 100%;
+      background: linear-gradient(90deg, #2563eb 0%, #22a05a 100%);
+      animation: pulse-progress 1.4s ease-in-out infinite;
+      transform-origin: left center;
+    }
+    @keyframes pulse-progress {
+      0% { transform: translateX(-85%) scaleX(0.72); }
+      50% { transform: translateX(120%) scaleX(1); }
+      100% { transform: translateX(260%) scaleX(0.72); }
+    }
     .panel {
       margin-top: 1rem;
-      border: 1px solid rgba(210, 201, 188, 0.9);
-      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid #dde2ea;
+      background: rgba(247, 249, 251, 0.9);
       padding: 1rem;
     }
     .panel h2 {
@@ -374,6 +436,36 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
       font-size: 0.94rem;
       line-height: 1.7;
     }
+    .status-copy {
+      margin: 0.55rem 0 0;
+      color: #6d7582;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .actions {
+      display: flex;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      margin-top: 1.15rem;
+    }
+    .action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 0.78rem;
+      border: 1px solid #c8ccd4;
+      color: #616875;
+      background: transparent;
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .action.primary {
+      border-color: #22a05a;
+      color: #178243;
+      background: rgba(34, 160, 90, 0.08);
+    }
     code {
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: 0.92em;
@@ -383,27 +475,46 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
 <body>
   <main class="shell">
     <section class="card">
-      <div class="eyebrow">Execution halted</div>
+      <div class="brand">
+        <div class="sprout-logo-shell sprout" data-sprout-logo aria-hidden="true"></div>
+        <div class="eyebrow">Autosoftware Route State</div>
+      </div>
+      {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
+      <div class="eyebrow">Terminated for cause</div>
+      {{else}}
+      <div class="eyebrow">Restoring realization</div>
+      <div class="progress" aria-hidden="true"><span></span></div>
+      {{end}}
       <h1>{{.Reference}}</h1>
       <p class="copy">{{.Message}}</p>
+      {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
+      <p class="status-copy">The kernel removed this route because the execution stopped or was suspended. The current cause is shown below.</p>
+      {{else}}
+      <p class="status-copy">This route is not live right now. The bootloader is treating it as a restore/loading state rather than a hard failure.</p>
+      {{end}}
       <div class="meta">
-        {{if .Status}}<span class="pill">{{.Status}}</span>{{end}}
-        {{if .ReasonCode}}<span class="pill">{{.ReasonCode}}</span>{{end}}
+        {{if .Status}}<span class="pill {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}cause{{else}}loading{{end}}">{{.Status}}</span>{{end}}
+        {{if and (not .RefreshPath) .ReasonCode}}<span class="pill cause">{{.ReasonCode}}</span>{{end}}
         {{if .ExecutionID}}<span class="pill">{{.ExecutionID}}</span>{{end}}
+        {{if .RouteDescription}}<span class="pill">{{.RouteDescription}}</span>{{end}}
       </div>
 
       <div class="panel">
-        <h2>What happened</h2>
+        {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
+        <h2>Cause</h2>
+        {{else}}
+        <h2>Loading</h2>
+        {{end}}
         <ul class="list">
           {{if .RouteDescription}}<li>Route: <code>{{.RouteDescription}}</code></li>{{end}}
           {{if .RefreshPath}}
           <li>The kernel is still bringing this realization online.</li>
           <li>This page will retry automatically without leaving the stable URL.</li>
+          <li>Retry target: <code>{{.RefreshPath}}</code></li>
           {{else}}
-          <li>The kernel stopped this realization and removed its live route.</li>
-          {{end}}
+          <li>The live route was removed after the execution stopped or the kernel suspended it.</li>
           {{if .RemediationTarget}}<li>Fix the issue on <code>{{.RemediationTarget}}</code> and relaunch after the change lands.</li>{{end}}
-          {{if .RefreshPath}}<li>Retry target: <code>{{.RefreshPath}}</code></li>{{end}}
+          {{end}}
         </ul>
       </div>
 
@@ -413,8 +524,23 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
       {{if .RefreshPath}}
       <p class="hint">Refreshing automatically while the launch finishes.</p>
       {{end}}
+      <div class="actions">
+        {{if .RefreshPath}}<a class="action primary" href="{{.RefreshPath}}">Retry Route</a>{{end}}
+        <a class="action" href="/">Return to Bootloader</a>
+      </div>
     </section>
   </main>
+  <script src="/assets/sprout-logo.js"></script>
+  <script nonce="{{.CSPNonce}}">
+    if (window.ASSproutLogo && typeof window.ASSproutLogo.init === "function") {
+      window.ASSproutLogo.init(document);
+    }
+    {{if not (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated"))}}
+    window.setTimeout(function () {
+      window.location.reload();
+    }, 3500);
+    {{end}}
+  </script>
 </body>
 </html>
 `))
@@ -741,6 +867,7 @@ type partialView struct {
 	Reference string
 	Result    materializer.Materialization
 	NotFound  bool
+	Registry  registryFootprintView
 }
 
 type growthView struct {
@@ -784,6 +911,18 @@ type realizationUnavailableView struct {
 	RouteDescription  string
 	RefreshPath       string
 	RefreshAfter      int
+}
+
+type registryFootprintView struct {
+	Available bool
+	Segments  []registryFootprintSegment
+}
+
+type registryFootprintSegment struct {
+	Label     string
+	ClassName string
+	Count     int
+	Width     int
 }
 
 func main() {
@@ -876,6 +1015,9 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+		}
+		if catalog, catalogErr := registryReader.Catalog(); catalogErr == nil {
+			view.Registry = newRegistryFootprintView(catalog, reference)
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -993,6 +1135,79 @@ func boolEnv(key string, fallback bool) bool {
 		return false
 	default:
 		return fallback
+	}
+}
+
+func newRegistryFootprintView(catalog registrycatalog.Catalog, reference string) registryFootprintView {
+	realization, ok := registrycatalog.GetRealization(catalog, reference)
+	if !ok {
+		return registryFootprintView{}
+	}
+
+	schemaRefs := make(map[string]struct{})
+	for _, schema := range catalog.Schemas {
+		for _, use := range schema.ObjectUses {
+			if use.Reference == reference {
+				schemaRefs[schema.Ref] = struct{}{}
+				break
+			}
+		}
+		for _, use := range schema.CommandInputs {
+			if use.Reference == reference {
+				schemaRefs[schema.Ref] = struct{}{}
+				break
+			}
+		}
+		for _, use := range schema.CommandResults {
+			if use.Reference == reference {
+				schemaRefs[schema.Ref] = struct{}{}
+				break
+			}
+		}
+	}
+
+	segments := []registryFootprintSegment{
+		{Label: "Objects", ClassName: "objects", Count: len(realization.ObjectKinds)},
+		{Label: "Commands", ClassName: "commands", Count: len(realization.CommandNames)},
+		{Label: "Projections", ClassName: "projections", Count: len(realization.Projections)},
+		{Label: "Schemas", ClassName: "schemas", Count: len(schemaRefs)},
+	}
+
+	total := 0
+	nonZero := 0
+	for _, segment := range segments {
+		total += segment.Count
+		if segment.Count > 0 {
+			nonZero++
+		}
+	}
+	if total == 0 || nonZero == 0 {
+		return registryFootprintView{}
+	}
+
+	compacted := make([]registryFootprintSegment, 0, nonZero)
+	remainingWidth := 100
+	seen := 0
+	for _, segment := range segments {
+		if segment.Count <= 0 {
+			continue
+		}
+		seen++
+		width := (segment.Count * 100) / total
+		if width == 0 {
+			width = 1
+		}
+		if seen == nonZero || width > remainingWidth {
+			width = remainingWidth
+		}
+		remainingWidth -= width
+		segment.Width = width
+		compacted = append(compacted, segment)
+	}
+
+	return registryFootprintView{
+		Available: true,
+		Segments:  compacted,
 	}
 }
 
@@ -1893,7 +2108,7 @@ func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w 
 		ReasonCode:  "execution_" + strings.TrimSpace(execution.Status),
 		Message: firstNonEmpty(
 			strings.TrimSpace(execution.LastError),
-			"This realization is not currently running. Fix the issue and relaunch it through the kernel.",
+			"This realization is not active on a live route right now. If the execution can be restored, this screen will retry automatically; if it was terminated, the cause is shown here.",
 		),
 		RouteDescription: strings.TrimSpace(execution.PreviewPathPrefix),
 	})

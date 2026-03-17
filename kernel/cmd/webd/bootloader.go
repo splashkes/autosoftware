@@ -314,6 +314,7 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       display: flex;
       align-items: center;
       gap: 0.35rem;
+      flex-wrap: wrap;
       padding: 0 0 0.95rem;
     }
     .tile-dot {
@@ -334,6 +335,30 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       color: #8d94a0;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+    }
+    .runtime-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      padding: 0.16rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid #cbd1da;
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      line-height: 1;
+    }
+    .runtime-state.running {
+      border-color: rgba(34, 160, 90, 0.32);
+      background: rgba(34, 160, 90, 0.1);
+      color: #178243;
+    }
+    .runtime-state.launching,
+    .runtime-state.queued {
+      border-color: rgba(37, 99, 235, 0.28);
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
     }
 
     .tile-expanded {
@@ -839,7 +864,10 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       <div class="featured-grid">
         {{range .Featured}}
         <article class="featured-card" style="--seed-hue: {{.AccentHue}};">
-          <div class="featured-kicker">{{.Primary.ReadinessLabel}}</div>
+          <div class="tile-meta">
+            {{if .Primary.RuntimeStateLabel}}<span class="runtime-state {{.Primary.RuntimeStateClass}}">{{.Primary.RuntimeStateLabel}}</span>{{end}}
+            <div class="featured-kicker">{{.Primary.ReadinessLabel}}</div>
+          </div>
           <div>
             <h3>{{.Label}}</h3>
             <p class="featured-summary">{{.Summary}}</p>
@@ -892,11 +920,13 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
             </div>
             <div class="tile-foot">
               <span class="tile-dot" data-status="{{.Status}}"></span>
+              {{if .RuntimeStateLabel}}<span class="runtime-state {{.RuntimeStateClass}}">{{.RuntimeStateLabel}}</span>{{end}}
               <span class="tile-stage">{{.ReadinessLabel}}</span>
             </div>
             <div class="tile-expanded" aria-hidden="true">
               <p class="tile-summary">{{.ReadinessSummary}}</p>
               <div class="tile-meta">
+                {{if .RuntimeStateLabel}}<span class="runtime-state {{.RuntimeStateClass}}">{{.RuntimeStateLabel}}</span>{{end}}
                 <span class="status {{.Status}}">{{.Status}}</span>
                 <span class="readiness {{.ReadinessStage}}">{{.ReadinessLabel}}</span>
                 {{if .SurfaceKind}}<span class="pill">{{.SurfaceKind}}</span>{{end}}
@@ -1041,6 +1071,9 @@ type realizationBootView struct {
 	ExecutionStatus   string
 	ExecutionID       string
 	ExecutionOpenPath string
+	RuntimeStateLabel string
+	RuntimeStateClass string
+	IsRunning         bool
 	Subdomain         string
 	PathPrefix        string
 }
@@ -1079,6 +1112,7 @@ func newBootPageView(options []materializer.RealizationOption, catalog registryc
 		readinessLabel := firstNonEmpty(strings.TrimSpace(option.Readiness.Label), "Designed")
 		readinessSummary := firstNonEmpty(strings.TrimSpace(option.Readiness.Summary), "This realization is ready for inspection and growth.")
 		execution := executions[option.Reference]
+		runtimeStateLabel, runtimeStateClass, isRunning := bootRuntimeState(execution)
 
 		item := realizationBootView{
 			Reference:         option.Reference,
@@ -1100,6 +1134,9 @@ func newBootPageView(options []materializer.RealizationOption, catalog registryc
 			ExecutionStatus:   execution.Status,
 			ExecutionID:       execution.ExecutionID,
 			ExecutionOpenPath: execution.OpenPath,
+			RuntimeStateLabel: runtimeStateLabel,
+			RuntimeStateClass: runtimeStateClass,
+			IsRunning:         isRunning,
 			Subdomain:         option.Subdomain,
 			PathPrefix:        option.PathPrefix,
 		}
@@ -1295,12 +1332,15 @@ func preferredFeaturedRealization(items []realizationBootView, preferredReferenc
 }
 
 func buildReadinessGroups(items []realizationBootView) []readinessGroupView {
+	running := make([]realizationBootView, 0)
 	runnable := make([]realizationBootView, 0)
 	ready := make([]realizationBootView, 0)
 	designed := make([]realizationBootView, 0)
 
 	for _, item := range items {
 		switch {
+		case item.IsRunning:
+			running = append(running, item)
 		case item.CanRun:
 			runnable = append(runnable, item)
 		case item.HasContract:
@@ -1311,10 +1351,17 @@ func buildReadinessGroups(items []realizationBootView) []readinessGroupView {
 	}
 
 	groups := make([]readinessGroupView, 0, 3)
+	if len(running) > 0 {
+		groups = append(groups, readinessGroupView{
+			Title:        "Running Now",
+			Summary:      "Live routes already backed by an active execution.",
+			Realizations: running,
+		})
+	}
 	if len(runnable) > 0 {
 		groups = append(groups, readinessGroupView{
-			Title:        "Runnable Now",
-			Summary:      "Surfaces that can open or launch immediately from the kernel.",
+			Title:        "Runnable But Idle",
+			Summary:      "Launchable realizations that are not currently serving a live route.",
 			Realizations: runnable,
 		})
 	}
@@ -1373,6 +1420,23 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func bootRuntimeState(execution executionBootState) (label, class string, running bool) {
+	status := strings.ToLower(strings.TrimSpace(execution.Status))
+	switch status {
+	case "healthy":
+		return "Running", "running", true
+	case "starting":
+		return "Launching", "launching", false
+	case "launch_requested":
+		return "Queued", "queued", false
+	default:
+		if strings.TrimSpace(execution.OpenPath) != "" {
+			return "Running", "running", true
+		}
+		return "", "", false
+	}
 }
 
 func consoleLoaderScript() string {
