@@ -753,9 +753,10 @@ func (a *app) publicDirectory(filters directoryFilters) []*eventView {
 
 func (a *app) workspaceEvents(filters workspaceFilters) []*eventView {
 	all := a.store.all()
+	lowerQuery := strings.ToLower(filters.Query)
 	results := make([]*eventView, 0, len(all))
 	for _, event := range all {
-		if !matchesWorkspaceFilters(event, filters) {
+		if !matchesWorkspaceFilters(event, filters, lowerQuery) {
 			continue
 		}
 		results = append(results, toEventView(event))
@@ -894,9 +895,10 @@ func (a *app) relatedEvents(id, category string, limit int) []*eventView {
 }
 
 func (a *app) handleDirectoryProjection(w http.ResponseWriter, r *http.Request) {
+	filters := parseDirectoryFilters(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"filters":   parseDirectoryFilters(r),
-		"events":    a.publicDirectory(parseDirectoryFilters(r)),
+		"filters":   filters,
+		"events":    a.publicDirectory(filters),
 		"discovery": eventProjectionDiscovery(),
 	})
 }
@@ -918,9 +920,10 @@ func (a *app) handleWorkspaceProjection(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusUnauthorized, "authentication required for organizer workspace projection")
 		return
 	}
+	filters := parseWorkspaceFilters(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"filters":   parseWorkspaceFilters(r),
-		"events":    a.workspaceEvents(parseWorkspaceFilters(r)),
+		"filters":   filters,
+		"events":    a.workspaceEvents(filters),
 		"discovery": eventProjectionDiscovery(),
 	})
 }
@@ -1334,11 +1337,11 @@ func matchesFilters(event *eventRecord, filters directoryFilters) bool {
 	return true
 }
 
-func matchesWorkspaceFilters(event *eventRecord, filters workspaceFilters) bool {
+func matchesWorkspaceFilters(event *eventRecord, filters workspaceFilters, lowerQuery string) bool {
 	if filters.Status != "" && !strings.EqualFold(filters.Status, string(event.Status)) {
 		return false
 	}
-	if filters.Query == "" {
+	if lowerQuery == "" {
 		return true
 	}
 	haystack := strings.ToLower(strings.Join([]string{
@@ -1352,7 +1355,7 @@ func matchesWorkspaceFilters(event *eventRecord, filters workspaceFilters) bool 
 		event.Category,
 		string(event.Status),
 	}, " "))
-	return strings.Contains(haystack, strings.ToLower(filters.Query))
+	return strings.Contains(haystack, lowerQuery)
 }
 
 func parseDateRange(filters directoryFilters) (time.Time, time.Time) {
@@ -1456,19 +1459,25 @@ func toEventView(event *eventRecord) *eventView {
 	}
 }
 
+var projectionDiscovery = map[string]string{
+	"workspace":              "/v1/projections/0004-event-listings/admin/events",
+	"record_template":        "/v1/projections/0004-event-listings/events/by-id/{event_id}",
+	"public_detail_template": "/v1/projections/0004-event-listings/events/{slug}",
+	"ledger_template":        "/v1/projections/0004-event-listings/events/by-id/{event_id}/ledger",
+	"create_command":         "/v1/commands/0004-event-listings/events.create",
+	"update_command":         "/v1/commands/0004-event-listings/events.update",
+	"publish_command":        "/v1/commands/0004-event-listings/events.publish",
+	"unpublish_command":      "/v1/commands/0004-event-listings/events.unpublish",
+	"cancel_command":         "/v1/commands/0004-event-listings/events.cancel",
+	"archive_command":        "/v1/commands/0004-event-listings/events.archive",
+}
+
 func eventProjectionDiscovery() map[string]string {
-	return map[string]string{
-		"workspace":              "/v1/projections/0004-event-listings/admin/events",
-		"record_template":        "/v1/projections/0004-event-listings/events/by-id/{event_id}",
-		"public_detail_template": "/v1/projections/0004-event-listings/events/{slug}",
-		"ledger_template":        "/v1/projections/0004-event-listings/events/by-id/{event_id}/ledger",
-		"create_command":         "/v1/commands/0004-event-listings/events.create",
-		"update_command":         "/v1/commands/0004-event-listings/events.update",
-		"publish_command":        "/v1/commands/0004-event-listings/events.publish",
-		"unpublish_command":      "/v1/commands/0004-event-listings/events.unpublish",
-		"cancel_command":         "/v1/commands/0004-event-listings/events.cancel",
-		"archive_command":        "/v1/commands/0004-event-listings/events.archive",
+	out := make(map[string]string, len(projectionDiscovery))
+	for key, value := range projectionDiscovery {
+		out[key] = value
 	}
+	return out
 }
 
 func toClaimViews(claims []eventClaim) []eventClaimView {
@@ -1756,7 +1765,7 @@ func (a *app) isCommandAuthorized(r *http.Request) bool {
 }
 
 func (a *app) hasServiceToken(r *http.Request) bool {
-	if strings.TrimSpace(a.serviceToken) == "" || r == nil {
+	if a.serviceToken == "" || r == nil {
 		return false
 	}
 	if token := strings.TrimSpace(r.Header.Get("X-AS-Service-Token")); token != "" {

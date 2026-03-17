@@ -323,6 +323,16 @@ func TestCommandEndpointsRequireAuthAndSupportServiceTokenFlow(t *testing.T) {
 	}
 }
 
+func TestEventProjectionDiscoveryReturnsCopy(t *testing.T) {
+	first := eventProjectionDiscovery()
+	first["workspace"] = "/tampered"
+
+	second := eventProjectionDiscovery()
+	if second["workspace"] != "/v1/projections/0004-event-listings/admin/events" {
+		t.Fatalf("expected discovery map to remain immutable across calls, got %q", second["workspace"])
+	}
+}
+
 func TestToEventViewDoesNotBakeEnvironmentHost(t *testing.T) {
 	start := time.Date(2026, 4, 10, 18, 0, 0, 0, loadLocationOrUTC("America/Toronto"))
 	end := start.Add(2 * time.Hour)
