@@ -15,7 +15,7 @@
     <tr><td>Path</td><td><code>{{$c.Path}}</code></td></tr>
     <tr><td>Idempotency</td><td>{{$c.Idempotency}}</td></tr>
     <tr><td>Consistency</td><td>{{$c.Consistency}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{$c.Contract}}">{{$c.ContractFile}}</a></td></tr>
+    <tr><td>Contract</td><td><a href="{{hrefURL $c.Contract}}">{{$c.ContractFile}}</a> · <a href="{{repoSourceURL $c.ContractFile}}">GitHub</a></td></tr>
   </table>
 </div>
 
@@ -36,8 +36,8 @@
 <div class="detail-section">
   <h3>Schemas</h3>
   <table class="field-table">
-    {{if $c.InputSchemaRef}}<tr><td>Input Schema</td><td><a href="/schemas/detail?ref={{queryEscape $c.InputSchemaRef}}">{{$c.InputSchemaRef}}</a></td></tr>{{end}}
-    {{if $c.ResultSchemaRef}}<tr><td>Result Schema</td><td><a href="/schemas/detail?ref={{queryEscape $c.ResultSchemaRef}}">{{$c.ResultSchemaRef}}</a></td></tr>{{end}}
+    {{if $c.InputSchemaRef}}<tr><td>Input Schema</td><td><a href="{{schemaPath $c.InputSchemaRef}}">{{$c.InputSchemaRef}}</a> · <a href="{{repoSourceURL $c.InputSchemaRef}}">GitHub</a></td></tr>{{end}}
+    {{if $c.ResultSchemaRef}}<tr><td>Result Schema</td><td><a href="{{schemaPath $c.ResultSchemaRef}}">{{$c.ResultSchemaRef}}</a> · <a href="{{repoSourceURL $c.ResultSchemaRef}}">GitHub</a></td></tr>{{end}}
   </table>
 </div>
 

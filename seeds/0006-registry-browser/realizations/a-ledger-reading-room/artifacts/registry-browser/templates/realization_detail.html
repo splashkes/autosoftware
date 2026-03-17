@@ -15,7 +15,7 @@
     <tr><td>Approach</td><td>{{$r.ApproachID}}</td></tr>
     <tr><td>Status</td><td>{{$r.Status}}</td></tr>
     <tr><td>Surface Kind</td><td>{{$r.SurfaceKind}}</td></tr>
-    <tr><td>Contract</td><td><a href="{{$r.Contract}}">{{$r.ContractFile}}</a></td></tr>
+    <tr><td>Contract</td><td><a href="{{hrefURL $r.Contract}}">{{$r.ContractFile}}</a> · <a href="{{repoSourceURL $r.ContractFile}}">GitHub</a></td></tr>
   </table>
 </div>
 
@@ -78,7 +78,7 @@
   <ul class="resource-list">
     {{range .Schemas}}
     <li class="resource-item">
-      <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+      <a href="{{schemaPath .Ref}}" class="name">{{.Ref}}</a>
       <div class="meta">
         <span>{{.ObjectUseCount}} object uses</span>
         <span>{{.CommandInputCount}} command inputs</span>

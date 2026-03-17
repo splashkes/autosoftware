@@ -15,7 +15,7 @@
 <ul class="resource-list">
   {{range .Schemas}}
   <li class="resource-item">
-    <a href="/schemas/detail?ref={{queryEscape .Ref}}" class="name">{{.Ref}}</a>
+    <a href="{{schemaPath .Ref}}" class="name">{{.Ref}}</a>
     <div class="meta">
       <span>{{.ObjectUseCount}} {{plural .ObjectUseCount "object use" "object uses"}}</span>
       <span>{{.CommandInputCount}} {{plural .CommandInputCount "command input" "command inputs"}}</span>
