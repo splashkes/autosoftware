@@ -18,6 +18,7 @@ import (
 )
 
 const goPrebuiltMetadataFile = "current.json"
+const goPrebuiltFingerprintVersion = "v2-cgo-disabled"
 
 const (
 	DOKSRuntimeGOOS   = "linux"
@@ -186,6 +187,8 @@ func computeGoPrebuiltFingerprint(workingDir string, manifest realizations.Runti
 	writeFingerprintLine(hash, "working_directory", strings.TrimSpace(manifest.WorkingDirectory))
 	writeFingerprintLine(hash, "target", targetGOOS+"/"+targetGOARCH)
 	writeFingerprintLine(hash, "toolchain", strings.TrimSpace(toolchain))
+	writeFingerprintLine(hash, "fingerprint_version", goPrebuiltFingerprintVersion)
+	writeFingerprintLine(hash, "cgo_enabled", "0")
 
 	for _, file := range files {
 		relative, err := filepath.Rel(workingDir, file)
