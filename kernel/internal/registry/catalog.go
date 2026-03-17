@@ -486,19 +486,19 @@ func flattenObjects(index map[string]*CatalogObject) []CatalogObject {
 		sort.Strings(item.Capabilities)
 		sort.Strings(item.SchemaRefs)
 		sort.Slice(item.Realizations, func(i, j int) bool {
-			return item.Realizations[i].Reference < item.Realizations[j].Reference
+			return item.Realizations[i].Reference > item.Realizations[j].Reference
 		})
 		sort.Slice(item.Commands, func(i, j int) bool {
 			if item.Commands[i].Reference == item.Commands[j].Reference {
 				return item.Commands[i].Name < item.Commands[j].Name
 			}
-			return item.Commands[i].Reference < item.Commands[j].Reference
+			return item.Commands[i].Reference > item.Commands[j].Reference
 		})
 		sort.Slice(item.Projections, func(i, j int) bool {
 			if item.Projections[i].Reference == item.Projections[j].Reference {
 				return item.Projections[i].Name < item.Projections[j].Name
 			}
-			return item.Projections[i].Reference < item.Projections[j].Reference
+			return item.Projections[i].Reference > item.Projections[j].Reference
 		})
 		out = append(out, *item)
 	}
@@ -506,7 +506,7 @@ func flattenObjects(index map[string]*CatalogObject) []CatalogObject {
 		if out[i].SeedID == out[j].SeedID {
 			return out[i].Kind < out[j].Kind
 		}
-		return out[i].SeedID < out[j].SeedID
+		return out[i].SeedID > out[j].SeedID
 	})
 	return out
 }
@@ -582,7 +582,7 @@ func catalogDataLayoutIsEmpty(layout CatalogDataLayout) bool {
 func flattenRealizations(items []CatalogRealization) []CatalogRealization {
 	out := append([]CatalogRealization(nil), items...)
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].Reference < out[j].Reference
+		return out[i].Reference > out[j].Reference
 	})
 	return out
 }
@@ -593,7 +593,7 @@ func flattenCommands(items []CatalogCommand) []CatalogCommand {
 		if out[i].Reference == out[j].Reference {
 			return out[i].Name < out[j].Name
 		}
-		return out[i].Reference < out[j].Reference
+		return out[i].Reference > out[j].Reference
 	})
 	return out
 }
@@ -604,7 +604,7 @@ func flattenProjections(items []CatalogProjection) []CatalogProjection {
 		if out[i].Reference == out[j].Reference {
 			return out[i].Name < out[j].Name
 		}
-		return out[i].Reference < out[j].Reference
+		return out[i].Reference > out[j].Reference
 	})
 	return out
 }
@@ -616,24 +616,24 @@ func flattenSchemas(index map[string]*CatalogSchema) []CatalogSchema {
 			if item.ObjectUses[i].Reference == item.ObjectUses[j].Reference {
 				return item.ObjectUses[i].Kind < item.ObjectUses[j].Kind
 			}
-			return item.ObjectUses[i].Reference < item.ObjectUses[j].Reference
+			return item.ObjectUses[i].Reference > item.ObjectUses[j].Reference
 		})
 		sort.Slice(item.CommandInputs, func(i, j int) bool {
 			if item.CommandInputs[i].Reference == item.CommandInputs[j].Reference {
 				return item.CommandInputs[i].Name < item.CommandInputs[j].Name
 			}
-			return item.CommandInputs[i].Reference < item.CommandInputs[j].Reference
+			return item.CommandInputs[i].Reference > item.CommandInputs[j].Reference
 		})
 		sort.Slice(item.CommandResults, func(i, j int) bool {
 			if item.CommandResults[i].Reference == item.CommandResults[j].Reference {
 				return item.CommandResults[i].Name < item.CommandResults[j].Name
 			}
-			return item.CommandResults[i].Reference < item.CommandResults[j].Reference
+			return item.CommandResults[i].Reference > item.CommandResults[j].Reference
 		})
 		out = append(out, *item)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].Ref < out[j].Ref
+		return out[i].Ref > out[j].Ref
 	})
 	return out
 }
