@@ -198,6 +198,8 @@ func rateLimitSubjectKey(r *http.Request) (subjectKey, authState, principalID st
 
 func requestClientIP(r *http.Request) string {
 	for _, candidate := range []string{
+		strings.TrimSpace(r.Header.Get("CF-Connecting-IP")),
+		strings.TrimSpace(r.Header.Get("True-Client-IP")),
 		firstForwardedFor(r.Header.Get("X-Forwarded-For")),
 		strings.TrimSpace(r.Header.Get("X-Real-IP")),
 		remoteHost(r.RemoteAddr),
