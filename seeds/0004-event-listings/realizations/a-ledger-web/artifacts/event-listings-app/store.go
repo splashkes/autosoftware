@@ -385,6 +385,7 @@ func (s *postgresEventStore) createAs(ctx context.Context, input eventInput, acc
 		UpdatedAt:     now,
 	}
 	hydrateEventDefaults(event)
+	event.RevisionCount = 2
 
 	if _, err := tx.Exec(ctx, `
 insert into as_event_listings_objects (event_id, slug, created_at, created_by)
@@ -401,7 +402,7 @@ values ($1, $2, $3, $4)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.upsertMaterialized(ctx, tx, event, 2, snapshotClaimID, statusClaimID); err != nil {
+	if err := s.upsertMaterialized(ctx, tx, event, event.RevisionCount, snapshotClaimID, statusClaimID); err != nil {
 		return nil, err
 	}
 
@@ -454,12 +455,13 @@ func (s *postgresEventStore) updateAs(ctx context.Context, id string, input even
 	event.End = end
 	event.UpdatedAt = time.Now().UTC()
 	hydrateEventDefaults(event)
+	event.RevisionCount = current.RevisionCount + 1
 
 	snapshotClaimID, err := s.insertSnapshotClaim(ctx, tx, event, current.LastSnapshotClaim, acceptedBy)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.upsertMaterialized(ctx, tx, event, current.RevisionCount+1, snapshotClaimID, current.LastStatusClaim); err != nil {
+	if err := s.upsertMaterialized(ctx, tx, event, event.RevisionCount, snapshotClaimID, current.LastStatusClaim); err != nil {
 		return nil, err
 	}
 
@@ -486,12 +488,13 @@ func (s *postgresEventStore) setStatusAs(ctx context.Context, id string, status 
 	}
 	current.Event.Status = status
 	current.Event.UpdatedAt = time.Now().UTC()
+	current.Event.RevisionCount = current.RevisionCount + 1
 
 	statusClaimID, err := s.insertStatusClaim(ctx, tx, id, status, current.LastStatusClaim, acceptedBy)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.upsertMaterialized(ctx, tx, current.Event, current.RevisionCount+1, current.LastSnapshotClaim, statusClaimID); err != nil {
+	if err := s.upsertMaterialized(ctx, tx, current.Event, current.Event.RevisionCount, current.LastSnapshotClaim, statusClaimID); err != nil {
 		return nil, err
 	}
 
@@ -659,6 +662,7 @@ for update`, id)
 	}
 	event.Tags = append([]string(nil), tags...)
 	event.Status = eventStatus(status)
+	event.RevisionCount = revisionCount
 	hydrateEventDefaults(&event)
 	return &storedEvent{
 		Event:             &event,

@@ -144,6 +144,13 @@ func TestLedgerRecordsSnapshotAndStatusClaims(t *testing.T) {
 	if _, err := store.setStatus(created.ID, statusPublished); err != nil {
 		t.Fatalf("publish event: %v", err)
 	}
+	published, ok := store.byID(created.ID)
+	if !ok {
+		t.Fatal("expected published event to remain addressable")
+	}
+	if published.RevisionCount < 3 {
+		t.Fatalf("expected revision count to reflect snapshot+status history, got %d", published.RevisionCount)
+	}
 
 	claims, err := store.ledgerByID(created.ID)
 	if err != nil {

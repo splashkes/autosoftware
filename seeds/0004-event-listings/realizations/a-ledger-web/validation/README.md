@@ -14,7 +14,7 @@ Current local validation target:
 - `go test ./...` inside `kernel`
 - manual smoke run against a local Postgres-backed launch
 
-## Evidence captured on March 16, 2026
+## Evidence captured on March 17, 2026
 
 - `go test ./...` passed in `artifacts/event-listings-app`
 - `go test ./...` passed in `kernel`
@@ -22,16 +22,21 @@ Current local validation target:
   - stable handles survive edits
   - public directory excludes draft and archived events
   - multi-day events render across covered calendar days
-  - ledger history records snapshot and status claims
-
-## Remaining manual validation
-
-- end-to-end browser smoke against a live Postgres-backed launch
-- HTTP checks for:
+  - ledger history records snapshot and status claims with non-zero revision counts
+- local Postgres-backed smoke validation passed against `postgres://postgres:postgres@127.0.0.1:54329/as_local?sslmode=disable`
+- HTTP checks passed:
   - `GET /healthz`
   - `GET /`
-  - `GET /calendar`
-  - `GET /events/{slug}/ledger`
+  - `GET /events/harbour-lights-night-market/ledger`
   - `GET /v1/projections/0004-event-listings/events`
   - `GET /v1/projections/0004-event-listings/events/{event_id}/ledger`
-  - all new command endpoints under `/v1/commands/0004-event-listings/`
+  - `POST /v1/commands/0004-event-listings/events.create`
+  - `POST /v1/commands/0004-event-listings/events.publish`
+  - `POST /v1/commands/0004-event-listings/events.update`
+- browser-rendered HTML checks passed:
+  - event detail page shows the ledger entry point
+  - ledger page renders accepted claim history with both `event.snapshot` and `event.status`
+- raw database checks passed:
+  - `as_event_listings_objects` populated
+  - `as_event_listings_claims` populated
+  - `as_event_listings_materialized_events` shows the smoke event with `revision_count = 4` and `status = published`
