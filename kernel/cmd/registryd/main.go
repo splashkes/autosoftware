@@ -57,7 +57,9 @@ func main() {
 
 	var handler http.Handler = mux
 	if runtimeService != nil {
-		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, mux)
+		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService},
+			server.RateLimitMiddleware(runtimeService, rateLimitOptions(runtimeConfig), mux),
+		)
 	}
 	handler = server.DefaultMiddlewareStack(handler)
 
@@ -110,4 +112,19 @@ func newMux(repoRoot string, runtimeService *interactions.RuntimeService, applie
 		}
 	})
 	return mux
+}
+
+func rateLimitOptions(runtimeConfig config.RuntimeConfig) server.RateLimitOptions {
+	return server.RateLimitOptions{
+		Enabled:             runtimeConfig.RateLimitsEnabled,
+		Window:              time.Duration(runtimeConfig.RateLimitWindow) * time.Second,
+		BlockDuration:       time.Duration(runtimeConfig.RateLimitBlock) * time.Second,
+		AnonymousReadLimit:  int64(runtimeConfig.AnonymousRead),
+		AnonymousWriteLimit: int64(runtimeConfig.AnonymousWrite),
+		SessionReadLimit:    int64(runtimeConfig.SessionRead),
+		SessionWriteLimit:   int64(runtimeConfig.SessionWrite),
+		InternalLimit:       int64(runtimeConfig.Internal),
+		WorkerLimit:         int64(runtimeConfig.Worker),
+		FeedbackLimit:       int64(runtimeConfig.Feedback),
+	}
 }
