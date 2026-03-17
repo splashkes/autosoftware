@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const RuntimeJobsNotifyChannel = "runtime_jobs_notify"
+
 func (s *RuntimeService) AssignHandle(ctx context.Context, input AssignHandleInput) (Handle, error) {
 	pool, err := expectReady(s)
 	if err != nil {
@@ -312,7 +314,11 @@ func (s *RuntimeService) EnqueueJob(ctx context.Context, input EnqueueJobInput) 
 		input.Priority, runAt, input.MaxAttempts, jsonBytes(input.Payload))
 
 	item, err := scanJob(row)
-	return item, wrapErr("enqueue job", err)
+	if err != nil {
+		return item, wrapErr("enqueue job", err)
+	}
+	s.notifyRuntimeJobs(ctx, item.Queue)
+	return item, nil
 }
 
 func (s *RuntimeService) GetJob(ctx context.Context, jobID string) (Job, error) {
@@ -376,6 +382,14 @@ func (s *RuntimeService) ClaimJobs(ctx context.Context, input JobClaimInput) ([]
 		items = append(items, item)
 	}
 	return items, wrapErr("claim jobs", rows.Err())
+}
+
+func (s *RuntimeService) notifyRuntimeJobs(ctx context.Context, queue string) {
+	pool, err := expectReady(s)
+	if err != nil {
+		return
+	}
+	_, _ = pool.Exec(ctx, `select pg_notify($1, $2)`, RuntimeJobsNotifyChannel, strings.TrimSpace(queue))
 }
 
 func (s *RuntimeService) ResetRunningJobs(ctx context.Context, queue, reason string) error {
