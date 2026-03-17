@@ -146,11 +146,11 @@ func TestNewBootPageViewGroupsRealizationsBySeed(t *testing.T) {
 func TestNewBootPageViewSkipsArchivedSeeds(t *testing.T) {
 	options := []materializer.RealizationOption{
 		{
-			Reference:     "0001-shared-notepad/a-go-htmx-room",
-			SeedID:        "0001-shared-notepad",
-			SeedSummary:   "Shared notepad",
+			Reference:     "9998-archived-demo/a-retired-prototype",
+			SeedID:        "9998-archived-demo",
+			SeedSummary:   "Archived demo",
 			SeedStatus:    "archived",
-			RealizationID: "a-go-htmx-room",
+			RealizationID: "a-retired-prototype",
 			Summary:       "Legacy prototype",
 			Status:        "retired",
 			Readiness: realizations.ReadinessInfo{

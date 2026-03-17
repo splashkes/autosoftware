@@ -14,7 +14,6 @@
 >
 > | Seed | `AS_ADDR` |
 > |------|-----------|
-> | 0001-shared-notepad | `/tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock` |
 > | 0003-customer-service-app | `/tmp/as-realizations/0003-customer-service-app--a-web-mvp.sock` |
 > | 0004-event-listings | `/tmp/as-realizations/0004-event-listings--a-web-mvp.sock` |
 
@@ -344,13 +343,13 @@ realization from `runtime.yaml` and route traffic to it.
 kind: runtime
 version: 1
 runtime: go
-entrypoint: main.go
-working_directory: artifacts/notepad-app
+entrypoint: artifacts/event-listings-app/main.go
+working_directory: artifacts/event-listings-app
 run:
-  command: go
-  args: [run, main.go]
+  command: prebuilt
+  args: []
 environment:
-  AS_ADDR: /tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock
+  AS_ADMIN_PASSWORD: admin
 ```
 
 **Runnable → Accepted:** Pass acceptance criteria, contract conformance,
@@ -578,33 +577,7 @@ different user feedback).
 
 ## Worked Examples
 
-### Example 1: 0001-shared-notepad (Simple, One Pass)
-
-**Context sequence:**
-
-1. `seed.yaml` — seed 0001, status proposed, "prove a runnable realization"
-2. `brief.md` — shared notepad, no login, in-memory, one room
-3. `acceptance.md` — 7 criteria: no-login UI, CRUD notes, shared across
-   clients, runnable source in artifacts, machine-readable runtime artifact
-4. `design.md` — single shared room, broadcast edits, server-rendered
-5. `approaches/a-go-htmx-room.yaml` — Go + HTMX, in-memory shared room,
-   realization-first prompt profile
-6. `interaction_contract.yaml` — 3 commands (create, update, delete),
-   1 projection (room view), anonymous auth
-7. No existing artifacts (first pass)
-8. No kernel capabilities needed (anonymous, in-memory)
-
-**What one pass produces:**
-
-- `artifacts/notepad-app/main.go` — Go HTTP server with HTMX
-- `artifacts/notepad-app/go.mod` — module definition
-- `artifacts/runtime.yaml` — `go run main.go` on port 8094
-- `realization.yaml` updated with artifact list
-- `validation/README.md` with manual test steps mapped to acceptance criteria
-
-**Result:** Designed → Runnable in one pass.
-
-### Example 2: 0003-customer-service-app (Complex, Phased)
+### Example 1: 0003-customer-service-app (Complex, Phased)
 
 **Context sequence:**
 
@@ -672,16 +645,16 @@ seeds/<seed-id>/
 ### realization.yaml
 
 ```yaml
-realization_id: a-go-htmx-room
-seed_id: 0001-shared-notepad
-approach_id: a-go-htmx-room
-summary: Shared notepad with Go backend and HTMX-driven edits.
+realization_id: a-web-mvp
+seed_id: 0004-event-listings
+approach_id: a-web-mvp
+summary: Public event listings application with organizer publishing flows.
 status: draft                    # draft | defined | runnable | accepted
-subdomain: notepad               # optional: kernel routes this subdomain here
-path_prefix: /notepad/           # optional: kernel routes this path here
+subdomain: events                # optional: kernel routes this subdomain here
+path_prefix: /event-listings/    # optional: kernel routes this path here
 artifacts:
   - artifacts/runtime.yaml
-  - artifacts/notepad-app/main.go
+  - artifacts/event-listings-app/main.go
 ```
 
 ### runtime.yaml
@@ -690,15 +663,16 @@ artifacts:
 kind: runtime
 version: 1
 runtime: go
-entrypoint: main.go
-working_directory: artifacts/notepad-app
+entrypoint: artifacts/event-listings-app/main.go
+working_directory: artifacts/event-listings-app
 run:
-  command: go
-  args: [run, main.go]
+  command: prebuilt
+  args: []
 environment:
-  AS_ADDR: /tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock
+  AS_ADMIN_PASSWORD: admin
 notes:
-  - In-memory state only; restart clears all notes
+  - AS_ADDR is injected by the kernel execution backend at launch time
+  - Organizer login uses AS_ADMIN_PASSWORD and defaults to admin for local development
 ```
 
 ### Kernel Capability Catalog

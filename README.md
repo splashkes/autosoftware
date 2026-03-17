@@ -45,7 +45,6 @@ the one we are here for.
 
 | Seed | Summary |
 |------|---------|
-| `0001-shared-notepad` | Shared in-memory notepad — the first runnable realization |
 | `0003-customer-service-app` | Web-first support product with tickets, live chat, and knowledge base |
 | `0004-event-listings` | Public event calendar with organizer publishing and discovery |
 | `0005-charity-auction-manager` | Online auction product for charities with lot management and bidding |

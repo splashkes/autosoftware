@@ -11,10 +11,8 @@ Provenance:
 
 - Derived from the earlier standalone sprout page on branch
   `codex/labs/notepad`
-- Visual structure and mocked seed catalog preserved from:
-  - `seeds/0001-shared-notepad/realizations/a-go-htmx-room/artifacts/notepad-app/main.go`
-  - `seeds/0001-shared-notepad/realizations/a-go-htmx-room/artifacts/notepad-app/assets/sprout-logo/sprout-logo.css`
-  - `seeds/0001-shared-notepad/realizations/a-go-htmx-room/artifacts/notepad-app/assets/sprout-logo/sprout-logo.js`
+- Visual structure and sprout branding preserved from the retired standalone
+  prototype that predated the current bootloader surfaces.
 
 Intent:
 
