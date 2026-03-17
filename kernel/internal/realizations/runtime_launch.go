@@ -31,8 +31,8 @@ func ValidateLocalRuntimeManifest(repoRoot, realizationRoot string, manifest Run
 
 	switch runtimeFamily {
 	case "go":
-		if command != "go" && command != "prebuilt" {
-			return fmt.Errorf("go runtime must use command go or prebuilt")
+		if command != "prebuilt" {
+			return fmt.Errorf("go runtime must use command prebuilt")
 		}
 	case "node":
 		if command != "node" {

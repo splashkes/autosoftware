@@ -14,8 +14,7 @@ func TestValidateLocalRuntimeManifestRejectsKernelOwnedEnvironment(t *testing.T)
 		Entrypoint:       "artifacts/app/main.go",
 		WorkingDirectory: "artifacts/app",
 		Run: RuntimeManifestRun{
-			Command: "go",
-			Args:    []string{"run", "."},
+			Command: "prebuilt",
 		},
 		Environment: map[string]string{
 			"AS_ADDR": "127.0.0.1:9000",
@@ -36,8 +35,7 @@ func TestValidateLocalRuntimeManifestAllowsAuthorOwnedEnvironment(t *testing.T) 
 		Entrypoint:       "artifacts/app/main.go",
 		WorkingDirectory: "artifacts/app",
 		Run: RuntimeManifestRun{
-			Command: "go",
-			Args:    []string{"run", "."},
+			Command: "prebuilt",
 		},
 		Environment: map[string]string{
 			"AS_DATA_FILE": "data/events.json",
@@ -46,5 +44,24 @@ func TestValidateLocalRuntimeManifestAllowsAuthorOwnedEnvironment(t *testing.T) 
 
 	if err := ValidateLocalRuntimeManifest(repoRoot, realizationRoot, manifest); err != nil {
 		t.Fatalf("expected author-owned environment to pass validation, got %v", err)
+	}
+}
+
+func TestValidateLocalRuntimeManifestRejectsGoRunCommand(t *testing.T) {
+	repoRoot := t.TempDir()
+	realizationRoot := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-runtime")
+
+	manifest := RuntimeManifest{
+		Runtime:          "go",
+		Entrypoint:       "artifacts/app/main.go",
+		WorkingDirectory: "artifacts/app",
+		Run: RuntimeManifestRun{
+			Command: "go",
+			Args:    []string{"run", "."},
+		},
+	}
+
+	if err := ValidateLocalRuntimeManifest(repoRoot, realizationRoot, manifest); err == nil {
+		t.Fatal("expected go runtime with go run command to be rejected")
 	}
 }

@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -74,15 +75,36 @@ runtime: go
 entrypoint: artifacts/app/main.go
 working_directory: artifacts/app
 run:
-  command: go
-  args:
-    - run
-    - .
+  command: prebuilt
 `)), 0644); err != nil {
 		t.Fatalf("write runtime manifest: %v", err)
 	}
 	if err := os.WriteFile(entrypointPath, []byte("package main\n"), 0644); err != nil {
 		t.Fatalf("write entrypoint: %v", err)
+	}
+	prebuiltDir := filepath.Join(repoRoot, "materialized", "realizations", "1234-demo", "a-runtime", "runtime", "prebuilt", DOKSRuntimeGOOS+"-"+DOKSRuntimeGOARCH)
+	if err := os.MkdirAll(prebuiltDir, 0755); err != nil {
+		t.Fatalf("mkdir prebuilt dir: %v", err)
+	}
+	prebuiltBinary := filepath.Join(prebuiltDir, "launch-test")
+	if err := os.WriteFile(prebuiltBinary, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("write prebuilt binary: %v", err)
+	}
+	metadata, err := json.Marshal(goPrebuiltMetadata{
+		Runtime:          "go",
+		GOOS:             DOKSRuntimeGOOS,
+		GOARCH:           DOKSRuntimeGOARCH,
+		Fingerprint:      "test",
+		Binary:           filepath.Base(prebuiltBinary),
+		Entrypoint:       "artifacts/app/main.go",
+		WorkingDirectory: "artifacts/app",
+		BuiltAt:          time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("marshal prebuilt metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(prebuiltDir, goPrebuiltMetadataFile), append(metadata, '\n'), 0644); err != nil {
+		t.Fatalf("write prebuilt metadata: %v", err)
 	}
 
 	spec, err := BuildLocalSpec(repoRoot, "1234-demo/a-runtime", "exec_demo_123", CapabilityURLs{
@@ -95,5 +117,8 @@ run:
 	joined := strings.Join(spec.Environment, "\n")
 	if !strings.Contains(joined, "AS_RUNTIME_DATABASE_URL=postgres://runtime.example/as") {
 		t.Fatalf("expected runtime database URL in environment, got %q", joined)
+	}
+	if got, want := spec.Command, prebuiltBinary; got != want {
+		t.Fatalf("expected prebuilt command %q, got %q", want, got)
 	}
 }

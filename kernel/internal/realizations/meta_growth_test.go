@@ -198,10 +198,8 @@ func writeGrowthRealizationFixture(t *testing.T, seedDir, realizationID string, 
 			"entrypoint: artifacts/app\n"+
 			"working_directory: artifacts\n"+
 			"run:\n"+
-			"  command: go\n"+
-			"  args:\n"+
-			"    - run\n"+
-			"    - ./cmd/app\n")
+			"  command: prebuilt\n"+
+			"  args: []\n")
 		writeRepoFile(t, filepath.Join(realizationDir, "artifacts", "README.md"), "# Runtime Artifact\n")
 	}
 }

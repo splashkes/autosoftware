@@ -4,8 +4,8 @@ runtime: go
 entrypoint: artifacts/registry-browser/main.go
 working_directory: artifacts/registry-browser
 run:
-  command: go
-  args: [run, .]
+  command: prebuilt
+  args: []
 notes:
   - AS_ADDR and AS_REGISTRY_URL are injected by the kernel execution backend at launch time.
   - AS_REGISTRY_URL points at the running kernel registry base URL.

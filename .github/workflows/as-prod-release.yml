@@ -35,6 +35,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: kernel/go.mod
+          cache-dependency-path: |
+            kernel/go.sum
+            seeds/**/realizations/**/artifacts/**/go.sum
+
       - name: Validate Build Configuration
         env:
           IMAGE_REPOSITORY: ${{ vars.AS_IMAGE_REPOSITORY }}
@@ -62,6 +70,27 @@ jobs:
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: doctl registry login --expiry-seconds 1800
+
+      - name: Restore realization prebuild cache
+        uses: actions/cache@v4
+        with:
+          path: materialized/realizations
+          key: ${{ runner.os }}-realization-prebuilt-linux-amd64-${{ hashFiles('kernel/go.mod', 'kernel/go.sum', 'kernel/cmd/prebuildrealizations/main.go', 'kernel/internal/execution/prebuilt.go', 'scripts/ci-build-realization-artifacts.sh', 'seeds/**/realizations/**/artifacts/runtime.yaml', 'seeds/**/realizations/**/artifacts/**/*.go', 'seeds/**/realizations/**/artifacts/**/go.mod', 'seeds/**/realizations/**/artifacts/**/go.sum', 'seeds/**/realizations/**/artifacts/**/*.html', 'seeds/**/realizations/**/artifacts/**/*.css', 'seeds/**/realizations/**/artifacts/**/*.js', 'seeds/**/realizations/**/artifacts/**/*.json') }}
+          restore-keys: |
+            ${{ runner.os }}-realization-prebuilt-linux-amd64-
+
+      - name: Build realization artifacts
+        env:
+          AS_PREBUILD_GOOS: linux
+          AS_PREBUILD_GOARCH: amd64
+        run: ./scripts/ci-build-realization-artifacts.sh
+
+      - name: Upload realization artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: realization-prebuilt-linux-amd64
+          path: materialized/realizations
+          if-no-files-found: error
 
       - name: Build and Push Image
         id: build
