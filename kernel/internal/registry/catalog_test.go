@@ -57,6 +57,35 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 			"    schema_ref: ../../design.md#ticket\n"+
 			"    capabilities:\n"+
 			"      - sessions\n"+
+			"    data_layout:\n"+
+			"      shared_metadata:\n"+
+			"        summary: Stable ticket identity.\n"+
+			"        fields:\n"+
+			"          - name: ticket_id\n"+
+			"            type: string\n"+
+			"            summary: Stable ticket id.\n"+
+			"      public_payload:\n"+
+			"        summary: Public ticket content.\n"+
+			"        fields:\n"+
+			"          - name: subject\n"+
+			"            type: string\n"+
+			"            summary: Public subject.\n"+
+			"domain_relations:\n"+
+			"  - kind: ticket_replies_to\n"+
+			"    summary: Connects a ticket to the ticket it replies to.\n"+
+			"    from_kinds:\n"+
+			"      - ticket\n"+
+			"    to_kinds:\n"+
+			"      - ticket\n"+
+			"    cardinality: many_to_one\n"+
+			"    visibility: mixed\n"+
+			"    schema_ref: ../../design.md#ticket\n"+
+			"    capabilities:\n"+
+			"      - sessions\n"+
+			"    attributes:\n"+
+			"      - name: reply_role\n"+
+			"        type: string\n"+
+			"        summary: Describes the parent-child ticket relation.\n"+
 			"commands:\n"+
 			"  - name: tickets.create\n"+
 			"    summary: Create ticket.\n"+
@@ -83,6 +112,13 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 			"    capabilities:\n"+
 			"      - sessions\n"+
 			"    freshness: materialized\n"+
+			"    data_views:\n"+
+			"      - auth_modes:\n"+
+			"          - session\n"+
+			"        sections:\n"+
+			"          - shared_metadata\n"+
+			"          - public_payload\n"+
+			"        summary: Session callers get the ticket payload.\n"+
 			"consistency:\n"+
 			"  write_visibility: read_your_writes\n"+
 			"  projection_freshness: materialized\n")
@@ -98,6 +134,9 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	}
 	if catalog.Summary.Objects != 1 {
 		t.Fatalf("expected 1 object, got %d", catalog.Summary.Objects)
+	}
+	if catalog.Summary.Relations != 2 {
+		t.Fatalf("expected 2 relations, got %d", catalog.Summary.Relations)
 	}
 	if catalog.Summary.Schemas != 3 {
 		t.Fatalf("expected 3 schemas, got %d", catalog.Summary.Schemas)
@@ -125,11 +164,23 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	if len(object.Projections) != 2 {
 		t.Fatalf("expected 2 projection uses, got %d", len(object.Projections))
 	}
+	if len(object.OutgoingRelations) != 2 || len(object.IncomingRelations) != 2 {
+		t.Fatalf("expected relation graph on object, got outgoing=%d incoming=%d", len(object.OutgoingRelations), len(object.IncomingRelations))
+	}
+	if object.OutgoingRelations[0].Kind != "ticket_replies_to" || object.OutgoingRelations[0].Visibility != "mixed" {
+		t.Fatalf("unexpected outgoing relation %+v", object.OutgoingRelations[0])
+	}
 	if len(object.Projections[0].AuthModes) != 1 || object.Projections[0].AuthModes[0] != "session" {
 		t.Fatalf("unexpected projection auth modes %+v", object.Projections[0].AuthModes)
 	}
 	if !contains(object.SchemaRefs, "seeds/1234-demo/design.md#ticket") {
 		t.Fatalf("expected canonical schema ref, got %+v", object.SchemaRefs)
+	}
+	if got := object.DataLayout.SharedMetadata.Fields[0].Name; got != "ticket_id" {
+		t.Fatalf("expected shared metadata field ticket_id, got %q", got)
+	}
+	if len(object.Projections[0].DataViews) != 1 || object.Projections[0].DataViews[0].Sections[1] != "public_payload" {
+		t.Fatalf("unexpected projection data views %+v", object.Projections[0].DataViews)
 	}
 
 	schema, ok := GetSchema(catalog, "seeds/1234-demo/design.md#ticket-input")
@@ -142,6 +193,9 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	realization, ok := GetRealization(catalog, "1234-demo/a-test")
 	if !ok {
 		t.Fatal("expected realization detail")
+	}
+	if len(realization.Relations) != 1 || realization.Relations[0].Kind != "ticket_replies_to" {
+		t.Fatalf("unexpected realization relations %+v", realization.Relations)
 	}
 	if len(realization.CommandNames) != 1 || realization.CommandNames[0] != "tickets.create" {
 		t.Fatalf("unexpected realization commands %+v", realization.CommandNames)
@@ -159,6 +213,12 @@ func TestFilterHelpers(t *testing.T) {
 			Kind:       "ticket",
 			Summary:    "Support ticket",
 			SchemaRefs: []string{"seeds/1234-demo/design.md#ticket"},
+			OutgoingRelations: []CatalogRelation{{
+				Kind:        "ticket_replies_to",
+				Summary:     "Reply chain edge",
+				Cardinality: "many_to_one",
+				Visibility:  "mixed",
+			}},
 		}},
 		Schemas: []CatalogSchema{{
 			Ref:  "seeds/1234-demo/design.md#ticket",
@@ -172,6 +232,9 @@ func TestFilterHelpers(t *testing.T) {
 
 	if got := FilterObjects(catalog.Objects, "1234-demo", "", "support"); len(got) != 1 {
 		t.Fatalf("expected object query match, got %d", len(got))
+	}
+	if got := FilterObjects(catalog.Objects, "1234-demo", "", "reply"); len(got) != 1 {
+		t.Fatalf("expected relation-backed object query match, got %d", len(got))
 	}
 	if got := FilterSchemas(catalog.Schemas, "1234-demo", "ticket"); len(got) != 1 {
 		t.Fatalf("expected schema query match, got %d", len(got))

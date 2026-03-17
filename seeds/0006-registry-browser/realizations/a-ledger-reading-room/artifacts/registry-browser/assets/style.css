@@ -69,6 +69,7 @@ footer{border-top:1px solid #e0e0e0;padding:1rem 0;font-size:.8rem;color:#888;te
 .field-table{width:100%;border-collapse:collapse}
 .field-table td{padding:.35rem .5rem;font-size:.85rem;border-bottom:1px solid #f0f0f0;vertical-align:top}
 .field-table td:first-child{font-weight:600;color:#555;white-space:nowrap;width:140px}
+.shape-block{background:#f6f1e6;border:1px solid #e6dcc8;border-radius:8px;padding:.85rem 1rem;font-size:.8rem;line-height:1.5;overflow-x:auto;color:#3b3428}
 .tag{display:inline-block;padding:.1rem .4rem;background:#f0f0f0;border-radius:3px;font-size:.75rem;margin:.1rem}
 
 /* Agent guidance */

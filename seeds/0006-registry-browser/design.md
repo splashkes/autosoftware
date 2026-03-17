@@ -99,6 +99,9 @@ Included in this seed:
 - deep detail views with IDs, provenance, and schema linkage
 - explicit API discovery and agent usage instructions
 - visible public/private redaction rules where relevant
+- grouped data-layout rendering when a governed thing declares
+  shared/public/private/runtime-only sections
+- graph-relation rendering when a contract declares explicit domain relations
 
 Included in the first realization:
 
@@ -166,10 +169,13 @@ inspection with:
 - stable IDs
 - timestamps and acceptance provenance
 - links to related resources that currently exist
+- explicit incoming and outgoing relation context when the contract declares it
 - supersession chains for claims when claim routes exist
 - schema identity separated from schema version identity when schema-version
   routes exist
 - raw payload or structured field display where safe
+- grouped public/private/shared/runtime layout display when the contract
+  declares it
 
 The deep layer should make it possible to answer disputes or ambiguity without
 leaving the browser.

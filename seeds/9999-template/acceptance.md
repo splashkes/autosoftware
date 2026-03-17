@@ -1,3 +1,5 @@
+*Quick `acceptance.md` map: top = concrete outcomes; middle = graph, identity, versioning, and public/private assertions; bottom = evidence notes, extensions, or clarifications.*
+
 # Acceptance
 
 List the acceptance criteria required for this seed, such as replay
@@ -5,6 +7,9 @@ expectations, permission assertions, and interface expectations.
 
 These are seed-level requirements.
 Realization-specific evidence belongs under `realizations/<id>/validation/`.
+
+In a finished seed, start with the actual acceptance bullets rather than a long
+preface.
 
 Boundary:
 
@@ -17,7 +22,17 @@ Typical acceptance requirements should cover:
 
 - first-party private workflows are reachable through declared commands and
   projections, not hidden server-only reads or writes
+- the canonical graph is explicit about nodes and relations rather than hiding
+  durable truth in one flattened payload
 - alternate clients can use a stable object identity even when the UX centers a
   handle or slug
+- content-bearing objects that matter over time have explicit version semantics
+- authorship or edit provenance is modeled explicitly when it matters
 - any public-metadata or digest-only registration surface is explicit about its
   boundary relative to private content
+- anonymously public data is available through authoritative APIs as well as the
+  UI, subject only to declared anonymous-client safety controls
+- the seed docs and interaction contract agree on which fields are
+  `shared_metadata`, `public_payload`, `private_payload`, or `runtime_only`
+- realization-specific extra structured truth is added additively instead of by
+  silently repurposing older canonical fields

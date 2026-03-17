@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +50,47 @@ func TestLoadInteractionContractValidatesManifestLinkage(t *testing.T) {
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"      - state_transitions\n"+
+		"    data_layout:\n"+
+		"      shared_metadata:\n"+
+		"        summary: Stable object identity.\n"+
+		"        fields:\n"+
+		"          - name: item_id\n"+
+		"            type: string\n"+
+		"            summary: Stable identifier.\n"+
+		"      public_payload:\n"+
+		"        summary: Public content.\n"+
+		"        fields:\n"+
+		"          - name: title\n"+
+		"            type: string\n"+
+		"            summary: Public title.\n"+
+		"      private_payload:\n"+
+		"        summary: Private content.\n"+
+		"        fields:\n"+
+		"          - name: draft_notes\n"+
+		"            type: string\n"+
+		"            summary: Private notes.\n"+
+		"  - kind: actor\n"+
+		"    summary: Actor who changes the demo item.\n"+
+		"    schema_ref: ../../design.md#actor\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"domain_relations:\n"+
+		"  - kind: demo_item_edited_by\n"+
+		"    summary: Connects the demo item to the actor who last edited it.\n"+
+		"    from_kinds:\n"+
+		"      - demo_item\n"+
+		"    to_kinds:\n"+
+		"      - actor\n"+
+		"    cardinality: many_to_one\n"+
+		"    visibility: mixed\n"+
+		"    schema_ref: ../../design.md#demo-item-graph\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"      - state_transitions\n"+
+		"    attributes:\n"+
+		"      - name: edited_at\n"+
+		"        type: RFC3339 timestamp\n"+
+		"        summary: Timestamp for the latest edit.\n"+
 		"commands:\n"+
 		"  - name: demo_items.create\n"+
 		"    summary: Create a demo item.\n"+
@@ -79,6 +121,21 @@ func TestLoadInteractionContractValidatesManifestLinkage(t *testing.T) {
 		"      - sessions\n"+
 		"      - state_transitions\n"+
 		"    freshness: materialized\n"+
+		"    data_views:\n"+
+		"      - auth_modes:\n"+
+		"          - session\n"+
+		"        sections:\n"+
+		"          - shared_metadata\n"+
+		"          - public_payload\n"+
+		"          - private_payload\n"+
+		"        summary: Session clients get the full demo payload.\n"+
+		"      - auth_modes:\n"+
+		"          - service_token\n"+
+		"        sections:\n"+
+		"          - shared_metadata\n"+
+		"          - public_payload\n"+
+		"          - private_payload\n"+
+		"        summary: Service callers get the same full demo payload.\n"+
 		"consistency:\n"+
 		"  write_visibility: read_your_writes\n"+
 		"  projection_freshness: materialized\n")
@@ -101,6 +158,15 @@ func TestLoadInteractionContractValidatesManifestLinkage(t *testing.T) {
 	}
 	if len(loaded.Contract.Commands) != 1 {
 		t.Fatalf("expected 1 command, got %d", len(loaded.Contract.Commands))
+	}
+	if got := loaded.Contract.DomainObjects[0].DataLayout.SharedMetadata.Fields[0].Name; got != "item_id" {
+		t.Fatalf("expected shared metadata field item_id, got %q", got)
+	}
+	if len(loaded.Contract.DomainRelations) != 1 || loaded.Contract.DomainRelations[0].Kind != "demo_item_edited_by" {
+		t.Fatalf("expected validated domain relation, got %+v", loaded.Contract.DomainRelations)
+	}
+	if len(loaded.Contract.Projections[0].DataViews) != 2 {
+		t.Fatalf("expected 2 projection data views, got %d", len(loaded.Contract.Projections[0].DataViews))
 	}
 }
 
@@ -139,6 +205,186 @@ func TestRepositoryRealizationsDeclareInteractionContracts(t *testing.T) {
 	}
 	if len(contracts) == 0 {
 		t.Fatal("expected at least one realization contract")
+	}
+}
+
+func TestLoadInteractionContractRequiresDataViewsToCoverProjectionAuthModes(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	realizationDir := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-test")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "brief.md"), "# Brief\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "design.md"), "# Design\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "README.md"), "# Demo\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "realization.yaml"), ""+
+		"realization_id: a-test\n"+
+		"seed_id: 1234-demo\n"+
+		"approach_id: a-approach\n"+
+		"summary: Demo realization.\n"+
+		"status: draft\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "interaction_contract.yaml"), ""+
+		"contract_version: v1\n"+
+		"surface_kind: interactive\n"+
+		"seed_id: 1234-demo\n"+
+		"realization_id: a-test\n"+
+		"summary: Demo contract.\n"+
+		"links:\n"+
+		"  seed_design: ../../design.md\n"+
+		"  seed_brief: ../../brief.md\n"+
+		"  realization_readme: README.md\n"+
+		"auth_modes:\n"+
+		"  - anonymous\n"+
+		"  - session\n"+
+		"capabilities:\n"+
+		"  - name: sessions\n"+
+		"    summary: Session plumbing.\n"+
+		"domain_objects:\n"+
+		"  - kind: demo_item\n"+
+		"    summary: Demo item.\n"+
+		"    schema_ref: ../../design.md\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"commands:\n"+
+		"  - name: demo_items.create\n"+
+		"    summary: Create a demo item.\n"+
+		"    path: /v1/commands/1234-demo/demo_items.create\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    idempotency: required\n"+
+		"    input_schema_ref: ../../design.md\n"+
+		"    result_schema_ref: README.md\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    projection: demo_items.detail\n"+
+		"    consistency: read_your_writes\n"+
+		"projections:\n"+
+		"  - name: demo_items.detail\n"+
+		"    summary: Demo read model.\n"+
+		"    path: /v1/projections/1234-demo/demo-items/{item_id}\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - anonymous\n"+
+		"      - session\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    freshness: materialized\n"+
+		"    data_views:\n"+
+		"      - auth_modes:\n"+
+		"          - anonymous\n"+
+		"        sections:\n"+
+		"          - shared_metadata\n"+
+		"        summary: Only anonymous coverage is declared.\n"+
+		"consistency:\n"+
+		"  write_visibility: read_your_writes\n"+
+		"  projection_freshness: materialized\n")
+
+	entries, err := Discover(repoRoot)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	_, err = LoadInteractionContract(repoRoot, entries[0])
+	if err == nil {
+		t.Fatal("expected missing data view coverage error")
+	}
+	if got := err.Error(); !strings.Contains(got, `must cover projection auth mode "session"`) {
+		t.Fatalf("unexpected error %q", got)
+	}
+}
+
+func TestLoadInteractionContractRejectsRelationWithUndeclaredKinds(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	realizationDir := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-test")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "brief.md"), "# Brief\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "design.md"), "# Design\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "README.md"), "# Demo\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "realization.yaml"), ""+
+		"realization_id: a-test\n"+
+		"seed_id: 1234-demo\n"+
+		"summary: Demo realization.\n"+
+		"status: draft\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "interaction_contract.yaml"), ""+
+		"contract_version: v1\n"+
+		"surface_kind: interactive\n"+
+		"seed_id: 1234-demo\n"+
+		"realization_id: a-test\n"+
+		"summary: Demo contract.\n"+
+		"links:\n"+
+		"  seed_design: ../../design.md\n"+
+		"  seed_brief: ../../brief.md\n"+
+		"  realization_readme: README.md\n"+
+		"auth_modes:\n"+
+		"  - session\n"+
+		"capabilities:\n"+
+		"  - name: sessions\n"+
+		"    summary: Session plumbing.\n"+
+		"domain_objects:\n"+
+		"  - kind: demo_item\n"+
+		"    summary: Demo item.\n"+
+		"    schema_ref: ../../design.md\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"domain_relations:\n"+
+		"  - kind: demo_item_unknown_edge\n"+
+		"    summary: Bad relation.\n"+
+		"    from_kinds:\n"+
+		"      - demo_item\n"+
+		"    to_kinds:\n"+
+		"      - missing_kind\n"+
+		"    cardinality: many_to_one\n"+
+		"    visibility: public\n"+
+		"    schema_ref: ../../design.md\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"commands:\n"+
+		"  - name: demo_items.create\n"+
+		"    summary: Create a demo item.\n"+
+		"    path: /v1/commands/1234-demo/demo_items.create\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    idempotency: required\n"+
+		"    input_schema_ref: ../../design.md\n"+
+		"    result_schema_ref: README.md\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    projection: demo_items.detail\n"+
+		"    consistency: read_your_writes\n"+
+		"projections:\n"+
+		"  - name: demo_items.detail\n"+
+		"    summary: Demo read model.\n"+
+		"    path: /v1/projections/1234-demo/demo-items/{item_id}\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    freshness: materialized\n"+
+		"consistency:\n"+
+		"  write_visibility: read_your_writes\n"+
+		"  projection_freshness: materialized\n")
+
+	entries, err := Discover(repoRoot)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+	_, err = LoadInteractionContract(repoRoot, entries[0])
+	if err == nil {
+		t.Fatal("expected relation validation error")
+	}
+	if !strings.Contains(err.Error(), "domain_relations[0].to_kinds[0]") {
+		t.Fatalf("expected to_kinds validation error, got %v", err)
 	}
 }
 

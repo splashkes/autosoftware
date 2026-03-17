@@ -46,6 +46,32 @@
 </div>
 {{end}}
 
+{{if $r.Relations}}
+<div class="detail-section">
+  <h3>Graph Relations</h3>
+  <ul class="resource-list">
+    {{range $r.Relations}}
+    <li class="resource-item">
+      <div class="name">{{.Kind}}</div>
+      <div class="meta">
+        <span>{{.Cardinality}}</span>
+        <span>{{.Visibility}}</span>
+      </div>
+      {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
+      <div class="summary">
+        from:
+        {{range $i, $source := .FromObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Realization.SeedID $source.Kind}}">{{$source.Kind}}</a>{{end}}
+      </div>
+      <div class="summary">
+        to:
+        {{range $i, $target := .ToObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Realization.SeedID $target.Kind}}">{{$target.Kind}}</a>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
 {{if $r.Commands}}
 <div class="detail-section">
   <h3>Actions</h3>

@@ -19,6 +19,8 @@ Document boundaries:
 - `brief.md` captures the incoming request in user language.
 - `design.md` explains the design response, including the early user-validation
   checkpoint before implementation.
+- `PUBLIC_PRIVATE_DATA.md` defines the seed-local shared/public/private/runtime
+  data boundary when the seed needs one, ideally in graph-first terms.
 - `approaches/` defines the named YAML approaches that realizations may
   implement.
 - `decision_log.md` records durable seed-local choices and tradeoffs.
@@ -32,7 +34,8 @@ content here. A seed should only explain the change it carries.
 Concrete artifacts should live under `realizations/<id>/artifacts/`, not beside
 the seed documents.
 Every runnable realization must also define `interaction_contract.yaml` so the
-same commands and projections can serve the UI and machine clients.
+same commands and projections can serve the UI and machine clients, and so the
+seed's objects plus relations are machine-readable.
 
 The normal collaboration path is:
 

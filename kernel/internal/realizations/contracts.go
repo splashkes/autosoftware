@@ -23,6 +23,7 @@ type InteractionContract struct {
 	AuthModes       []string                `yaml:"auth_modes" json:"auth_modes"`
 	Capabilities    []InteractionCapability `yaml:"capabilities" json:"capabilities"`
 	DomainObjects   []InteractionObject     `yaml:"domain_objects" json:"domain_objects"`
+	DomainRelations []InteractionRelation   `yaml:"domain_relations,omitempty" json:"domain_relations,omitempty"`
 	Commands        []InteractionCommand    `yaml:"commands" json:"commands"`
 	Projections     []InteractionProjection `yaml:"projections" json:"projections"`
 	Consistency     InteractionConsistency  `yaml:"consistency" json:"consistency"`
@@ -41,10 +42,41 @@ type InteractionCapability struct {
 }
 
 type InteractionObject struct {
-	Kind         string   `yaml:"kind" json:"kind"`
-	Summary      string   `yaml:"summary" json:"summary"`
-	SchemaRef    string   `yaml:"schema_ref" json:"schema_ref"`
-	Capabilities []string `yaml:"capabilities" json:"capabilities"`
+	Kind         string                `yaml:"kind" json:"kind"`
+	Summary      string                `yaml:"summary" json:"summary"`
+	SchemaRef    string                `yaml:"schema_ref" json:"schema_ref"`
+	Capabilities []string              `yaml:"capabilities" json:"capabilities"`
+	DataLayout   InteractionDataLayout `yaml:"data_layout,omitempty" json:"data_layout,omitempty"`
+}
+
+type InteractionRelation struct {
+	Kind         string                 `yaml:"kind" json:"kind"`
+	Summary      string                 `yaml:"summary" json:"summary"`
+	FromKinds    []string               `yaml:"from_kinds" json:"from_kinds"`
+	ToKinds      []string               `yaml:"to_kinds" json:"to_kinds"`
+	Cardinality  string                 `yaml:"cardinality" json:"cardinality"`
+	Visibility   string                 `yaml:"visibility" json:"visibility"`
+	SchemaRef    string                 `yaml:"schema_ref" json:"schema_ref"`
+	Capabilities []string               `yaml:"capabilities" json:"capabilities"`
+	Attributes   []InteractionDataField `yaml:"attributes,omitempty" json:"attributes,omitempty"`
+}
+
+type InteractionDataLayout struct {
+	SharedMetadata InteractionDataSection `yaml:"shared_metadata,omitempty" json:"shared_metadata,omitempty"`
+	PublicPayload  InteractionDataSection `yaml:"public_payload,omitempty" json:"public_payload,omitempty"`
+	PrivatePayload InteractionDataSection `yaml:"private_payload,omitempty" json:"private_payload,omitempty"`
+	RuntimeOnly    InteractionDataSection `yaml:"runtime_only,omitempty" json:"runtime_only,omitempty"`
+}
+
+type InteractionDataSection struct {
+	Summary string                 `yaml:"summary,omitempty" json:"summary,omitempty"`
+	Fields  []InteractionDataField `yaml:"fields,omitempty" json:"fields,omitempty"`
+}
+
+type InteractionDataField struct {
+	Name    string `yaml:"name" json:"name"`
+	Type    string `yaml:"type,omitempty" json:"type,omitempty"`
+	Summary string `yaml:"summary,omitempty" json:"summary,omitempty"`
 }
 
 type InteractionCommand struct {
@@ -62,13 +94,20 @@ type InteractionCommand struct {
 }
 
 type InteractionProjection struct {
-	Name         string   `yaml:"name" json:"name"`
-	Summary      string   `yaml:"summary" json:"summary"`
-	Path         string   `yaml:"path" json:"path"`
-	ObjectKinds  []string `yaml:"object_kinds" json:"object_kinds"`
-	AuthModes    []string `yaml:"auth_modes" json:"auth_modes"`
-	Capabilities []string `yaml:"capabilities" json:"capabilities"`
-	Freshness    string   `yaml:"freshness" json:"freshness"`
+	Name         string                `yaml:"name" json:"name"`
+	Summary      string                `yaml:"summary" json:"summary"`
+	Path         string                `yaml:"path" json:"path"`
+	ObjectKinds  []string              `yaml:"object_kinds" json:"object_kinds"`
+	AuthModes    []string              `yaml:"auth_modes" json:"auth_modes"`
+	Capabilities []string              `yaml:"capabilities" json:"capabilities"`
+	Freshness    string                `yaml:"freshness" json:"freshness"`
+	DataViews    []InteractionDataView `yaml:"data_views,omitempty" json:"data_views,omitempty"`
+}
+
+type InteractionDataView struct {
+	AuthModes []string `yaml:"auth_modes" json:"auth_modes"`
+	Sections  []string `yaml:"sections" json:"sections"`
+	Summary   string   `yaml:"summary,omitempty" json:"summary,omitempty"`
 }
 
 type InteractionConsistency struct {
@@ -182,6 +221,9 @@ func validateInteractionContract(repoRoot string, entry LocalRealization, contra
 	if err != nil {
 		return err
 	}
+	if err := validateRelations(repoRoot, contractPath, contract.DomainRelations, objectKinds, capabilities); err != nil {
+		return err
+	}
 
 	if err := validateConsistencyDefaults(contract.Consistency); err != nil {
 		return err
@@ -254,9 +296,54 @@ func validateObjects(repoRoot, contractPath string, items []InteractionObject, c
 		if err := validateSubset(fmt.Sprintf("domain_objects[%d].capabilities", i), item.Capabilities, capabilities); err != nil {
 			return nil, err
 		}
+		if err := validateDataLayout(fmt.Sprintf("domain_objects[%d].data_layout", i), item.DataLayout); err != nil {
+			return nil, err
+		}
 		out[kind] = struct{}{}
 	}
 	return out, nil
+}
+
+func validateRelations(repoRoot, contractPath string, items []InteractionRelation, objectKinds, capabilities map[string]struct{}) error {
+	seen := make(map[string]struct{}, len(items))
+	for i, item := range items {
+		kind := strings.TrimSpace(item.Kind)
+		if kind == "" {
+			return fmt.Errorf("domain_relations[%d].kind is required", i)
+		}
+		if _, exists := seen[kind]; exists {
+			return fmt.Errorf("domain_relations[%d].kind %q is duplicated", i, kind)
+		}
+		if strings.TrimSpace(item.Summary) == "" {
+			return fmt.Errorf("domain_relations[%d].summary is required", i)
+		}
+		if err := validateSubset(fmt.Sprintf("domain_relations[%d].from_kinds", i), item.FromKinds, objectKinds); err != nil {
+			return err
+		}
+		if err := validateSubset(fmt.Sprintf("domain_relations[%d].to_kinds", i), item.ToKinds, objectKinds); err != nil {
+			return err
+		}
+		if _, ok := allowedRelationCardinality[strings.TrimSpace(item.Cardinality)]; !ok {
+			return fmt.Errorf("domain_relations[%d].cardinality must be one of %s", i, formatAllowedKeys(allowedRelationCardinality))
+		}
+		if _, ok := allowedRelationVisibility[strings.TrimSpace(item.Visibility)]; !ok {
+			return fmt.Errorf("domain_relations[%d].visibility must be one of %s", i, formatAllowedKeys(allowedRelationVisibility))
+		}
+		if strings.TrimSpace(item.SchemaRef) == "" {
+			return fmt.Errorf("domain_relations[%d].schema_ref is required", i)
+		}
+		if err := validateContractRef(repoRoot, contractPath, item.SchemaRef); err != nil {
+			return fmt.Errorf("domain_relations[%d].schema_ref: %w", i, err)
+		}
+		if err := validateSubset(fmt.Sprintf("domain_relations[%d].capabilities", i), item.Capabilities, capabilities); err != nil {
+			return err
+		}
+		if err := validateFieldList(fmt.Sprintf("domain_relations[%d].attributes", i), item.Attributes); err != nil {
+			return err
+		}
+		seen[kind] = struct{}{}
+	}
+	return nil
 }
 
 func validateConsistencyDefaults(item InteractionConsistency) error {
@@ -310,10 +397,114 @@ func validateProjections(seedID string, items []InteractionProjection, objectKin
 		if _, ok := allowedProjectionFreshness[strings.TrimSpace(item.Freshness)]; !ok {
 			return nil, fmt.Errorf("projections[%d].freshness must be one of %s", i, formatAllowedKeys(allowedProjectionFreshness))
 		}
+		if err := validateDataViews(fmt.Sprintf("projections[%d].data_views", i), item.DataViews, item.AuthModes, authModes); err != nil {
+			return nil, err
+		}
 		out[name] = struct{}{}
 		paths[path] = struct{}{}
 	}
 	return out, nil
+}
+
+func validateDataLayout(field string, layout InteractionDataLayout) error {
+	if !layout.hasContent() {
+		return nil
+	}
+	if err := validateDataSection(field+".shared_metadata", layout.SharedMetadata); err != nil {
+		return err
+	}
+	if err := validateOptionalDataSection(field+".public_payload", layout.PublicPayload); err != nil {
+		return err
+	}
+	if err := validateOptionalDataSection(field+".private_payload", layout.PrivatePayload); err != nil {
+		return err
+	}
+	if err := validateOptionalDataSection(field+".runtime_only", layout.RuntimeOnly); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateOptionalDataSection(field string, section InteractionDataSection) error {
+	if !section.hasContent() {
+		return nil
+	}
+	return validateDataSection(field, section)
+}
+
+func validateDataSection(field string, section InteractionDataSection) error {
+	if strings.TrimSpace(section.Summary) == "" {
+		return fmt.Errorf("%s.summary is required", field)
+	}
+	if len(section.Fields) == 0 {
+		return fmt.Errorf("%s.fields must declare at least one field", field)
+	}
+	return validateFieldList(field+".fields", section.Fields)
+}
+
+func validateFieldList(field string, items []InteractionDataField) error {
+	seen := map[string]struct{}{}
+	for i, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return fmt.Errorf("%s[%d].name is required", field, i)
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("%s[%d].name %q is duplicated", field, i, name)
+		}
+		if strings.TrimSpace(item.Type) == "" {
+			return fmt.Errorf("%s[%d].type is required", field, i)
+		}
+		if strings.TrimSpace(item.Summary) == "" {
+			return fmt.Errorf("%s[%d].summary is required", field, i)
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
+}
+
+func validateDataViews(field string, views []InteractionDataView, projectionModes []string, authModes map[string]struct{}) error {
+	if len(views) == 0 {
+		return nil
+	}
+	projectionAuthModes, err := validateNamedList(projectionModes, authModes, field+".projection_auth_modes")
+	if err != nil {
+		return err
+	}
+	covered := map[string]struct{}{}
+	for i, view := range views {
+		if err := validateSubset(fmt.Sprintf("%s[%d].auth_modes", field, i), view.AuthModes, projectionAuthModes); err != nil {
+			return err
+		}
+		if err := validateSubset(fmt.Sprintf("%s[%d].sections", field, i), view.Sections, allowedDataLayoutSections); err != nil {
+			return err
+		}
+		if strings.TrimSpace(view.Summary) == "" {
+			return fmt.Errorf("%s[%d].summary is required", field, i)
+		}
+		for _, mode := range view.AuthModes {
+			mode = strings.TrimSpace(mode)
+			if _, exists := covered[mode]; exists {
+				return fmt.Errorf("%s[%d].auth_modes %q is already covered by another data view", field, i, mode)
+			}
+			covered[mode] = struct{}{}
+		}
+	}
+	for _, mode := range projectionModes {
+		mode = strings.TrimSpace(mode)
+		if _, ok := covered[mode]; !ok {
+			return fmt.Errorf("%s must cover projection auth mode %q", field, mode)
+		}
+	}
+	return nil
+}
+
+func (layout InteractionDataLayout) hasContent() bool {
+	return layout.SharedMetadata.hasContent() || layout.PublicPayload.hasContent() || layout.PrivatePayload.hasContent() || layout.RuntimeOnly.hasContent()
+}
+
+func (section InteractionDataSection) hasContent() bool {
+	return strings.TrimSpace(section.Summary) != "" || len(section.Fields) > 0
 }
 
 func validateCommands(seedID, repoRoot, contractPath string, items []InteractionCommand, objectKinds, projections, capabilities, authModes map[string]struct{}) error {
@@ -460,6 +651,27 @@ var allowedAuthModes = map[string]struct{}{
 	"anonymous":     {},
 	"service_token": {},
 	"session":       {},
+}
+
+var allowedDataLayoutSections = map[string]struct{}{
+	"private_payload": {},
+	"public_payload":  {},
+	"runtime_only":    {},
+	"shared_metadata": {},
+}
+
+var allowedRelationCardinality = map[string]struct{}{
+	"many_to_many": {},
+	"many_to_one":  {},
+	"one_to_many":  {},
+	"one_to_one":   {},
+}
+
+var allowedRelationVisibility = map[string]struct{}{
+	"mixed":        {},
+	"private":      {},
+	"public":       {},
+	"runtime_only": {},
 }
 
 var allowedCapabilities = map[string]struct{}{
