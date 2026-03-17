@@ -918,6 +918,9 @@ func TestSchemaDetailPage(t *testing.T) {
 	if !strings.Contains(body, `https://github.com/splashkes/autosoftware/blob/main/seeds/0001-notepad/design.md`) {
 		t.Error("schema detail missing GitHub source link")
 	}
+	if !strings.Contains(body, `href="/contracts/0001-notepad/a-go-htmx"`) {
+		t.Error("schema detail missing human-readable contract link")
+	}
 }
 
 func TestSchemaDetailMissingRef(t *testing.T) {

@@ -25,7 +25,7 @@
       <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
-        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+        <span><a href="{{realizationPath .Reference}}">{{.RealizationID}}</a></span>
       </div>
       {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
     </li>
@@ -40,10 +40,10 @@
   <ul class="resource-list">
     {{range $s.CommandInputs}}
     <li class="resource-item">
-      <a href="/commands/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{commandPath .Reference .Name}}" class="name">{{.Name}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
-        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+        <span><a href="{{realizationPath .Reference}}">{{.RealizationID}}</a></span>
       </div>
     </li>
     {{end}}
@@ -57,10 +57,10 @@
   <ul class="resource-list">
     {{range $s.CommandResults}}
     <li class="resource-item">
-      <a href="/commands/{{pathEscape .Reference}}/{{pathEscape .Name}}" class="name">{{.Name}}</a>
+      <a href="{{commandPath .Reference .Name}}" class="name">{{.Name}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
-        <span><a href="/realizations/{{pathEscape .Reference}}">{{.RealizationID}}</a></span>
+        <span><a href="{{realizationPath .Reference}}">{{.RealizationID}}</a></span>
       </div>
     </li>
     {{end}}
