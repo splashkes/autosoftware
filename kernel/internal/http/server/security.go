@@ -80,7 +80,7 @@ func SameOriginUnsafeMethodsMiddlewareWithOptions(options SameOriginUnsafeMethod
 		switch fetchSite {
 		case "", "same-origin", "none":
 		default:
-			http.Error(w, "cross-origin browser writes are not allowed", http.StatusForbidden)
+			writeForbiddenRequest(w, r, "cross-origin browser writes are not allowed")
 			return
 		}
 
@@ -88,7 +88,7 @@ func SameOriginUnsafeMethodsMiddlewareWithOptions(options SameOriginUnsafeMethod
 
 		if origin := normalizeOrigin(r.Header.Get("Origin")); origin != "" {
 			if !originAllowed(origin, target, allowedOrigins) {
-				http.Error(w, "origin mismatch", http.StatusForbidden)
+				writeForbiddenRequest(w, r, "origin mismatch")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -98,7 +98,7 @@ func SameOriginUnsafeMethodsMiddlewareWithOptions(options SameOriginUnsafeMethod
 		if referer := strings.TrimSpace(r.Referer()); referer != "" {
 			referrerOrigin := normalizeOrigin(referer)
 			if referrerOrigin == "" || !originAllowed(referrerOrigin, target, allowedOrigins) {
-				http.Error(w, "referrer mismatch", http.StatusForbidden)
+				writeForbiddenRequest(w, r, "referrer mismatch")
 				return
 			}
 		}
@@ -193,4 +193,12 @@ func normalizeOrigin(origin string) string {
 	}
 
 	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+}
+
+func writeForbiddenRequest(w http.ResponseWriter, r *http.Request, message string) {
+	if PrefersJSONErrors(r) {
+		WriteJSONError(w, r, http.StatusForbidden, Forbidden(message))
+		return
+	}
+	http.Error(w, message, http.StatusForbidden)
 }

@@ -53,7 +53,7 @@ func (api *GrowthAPI) handleSeedPacket(w http.ResponseWriter, r *http.Request) {
 
 	packet, err := realizations.LoadGrowthContext(api.RepoRoot, reference)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err)
+		respondError(w, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 		return
 	}
 
@@ -81,7 +81,7 @@ func (api *GrowthAPI) handleSeedPacket(w http.ResponseWriter, r *http.Request) {
 
 func (api *GrowthAPI) handleGrow(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, fmt.Errorf("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 
@@ -92,7 +92,7 @@ func (api *GrowthAPI) handleGrow(w http.ResponseWriter, r *http.Request) {
 
 	packet, err := realizations.LoadGrowthContext(api.RepoRoot, input.Reference)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err)
+		respondError(w, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 		return
 	}
 
@@ -157,7 +157,7 @@ func (api *GrowthAPI) handleGrow(w http.ResponseWriter, r *http.Request) {
 
 func (api *GrowthAPI) handleGrowthJob(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, fmt.Errorf("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 

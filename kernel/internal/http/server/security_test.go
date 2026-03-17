@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,7 +43,14 @@ func TestSameOriginUnsafeMethodsRejectsMismatchedOrigin(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
 	}
-	if got := rec.Body.String(); got != "origin mismatch\n" {
-		t.Fatalf("expected origin mismatch body, got %q", got)
+	var payload ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Error.Code != "forbidden" {
+		t.Fatalf("expected forbidden code, got %q", payload.Error.Code)
+	}
+	if payload.Error.Message != "origin mismatch" {
+		t.Fatalf("expected origin mismatch message, got %q", payload.Error.Message)
 	}
 }

@@ -14,10 +14,15 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrNotFound = errors.New("runtime record not found")
+var ErrConflict = errors.New("runtime conflict")
+var ErrUnauthorized = errors.New("runtime unauthorized")
+var ErrForbidden = errors.New("runtime forbidden")
+var ErrRateLimited = errors.New("runtime rate limited")
 
 type RuntimeService struct {
 	pool *pgxpool.Pool
@@ -1117,5 +1122,21 @@ func wrapErr(action string, err error) error {
 	if errors.Is(err, ErrNotFound) {
 		return err
 	}
+	if conflictErr := classifyConflictError(err); conflictErr != nil {
+		return conflictErr
+	}
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+func classifyConflictError(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+	switch pgErr.Code {
+	case "23505", "23503":
+		return fmt.Errorf("%w: %s", ErrConflict, strings.TrimSpace(pgErr.ConstraintName))
+	default:
+		return nil
+	}
 }

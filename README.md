@@ -19,6 +19,10 @@ Seeds are full change capsules. Each one holds the brief, design, acceptance
 criteria, approaches, and every realization compiled from them. The same seed
 can be realized many times as tools improve.
 
+The definitive active seed catalog is public at
+https://autosoftware.app/#seed-catalog. This README points to a few strong
+examples for quick orientation.
+
 ## Who This Is Not For
 
 Yes, AI can generate a working app in minutes. Yes, there are thousands of
@@ -41,13 +45,32 @@ We are building a public software commons. The people who use it should own
 its evolution, not just its interface. That is a different problem, and it is
 the one we are here for.
 
-## Active Seeds
+## Active Seeds (selected)
 
 | Seed | Summary |
 |------|---------|
-| `0003-customer-service-app` | Web-first support product with tickets, live chat, and knowledge base |
-| `0004-event-listings` | Public event calendar with organizer publishing and discovery |
-| `0005-charity-auction-manager` | Online auction product for charities with lot management and bidding |
+| [`0001-shared-notepad`](seeds/0001-shared-notepad/) | Shared in-memory notepad — the first runnable realization |
+| [`0003-customer-service-app`](seeds/0003-customer-service-app/) | Web-first support product with tickets, live chat, and knowledge base |
+| [`0004-event-listings`](seeds/0004-event-listings/) | Public event calendar with organizer publishing and discovery |
+| [`0005-charity-auction-manager`](seeds/0005-charity-auction-manager/) | Online auction product for charities with lot management and bidding |
+
+For the full active list and current realization status, use
+`https://autosoftware.app/#seed-catalog`.
+
+## Core AS principles
+
+- User- and agent-driven evolution from seeds with reviewable growth and
+  re-realization.
+- Immutable object, claim, and schema history so registry state can be rolled
+  back or replayed by object identity.
+- Purpose and design docs are system-level guides, with changes expressed through
+  versioned seeds rather than hidden repo rewrites.
+- APIs are first-class: every realization is intended for agent access via scoped
+  keys, not interface-only access.
+- Security and scale are centrally managed in kernel pathways; individual
+  realizations remain replaceable artifacts.
+- Realizations can be re-run as tooling improves while keeping contracts and goals
+  explicit.
 
 ## Repo Layout
 

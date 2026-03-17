@@ -68,7 +68,9 @@ func main() {
 	telemetry.NewServiceMonitor("apid", service).Start(ctx)
 
 	handler := server.DefaultMiddlewareStack(
-		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service}, mux),
+		server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: service},
+			server.RateLimitMiddleware(service, rateLimitOptions(runtimeConfig), mux),
+		),
 	)
 
 	addr := config.EnvOrDefault("AS_APID_ADDR", "127.0.0.1:8092")
@@ -82,5 +84,20 @@ func main() {
 	}()
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
+	}
+}
+
+func rateLimitOptions(runtimeConfig config.RuntimeConfig) server.RateLimitOptions {
+	return server.RateLimitOptions{
+		Enabled:             runtimeConfig.RateLimitsEnabled,
+		Window:              time.Duration(runtimeConfig.RateLimitWindow) * time.Second,
+		BlockDuration:       time.Duration(runtimeConfig.RateLimitBlock) * time.Second,
+		AnonymousReadLimit:  int64(runtimeConfig.AnonymousRead),
+		AnonymousWriteLimit: int64(runtimeConfig.AnonymousWrite),
+		SessionReadLimit:    int64(runtimeConfig.SessionRead),
+		SessionWriteLimit:   int64(runtimeConfig.SessionWrite),
+		InternalLimit:       int64(runtimeConfig.Internal),
+		WorkerLimit:         int64(runtimeConfig.Worker),
+		FeedbackLimit:       int64(runtimeConfig.Feedback),
 	}
 }
