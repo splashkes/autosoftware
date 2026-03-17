@@ -257,6 +257,12 @@ func prepareLocalLaunchCommand(repoRoot string, entry realizations.LocalRealizat
 	if strings.TrimSpace(manifest.Runtime) != "go" || command != "go" || !isGoRunDot(args) {
 		return command, args, nil
 	}
+	if _, err := os.Stat(filepath.Join(workingDir, "go.mod")); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return command, args, nil
+		}
+		return "", nil, err
+	}
 
 	binaryPath, err := ensureGoLaunchBinary(repoRoot, entry, manifest, workingDir)
 	if err != nil {
