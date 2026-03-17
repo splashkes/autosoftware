@@ -11,6 +11,7 @@
   <table class="field-table">
     <tr><td>Ref</td><td>{{$s.Ref}}</td></tr>
     <tr><td>Path</td><td>{{$s.Path}}</td></tr>
+    <tr><td>Browse URL</td><td><a href="{{schemaPath $s.Ref}}">{{schemaPath $s.Ref}}</a></td></tr>
     <tr><td>Source</td><td><a href="{{repoSourceURL $s.Ref}}">GitHub</a></td></tr>
     {{if $s.Anchor}}<tr><td>Anchor</td><td>{{$s.Anchor}}</td></tr>{{end}}
   </table>

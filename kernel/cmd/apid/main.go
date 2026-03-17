@@ -43,6 +43,11 @@ func main() {
 	}
 
 	service := interactions.NewRuntimeService(pool)
+	hashIndex := runtimedb.NewRegistryHashIndex(pool)
+	registryReader := registry.NewCatalogReader(repoRoot)
+	if err := hashIndex.SyncCatalogReader(ctx, registryReader); err != nil {
+		log.Fatal(err)
+	}
 	api := jsontransport.NewRuntimeAPI(service, func(ctx context.Context) ([]string, error) {
 		return runtimedb.AppliedMigrations(ctx, pool)
 	})
@@ -50,7 +55,7 @@ func main() {
 	operationsAPI := jsontransport.NewOperationsAPI(service)
 	contractsAPI := jsontransport.NewContractsAPI(repoRoot)
 	growthAPI := jsontransport.NewGrowthAPI(repoRoot, service)
-	registryAPI := jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
+	registryAPI := jsontransport.NewRegistryCatalogAPI(registryReader, hashIndex)
 
 	mux := http.NewServeMux()
 	contractsAPI.Register(mux)

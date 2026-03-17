@@ -33,6 +33,10 @@ import (
 	"as/kernel/internal/telemetry"
 )
 
+func registryPermalinkRedirectPath(record registrycatalog.HashLookupRecord) string {
+	return registrycatalog.PermalinkResolvePath(record.CanonicalURL, record.ContentHash)
+}
+
 var materializationTemplate = template.Must(template.New("materialization").Parse(`
 {{if .NotFound}}
 <div class="empty">No realization matched <code>{{.Reference}}</code>.</div>
@@ -1098,6 +1102,7 @@ func main() {
 		log.Fatal(err)
 	}
 	registryReader := registrycatalog.NewCatalogReader(repoRoot)
+	var hashIndex *runtimedb.RegistryHashIndex
 
 	var runtimeService *interactions.RuntimeService
 	runtimeConfig := config.LoadRuntimeConfigFromEnv()
@@ -1112,6 +1117,10 @@ func main() {
 				log.Fatal(err)
 			}
 		}
+		hashIndex = runtimedb.NewRegistryHashIndex(pool)
+		if err := hashIndex.SyncCatalogReader(ctx, registryReader); err != nil {
+			log.Fatal(err)
+		}
 		runtimeService = interactions.NewRuntimeService(pool)
 		store = feedbackloop.NewPostgresStore(pool)
 		log.Print("feedback loop: persisting to runtime database")
@@ -1124,7 +1133,33 @@ func main() {
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	mux.Handle("GET /__sprout-assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
-	jsontransport.NewRegistryCatalogAPI(registryReader).Register(mux)
+	jsontransport.NewRegistryCatalogAPI(registryReader, hashIndex).Register(mux)
+	mux.HandleFunc("GET /reg/{hash}", func(w http.ResponseWriter, r *http.Request) {
+		if hashIndex == nil {
+			http.Error(w, "registry permalink lookup unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		contentHash := strings.TrimSpace(r.PathValue("hash"))
+		if !registrycatalog.IsSHA256Hex(contentHash) {
+			http.NotFound(w, r)
+			return
+		}
+		record, err := hashIndex.Resolve(r.Context(), contentHash)
+		if err != nil {
+			if errors.Is(err, registrycatalog.ErrHashLookupNotFound) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		redirectPath := registryPermalinkRedirectPath(record)
+		if strings.TrimSpace(redirectPath) == "" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, redirectPath, http.StatusFound)
+	})
 	if bootExecutionEnabled {
 		jsontransport.NewExecutionAPI(repoRoot, runtimeService).RegisterPrefix(mux, "/boot")
 	}

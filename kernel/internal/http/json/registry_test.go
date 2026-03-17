@@ -169,7 +169,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if catalogPayload.Realizations[0].CanonicalURL != "/contracts/1234-demo/a-test" {
 		t.Fatalf("unexpected realization canonical url %q", catalogPayload.Realizations[0].CanonicalURL)
 	}
-	if !strings.HasPrefix(catalogPayload.Realizations[0].PermalinkURL, "/@sha256-") || !strings.HasSuffix(catalogPayload.Realizations[0].PermalinkURL, catalogPayload.Realizations[0].CanonicalURL) {
+	if catalogPayload.Realizations[0].PermalinkURL != "/reg/"+catalogPayload.Realizations[0].ContentHash {
 		t.Fatalf("unexpected realization permalink %q", catalogPayload.Realizations[0].PermalinkURL)
 	}
 	if catalogPayload.Realizations[0].ContentHash == "" {
@@ -395,7 +395,7 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	if len(schemaPayload.Schema.CommandInputs) != 1 {
 		t.Fatalf("expected 1 input use, got %d", len(schemaPayload.Schema.CommandInputs))
 	}
-	if schemaPayload.Schema.CanonicalURL != "/schemas/detail?ref=seeds%2F1234-demo%2Fdesign.md%23ticket-input" {
+	if schemaPayload.Schema.CanonicalURL != "/schemas/seeds%2F1234-demo%2Fdesign.md%23ticket-input" {
 		t.Fatalf("unexpected schema detail canonical url %q", schemaPayload.Schema.CanonicalURL)
 	}
 	if schemaPayload.Schema.ContentHash == "" {

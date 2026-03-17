@@ -1,9 +1,7 @@
 package jsontransport
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -13,19 +11,29 @@ import (
 )
 
 type RegistryAPI struct {
-	Reader registry.CatalogReader
+	Reader    registry.CatalogReader
+	HashIndex registryHashResolver
 }
 
 func NewRegistryAPI(repoRoot string) *RegistryAPI {
 	return NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot))
 }
 
-func NewRegistryCatalogAPI(reader registry.CatalogReader) *RegistryAPI {
-	return &RegistryAPI{Reader: reader}
+type registryHashResolver interface {
+	Resolve(context.Context, string) (registry.HashLookupRecord, error)
+}
+
+func NewRegistryCatalogAPI(reader registry.CatalogReader, hashIndex ...registryHashResolver) *RegistryAPI {
+	var resolver registryHashResolver
+	if len(hashIndex) > 0 {
+		resolver = hashIndex[0]
+	}
+	return &RegistryAPI{Reader: reader, HashIndex: resolver}
 }
 
 func (api *RegistryAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/registry/catalog", api.handleCatalog)
+	mux.HandleFunc("GET /v1/registry/lookup", api.handleLookup)
 	mux.HandleFunc("GET /v1/registry/realizations", api.handleRealizations)
 	mux.HandleFunc("GET /v1/registry/realization", api.handleRealization)
 	mux.HandleFunc("GET /v1/registry/commands", api.handleCommands)
@@ -36,6 +44,41 @@ func (api *RegistryAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/registry/object", api.handleObject)
 	mux.HandleFunc("GET /v1/registry/schemas", api.handleSchemas)
 	mux.HandleFunc("GET /v1/registry/schema", api.handleSchema)
+}
+
+func (api *RegistryAPI) handleLookup(w http.ResponseWriter, r *http.Request) {
+	if api.HashIndex == nil {
+		respondError(w, http.StatusServiceUnavailable, errors.New("registry hash lookup is unavailable"))
+		return
+	}
+
+	contentHash := strings.TrimSpace(r.URL.Query().Get("sha256"))
+	if !registry.IsSHA256Hex(contentHash) {
+		respondError(w, http.StatusBadRequest, errors.New("sha256 is required"))
+		return
+	}
+
+	record, err := api.HashIndex.Resolve(r.Context(), contentHash)
+	if err != nil {
+		if errors.Is(err, registry.ErrHashLookupNotFound) {
+			respondError(w, http.StatusNotFound, errors.New("registry hash not found"))
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"mode": "catalog_projection",
+		"lookup": map[string]any{
+			"content_hash":  record.ContentHash,
+			"resource_kind": record.ResourceKind,
+			"canonical_url": record.CanonicalURL,
+			"permalink_url": record.PermalinkURL,
+			"redirect_url":  registry.PermalinkResolvePath(record.CanonicalURL, record.ContentHash),
+		},
+		"discovery": registryDiscoveryPaths(),
+	})
 }
 
 func (api *RegistryAPI) handleCatalog(w http.ResponseWriter, r *http.Request) {
@@ -834,59 +877,12 @@ func detailSchemaCommandUse(use registry.CatalogSchemaCommandUse) map[string]any
 	}
 }
 
-type registryResourceLocator struct {
-	CanonicalURL string
-	PermalinkURL string
-	ContentHash  string
-}
-
-func realizationLocator(item registry.CatalogRealization) registryResourceLocator {
-	return resourceLocator("realization", browseRealizationPath(item.Reference), item)
-}
-
-func commandLocator(item registry.CatalogCommand) registryResourceLocator {
-	return resourceLocator("command", browseCommandPath(item.Reference, item.Name), item)
-}
-
-func projectionLocator(item registry.CatalogProjection) registryResourceLocator {
-	return resourceLocator("projection", browseProjectionPath(item.Reference, item.Name), item)
-}
-
-func objectLocator(item registry.CatalogObject) registryResourceLocator {
-	return resourceLocator("object", browseObjectPath(item.SeedID, item.Kind), item)
-}
-
-func schemaLocator(item registry.CatalogSchema) registryResourceLocator {
-	return resourceLocator("schema", browseSchemaPath(item.Ref), item)
-}
-
-func resourceLocator(kind, canonicalURL string, payload any) registryResourceLocator {
-	contentHash := resourceContentHash(kind, payload)
-	return registryResourceLocator{
-		CanonicalURL: canonicalURL,
-		PermalinkURL: permalinkBrowsePath(canonicalURL, contentHash),
-		ContentHash:  contentHash,
-	}
-}
-
-func resourceContentHash(kind string, payload any) string {
-	raw, err := json.Marshal(struct {
-		Kind    string `json:"kind"`
-		Payload any    `json:"payload"`
-	}{
-		Kind:    strings.TrimSpace(kind),
-		Payload: payload,
-	})
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])
-}
+type registryResourceLocator = registry.ResourceLocator
 
 func registryDiscoveryPaths() map[string]string {
 	return map[string]string{
 		"catalog":      "/v1/registry/catalog",
+		"lookup":       "/v1/registry/lookup?sha256={sha256}",
 		"realizations": "/v1/registry/realizations",
 		"realization":  "/v1/registry/realization?reference={reference}",
 		"commands":     "/v1/registry/commands",
@@ -897,6 +893,7 @@ func registryDiscoveryPaths() map[string]string {
 		"object":       "/v1/registry/object?seed_id={seed_id}&kind={kind}",
 		"schemas":      "/v1/registry/schemas",
 		"schema":       "/v1/registry/schema?ref={ref}",
+		"permalink":    "/reg/{sha256}",
 		"contracts":    "/v1/contracts",
 	}
 }
@@ -906,11 +903,7 @@ func realizationSelfPath(reference string) string {
 }
 
 func browseRealizationPath(reference string) string {
-	seedID, realizationID, ok := splitBrowseReference(reference)
-	if !ok {
-		return "/contracts/" + url.PathEscape(reference)
-	}
-	return "/contracts/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID)
+	return registry.BrowseRealizationPath(reference)
 }
 
 func commandSelfPath(reference, name string) string {
@@ -918,11 +911,7 @@ func commandSelfPath(reference, name string) string {
 }
 
 func browseCommandPath(reference, name string) string {
-	seedID, realizationID, ok := splitBrowseReference(reference)
-	if !ok {
-		return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
-	}
-	return "/actions/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+	return registry.BrowseCommandPath(reference, name)
 }
 
 func projectionSelfPath(reference, name string) string {
@@ -930,11 +919,7 @@ func projectionSelfPath(reference, name string) string {
 }
 
 func browseProjectionPath(reference, name string) string {
-	seedID, realizationID, ok := splitBrowseReference(reference)
-	if !ok {
-		return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
-	}
-	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+	return registry.BrowseProjectionPath(reference, name)
 }
 
 func objectSelfPath(seedID, kind string) string {
@@ -942,7 +927,7 @@ func objectSelfPath(seedID, kind string) string {
 }
 
 func browseObjectPath(seedID, kind string) string {
-	return "/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind)
+	return registry.BrowseObjectPath(seedID, kind)
 }
 
 func schemaSelfPath(ref string) string {
@@ -950,24 +935,30 @@ func schemaSelfPath(ref string) string {
 }
 
 func browseSchemaPath(ref string) string {
-	return "/schemas/detail?ref=" + url.QueryEscape(ref)
+	return registry.BrowseSchemaPath(ref)
 }
 
 func permalinkBrowsePath(canonicalURL, contentHash string) string {
-	if strings.TrimSpace(canonicalURL) == "" || strings.TrimSpace(contentHash) == "" {
-		return ""
-	}
-	return "/@sha256-" + contentHash + canonicalURL
+	_ = canonicalURL
+	return registry.PermalinkBrowsePath(contentHash)
 }
 
-func splitBrowseReference(reference string) (string, string, bool) {
-	reference = strings.Trim(strings.TrimSpace(reference), "/")
-	if reference == "" {
-		return "", "", false
-	}
-	parts := strings.Split(reference, "/")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", "", false
-	}
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+func realizationLocator(item registry.CatalogRealization) registryResourceLocator {
+	return registry.RealizationLocator(item)
+}
+
+func commandLocator(item registry.CatalogCommand) registryResourceLocator {
+	return registry.CommandLocator(item)
+}
+
+func projectionLocator(item registry.CatalogProjection) registryResourceLocator {
+	return registry.ProjectionLocator(item)
+}
+
+func objectLocator(item registry.CatalogObject) registryResourceLocator {
+	return registry.ObjectLocator(item)
+}
+
+func schemaLocator(item registry.CatalogSchema) registryResourceLocator {
+	return registry.SchemaLocator(item)
 }
