@@ -4,10 +4,8 @@ runtime: go
 entrypoint: service-app/main.go
 working_directory: artifacts/service-app
 run:
-  command: go
-  args:
-    - run
-    - .
+  command: prebuilt
+  args: []
 notes:
   - AS_ADDR is injected by the kernel execution backend at launch time.
   - In-memory state only; restart clears all data.

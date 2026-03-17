@@ -1,11 +1,13 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -50,6 +52,14 @@ type LocalProcess struct {
 	logFile     string
 }
 
+type ExecutionLogRecord struct {
+	ExecutionID string
+	Source      string
+	Stream      string
+	Message     string
+	OccurredAt  time.Time
+}
+
 type RunningProcess struct {
 	ExecutionID string
 	PID         int
@@ -60,13 +70,25 @@ type LocalExecutor struct {
 	mu        sync.Mutex
 	processes map[string]LocalProcess
 	onExit    func(string, error)
+	onLog     func(ExecutionLogRecord)
 }
 
-func NewLocalExecutor(onExit func(string, error)) *LocalExecutor {
-	return &LocalExecutor{processes: make(map[string]LocalProcess), onExit: onExit}
+type LaunchPreparationObserver interface {
+	BuildStarted(targetPath string)
+	BuildOutput(source, output string)
+	BuildFinished(targetPath string)
+	BuildFailed(targetPath, output string, err error)
+}
+
+func NewLocalExecutor(onExit func(string, error), onLog func(ExecutionLogRecord)) *LocalExecutor {
+	return &LocalExecutor{processes: make(map[string]LocalProcess), onExit: onExit, onLog: onLog}
 }
 
 func BuildLocalSpec(repoRoot, reference, executionID string, urls CapabilityURLs) (LocalSpec, error) {
+	return BuildLocalSpecWithObserver(repoRoot, reference, executionID, urls, nil)
+}
+
+func BuildLocalSpecWithObserver(repoRoot, reference, executionID string, urls CapabilityURLs, observer LaunchPreparationObserver) (LocalSpec, error) {
 	entries, err := realizations.Discover(repoRoot)
 	if err != nil {
 		return LocalSpec{}, err
@@ -111,15 +133,9 @@ func BuildLocalSpec(repoRoot, reference, executionID string, urls CapabilityURLs
 	if strings.TrimSpace(urls.RuntimeDatabaseURL) != "" {
 		envMap["AS_RUNTIME_DATABASE_URL"] = strings.TrimSpace(urls.RuntimeDatabaseURL)
 	}
-	command := strings.TrimSpace(meta.RuntimeManifest.Run.Command)
-	args := append([]string(nil), meta.RuntimeManifest.Run.Args...)
-	builtCommand, builtArgs, err := prepareLocalLaunchCommand(repoRoot, entry, *meta.RuntimeManifest, workingDir)
+	command, args, err := prepareLocalLaunchCommand(repoRoot, entry, *meta.RuntimeManifest, workingDir, observer)
 	if err != nil {
 		return LocalSpec{}, err
-	}
-	if strings.TrimSpace(builtCommand) != "" {
-		command = builtCommand
-		args = builtArgs
 	}
 
 	return LocalSpec{
@@ -151,20 +167,22 @@ func (e *LocalExecutor) Launch(_ context.Context, spec LocalSpec) (string, error
 	}
 
 	logDir := filepath.Join(os.TempDir(), "as-executions", spec.ExecutionID)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return "", err
 	}
 	logPath := filepath.Join(logDir, "process.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", err
 	}
+	stdoutWriter := newExecutionLineWriter(spec.ExecutionID, "process", "stdout", e.onLog)
+	stderrWriter := newExecutionLineWriter(spec.ExecutionID, "process", "stderr", e.onLog)
 
 	cmd := exec.Command(spec.Command, spec.Args...)
 	cmd.Dir = spec.WorkingDir
 	cmd.Env = spec.Environment
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	cmd.Stdout = io.MultiWriter(logFile, stdoutWriter)
+	cmd.Stderr = io.MultiWriter(logFile, stderrWriter)
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
@@ -177,6 +195,8 @@ func (e *LocalExecutor) Launch(_ context.Context, spec LocalSpec) (string, error
 
 	go func() {
 		err := cmd.Wait()
+		stdoutWriter.Flush()
+		stderrWriter.Flush()
 		_ = logFile.Close()
 		e.mu.Lock()
 		delete(e.processes, spec.ExecutionID)
@@ -251,10 +271,21 @@ func WaitForHealthy(ctx context.Context, upstreamAddr string) error {
 	}
 }
 
-func prepareLocalLaunchCommand(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string) (string, []string, error) {
+func prepareLocalLaunchCommand(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string, observer LaunchPreparationObserver) (string, []string, error) {
 	command := strings.TrimSpace(manifest.Run.Command)
 	args := append([]string(nil), manifest.Run.Args...)
-	if strings.TrimSpace(manifest.Runtime) != "go" || command != "go" || !isGoRunDot(args) {
+	if strings.TrimSpace(manifest.Runtime) != "go" {
+		return command, args, nil
+	}
+
+	if command == "prebuilt" {
+		binaryPath, err := ensureGoLaunchBinary(repoRoot, entry, manifest, workingDir, observer)
+		if err != nil {
+			return "", nil, err
+		}
+		return binaryPath, nil, nil
+	}
+	if command != "go" || !isGoRunDot(args) {
 		return command, args, nil
 	}
 	if _, err := os.Stat(filepath.Join(workingDir, "go.mod")); err != nil {
@@ -263,8 +294,7 @@ func prepareLocalLaunchCommand(repoRoot string, entry realizations.LocalRealizat
 		}
 		return "", nil, err
 	}
-
-	binaryPath, err := ensureGoLaunchBinary(repoRoot, entry, manifest, workingDir)
+	binaryPath, err := ensureGoLaunchBinary(repoRoot, entry, manifest, workingDir, observer)
 	if err != nil {
 		return "", nil, err
 	}
@@ -278,17 +308,8 @@ func isGoRunDot(args []string) bool {
 	return strings.TrimSpace(args[0]) == "run" && strings.TrimSpace(args[1]) == "."
 }
 
-func ensureGoLaunchBinary(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string) (string, error) {
-	buildDir := filepath.Join(
-		repoRoot,
-		"materialized",
-		"realizations",
-		entry.SeedID,
-		entry.RealizationID,
-		"runtime",
-		"local",
-		runtime.GOOS+"-"+runtime.GOARCH,
-	)
+func ensureGoLaunchBinary(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string, observer LaunchPreparationObserver) (string, error) {
+	buildDir := filepath.Join(repoRoot, "materialized", "realizations", entry.SeedID, entry.RealizationID, "runtime", "local", runtime.GOOS+"-"+runtime.GOARCH)
 	if !realizations.PathContained(repoRoot, buildDir) {
 		return "", fmt.Errorf("launch build directory escapes repo root")
 	}
@@ -305,14 +326,24 @@ func ensureGoLaunchBinary(repoRoot string, entry realizations.LocalRealization, 
 		return target, nil
 	}
 
+	if observer != nil {
+		observer.BuildStarted(target)
+	}
+
 	tmpTarget := target + ".tmp"
 	_ = os.Remove(tmpTarget)
 	cmd := exec.Command("go", "build", "-o", tmpTarget, ".")
 	cmd.Dir = workingDir
 	cmd.Env = buildProcessEnvironment(map[string]string{})
 	output, err := cmd.CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed != "" && observer != nil {
+		observer.BuildOutput("combined", trimmed)
+	}
 	if err != nil {
-		trimmed := strings.TrimSpace(string(output))
+		if observer != nil {
+			observer.BuildFailed(target, trimmed, err)
+		}
 		if trimmed == "" {
 			return "", fmt.Errorf("build local launch binary: %w", err)
 		}
@@ -325,6 +356,9 @@ func ensureGoLaunchBinary(repoRoot string, entry realizations.LocalRealization, 
 	if err := os.Rename(tmpTarget, target); err != nil {
 		_ = os.Remove(tmpTarget)
 		return "", fmt.Errorf("finalize launch binary: %w", err)
+	}
+	if observer != nil {
+		observer.BuildFinished(target)
 	}
 	return target, nil
 }
@@ -363,6 +397,68 @@ func newestRegularFileModTime(root string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("scan launch sources: %w", err)
 	}
 	return newest, nil
+}
+
+type executionLineWriter struct {
+	executionID string
+	source      string
+	stream      string
+	onLog       func(ExecutionLogRecord)
+	buffer      bytes.Buffer
+}
+
+func newExecutionLineWriter(executionID, source, stream string, onLog func(ExecutionLogRecord)) *executionLineWriter {
+	return &executionLineWriter{
+		executionID: strings.TrimSpace(executionID),
+		source:      strings.TrimSpace(source),
+		stream:      strings.TrimSpace(stream),
+		onLog:       onLog,
+	}
+}
+
+func (w *executionLineWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if _, err := w.buffer.Write(p); err != nil {
+		return 0, err
+	}
+	w.flushCompleteLines()
+	return len(p), nil
+}
+
+func (w *executionLineWriter) Flush() {
+	if w.buffer.Len() == 0 {
+		return
+	}
+	w.emit(strings.TrimRight(w.buffer.String(), "\r\n"))
+	w.buffer.Reset()
+}
+
+func (w *executionLineWriter) flushCompleteLines() {
+	for {
+		raw := w.buffer.Bytes()
+		index := bytes.IndexByte(raw, '\n')
+		if index < 0 {
+			return
+		}
+		line := string(raw[:index])
+		w.buffer.Next(index + 1)
+		w.emit(strings.TrimRight(line, "\r"))
+	}
+}
+
+func (w *executionLineWriter) emit(line string) {
+	if w == nil || w.onLog == nil || strings.TrimSpace(line) == "" {
+		return
+	}
+	w.onLog(ExecutionLogRecord{
+		ExecutionID: w.executionID,
+		Source:      w.source,
+		Stream:      w.stream,
+		Message:     line,
+		OccurredAt:  time.Now().UTC(),
+	})
 }
 
 func reserveLoopbackAddress() (string, error) {
