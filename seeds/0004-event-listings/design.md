@@ -23,6 +23,7 @@ The key job is making event publishing fast and public discovery pleasant.
 
 Each event should have:
 
+- stable event object identity for machine clients and alternate UIs
 - title, summary, and description
 - stable public URL that does not change when the event is edited
 - start timestamp, end timestamp, and authoritative timezone
@@ -64,6 +65,11 @@ Organizers should be able to:
 - edit an existing event without losing its public URL
 - mark an event as canceled or archived
 
+These organizer workflows must not be private implementation details of the
+first-party UI. A realization should expose the same semantic commands and
+private organizer read models so another UI or agent can manage the same event
+objects.
+
 ### Public Discovery Workflow
 
 Visitors should be able to:
@@ -73,6 +79,11 @@ Visitors should be able to:
 - search by title or keyword
 - filter by category, date range, and location
 - open a dedicated event page with clear time, venue, and status information
+
+Public discovery may expose only the metadata appropriate for public visitors,
+while organizer-facing projections may expose fuller draft or editorial state.
+That split should be explicit in the realization contract rather than hidden in
+server-only code.
 
 ## MVP Boundaries
 
@@ -97,6 +108,12 @@ Deferred beyond v1:
 
 Realizations should make public discovery trustworthy first: time display,
 status behavior, URL stability, and filter semantics should be deterministic.
+
+Realizations should also declare:
+
+- a stable by-ID event projection for alternate clients
+- a public handle-based detail projection for the public site
+- a private organizer workspace projection for draft and editorial state
 
 Technology choice belongs in the realization approach documents. Whatever stack
 is used, the MVP should keep organizer publishing simple while ensuring that

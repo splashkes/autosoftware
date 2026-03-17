@@ -2,7 +2,7 @@ contract_version: v1
 surface_kind: interactive
 seed_id: 0004-event-listings
 realization_id: a-web-mvp
-summary: First web MVP operational contract for organizer publishing and public event discovery.
+summary: First web MVP operational contract for organizer publishing, stable event identity, and public plus private event discovery.
 links:
   seed_design: ../../design.md
   seed_brief: ../../brief.md
@@ -27,7 +27,7 @@ capabilities:
     summary: Auditable draft, published, canceled, and archived lifecycle changes.
 domain_objects:
   - kind: event
-    summary: Organizer-managed event shown through list, calendar, search, and detail pages.
+    summary: Organizer-managed event with a stable identity, stable public handle, and separate public plus private read surfaces.
     schema_ref: ../../design.md
     capabilities:
       - activity_events
@@ -52,7 +52,24 @@ commands:
       - activity_events
       - handles
       - state_transitions
-    projection: events.detail
+    projection: events.record
+    consistency: read_your_writes
+  - name: events.update
+    summary: Edit an existing event without changing its stable public handle or object identity.
+    path: /v1/commands/0004-event-listings/events.update
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - handles
+      - state_transitions
+    projection: events.record
     consistency: read_your_writes
   - name: events.publish
     summary: Publish an event into public list, calendar, and search surfaces.
@@ -71,14 +88,69 @@ commands:
       - search_documents
       - search_facets
       - state_transitions
-    projection: events.detail
+    projection: events.record
+    consistency: read_your_writes
+  - name: events.unpublish
+    summary: Return an event to draft while preserving its stable public handle.
+    path: /v1/commands/0004-event-listings/events.unpublish
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+    projection: events.record
+    consistency: read_your_writes
+  - name: events.cancel
+    summary: Mark an event canceled while keeping the public detail route stable and understandable.
+    path: /v1/commands/0004-event-listings/events.cancel
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+    projection: events.record
+    consistency: read_your_writes
+  - name: events.archive
+    summary: Archive an event while retaining object identity and direct-link detail access.
+    path: /v1/commands/0004-event-listings/events.archive
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+      - state_transitions
+    projection: events.record
     consistency: read_your_writes
 projections:
   - name: events.detail
-    summary: Canonical event detail projection used by both the first-party UI and third-party clients.
-    path: /v1/projections/0004-event-listings/events/{event_id}
+    summary: Canonical public event detail projection keyed by stable handle; public states are anonymous while draft reads require organizer auth.
+    path: /v1/projections/0004-event-listings/events/{slug}
     object_kinds:
       - event
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
       - handles
@@ -91,6 +163,10 @@ projections:
     path: /v1/projections/0004-event-listings/events
     object_kinds:
       - event
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - publications
       - search_documents
@@ -102,8 +178,44 @@ projections:
     path: /v1/projections/0004-event-listings/calendar
     object_kinds:
       - event
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - publications
+      - search_facets
+      - state_transitions
+    freshness: materialized
+  - name: events.record
+    summary: Stable by-ID event projection for alternate clients; public states are anonymous while draft reads require organizer auth.
+    path: /v1/projections/0004-event-listings/events/by-id/{event_id}
+    object_kinds:
+      - event
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - handles
+      - publications
+      - search_documents
+      - state_transitions
+    freshness: materialized
+  - name: events.workspace
+    summary: Organizer workspace projection listing draft and public events through the same contract surfaced to alternate clients.
+    path: /v1/projections/0004-event-listings/admin/events
+    object_kinds:
+      - event
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - handles
+      - publications
+      - search_documents
       - search_facets
       - state_transitions
     freshness: materialized

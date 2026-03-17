@@ -6,6 +6,9 @@ Validation evidence for this realization should cover:
 - organizer create, update, publish, unpublish, cancel, and archive flows
 - public directory, calendar, and detail rendering from materialized state
 - per-event ledger/history browsing in both HTML and JSON projections
+- stable by-ID event projection for alternate clients
+- private organizer workspace projection with auth enforcement
+- command auth enforcement for create, update, publish, unpublish, cancel, and archive
 - stable handle behavior across edits
 
 Current local validation target:
@@ -29,13 +32,18 @@ Current local validation target:
   - `GET /`
   - `GET /events/harbour-lights-night-market/ledger`
   - `GET /v1/projections/0004-event-listings/events`
-  - `GET /v1/projections/0004-event-listings/events/{event_id}/ledger`
+  - `GET /v1/projections/0004-event-listings/events/by-id/{event_id}`
+  - `GET /v1/projections/0004-event-listings/events/by-id/{event_id}/ledger`
+  - `GET /v1/projections/0004-event-listings/admin/events`
   - `POST /v1/commands/0004-event-listings/events.create`
   - `POST /v1/commands/0004-event-listings/events.publish`
   - `POST /v1/commands/0004-event-listings/events.update`
 - browser-rendered HTML checks passed:
   - event detail page shows the ledger entry point
   - ledger page renders accepted claim history with both `event.snapshot` and `event.status`
+- API parity checks passed:
+  - anonymous callers cannot write through `/v1/commands/0004-event-listings/*`
+  - organizer or service-token callers can read draft organizer projections and write through the declared command surface
 - raw database checks passed:
   - `as_event_listings_objects` populated
   - `as_event_listings_claims` populated

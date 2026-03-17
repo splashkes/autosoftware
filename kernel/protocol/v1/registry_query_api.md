@@ -482,9 +482,18 @@ Rules:
 
 The public registry may expose only public accepted history.
 
+Some systems may still want public registration of private objects or private
+content boundaries.
+
 Rules:
 
 - private claims may be omitted entirely from public list endpoints
+- when a thing is publicly registered but its content is private, the public
+  registry may expose metadata-only or digest-only accepted rows instead of the
+  private payload
+- metadata-only public rows should still preserve stable identity, accepted
+  ordering, schema linkage, and any intentionally public digest such as
+  `content_hash` or SHA-256 payload evidence
 - if a private row is omitted, row ordering exposed to a public client must
   still remain internally consistent
 - redaction must not cause one public row to appear to have been accepted

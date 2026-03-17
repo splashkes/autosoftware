@@ -15,6 +15,10 @@ Boundary:
 - describe affected objects, claims, artifacts, interfaces, and projections
 - make the intended command and projection surface clear enough to encode in
   `realizations/<id>/interaction_contract.yaml`
+- identify which projections are public, which are private, and whether any
+  public surface is metadata-only or digest-only
+- call out the stable object identity that alternate clients should use if the
+  UX also exposes a public handle or slug
 - make the early design checkpoint explicit so time is not wasted on the wrong
   implementation path
 - identify the named approaches that deserve realization

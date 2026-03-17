@@ -69,6 +69,8 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 		"    path: /v1/projections/1234-demo/tickets/{ticket_id}\n"+
 		"    object_kinds:\n"+
 		"      - ticket\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"    freshness: materialized\n"+
@@ -105,10 +107,11 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 			ContentHash  string `json:"content_hash"`
 		} `json:"commands"`
 		Projections []struct {
-			Self         string `json:"self"`
-			CanonicalURL string `json:"canonical_url"`
-			PermalinkURL string `json:"permalink_url"`
-			ContentHash  string `json:"content_hash"`
+			AuthModes    []string `json:"auth_modes"`
+			Self         string   `json:"self"`
+			CanonicalURL string   `json:"canonical_url"`
+			PermalinkURL string   `json:"permalink_url"`
+			ContentHash  string   `json:"content_hash"`
 		} `json:"projections"`
 		Objects []struct {
 			Self         string `json:"self"`
@@ -146,6 +149,9 @@ func TestRegistryAPIListsCatalogObservabilityRoutes(t *testing.T) {
 	}
 	if catalogPayload.Projections[0].Self != "/v1/registry/projection?reference=1234-demo%2Fa-test&name=tickets.detail" {
 		t.Fatalf("unexpected projection self %q", catalogPayload.Projections[0].Self)
+	}
+	if len(catalogPayload.Projections[0].AuthModes) != 1 || catalogPayload.Projections[0].AuthModes[0] != "session" {
+		t.Fatalf("unexpected projection auth modes %+v", catalogPayload.Projections[0].AuthModes)
 	}
 	if catalogPayload.Projections[0].CanonicalURL != "/read-models/1234-demo/a-test/tickets.detail" {
 		t.Fatalf("unexpected projection canonical url %q", catalogPayload.Projections[0].CanonicalURL)
@@ -360,6 +366,8 @@ func TestRegistryAPIRejectsMutatingMethods(t *testing.T) {
 		"    path: /v1/projections/1234-demo/tickets/{ticket_id}\n"+
 		"    object_kinds:\n"+
 		"      - ticket\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"    freshness: materialized\n"+

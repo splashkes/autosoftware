@@ -28,6 +28,8 @@ projections:
     path: /v1/projections/0000-genesis/bootstrap-status
     object_kinds:
       - founding_state
+    auth_modes:
+      - service_token
     capabilities:
       - principals
       - state_transitions

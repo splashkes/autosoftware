@@ -66,6 +66,7 @@ type InteractionProjection struct {
 	Summary      string   `yaml:"summary" json:"summary"`
 	Path         string   `yaml:"path" json:"path"`
 	ObjectKinds  []string `yaml:"object_kinds" json:"object_kinds"`
+	AuthModes    []string `yaml:"auth_modes" json:"auth_modes"`
 	Capabilities []string `yaml:"capabilities" json:"capabilities"`
 	Freshness    string   `yaml:"freshness" json:"freshness"`
 }
@@ -186,7 +187,7 @@ func validateInteractionContract(repoRoot string, entry LocalRealization, contra
 		return err
 	}
 
-	projections, err := validateProjections(entry.SeedID, contract.Projections, objectKinds, capabilities)
+	projections, err := validateProjections(entry.SeedID, contract.Projections, objectKinds, capabilities, authModes)
 	if err != nil {
 		return err
 	}
@@ -268,7 +269,7 @@ func validateConsistencyDefaults(item InteractionConsistency) error {
 	return nil
 }
 
-func validateProjections(seedID string, items []InteractionProjection, objectKinds, capabilities map[string]struct{}) (map[string]struct{}, error) {
+func validateProjections(seedID string, items []InteractionProjection, objectKinds, capabilities, authModes map[string]struct{}) (map[string]struct{}, error) {
 	if len(items) == 0 {
 		return nil, fmt.Errorf("projections must declare at least one projection")
 	}
@@ -298,6 +299,9 @@ func validateProjections(seedID string, items []InteractionProjection, objectKin
 			return nil, fmt.Errorf("projections[%d].path %q is duplicated", i, path)
 		}
 		if err := validateSubset(fmt.Sprintf("projections[%d].object_kinds", i), item.ObjectKinds, objectKinds); err != nil {
+			return nil, err
+		}
+		if err := validateSubset(fmt.Sprintf("projections[%d].auth_modes", i), item.AuthModes, authModes); err != nil {
 			return nil, err
 		}
 		if err := validateSubset(fmt.Sprintf("projections[%d].capabilities", i), item.Capabilities, capabilities); err != nil {

@@ -149,7 +149,7 @@ func newMockRegistry() *httptest.Server {
 	mux.HandleFunc("GET /v1/registry/projections", func(w http.ResponseWriter, r *http.Request) {
 		seedID := r.URL.Query().Get("seed_id")
 		items := []ProjectionSummary{
-			{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Name: "notes.room", Path: "/v1/projections/0001-notepad/notes.room", Freshness: "materialized"},
+			{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Name: "notes.room", Path: "/v1/projections/0001-notepad/notes.room", AuthModes: []string{"anonymous", "session"}, Freshness: "materialized"},
 		}
 		if seedID != "" {
 			var filtered []ProjectionSummary
@@ -171,6 +171,7 @@ func newMockRegistry() *httptest.Server {
 				"projection": ProjectionDetail{
 					Reference: ref, SeedID: "0001-notepad", RealizationID: "a-go-htmx",
 					Name: "notes.room", Summary: "Note room view", Path: "/v1/projections/0001-notepad/notes.room",
+					AuthModes:    []string{"anonymous", "session"},
 					Freshness:    "materialized",
 					Self:         "/v1/registry/projection?reference=0001-notepad%2Fa-go-htmx&name=notes.room",
 					CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
@@ -757,6 +758,9 @@ func TestProjectionDetailPage(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "notes.room") {
 		t.Error("projection detail missing name")
+	}
+	if !strings.Contains(body, "anonymous, session") {
+		t.Error("projection detail missing auth modes")
 	}
 	if !strings.Contains(body, "materialized") {
 		t.Error("projection detail missing freshness")

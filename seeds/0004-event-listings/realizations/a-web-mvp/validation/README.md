@@ -6,7 +6,10 @@ Validation evidence for this realization should cover:
 - publish and unpublish behavior
 - cancel and archive behavior
 - public list and calendar rendering
-- event detail routing
+- event detail routing by stable public handle
+- stable by-ID event projection for alternate clients
+- private organizer workspace projection with auth enforcement
+- command auth enforcement for create, update, publish, unpublish, cancel, and archive
 - keyword search plus category, date, and location filtering
 
 Current local validation target:
@@ -18,6 +21,8 @@ Current local validation target:
   - `GET /`
   - `GET /calendar`
   - `GET /v1/projections/0004-event-listings/events`
+  - `GET /v1/projections/0004-event-listings/events/by-id/{event_id}`
+  - `GET /v1/projections/0004-event-listings/admin/events`
   - organizer login and draft state transitions
 
 ## Evidence captured on March 15, 2026
@@ -54,6 +59,10 @@ Current local validation target:
   - homepage modules render featured pick, quick picks, organizer identity, and save/share signals
   - detail pages render organizer label, venue note, crowd fit, tags, related events, and copy-link control
   - organizer create form exposes neighborhood, organizer, cover image, tags, crowd label, and editorial blurb fields
+- API parity checks confirmed:
+  - anonymous callers cannot write through `/v1/commands/0004-event-listings/*`
+  - organizer or service-token callers can create, update, publish, unpublish, cancel, and archive through the declared command surface
+  - draft reads stay private unless the caller uses organizer session or service token
 - persistence validation:
   - created draft `Signals and Scenes Night` with organizer and cover-image metadata
   - restarted the app against the same `AS_DATA_FILE`

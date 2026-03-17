@@ -295,16 +295,17 @@ type registryCommandSummary struct {
 }
 
 type registryProjectionSummary struct {
-	Reference     string `json:"reference"`
-	SeedID        string `json:"seed_id"`
-	RealizationID string `json:"realization_id"`
-	Name          string `json:"name"`
-	Path          string `json:"path"`
-	Freshness     string `json:"freshness"`
-	Self          string `json:"self"`
-	CanonicalURL  string `json:"canonical_url"`
-	PermalinkURL  string `json:"permalink_url"`
-	ContentHash   string `json:"content_hash"`
+	Reference     string   `json:"reference"`
+	SeedID        string   `json:"seed_id"`
+	RealizationID string   `json:"realization_id"`
+	Name          string   `json:"name"`
+	Path          string   `json:"path"`
+	AuthModes     []string `json:"auth_modes"`
+	Freshness     string   `json:"freshness"`
+	Self          string   `json:"self"`
+	CanonicalURL  string   `json:"canonical_url"`
+	PermalinkURL  string   `json:"permalink_url"`
+	ContentHash   string   `json:"content_hash"`
 }
 
 type registryObjectSummary struct {
@@ -390,6 +391,7 @@ func summarizeProjections(items []registry.CatalogProjection) []registryProjecti
 			RealizationID: item.RealizationID,
 			Name:          item.Name,
 			Path:          item.Path,
+			AuthModes:     append([]string(nil), item.AuthModes...),
 			Freshness:     item.Freshness,
 			Self:          projectionSelfPath(item.Reference, item.Name),
 			CanonicalURL:  locator.CanonicalURL,
@@ -541,6 +543,7 @@ func detailProjection(item registry.CatalogProjection) map[string]any {
 		"name":           item.Name,
 		"summary":        item.Summary,
 		"path":           item.Path,
+		"auth_modes":     item.AuthModes,
 		"capabilities":   item.Capabilities,
 		"freshness":      item.Freshness,
 		"contract_file":  item.ContractFile,
