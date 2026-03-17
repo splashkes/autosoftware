@@ -86,6 +86,21 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       margin: 0 auto 1rem;
       text-align: center;
     }
+    .principle-list {
+      max-width: 31rem;
+      margin: 0 auto 0.9rem;
+      padding-left: 1.1rem;
+      color: #6c7380;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+    .principle-list li {
+      margin-bottom: 0.25rem;
+    }
+    .principle-list a {
+      color: #3f7442;
+      text-decoration-color: #bddbc2;
+    }
 
     .pill {
       display: inline-flex;
@@ -850,8 +865,15 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       </a>{{end}}
     </section>
 
-    <p class="intro">User- and agent-driven rapid software evolution, guided by purpose, design docs, and accepted decision history. Realizations can be rerun as technology improves without losing the contract beneath them.</p>
-    <div class="hero-note">Use the sprout any time to understand a page, request improvements, or fork your own version on the same data or a new dataset. Security and scale stay centralized while each realization keeps evolving.</div>
+    <p class="intro">Users and agents evolve software here: each change is a seed, and each accepted change compiles into a new realization without losing the intent history.</p>
+    <ul class="principle-list">
+      <li>Growth is driven by users and agents through inspect, grow, and run flows.</li>
+      <li>Use the sprout action to understand page intent, request improvements, or fork from existing behavior.</li>
+      <li>The same contracts can be re-executed as tools evolve.</li>
+      <li>API access is first-class through scoped authentication for agent workflows.</li>
+      <li>Central services own security and scale while realizations stay replaceable.</li>
+      <li>An append-only object registry backs immutable claims, schemas, and replay.</li>
+    </ul>
 
     <section class="featured-shell">
       <div class="section-head">
@@ -893,11 +915,11 @@ var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype 
       </div>
     </section>
 
-    <section class="catalog-shell" id="catalog">
+    <section class="catalog-shell" id="seed-catalog">
       <div class="catalog-head">
         <div class="catalog-copy">
-          <h2 class="catalog-title">Explore By Readiness</h2>
-          <p class="catalog-text">Smaller tiles keep the active surfaces visible while grouping realizations by what you can do with them right now.</p>
+          <h2 class="catalog-title">Live seeds and realizations</h2>
+          <p class="catalog-text">Grouped by seed and wired into inspect, grow, run, and registry flows. The canonical list is always this live page: <a href="https://autosoftware.app/#seed-catalog" target="_blank" rel="noopener">autosoftware.app/#seed-catalog</a>.</p>
         </div>
       </div>
     <section class="tile-grid" id="tile-grid">
@@ -970,7 +992,7 @@ Immutable object and schema history keeps rollback and replay possible.</pre>
       </div>
     </section>
 
-    <button class="sprout-fab" id="sprout-fab" type="button" aria-label="Plant a new seed" data-sprout-trigger>
+    <button class="sprout-fab" id="sprout-fab" type="button" aria-label="Understand this page, request improvements, or start a fork" title="Understand this page, request improvements, or start a fork" data-sprout-trigger>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 22v-8"/>
         <path d="M12 14c-4 0-8-4-8-8 4 0 8 4 8 8z"/>
@@ -986,7 +1008,7 @@ Immutable object and schema history keeps rollback and replay possible.</pre>
     </div>
 
     <div id="console-status"></div>
-    <p class="footer">Draft realizations materialize into <code>materialized/</code> for inspection. Growth requests enqueue agent-ready jobs in <code>runtime_jobs</code>, and accepted history stays replayable through the registry layer.</p>
+    <p class="footer">Draft realizations materialize into <code>materialized/</code> for inspection. Growth requests enqueue agent-ready jobs in <code>runtime_jobs</code>, and registry projections remain available to both humans and agents through the API surface.</p>
 
     <script src="/assets/sprout-logo.js"></script>
     <script src="/assets/launch-state.js"></script>
@@ -1477,9 +1499,54 @@ func consoleLoaderScript() string {
     try {
       return JSON.parse(body);
     } catch (err) {
-      if (!response.ok) return { error: body.trim() || ("Request failed: " + response.status) };
+      if (!response.ok) return { error: { code: "invalid_error_response", message: body.trim() || ("Request failed: " + response.status) } };
       throw err;
     }
+  }
+
+  function errorInfo(result, response) {
+    var payload = result && result.error ? result.error : null;
+    var info = {
+      code: "",
+      message: "",
+      requestID: "",
+      retryAfterSeconds: 0,
+      authState: "",
+      status: response && response.status ? response.status : 0
+    };
+
+    if (payload && typeof payload === "object") {
+      info.code = String(payload.code || "");
+      info.message = String(payload.message || "");
+      info.requestID = String(payload.request_id || "");
+      info.retryAfterSeconds = Number(payload.retry_after_seconds || 0) || 0;
+      info.authState = payload.details && payload.details.auth_state ? String(payload.details.auth_state) : "";
+    } else if (typeof payload === "string") {
+      info.message = payload;
+    }
+
+    return info;
+  }
+
+  function prettyErrorMessage(result, response, fallback) {
+    var info = errorInfo(result, response);
+    if (info.code === "rate_limited") {
+      var retryCopy = info.retryAfterSeconds > 0 ? (" Retry in " + info.retryAfterSeconds + "s.") : "";
+      if (info.authState === "session") {
+        return "Too many requests for this signed-in session." + retryCopy;
+      }
+      return "Too many requests from this browser." + retryCopy;
+    }
+    if ((info.code === "unauthorized" || info.code === "forbidden") && info.authState === "anonymous") {
+      return (info.message || fallback || "Request blocked.") + " Sign in may be required.";
+    }
+    return info.message || fallback || ("Request failed: " + (response && response.status ? response.status : "unknown"));
+  }
+
+  function responseError(result, response, fallback) {
+    var err = new Error(prettyErrorMessage(result, response, fallback));
+    err.info = errorInfo(result, response);
+    return err;
   }
 
   function launchStateAPI() {
@@ -1824,7 +1891,7 @@ func consoleLoaderScript() string {
         });
         var result = await readJSONResponse(response);
         if (!response.ok) {
-          var projectionError = new Error(result.error || ("Execution poll failed: " + response.status));
+          var projectionError = responseError(result, response, "Execution status could not be refreshed.");
           projectionError.terminal = response.status >= 400 && response.status < 500;
           throw projectionError;
         }
@@ -1902,7 +1969,7 @@ func consoleLoaderScript() string {
     });
     var result = await readJSONResponse(response);
     if (!response.ok) {
-      throw new Error(result.error || ("Launch failed: " + response.status));
+      throw responseError(result, response, "Launch failed.");
     }
     if (launchContext.token !== activeLaunchToken) {
       return null;
@@ -2146,18 +2213,18 @@ func consoleLoaderScript() string {
         headers: { "Accept": "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      var commandResult = await commandResponse.json();
+      var commandResult = await readJSONResponse(commandResponse);
       if (!commandResponse.ok) {
-        throw new Error(commandResult.error || ("Queue failed: " + commandResponse.status));
+        throw responseError(commandResult, commandResponse, "Growth request failed.");
       }
       var projectionResponse = await fetch(commandResult.projection, {
         method: "GET",
         credentials: "same-origin",
         headers: { "Accept": "application/json" }
       });
-      var projection = await projectionResponse.json();
+      var projection = await readJSONResponse(projectionResponse);
       if (!projectionResponse.ok) {
-        throw new Error(projection.error || ("Projection failed: " + projectionResponse.status));
+        throw responseError(projection, projectionResponse, "Growth status could not be loaded.");
       }
       renderJobResult(projection);
       setStatus("Queued growth for " + (commandResult.target_reference || reference) + ".");
@@ -2187,9 +2254,9 @@ func consoleLoaderScript() string {
       headers: { "Accept": "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ execution_id: executionID })
     });
-    var result = await response.json();
+    var result = await readJSONResponse(response);
     if (!response.ok) {
-      throw new Error(result.error || ("Stop failed: " + response.status));
+      throw responseError(result, response, "Stop failed.");
     }
     modalContent.innerHTML =
       '<div class="stack"><div class="indicator-title">Stopped</div><p class="indicator-copy">' +

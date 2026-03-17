@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"as/kernel/internal/http/server"
 	"as/kernel/internal/interactions"
@@ -18,6 +19,8 @@ type RuntimeAPI struct {
 	Service           *interactions.RuntimeService
 	AppliedMigrations AppliedMigrationsReader
 }
+
+const maxJSONBodyBytes int64 = 1 << 20
 
 func NewRuntimeAPI(service *interactions.RuntimeService, applied AppliedMigrationsReader) *RuntimeAPI {
 	return &RuntimeAPI{
@@ -64,11 +67,11 @@ func (api *RuntimeAPI) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 func (api *RuntimeAPI) handleRuntimeHealth(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	if err := api.Service.Ping(r.Context()); err != nil {
-		respondError(w, http.StatusServiceUnavailable, err)
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 
@@ -325,9 +328,14 @@ func (api *RuntimeAPI) handleRecordRiskEvent(w http.ResponseWriter, r *http.Requ
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target interface{}) bool {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBodyBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			respondError(w, http.StatusRequestEntityTooLarge, server.NewHTTPError(http.StatusRequestEntityTooLarge, "payload_too_large", "request body is too large"))
+			return false
+		}
 		respondError(w, http.StatusBadRequest, err)
 		return false
 	}
@@ -344,6 +352,16 @@ func writeRuntimeResult(w http.ResponseWriter, payload interface{}, err error) {
 		respondJSON(w, http.StatusOK, payload)
 	case errors.Is(err, interactions.ErrNotFound):
 		respondError(w, http.StatusNotFound, err)
+	case errors.Is(err, interactions.ErrConflict):
+		respondError(w, http.StatusConflict, err)
+	case errors.Is(err, interactions.ErrUnauthorized):
+		respondError(w, http.StatusUnauthorized, err)
+	case errors.Is(err, interactions.ErrForbidden):
+		respondError(w, http.StatusForbidden, err)
+	case errors.Is(err, interactions.ErrRateLimited):
+		respondError(w, http.StatusTooManyRequests, err)
+	case strings.Contains(strings.ToLower(err.Error()), "runtime database is not configured"):
+		respondError(w, http.StatusServiceUnavailable, err)
 	default:
 		respondError(w, http.StatusBadRequest, err)
 	}

@@ -2,7 +2,6 @@ package jsontransport
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -59,7 +58,7 @@ func (api *ExecutionAPI) RegisterPrefix(mux *http.ServeMux, prefix string) {
 
 func (api *ExecutionAPI) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -75,7 +74,7 @@ func (api *ExecutionAPI) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 	packet, err := realizations.LoadGrowthContext(api.RepoRoot, reference)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err)
+		respondError(w, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 		return
 	}
 	if !packet.Readiness.CanLaunchLocal {
@@ -148,7 +147,7 @@ func (api *ExecutionAPI) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 func (api *ExecutionAPI) handleStop(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	var input StopRealizationInput
@@ -180,7 +179,7 @@ func (api *ExecutionAPI) handleStop(w http.ResponseWriter, r *http.Request) {
 
 func (api *ExecutionAPI) handleActivate(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	var input ActivateRealizationRequest
@@ -222,7 +221,7 @@ func (api *ExecutionAPI) handleActivate(w http.ResponseWriter, r *http.Request) 
 
 func (api *ExecutionAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -241,7 +240,7 @@ func (api *ExecutionAPI) handleSessions(w http.ResponseWriter, r *http.Request) 
 
 func (api *ExecutionAPI) handleSession(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -264,7 +263,7 @@ func (api *ExecutionAPI) handleSession(w http.ResponseWriter, r *http.Request) {
 
 func (api *ExecutionAPI) handleRoutes(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -350,7 +349,7 @@ func preferredExecutionOpenPath(binding interactions.RealizationRouteBinding) (s
 
 func syncActiveRouteBindings(ctx context.Context, service *interactions.RuntimeService, execRow interactions.RealizationExecution) error {
 	if service == nil {
-		return errors.New("runtime service unavailable")
+		return server.ServiceUnavailable("runtime service unavailable")
 	}
 	if err := service.DeleteStableRouteBindingsForReference(ctx, execRow.Reference); err != nil {
 		return err

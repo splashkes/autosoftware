@@ -708,13 +708,13 @@ cause={{.ReasonCode}}{{end}}</pre>
 
 var mutateTemplate = template.Must(template.New("mutate").Parse(`
 <div class="stack">
-  {{if .IsNew}}
+{{if .IsNew}}
   <h2 style="margin:0;font-size:1.15rem;">Create from Bare Earth</h2>
-  <p class="subtle">Define a new seed. Describe what you want to build, then review the generated brief, design, and acceptance criteria.</p>
-  {{else}}
+  <p class="subtle">Define a new seed, request improvements, or fork this software model. Describe your goal and whether this should reuse the current data lineage or start from fresh data.</p>
+{{else}}
   <h2 style="margin:0;font-size:1.15rem;">Mutate {{.Packet.Reference}}</h2>
-  <p class="subtle">Propose a change to this seed. Review the current specs, describe your mutation, then approve the approach and UAT updates.</p>
-  {{end}}
+  <p class="subtle">Propose a change to this seed. Review the current specs, describe your mutation, and queue a growth job so the agent can optimize from the same design/contracts.</p>
+{{end}}
 
   <!-- Step 1: Current Specs / Intent -->
   <div data-wizard-step>
@@ -1166,12 +1166,12 @@ func main() {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		options, err := service.ListRealizations(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to load realizations"))
 			return
 		}
 		catalog, err := registryReader.Catalog()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to load registry catalog"))
 			return
 		}
 		executions := latestExecutionStateByReference(r.Context(), runtimeService)
@@ -1190,7 +1190,7 @@ func main() {
 
 		var body bytes.Buffer
 		if err := bootPageTemplate.Execute(&body, view); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render boot page"))
 			return
 		}
 
@@ -1205,7 +1205,7 @@ func main() {
 			if errors.Is(err, materializer.ErrReferenceNotFound) {
 				view.NotFound = true
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to materialize realization"))
 				return
 			}
 		}
@@ -1215,7 +1215,7 @@ func main() {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := materializationTemplate.Execute(w, view); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render materialization"))
 			return
 		}
 	})
@@ -1223,7 +1223,7 @@ func main() {
 		reference := strings.TrimSpace(r.URL.Query().Get("reference"))
 		packet, err := realizations.LoadGrowthContext(repoRoot, reference)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			server.WriteTextError(w, r, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 			return
 		}
 
@@ -1233,7 +1233,7 @@ func main() {
 			ExecutionEnabled: bootExecutionEnabled,
 			Current:          latestExecutionModalState(r.Context(), runtimeService, packet.Reference),
 		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render growth panel"))
 			return
 		}
 	})
@@ -1241,7 +1241,7 @@ func main() {
 		reference := strings.TrimSpace(r.URL.Query().Get("reference"))
 		packet, err := realizations.LoadGrowthContext(repoRoot, reference)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			server.WriteTextError(w, r, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 			return
 		}
 
@@ -1251,7 +1251,7 @@ func main() {
 			ExecutionEnabled: bootExecutionEnabled,
 			Current:          latestExecutionModalState(r.Context(), runtimeService, packet.Reference),
 		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render run panel"))
 			return
 		}
 	})
@@ -1261,7 +1261,7 @@ func main() {
 		if reference != "" {
 			packet, err := realizations.LoadGrowthContext(repoRoot, reference)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				server.WriteTextError(w, r, http.StatusBadRequest, server.BadRequest("realization reference could not be loaded"))
 				return
 			}
 			view.Packet = packet
@@ -1269,20 +1269,20 @@ func main() {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := mutateTemplate.Execute(w, view); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render mutation wizard"))
 			return
 		}
 	})
 	mux.HandleFunc("GET /partials/registry", func(w http.ResponseWriter, r *http.Request) {
 		catalog, err := registryReader.Catalog()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to load registry catalog"))
 			return
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := registryTemplate.Execute(w, registryView{Catalog: catalog}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render registry panel"))
 			return
 		}
 	})
@@ -1290,7 +1290,9 @@ func main() {
 	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
 	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, http.Handler(mux))
 	if runtimeService != nil {
-		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService}, handler)
+		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService},
+			server.RateLimitMiddleware(runtimeService, rateLimitOptions(runtimeConfig), handler),
+		)
 	}
 
 	addr := config.EnvOrDefault("AS_WEBD_ADDR", "127.0.0.1:8090")
@@ -1328,6 +1330,21 @@ func boolEnv(key string, fallback bool) bool {
 		return false
 	default:
 		return fallback
+	}
+}
+
+func rateLimitOptions(runtimeConfig config.RuntimeConfig) server.RateLimitOptions {
+	return server.RateLimitOptions{
+		Enabled:             runtimeConfig.RateLimitsEnabled,
+		Window:              time.Duration(runtimeConfig.RateLimitWindow) * time.Second,
+		BlockDuration:       time.Duration(runtimeConfig.RateLimitBlock) * time.Second,
+		AnonymousReadLimit:  int64(runtimeConfig.AnonymousRead),
+		AnonymousWriteLimit: int64(runtimeConfig.AnonymousWrite),
+		SessionReadLimit:    int64(runtimeConfig.SessionRead),
+		SessionWriteLimit:   int64(runtimeConfig.SessionWrite),
+		InternalLimit:       int64(runtimeConfig.Internal),
+		WorkerLimit:         int64(runtimeConfig.Worker),
+		FeedbackLimit:       int64(runtimeConfig.Feedback),
 	}
 }
 
@@ -2356,7 +2373,7 @@ func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTa
 	})
 }
 
-func renderUnavailablePage(w http.ResponseWriter, _ *http.Request, view realizationUnavailableView) {
+func renderUnavailablePage(w http.ResponseWriter, r *http.Request, view realizationUnavailableView) {
 	if view.Reference == "" {
 		view.Reference = "Unknown realization"
 	}
@@ -2365,7 +2382,7 @@ func renderUnavailablePage(w http.ResponseWriter, _ *http.Request, view realizat
 	}
 	var body bytes.Buffer
 	if err := realizationUnavailableTemplate.Execute(&body, view); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		server.WriteTextError(w, r, http.StatusInternalServerError, server.Internal("failed to render unavailable page"))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

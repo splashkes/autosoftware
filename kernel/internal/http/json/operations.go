@@ -1,11 +1,11 @@
 package jsontransport
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"as/kernel/internal/http/server"
 	"as/kernel/internal/interactions"
 )
 
@@ -25,7 +25,7 @@ func (api *OperationsAPI) Register(mux *http.ServeMux) {
 
 func (api *OperationsAPI) handleProcessSamples(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
@@ -45,7 +45,7 @@ func (api *OperationsAPI) handleProcessSamples(w http.ResponseWriter, r *http.Re
 
 func (api *OperationsAPI) handleServiceEvents(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
@@ -63,7 +63,7 @@ func (api *OperationsAPI) handleServiceEvents(w http.ResponseWriter, r *http.Req
 
 func (api *OperationsAPI) handleRealizationSuspensions(w http.ResponseWriter, r *http.Request) {
 	if api.Service == nil {
-		respondError(w, http.StatusServiceUnavailable, errors.New("runtime service unavailable"))
+		respondError(w, http.StatusServiceUnavailable, server.ServiceUnavailable("runtime service unavailable"))
 		return
 	}
 	limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))

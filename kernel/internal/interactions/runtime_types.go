@@ -680,6 +680,50 @@ type SearchDocumentsInput struct {
 	Limit int    `json:"limit,omitempty"`
 }
 
+type RateLimitDecision struct {
+	Namespace       string                 `json:"namespace"`
+	SubjectKey      string                 `json:"subject_key"`
+	Allowed         bool                   `json:"allowed"`
+	HitCount        int64                  `json:"hit_count"`
+	Limit           int64                  `json:"limit"`
+	WindowStartedAt time.Time              `json:"window_started_at"`
+	WindowEndsAt    time.Time              `json:"window_ends_at"`
+	BlockedUntil    *time.Time             `json:"blocked_until,omitempty"`
+	RetryAfter      time.Duration          `json:"retry_after,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type EnforceRateLimitInput struct {
+	Namespace     string                 `json:"namespace"`
+	SubjectKey    string                 `json:"subject_key"`
+	Action        string                 `json:"action,omitempty"`
+	Limit         int64                  `json:"limit"`
+	Window        time.Duration          `json:"window,omitempty"`
+	BlockDuration time.Duration          `json:"block_duration,omitempty"`
+	RequestID     string                 `json:"request_id,omitempty"`
+	SessionID     string                 `json:"session_id,omitempty"`
+	PrincipalID   string                 `json:"principal_id,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type RateLimitError struct {
+	Namespace  string        `json:"namespace"`
+	SubjectKey string        `json:"subject_key"`
+	Message    string        `json:"message"`
+	RetryAfter time.Duration `json:"retry_after,omitempty"`
+}
+
+func (e *RateLimitError) Error() string {
+	if e == nil || e.Message == "" {
+		return "rate limited"
+	}
+	return e.Message
+}
+
+func (e *RateLimitError) Unwrap() error {
+	return ErrRateLimited
+}
+
 type GuardDecision struct {
 	DecisionID  string                 `json:"decision_id"`
 	Namespace   string                 `json:"namespace"`

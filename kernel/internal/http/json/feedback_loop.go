@@ -33,12 +33,12 @@ func NewIncidentIngestHandler(recorder IncidentRecorder) *IncidentIngestHandler 
 func (h *IncidentIngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		server.WriteJSONError(w, r, http.StatusMethodNotAllowed, server.NewHTTPError(http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed"))
 		return
 	}
 
 	if h.Recorder == nil {
-		http.Error(w, "incident recorder unavailable", http.StatusServiceUnavailable)
+		server.WriteJSONError(w, r, http.StatusServiceUnavailable, server.ServiceUnavailable("incident recorder unavailable"))
 		return
 	}
 
@@ -52,12 +52,12 @@ func (h *IncidentIngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	var incident feedbackloop.ClientIncident
 	decoder := json.NewDecoder(io.LimitReader(r.Body, bodyLimit))
 	if err := decoder.Decode(&incident); err != nil {
-		http.Error(w, "invalid incident payload", http.StatusBadRequest)
+		server.WriteJSONError(w, r, http.StatusBadRequest, server.BadRequest("invalid incident payload"))
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); err != io.EOF && !errors.Is(err, io.EOF) {
-		http.Error(w, "incident payload must contain one JSON value", http.StatusBadRequest)
+		server.WriteJSONError(w, r, http.StatusBadRequest, server.BadRequest("incident payload must contain one JSON value"))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *IncidentIngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	)
 
 	if err := h.Recorder.RecordIncident(r.Context(), incident); err != nil {
-		http.Error(w, "failed to record incident", http.StatusInternalServerError)
+		server.WriteJSONError(w, r, http.StatusInternalServerError, server.Internal("failed to record incident"))
 		return
 	}
 

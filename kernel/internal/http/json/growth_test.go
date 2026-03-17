@@ -78,6 +78,22 @@ func TestGrowthAPIHandleGrowRequiresRuntimeService(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d with body %s", rec.Code, rec.Body.String())
 	}
+
+	var payload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if payload.Error.Code != "service_unavailable" {
+		t.Fatalf("expected service_unavailable code, got %q", payload.Error.Code)
+	}
+	if payload.Error.Message != "runtime service unavailable" {
+		t.Fatalf("expected runtime service unavailable message, got %q", payload.Error.Message)
+	}
 }
 
 func TestTargetReferenceForGrowthSupportsNewVariants(t *testing.T) {
