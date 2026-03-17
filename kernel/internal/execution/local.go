@@ -2,13 +2,17 @@ package execution
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -107,6 +111,16 @@ func BuildLocalSpec(repoRoot, reference, executionID string, urls CapabilityURLs
 	if strings.TrimSpace(urls.RuntimeDatabaseURL) != "" {
 		envMap["AS_RUNTIME_DATABASE_URL"] = strings.TrimSpace(urls.RuntimeDatabaseURL)
 	}
+	command := strings.TrimSpace(meta.RuntimeManifest.Run.Command)
+	args := append([]string(nil), meta.RuntimeManifest.Run.Args...)
+	builtCommand, builtArgs, err := prepareLocalLaunchCommand(repoRoot, entry, *meta.RuntimeManifest, workingDir)
+	if err != nil {
+		return LocalSpec{}, err
+	}
+	if strings.TrimSpace(builtCommand) != "" {
+		command = builtCommand
+		args = builtArgs
+	}
 
 	return LocalSpec{
 		ExecutionID:       executionID,
@@ -118,8 +132,8 @@ func BuildLocalSpec(repoRoot, reference, executionID string, urls CapabilityURLs
 		PreviewPathPrefix: PreviewPath(executionID),
 		UpstreamAddr:      upstreamAddr,
 		WorkingDir:        workingDir,
-		Command:           strings.TrimSpace(meta.RuntimeManifest.Run.Command),
-		Args:              append([]string(nil), meta.RuntimeManifest.Run.Args...),
+		Command:           command,
+		Args:              args,
 		Environment:       buildProcessEnvironment(envMap),
 	}, nil
 }
@@ -235,6 +249,120 @@ func WaitForHealthy(ctx context.Context, upstreamAddr string) error {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+func prepareLocalLaunchCommand(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string) (string, []string, error) {
+	command := strings.TrimSpace(manifest.Run.Command)
+	args := append([]string(nil), manifest.Run.Args...)
+	if strings.TrimSpace(manifest.Runtime) != "go" || command != "go" || !isGoRunDot(args) {
+		return command, args, nil
+	}
+	if _, err := os.Stat(filepath.Join(workingDir, "go.mod")); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return command, args, nil
+		}
+		return "", nil, err
+	}
+
+	binaryPath, err := ensureGoLaunchBinary(repoRoot, entry, manifest, workingDir)
+	if err != nil {
+		return "", nil, err
+	}
+	return binaryPath, nil, nil
+}
+
+func isGoRunDot(args []string) bool {
+	if len(args) != 2 {
+		return false
+	}
+	return strings.TrimSpace(args[0]) == "run" && strings.TrimSpace(args[1]) == "."
+}
+
+func ensureGoLaunchBinary(repoRoot string, entry realizations.LocalRealization, manifest realizations.RuntimeManifest, workingDir string) (string, error) {
+	buildDir := filepath.Join(
+		repoRoot,
+		"materialized",
+		"realizations",
+		entry.SeedID,
+		entry.RealizationID,
+		"runtime",
+		"local",
+		runtime.GOOS+"-"+runtime.GOARCH,
+	)
+	if !realizations.PathContained(repoRoot, buildDir) {
+		return "", fmt.Errorf("launch build directory escapes repo root")
+	}
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
+		return "", fmt.Errorf("create launch build directory: %w", err)
+	}
+
+	target := filepath.Join(buildDir, goLaunchBinaryName(manifest, workingDir))
+	sourceModTime, err := newestRegularFileModTime(workingDir)
+	if err != nil {
+		return "", err
+	}
+	if info, err := os.Stat(target); err == nil && !info.ModTime().Before(sourceModTime) {
+		return target, nil
+	}
+
+	tmpTarget := target + ".tmp"
+	_ = os.Remove(tmpTarget)
+	cmd := exec.Command("go", "build", "-o", tmpTarget, ".")
+	cmd.Dir = workingDir
+	cmd.Env = buildProcessEnvironment(map[string]string{})
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(output))
+		if trimmed == "" {
+			return "", fmt.Errorf("build local launch binary: %w", err)
+		}
+		return "", fmt.Errorf("build local launch binary: %w: %s", err, trimmed)
+	}
+	if err := os.Chmod(tmpTarget, 0o755); err != nil {
+		_ = os.Remove(tmpTarget)
+		return "", fmt.Errorf("chmod launch binary: %w", err)
+	}
+	if err := os.Rename(tmpTarget, target); err != nil {
+		_ = os.Remove(tmpTarget)
+		return "", fmt.Errorf("finalize launch binary: %w", err)
+	}
+	return target, nil
+}
+
+func goLaunchBinaryName(manifest realizations.RuntimeManifest, workingDir string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(manifest.Entrypoint) + "\n" + strings.TrimSpace(workingDir)))
+	return "launch-" + hex.EncodeToString(sum[:6])
+}
+
+func newestRegularFileModTime(root string) (time.Time, error) {
+	var newest time.Time
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			base := filepath.Base(path)
+			if base == ".git" || base == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+		return nil
+	})
+	if err != nil {
+		return time.Time{}, fmt.Errorf("scan launch sources: %w", err)
+	}
+	return newest, nil
 }
 
 func reserveLoopbackAddress() (string, error) {

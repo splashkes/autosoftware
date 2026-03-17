@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -26,11 +27,12 @@ var templateFS embed.FS
 
 // App holds the application state and dependencies.
 type App struct {
-	store     *Store
-	tmpl      map[string]*template.Template
-	hmacKey   []byte
-	sessions  map[string]string // sessionID -> agentID
-	sessionMu sync.RWMutex
+	store       *Store
+	tmpl        map[string]*template.Template
+	hmacKey     []byte
+	sessions    map[string]string // sessionID -> agentID
+	sessionMu   sync.RWMutex
+	ready       atomic.Bool
 	chatTimeout time.Duration
 }
 
@@ -64,6 +66,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Public routes
+	mux.HandleFunc("GET /healthz", app.handleHealthz)
 	mux.HandleFunc("GET /", app.handleHome)
 	mux.HandleFunc("GET /help/tickets/new", app.handleTicketNew)
 	mux.HandleFunc("POST /help/tickets", app.handleTicketCreate)
@@ -122,6 +125,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		app.ready.Store(true)
 		defer ln.Close()
 		defer os.Remove(addr)
 		go func() {
@@ -139,8 +143,16 @@ func main() {
 		return
 	}
 
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	app.ready.Store(true)
+	defer ln.Close()
 	log.Printf("Customer Service App listening on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, app.logMiddleware(mux)))
+	if err := http.Serve(ln, app.logMiddleware(mux)); err != nil && !errors.Is(err, net.ErrClosed) {
+		log.Fatal(err)
+	}
 }
 
 // --- Template loading ---
@@ -327,6 +339,15 @@ func (app *App) render(w http.ResponseWriter, page string, data map[string]any) 
 	if err := t.ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("template error: %v", err)
 	}
+}
+
+func (app *App) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	if !app.ready.Load() {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte("ok"))
 }
 
 // --- Auth helpers ---
