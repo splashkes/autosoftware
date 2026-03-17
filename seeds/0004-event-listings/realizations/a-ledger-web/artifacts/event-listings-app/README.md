@@ -11,6 +11,8 @@ Features included:
 - durable event object IDs backed by the shared runtime database
 - append-only event claims for snapshots and lifecycle changes
 - materialized current-state projections for directory, calendar, detail, and ledger views
+- stable by-ID event projection for alternate clients
+- private organizer workspace projection exposed through the same contract
 - human-visible ledger pages for each event object
 - public upcoming list, curated discovery modules, month calendar, and event detail pages
 - keyword search plus category, location, and date-range filtering
@@ -27,6 +29,7 @@ Environment:
 
 - `AS_ADDR` — unix socket path (e.g. `/tmp/as-realizations/0004-event-listings--a-ledger-web.sock`); falls back to `127.0.0.1:8096` if unset
 - `AS_ADMIN_PASSWORD` defaults to `admin`
+- `AS_SERVICE_TOKEN` enables service-token access to organizer projections and commands
 - `AS_RUNTIME_DATABASE_URL` is required and points at the shared runtime database used for durable event objects and claims
 
 Organizer login:

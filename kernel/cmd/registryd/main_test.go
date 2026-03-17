@@ -68,6 +68,8 @@ func TestRegistrydRejectsMutatingMethods(t *testing.T) {
 		"    path: /v1/projections/1234-demo/tickets/{ticket_id}\n"+
 		"    object_kinds:\n"+
 		"      - ticket\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"    freshness: materialized\n"+

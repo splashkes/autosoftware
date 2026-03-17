@@ -91,6 +91,7 @@ type CatalogProjection struct {
 	Name          string   `json:"name"`
 	Summary       string   `json:"summary"`
 	Path          string   `json:"path"`
+	AuthModes     []string `json:"auth_modes"`
 	Capabilities  []string `json:"capabilities"`
 	Freshness     string   `json:"freshness"`
 	ContractFile  string   `json:"contract_file"`
@@ -280,6 +281,7 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 					Name:          strings.TrimSpace(projection.Name),
 					Summary:       strings.TrimSpace(projection.Summary),
 					Path:          strings.TrimSpace(projection.Path),
+					AuthModes:     append([]string(nil), projection.AuthModes...),
 					Capabilities:  append([]string(nil), projection.Capabilities...),
 					Freshness:     strings.TrimSpace(projection.Freshness),
 					ContractFile:  contractFile,
@@ -292,6 +294,7 @@ func LoadCatalog(repoRoot string) (Catalog, error) {
 				Name:          strings.TrimSpace(projection.Name),
 				Summary:       strings.TrimSpace(projection.Summary),
 				Path:          strings.TrimSpace(projection.Path),
+				AuthModes:     append([]string(nil), projection.AuthModes...),
 				Capabilities:  append([]string(nil), projection.Capabilities...),
 				Freshness:     strings.TrimSpace(projection.Freshness),
 				ContractFile:  contractFile,

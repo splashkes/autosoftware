@@ -116,6 +116,10 @@ projections:
     path: /v1/projections/0005-charity-auction-manager/auctions/{auction_id}
     object_kinds:
       - auction
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
       - jobs
@@ -128,6 +132,10 @@ projections:
     object_kinds:
       - auction
       - lot
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - publications
       - search_documents
@@ -139,6 +147,10 @@ projections:
     object_kinds:
       - lot
       - bid
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
       - publications

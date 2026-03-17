@@ -20,6 +20,7 @@
       <span>{{.SeedID}}</span>
       <span>{{.RealizationID}}</span>
       <span>{{.Freshness}}</span>
+      {{if .AuthModes}}<span>{{join .AuthModes ", "}}</span>{{end}}
     </div>
     {{if .Summary}}<div class="summary">{{.Summary}}</div>{{else}}<div class="summary">Read model exposed through the registry catalog.</div>{{end}}
     {{if .Path}}<div class="read-only-notice">Authoritative route: <span class="api-route">{{.Path}}</span></div>{{end}}

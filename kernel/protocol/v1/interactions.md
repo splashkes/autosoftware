@@ -25,6 +25,7 @@ projections whether the caller is:
 Do not make the UI the only complete interface.
 Do not expose projection-table CRUD as the public operational contract.
 Do not require normal clients to append raw claims directly.
+Do not treat first-party private screens as an exception to this rule.
 
 The public operational API should normalize the interaction contract, not erase
 the domain vocabulary.
@@ -174,6 +175,7 @@ Each projection must define:
 - `summary`
 - `path`
 - `object_kinds`
+- `auth_modes`
 - `capabilities`
 - `freshness`
 
@@ -187,6 +189,26 @@ Freshness values:
 - `direct`
 - `eventual`
 
+## Private And Split Read Surfaces
+
+First-party private views are still part of the operational contract.
+
+Rules:
+
+- if the first-party UI can see or manage private state, the realization must
+  declare a corresponding projection with non-anonymous `auth_modes`
+- if one object has both public metadata and private full content, model those
+  as separate projections rather than hiding the private read path behind
+  server-only code
+- if only a digest or very small metadata surface is public, declare that
+  metadata-facing projection explicitly and keep the fuller projection private
+- if a public route is keyed by a mutable-friendly handle or slug, also expose
+  a stable object-id projection so alternate clients are not forced to treat
+  the handle as the primary identity
+
+This is the minimum shape needed for another UI, agent, or integration to
+reuse the same contracts and data boundary decisions as the first-party app.
+
 ## Process For New Seeds
 
 If an agent starts from only the seed directory and kernel specs, the intended
@@ -198,7 +220,8 @@ process is:
 3. Map those objects to shared kernel capabilities in
    `interaction_contract.yaml`.
 4. Declare the commands that both UI and third-party callers will use.
-5. Declare the projections those callers will read.
+5. Declare the projections those callers will read, including private or
+   metadata-only variants when visibility differs by audience.
 6. Implement the realization so the UI consumes those same commands and
    projections.
 7. Verify the contract through `go test ./...`.

@@ -483,6 +483,7 @@ type app struct {
 	store         *eventStore
 	templates     *template.Template
 	adminPassword string
+	serviceToken  string
 }
 
 func main() {
@@ -492,6 +493,7 @@ func main() {
 		store:         newEventStore(dataFile),
 		templates:     parseTemplates(),
 		adminPassword: envOrDefault("AS_ADMIN_PASSWORD", "admin"),
+		serviceToken:  strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
 	}
 
 	mux := http.NewServeMux()
@@ -510,11 +512,17 @@ func main() {
 	mux.HandleFunc("GET /admin/events/", a.requireAdmin(a.handleAdminEventRoutes))
 	mux.HandleFunc("POST /admin/events/", a.requireAdmin(a.handleAdminEventRoutes))
 
+	mux.HandleFunc("GET /v1/projections/0004-event-listings/admin/events", a.handleWorkspaceProjection)
+	mux.HandleFunc("GET /v1/projections/0004-event-listings/events/by-id/", a.handleRecordProjection)
 	mux.HandleFunc("GET /v1/projections/0004-event-listings/events", a.handleDirectoryProjection)
 	mux.HandleFunc("GET /v1/projections/0004-event-listings/calendar", a.handleCalendarProjection)
 	mux.HandleFunc("GET /v1/projections/0004-event-listings/events/", a.handleDetailProjection)
 	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.create", a.handleCreateCommand)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.update", a.handleUpdateCommand)
 	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.publish", a.handlePublishCommand)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.unpublish", a.handleUnpublishCommand)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.cancel", a.handleCancelCommand)
+	mux.HandleFunc("POST /v1/commands/0004-event-listings/events.archive", a.handleArchiveCommand)
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
 		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
@@ -582,6 +590,7 @@ type homePageData struct {
 
 type eventView struct {
 	ID             string   `json:"id"`
+	EventID        string   `json:"event_id"`
 	Slug           string   `json:"slug"`
 	Title          string   `json:"title"`
 	Summary        string   `json:"summary"`
@@ -621,6 +630,9 @@ type eventView struct {
 	ShareLabel     string   `json:"share_label"`
 	SaveLabel      string   `json:"save_label"`
 	OrganizerLabel string   `json:"organizer_label"`
+	RecordAPIURL   string   `json:"record_api_url"`
+	HandleAPIURL   string   `json:"handle_api_url"`
+	WorkspaceAPI   string   `json:"workspace_api_url,omitempty"`
 }
 
 type statsView struct {
@@ -712,7 +724,7 @@ func (a *app) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isAdmin := a.isAdmin(r)
-	if event.Status == statusDraft && !isAdmin {
+	if !a.canReadEvent(r, event) {
 		http.NotFound(w, r)
 		return
 	}
@@ -1028,6 +1040,11 @@ type directoryFilters struct {
 	To       string `json:"to,omitempty"`
 }
 
+type workspaceFilters struct {
+	Query  string `json:"q,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
 func parseDirectoryFilters(r *http.Request) directoryFilters {
 	q := r.URL.Query()
 	return directoryFilters{
@@ -1036,6 +1053,14 @@ func parseDirectoryFilters(r *http.Request) directoryFilters {
 		Location: strings.TrimSpace(q.Get("location")),
 		From:     strings.TrimSpace(q.Get("from")),
 		To:       strings.TrimSpace(q.Get("to")),
+	}
+}
+
+func parseWorkspaceFilters(r *http.Request) workspaceFilters {
+	q := r.URL.Query()
+	return workspaceFilters{
+		Query:  strings.TrimSpace(q.Get("q")),
+		Status: strings.TrimSpace(q.Get("status")),
 	}
 }
 
@@ -1050,6 +1075,19 @@ func (a *app) publicDirectory(filters directoryFilters) []*eventView {
 			continue
 		}
 		if !matchesFilters(event, filters) {
+			continue
+		}
+		results = append(results, toEventView(event))
+	}
+	return results
+}
+
+func (a *app) workspaceEvents(filters workspaceFilters) []*eventView {
+	all := a.store.all()
+	lowerQuery := strings.ToLower(filters.Query)
+	results := make([]*eventView, 0, len(all))
+	for _, event := range all {
+		if !matchesWorkspaceFilters(event, filters, lowerQuery) {
 			continue
 		}
 		results = append(results, toEventView(event))
@@ -1188,9 +1226,11 @@ func (a *app) relatedEvents(id, category string, limit int) []*eventView {
 }
 
 func (a *app) handleDirectoryProjection(w http.ResponseWriter, r *http.Request) {
+	filters := parseDirectoryFilters(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"filters": parseDirectoryFilters(r),
-		"events":  a.publicDirectory(parseDirectoryFilters(r)),
+		"filters":   filters,
+		"events":    a.publicDirectory(filters),
+		"discovery": eventProjectionDiscovery(),
 	})
 }
 
@@ -1200,24 +1240,60 @@ func (a *app) handleCalendarProjection(w http.ResponseWriter, r *http.Request) {
 		month = time.Now().Format("2006-01")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"month": month,
-		"days":  a.calendarDays(month),
+		"month":     month,
+		"days":      a.calendarDays(month),
+		"discovery": eventProjectionDiscovery(),
 	})
 }
 
-func (a *app) handleDetailProjection(w http.ResponseWriter, r *http.Request) {
-	slug := strings.TrimPrefix(r.URL.Path, "/v1/projections/0004-event-listings/events/")
-	event, ok := a.store.bySlug(strings.Trim(slug, "/"))
-	if !ok || event.Status == statusDraft {
+func (a *app) handleWorkspaceProjection(w http.ResponseWriter, r *http.Request) {
+	if !a.isProjectionAuthorized(r) {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required for organizer workspace projection")
+		return
+	}
+	filters := parseWorkspaceFilters(r)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"filters":   filters,
+		"events":    a.workspaceEvents(filters),
+		"discovery": eventProjectionDiscovery(),
+	})
+}
+
+func (a *app) handleRecordProjection(w http.ResponseWriter, r *http.Request) {
+	eventID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/projections/0004-event-listings/events/by-id/"), "/")
+	if eventID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	event, ok := a.store.byID(eventID)
+	if !ok || !a.canReadEvent(r, event) {
 		http.NotFound(w, r)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"event": toEventView(event),
+		"event":     toEventView(event),
+		"discovery": eventProjectionDiscovery(),
+	})
+}
+
+func (a *app) handleDetailProjection(w http.ResponseWriter, r *http.Request) {
+	ref := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/projections/0004-event-listings/events/"), "/")
+	event, ok := a.lookupEventRef(ref)
+	if !ok || !a.canReadEvent(r, event) {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event":     toEventView(event),
+		"discovery": eventProjectionDiscovery(),
 	})
 }
 
 func (a *app) handleCreateCommand(w http.ResponseWriter, r *http.Request) {
+	if !a.isCommandAuthorized(r) {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required for event command")
+		return
+	}
 	var payload eventCommandPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -1233,7 +1309,36 @@ func (a *app) handleCreateCommand(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *app) handleUpdateCommand(w http.ResponseWriter, r *http.Request) {
+	if !a.isCommandAuthorized(r) {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required for event command")
+		return
+	}
+	var payload eventCommandPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	event, ok := a.lookupEvent(payload.EventID, payload.Slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	updated, err := a.store.update(event.ID, payload.toInput())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event": toEventView(updated),
+	})
+}
+
 func (a *app) handlePublishCommand(w http.ResponseWriter, r *http.Request) {
+	if !a.isCommandAuthorized(r) {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required for event command")
+		return
+	}
 	var payload struct {
 		EventID string `json:"event_id"`
 		Slug    string `json:"slug"`
@@ -1257,6 +1362,46 @@ func (a *app) handlePublishCommand(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *app) handleUnpublishCommand(w http.ResponseWriter, r *http.Request) {
+	a.handleStateCommand(w, r, statusDraft)
+}
+
+func (a *app) handleCancelCommand(w http.ResponseWriter, r *http.Request) {
+	a.handleStateCommand(w, r, statusCanceled)
+}
+
+func (a *app) handleArchiveCommand(w http.ResponseWriter, r *http.Request) {
+	a.handleStateCommand(w, r, statusArchived)
+}
+
+func (a *app) handleStateCommand(w http.ResponseWriter, r *http.Request, target eventStatus) {
+	if !a.isCommandAuthorized(r) {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required for event command")
+		return
+	}
+	var payload struct {
+		EventID string `json:"event_id"`
+		Slug    string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	event, ok := a.lookupEvent(payload.EventID, payload.Slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	updated, err := a.store.setStatus(event.ID, target)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event": toEventView(updated),
+	})
+}
+
 func (a *app) lookupEvent(id, slug string) (*eventRecord, bool) {
 	if id != "" {
 		return a.store.byID(id)
@@ -1267,7 +1412,20 @@ func (a *app) lookupEvent(id, slug string) (*eventRecord, bool) {
 	return nil, false
 }
 
+func (a *app) lookupEventRef(ref string) (*eventRecord, bool) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, false
+	}
+	if event, ok := a.store.byID(ref); ok {
+		return event, true
+	}
+	return a.store.bySlug(ref)
+}
+
 type eventCommandPayload struct {
+	EventID       string `json:"event_id,omitempty"`
+	Slug          string `json:"slug,omitempty"`
 	Title         string `json:"title"`
 	Summary       string `json:"summary"`
 	Description   string `json:"description"`
@@ -1472,6 +1630,21 @@ func matchesFilters(event *eventRecord, filters directoryFilters) bool {
 	return true
 }
 
+func matchesWorkspaceFilters(event *eventRecord, filters workspaceFilters, lowerQuery string) bool {
+	if lowerQuery != "" {
+		haystack := strings.ToLower(strings.Join([]string{
+			event.ID, event.Slug, event.Title, event.Summary, event.Description, event.Venue, event.Location, event.Category, string(event.Status),
+		}, " "))
+		if !strings.Contains(haystack, lowerQuery) {
+			return false
+		}
+	}
+	if filters.Status != "" && !strings.EqualFold(filters.Status, string(event.Status)) {
+		return false
+	}
+	return true
+}
+
 func parseDateRange(filters directoryFilters) (time.Time, time.Time) {
 	var from, to time.Time
 	if filters.From != "" {
@@ -1520,8 +1693,11 @@ func toEventView(event *eventRecord) *eventView {
 	start := event.Start.In(loc)
 	end := event.End.In(loc)
 	publicURL := "/events/" + event.Slug
+	recordAPIURL := "/v1/projections/0004-event-listings/events/by-id/" + url.PathEscape(event.ID)
+	handleAPIURL := "/v1/projections/0004-event-listings/events/" + url.PathEscape(event.Slug)
 	return &eventView{
 		ID:             event.ID,
+		EventID:        event.ID,
 		Slug:           event.Slug,
 		Title:          event.Title,
 		Summary:        event.Summary,
@@ -1561,7 +1737,30 @@ func toEventView(event *eventRecord) *eventView {
 		ShareLabel:     formatMetricLabel(event.ShareCount, "share"),
 		SaveLabel:      formatMetricLabel(event.SaveCount, "save"),
 		OrganizerLabel: joinNonEmpty(" · ", event.OrganizerName, event.OrganizerRole),
+		RecordAPIURL:   recordAPIURL,
+		HandleAPIURL:   handleAPIURL,
+		WorkspaceAPI:   "/v1/projections/0004-event-listings/admin/events",
 	}
+}
+
+var projectionDiscovery = map[string]string{
+	"workspace":              "/v1/projections/0004-event-listings/admin/events",
+	"record_template":        "/v1/projections/0004-event-listings/events/by-id/{event_id}",
+	"public_detail_template": "/v1/projections/0004-event-listings/events/{slug}",
+	"create_command":         "/v1/commands/0004-event-listings/events.create",
+	"update_command":         "/v1/commands/0004-event-listings/events.update",
+	"publish_command":        "/v1/commands/0004-event-listings/events.publish",
+	"unpublish_command":      "/v1/commands/0004-event-listings/events.unpublish",
+	"cancel_command":         "/v1/commands/0004-event-listings/events.cancel",
+	"archive_command":        "/v1/commands/0004-event-listings/events.archive",
+}
+
+func eventProjectionDiscovery() map[string]string {
+	out := make(map[string]string, len(projectionDiscovery))
+	for key, value := range projectionDiscovery {
+		out[key] = value
+	}
+	return out
 }
 
 func firstEvent(events []*eventView) *eventView {
@@ -1807,6 +2006,46 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]any{
+		"error": map[string]string{
+			"message": strings.TrimSpace(message),
+		},
+	})
+}
+
+func (a *app) isProjectionAuthorized(r *http.Request) bool {
+	return a.isAdmin(r) || a.hasServiceToken(r)
+}
+
+func (a *app) isCommandAuthorized(r *http.Request) bool {
+	return a.isProjectionAuthorized(r)
+}
+
+func (a *app) hasServiceToken(r *http.Request) bool {
+	if a.serviceToken == "" || r == nil {
+		return false
+	}
+	if token := strings.TrimSpace(r.Header.Get("X-AS-Service-Token")); token != "" {
+		return token == a.serviceToken
+	}
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		return false
+	}
+	return strings.TrimSpace(authHeader[len("Bearer "):]) == a.serviceToken
+}
+
+func (a *app) canReadEvent(r *http.Request, event *eventRecord) bool {
+	if event == nil {
+		return false
+	}
+	if event.Status != statusDraft {
+		return true
+	}
+	return a.isProjectionAuthorized(r)
 }
 
 func (a *app) render(w http.ResponseWriter, name string, data any) {

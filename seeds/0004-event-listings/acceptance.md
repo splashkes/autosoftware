@@ -15,5 +15,11 @@ Every realization of this seed must satisfy the following:
    and location.
 7. Canceled events remain publicly understandable with a clear canceled status,
    while archived events are removed from default upcoming discovery surfaces.
-8. The realization stays focused on event publishing and discovery rather than
+8. Alternate clients can manage and read the same event objects through
+   declared commands plus projections, including a stable by-ID event read
+   surface and a private organizer workspace read surface.
+9. Draft or otherwise private organizer state is not exposed anonymously, and
+   any public-metadata versus private-content boundary is explicit in the
+   realization contract.
+10. The realization stays focused on event publishing and discovery rather than
    bundling ticketing or attendee-management promises it does not implement.

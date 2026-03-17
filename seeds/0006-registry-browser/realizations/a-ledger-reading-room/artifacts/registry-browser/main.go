@@ -123,14 +123,15 @@ type CommandDetail struct {
 }
 
 type ProjectionSummary struct {
-	Reference     string `json:"reference"`
-	SeedID        string `json:"seed_id"`
-	RealizationID string `json:"realization_id"`
-	Name          string `json:"name"`
-	Summary       string `json:"summary,omitempty"`
-	Path          string `json:"path"`
-	Freshness     string `json:"freshness"`
-	Self          string `json:"self"`
+	Reference     string   `json:"reference"`
+	SeedID        string   `json:"seed_id"`
+	RealizationID string   `json:"realization_id"`
+	Name          string   `json:"name"`
+	Summary       string   `json:"summary,omitempty"`
+	Path          string   `json:"path"`
+	AuthModes     []string `json:"auth_modes"`
+	Freshness     string   `json:"freshness"`
+	Self          string   `json:"self"`
 }
 
 type ProjectionDetail struct {
@@ -140,6 +141,7 @@ type ProjectionDetail struct {
 	Name          string   `json:"name"`
 	Summary       string   `json:"summary"`
 	Path          string   `json:"path"`
+	AuthModes     []string `json:"auth_modes"`
 	Capabilities  []string `json:"capabilities"`
 	Freshness     string   `json:"freshness"`
 	ContractFile  string   `json:"contract_file"`

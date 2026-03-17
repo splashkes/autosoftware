@@ -78,6 +78,8 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 			"    path: /v1/projections/1234-demo/tickets/{ticket_id}\n"+
 			"    object_kinds:\n"+
 			"      - ticket\n"+
+			"    auth_modes:\n"+
+			"      - session\n"+
 			"    capabilities:\n"+
 			"      - sessions\n"+
 			"    freshness: materialized\n"+
@@ -122,6 +124,9 @@ func TestLoadCatalogBuildsObjectsAndSchemas(t *testing.T) {
 	}
 	if len(object.Projections) != 2 {
 		t.Fatalf("expected 2 projection uses, got %d", len(object.Projections))
+	}
+	if len(object.Projections[0].AuthModes) != 1 || object.Projections[0].AuthModes[0] != "session" {
+		t.Fatalf("unexpected projection auth modes %+v", object.Projections[0].AuthModes)
 	}
 	if !contains(object.SchemaRefs, "seeds/1234-demo/design.md#ticket") {
 		t.Fatalf("expected canonical schema ref, got %+v", object.SchemaRefs)

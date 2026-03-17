@@ -61,6 +61,8 @@ projections:
       - registry_command
       - registry_projection
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -74,6 +76,8 @@ projections:
       - registry_command
       - registry_projection
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets
@@ -88,6 +92,8 @@ projections:
       - registry_command
       - registry_projection
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -100,6 +106,8 @@ projections:
       - registry_projection
       - registry_realization
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets
@@ -113,6 +121,8 @@ projections:
       - registry_projection
       - registry_realization
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -125,6 +135,8 @@ projections:
       - registry_object
       - registry_projection
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets
@@ -138,6 +150,8 @@ projections:
       - registry_object
       - registry_projection
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -149,6 +163,8 @@ projections:
       - registry_realization
       - registry_object
       - registry_command
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets
@@ -161,6 +177,8 @@ projections:
       - registry_realization
       - registry_object
       - registry_command
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -173,6 +191,8 @@ projections:
       - registry_command
       - registry_projection
       - registry_object
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets
@@ -186,6 +206,8 @@ projections:
       - registry_command
       - registry_projection
       - registry_object
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
     freshness: materialized
@@ -198,6 +220,8 @@ projections:
       - registry_projection
       - registry_object
       - registry_schema
+    auth_modes:
+      - anonymous
     capabilities:
       - search_documents
       - search_facets

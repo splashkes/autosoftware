@@ -72,6 +72,9 @@ func TestLoadInteractionContractValidatesManifestLinkage(t *testing.T) {
 		"    path: /v1/projections/1234-demo/demo-items/{item_id}\n"+
 		"    object_kinds:\n"+
 		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"      - service_token\n"+
 		"    capabilities:\n"+
 		"      - sessions\n"+
 		"      - state_transitions\n"+

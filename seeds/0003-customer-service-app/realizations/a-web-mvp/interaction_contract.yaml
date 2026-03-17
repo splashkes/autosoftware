@@ -127,6 +127,10 @@ projections:
     path: /v1/projections/0003-customer-service-app/tickets/{ticket_id}
     object_kinds:
       - support_ticket
+    auth_modes:
+      - access_link
+      - session
+      - service_token
     capabilities:
       - access_links
       - assignments
@@ -141,6 +145,9 @@ projections:
     object_kinds:
       - support_ticket
       - chat_session
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - assignments
       - activity_events
@@ -153,6 +160,10 @@ projections:
     path: /v1/projections/0003-customer-service-app/knowledge-base/articles/{article_id}
     object_kinds:
       - knowledge_article
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
       - publications

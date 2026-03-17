@@ -9,6 +9,7 @@ links:
   seed_acceptance: ../../acceptance.md
   realization_readme: README.md
 auth_modes:
+  - anonymous
   - session
   - service_token
 capabilities:
@@ -73,6 +74,10 @@ projections:
     path: /v1/projections/9999-template/example-items/{item_id}
     object_kinds:
       - example_item
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - handles
       - publications
@@ -85,6 +90,10 @@ projections:
     path: /v1/projections/9999-template/example-items
     object_kinds:
       - example_item
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
     capabilities:
       - publications
       - search_documents
