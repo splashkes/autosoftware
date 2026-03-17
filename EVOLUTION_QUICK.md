@@ -7,7 +7,6 @@
 >
 > | Seed | `AS_ADDR` |
 > |------|-----------|
-> | 0001 | `/tmp/as-realizations/0001-shared-notepad--a-go-htmx-room.sock` |
 > | 0003 | `/tmp/as-realizations/0003-customer-service-app--a-web-mvp.sock` |
 > | 0004 | `/tmp/as-realizations/0004-event-listings--a-web-mvp.sock` |
 
