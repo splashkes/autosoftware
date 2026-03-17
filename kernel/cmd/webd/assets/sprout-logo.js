@@ -21,6 +21,7 @@
       this.budLayer = null;
       this.childrenByParent = new Map();
       this.seedOffset = 0;
+      this.externalProgress = null;
       this.handleRestart = this.restart.bind(this);
       this.render = this.render.bind(this);
     }
@@ -51,6 +52,7 @@
     restart() {
       cancelAnimationFrame(this.frame);
       this.startTime = 0;
+      this.externalProgress = null;
       this.resetScene();
 
       if (this.reduceMotion) {
@@ -65,6 +67,7 @@
       this.root.innerHTML = "";
       this.root.classList.remove("is-static");
       this.startTime = 0;
+      this.externalProgress = null;
       this.seedOffset = Math.floor(Math.random() * 100000);
       this.svg = createSVG("svg", {
         viewBox: `0 0 ${VIEWBOX.width} ${VIEWBOX.height}`,
@@ -620,32 +623,24 @@
 
     renderStatic() {
       this.root.classList.add("is-static");
-      const progressById = new Map(this.branches.map((branch) => [branch.id, 1]));
-      const massCache = new Map();
-      for (const branch of this.branches) {
-        updateSupportLayers(branch, progressById, this.childrenByParent, massCache);
-        for (const segment of branch.segments) {
-          segment.node.style.strokeDashoffset = "0";
-          segment.node.setAttribute(
-            "stroke-width",
-            resolveSegmentWidth(branch, segment.position, progressById, this.childrenByParent, massCache).toFixed(2),
-          );
-        }
-        branch.budNode.setAttribute("rx", branch.budRx);
-        branch.budNode.setAttribute("ry", branch.budRy);
-        branch.budNode.setAttribute("opacity", "1");
-      }
+      this.drawProgress(1);
     }
 
-    render(now) {
-      if (!this.startTime) this.startTime = now;
-      const elapsed = now - this.startTime;
-      const progress = Math.min(1, elapsed / this.duration);
+    setProgress(progress) {
+      cancelAnimationFrame(this.frame);
+      this.root.classList.add("is-static");
+      this.externalProgress = clamp(progress, 0, 1);
+      this.drawProgress(this.externalProgress);
+      return this;
+    }
+
+    drawProgress(progress) {
+      const clampedProgress = clamp(progress, 0, 1);
       const progressById = new Map();
       const massCache = new Map();
 
       for (const branch of this.branches) {
-        const local = clamp((progress - branch.startAt) / (branch.endAt - branch.startAt), 0, 1);
+        const local = clamp((clampedProgress - branch.startAt) / (branch.endAt - branch.startAt), 0, 1);
         progressById.set(branch.id, local);
       }
 
@@ -669,6 +664,17 @@
         branch.budNode.setAttribute("ry", (branch.budRy * (0.72 + budOpacity * 0.28)).toFixed(2));
         branch.budNode.setAttribute("transform", `rotate(${angle} ${branch.end.x} ${branch.end.y})`);
       }
+    }
+
+    render(now) {
+      if (this.externalProgress !== null) {
+        this.drawProgress(this.externalProgress);
+        return;
+      }
+      if (!this.startTime) this.startTime = now;
+      const elapsed = now - this.startTime;
+      const progress = Math.min(1, elapsed / this.duration);
+      this.drawProgress(progress);
 
       if (progress < 1) {
         this.frame = requestAnimationFrame(this.render);
@@ -679,11 +685,22 @@
   }
 
   function init(root = document) {
+    const mounted = [];
     root.querySelectorAll(SELECTOR).forEach((node) => {
       if (!node.__sproutLogo) {
         new SproutLogo(node).mount();
       }
+      if (node.__sproutLogo) mounted.push(node.__sproutLogo);
     });
+    return mounted;
+  }
+
+  function setProgress(target, progress) {
+    if (!target) return null;
+    const node = target.matches && target.matches(SELECTOR) ? target : target.querySelector && target.querySelector(SELECTOR);
+    if (!node) return null;
+    const mounted = node.__sproutLogo || new SproutLogo(node).mount();
+    return mounted.setProgress(progress);
   }
 
   function createSVG(tag, attrs = {}) {
@@ -894,5 +911,5 @@
   }
 
   document.addEventListener("htmx:load", (event) => init(event.target));
-  window.ASSproutLogo = { init };
+  window.ASSproutLogo = { init, setProgress };
 })();

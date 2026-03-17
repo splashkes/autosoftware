@@ -301,11 +301,12 @@ var runTemplate = template.Must(template.New("run").Parse(`
 var realizationUnavailableTemplate = template.Must(template.New("realization-unavailable").Parse(`<!doctype html>
 <html lang="en">
 <head>
+  {{$isCause := and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Realization unavailable</title>
-  {{if .RefreshPath}}<meta http-equiv="refresh" content="{{if gt .RefreshAfter 0}}{{.RefreshAfter}}{{else}}2{{end}};url={{.RefreshPath}}">{{end}}
+  <title>{{if $isCause}}Route unavailable{{else}}Starting {{.Reference}}{{end}}</title>
   <link rel="stylesheet" href="/assets/sprout-logo.css">
+  {{if and .RefreshPath (not $isCause)}}<noscript><meta http-equiv="refresh" content="{{if gt .RefreshAfter 0}}{{.RefreshAfter}}{{else}}2{{end}};url={{.RefreshPath}}"></noscript>{{end}}
   <style nonce="{{.CSPNonce}}">
     * { box-sizing: border-box; }
     body {
@@ -315,144 +316,188 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
       color: #1f2933;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     }
-    .shell {
-      width: min(42rem, calc(100vw - 2rem));
+    .launch-page {
+      width: min(46rem, calc(100vw - 2rem));
       margin: 0 auto;
-      padding: 2.2rem 0 3rem;
+      padding: 2rem 0 3rem;
     }
-    .card {
-      border: 1px solid #d4d8df;
-      background: rgba(255, 255, 255, 0.94);
-      box-shadow: 0 1.4rem 3rem rgba(28, 35, 48, 0.14);
-      padding: 1.5rem;
-    }
-    .brand {
+    .launch-panel {
       display: grid;
-      justify-items: center;
-      text-align: center;
-      gap: 0.45rem;
-      margin-bottom: 1.1rem;
+      gap: 0.95rem;
+      padding: 1.35rem;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #d4d8df;
+      box-shadow: 0 1.4rem 3rem rgba(28, 35, 48, 0.14);
+      color: #222730;
     }
-    .eyebrow {
-      color: #7a818d;
-      font: 700 0.7rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+    .launch-panel.is-cause {
+      border-color: rgba(196, 71, 93, 0.24);
+      box-shadow: 0 1.4rem 3rem rgba(78, 30, 38, 0.14);
     }
-    .sprout {
-      width: 7.5rem;
+    .launch-top {
+      display: grid;
+      grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: center;
+    }
+    .launch-sprout {
+      width: 8.5rem;
+      margin: 0 auto;
       cursor: default;
     }
-    h1 {
-      margin: 0.4rem 0 0.25rem;
-      font-size: clamp(1.8rem, 5vw, 2.8rem);
-      line-height: 1;
+    .launch-heading {
+      display: grid;
+      gap: 0.3rem;
+    }
+    .launch-kicker {
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #7a818d;
+      font-weight: 700;
+    }
+    .launch-name {
+      margin: 0;
+      font-size: clamp(1.4rem, 4vw, 2.3rem);
+      line-height: 1.05;
       letter-spacing: -0.04em;
       color: #181c24;
     }
-    .copy,
-    .meta,
-    .list,
-    .hint,
-    .status-copy {
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-    .copy {
-      margin: 0.65rem 0 0;
-      color: #47515f;
-      font-size: 0.96rem;
-      line-height: 1.75;
+    .launch-intro {
+      margin: 0;
+      color: #5f6875;
+      font-size: 0.92rem;
+      line-height: 1.7;
       max-width: 34rem;
     }
-    .meta {
+    .launch-progress {
+      height: 0.32rem;
+      overflow: hidden;
+      background: #e6ebf0;
+    }
+    .launch-progress-fill {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #2563eb 0%, #22a05a 100%);
+      transition: width 0.12s linear;
+    }
+    .launch-progress.is-failed .launch-progress-fill {
+      background: #c4475d;
+    }
+    .launch-progress.is-ready .launch-progress-fill {
+      background: #178243;
+    }
+    .launch-step {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.45;
+      color: #1f2933;
+    }
+    .launch-copy {
+      margin: 0;
+      color: #66707d;
+      font-size: 0.82rem;
+      line-height: 1.65;
+    }
+    .launch-meta-row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.45rem;
-      margin: 1rem 0 1.1rem;
     }
-    .pill {
+    .launch-meta-item {
       display: inline-flex;
       align-items: center;
-      border: 1px solid #d7dce4;
-      background: rgba(255, 255, 255, 0.84);
-      padding: 0.28rem 0.65rem;
+      gap: 0.35rem;
+      border: 1px solid #d5d9e1;
       border-radius: 999px;
-      color: #5d6470;
+      padding: 0.24rem 0.6rem;
+      background: rgba(255, 255, 255, 0.82);
+      color: #616875;
       font-size: 0.69rem;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
-    .pill.cause {
-      border-color: rgba(196, 71, 93, 0.24);
-      background: rgba(196, 71, 93, 0.08);
-      color: #b4233d;
-    }
-    .pill.loading {
+    .launch-meta-item.is-loading {
       border-color: rgba(37, 99, 235, 0.24);
       background: rgba(37, 99, 235, 0.08);
       color: #1d4ed8;
     }
-    .progress {
-      height: 0.32rem;
-      overflow: hidden;
-      background: #e5e9ef;
-      margin: 1rem 0 0.95rem;
+    .launch-meta-item.is-cause {
+      border-color: rgba(196, 71, 93, 0.24);
+      background: rgba(196, 71, 93, 0.08);
+      color: #b4233d;
     }
-    .progress > span {
-      display: block;
-      width: 34%;
-      height: 100%;
-      background: linear-gradient(90deg, #2563eb 0%, #22a05a 100%);
-      animation: pulse-progress 1.4s ease-in-out infinite;
-      transform-origin: left center;
+    .launch-timer {
+      margin: 0;
+      color: #59606b;
+      font-size: 0.8rem;
+      letter-spacing: 0.01em;
     }
-    @keyframes pulse-progress {
-      0% { transform: translateX(-85%) scaleX(0.72); }
-      50% { transform: translateX(120%) scaleX(1); }
-      100% { transform: translateX(260%) scaleX(0.72); }
-    }
-    .panel {
-      margin-top: 1rem;
+    .launch-assurance,
+    .launch-cause {
       border: 1px solid #dde2ea;
-      background: rgba(247, 249, 251, 0.9);
+      background: rgba(247, 249, 251, 0.92);
       padding: 1rem;
     }
-    .panel h2 {
-      margin: 0 0 0.55rem;
-      font: 700 0.86rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    .launch-assurance strong,
+    .launch-cause strong {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: #2b3340;
+      font-size: 0.76rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .launch-assurance p,
+    .launch-cause p {
+      margin: 0;
+      color: #586272;
+      font-size: 0.84rem;
+      line-height: 1.7;
+    }
+    .launch-cause {
+      border-color: rgba(196, 71, 93, 0.18);
+      background: rgba(252, 246, 247, 0.96);
+    }
+    .launch-details {
+      border: 1px solid #dde2ea;
+      background: rgba(247, 249, 251, 0.9);
+      padding: 0.85rem 1rem;
+    }
+    .launch-details summary {
+      cursor: pointer;
+      color: #586272;
+      font-size: 0.74rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #5b6573;
+      font-weight: 700;
     }
-    .list {
-      margin: 0;
-      padding-left: 1.15rem;
-      color: #334155;
-      line-height: 1.7;
+    .launch-debug {
+      margin: 0.75rem 0 0;
+      color: #59606b;
+      font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .hint {
-      margin-top: 1rem;
-      color: #596373;
-      font-size: 0.94rem;
+      margin: 0;
+      color: #5b6573;
+      font-size: 0.84rem;
       line-height: 1.7;
-    }
-    .status-copy {
-      margin: 0.55rem 0 0;
-      color: #6d7582;
-      font-size: 0.8rem;
-      line-height: 1.6;
     }
     .actions {
       display: flex;
       gap: 0.55rem;
       flex-wrap: wrap;
-      margin-top: 1.15rem;
     }
     .action {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0.5rem 0.78rem;
+      padding: 0.52rem 0.82rem;
       border: 1px solid #c8ccd4;
       color: #616875;
       background: transparent;
@@ -470,76 +515,188 @@ var realizationUnavailableTemplate = template.Must(template.New("realization-una
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: 0.92em;
     }
+    @media (max-width: 720px) {
+      .launch-page { width: min(42rem, calc(100vw - 1rem)); }
+      .launch-top { grid-template-columns: 1fr; text-align: center; }
+      .launch-sprout { width: 7.25rem; }
+    }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <section class="card">
-      <div class="brand">
-        <div class="sprout-logo-shell sprout" data-sprout-logo aria-hidden="true"></div>
-        <div class="eyebrow">Autosoftware Route State</div>
-      </div>
-      {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
-      <div class="eyebrow">Terminated for cause</div>
-      {{else}}
-      <div class="eyebrow">Restoring realization</div>
-      <div class="progress" aria-hidden="true"><span></span></div>
-      {{end}}
-      <h1>{{.Reference}}</h1>
-      <p class="copy">{{.Message}}</p>
-      {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
-      <p class="status-copy">The kernel removed this route because the execution stopped or was suspended. The current cause is shown below.</p>
-      {{else}}
-      <p class="status-copy">This route is not live right now. The bootloader is treating it as a restore/loading state rather than a hard failure.</p>
-      {{end}}
-      <div class="meta">
-        {{if .Status}}<span class="pill {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}cause{{else}}loading{{end}}">{{.Status}}</span>{{end}}
-        {{if and (not .RefreshPath) .ReasonCode}}<span class="pill cause">{{.ReasonCode}}</span>{{end}}
-        {{if .ExecutionID}}<span class="pill">{{.ExecutionID}}</span>{{end}}
-        {{if .RouteDescription}}<span class="pill">{{.RouteDescription}}</span>{{end}}
+  <main class="launch-page">
+    <section
+      class="launch-panel{{if $isCause}} is-cause{{end}}"
+      data-route-launch-shell
+      data-reference="{{.Reference}}"
+      data-execution-id="{{.ExecutionID}}"
+      data-status="{{.Status}}"
+      data-refresh-path="{{.RefreshPath}}"
+      data-projection-path="{{.ExecutionProjectionPath}}">
+      <div class="launch-top">
+        <div class="sprout-logo-shell launch-sprout" data-sprout-logo aria-hidden="true"></div>
+        <div class="launch-heading">
+          <div class="launch-kicker">{{if $isCause}}Route unavailable{{else}}Starting route{{end}}</div>
+          <h1 class="launch-name">{{.Reference}}</h1>
+          <p class="launch-intro" data-launch-copy>{{.Message}}</p>
+        </div>
       </div>
 
-      <div class="panel">
-        {{if and (not .RefreshPath) (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated") (eq .Status "suspended"))}}
-        <h2>Cause</h2>
-        {{else}}
-        <h2>Loading</h2>
-        {{end}}
-        <ul class="list">
-          {{if .RouteDescription}}<li>Route: <code>{{.RouteDescription}}</code></li>{{end}}
-          {{if .RefreshPath}}
-          <li>The kernel is still bringing this realization online.</li>
-          <li>This page will retry automatically without leaving the stable URL.</li>
-          <li>Retry target: <code>{{.RefreshPath}}</code></li>
-          {{else}}
-          <li>The live route was removed after the execution stopped or the kernel suspended it.</li>
-          {{if .RemediationTarget}}<li>Fix the issue on <code>{{.RemediationTarget}}</code> and relaunch after the change lands.</li>{{end}}
-          {{end}}
-        </ul>
+      {{if not $isCause}}
+      <div class="launch-progress" data-launch-progress role="progressbar" aria-label="Launch progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="10">
+        <span class="launch-progress-fill" data-launch-progress-fill></span>
+      </div>
+      <p class="launch-step" data-launch-step>Starting execution</p>
+      <p class="launch-timer" data-launch-timer>Elapsed 0.0s</p>
+      {{end}}
+
+      <div class="launch-meta-row">
+        {{if .Status}}<span class="launch-meta-item {{if $isCause}}is-cause{{else}}is-loading{{end}}" data-launch-status>{{.Status}}</span>{{end}}
+        {{if .ExecutionID}}<span class="launch-meta-item">{{.ExecutionID}}</span>{{end}}
+        {{if .RouteDescription}}<span class="launch-meta-item" data-launch-route>{{.RouteDescription}}</span>{{end}}
       </div>
 
-      {{if .RemediationHint}}
-      <p class="hint">{{.RemediationHint}}</p>
+      {{if $isCause}}
+      <div class="launch-cause">
+        <strong>Cause</strong>
+        <p>The stable route is not live right now. {{if .RemediationTarget}}Fix the issue on <code>{{.RemediationTarget}}</code> and relaunch once the change lands.{{else}}The current cause is shown below.{{end}}</p>
+      </div>
+      {{else}}
+      <div class="launch-assurance">
+        <strong>Permanent Route</strong>
+        <p>You are already on the permanent route. This page will go live here as soon as health checks and route registration finish.</p>
+      </div>
       {{end}}
-      {{if .RefreshPath}}
-      <p class="hint">Refreshing automatically while the launch finishes.</p>
-      {{end}}
+
+      {{if .RemediationHint}}<p class="hint">{{.RemediationHint}}</p>{{end}}
+
+      <details class="launch-details">
+        <summary>{{if $isCause}}Execution details{{else}}Launch details{{end}}</summary>
+        <pre class="launch-debug" data-launch-debug>{{if .RouteDescription}}route={{.RouteDescription}}{{end}}{{if .ExecutionID}}
+exec={{.ExecutionID}}{{end}}{{if .ReasonCode}}
+cause={{.ReasonCode}}{{end}}</pre>
+      </details>
+
       <div class="actions">
-        {{if .RefreshPath}}<a class="action primary" href="{{.RefreshPath}}">Retry Route</a>{{end}}
-        <a class="action" href="/">Return to Bootloader</a>
+        {{if .RefreshPath}}<a class="action primary" href="{{.RefreshPath}}">Refresh now</a>{{end}}
+        <a class="action" href="/">View Home</a>
       </div>
     </section>
   </main>
   <script src="/assets/sprout-logo.js"></script>
+  <script src="/assets/launch-state.js"></script>
   <script nonce="{{.CSPNonce}}">
-    if (window.ASSproutLogo && typeof window.ASSproutLogo.init === "function") {
-      window.ASSproutLogo.init(document);
-    }
-    {{if not (or .ReasonCode (eq .Status "failed") (eq .Status "stopped") (eq .Status "terminated"))}}
-    window.setTimeout(function () {
-      window.location.reload();
-    }, 3500);
-    {{end}}
+    (function () {
+      var shell = document.querySelector("[data-route-launch-shell]");
+      if (!shell) return;
+
+      var sprout = shell.querySelector("[data-sprout-logo]");
+      var progressBar = shell.querySelector("[data-launch-progress]");
+      var progressFill = shell.querySelector("[data-launch-progress-fill]");
+      var stepLine = shell.querySelector("[data-launch-step]");
+      var copyLine = shell.querySelector("[data-launch-copy]");
+      var timerLine = shell.querySelector("[data-launch-timer]");
+      var routeLine = shell.querySelector("[data-launch-route]");
+      var statusPill = shell.querySelector("[data-launch-status]");
+      var debugLine = shell.querySelector("[data-launch-debug]");
+      var reference = shell.dataset.reference || "Unknown realization";
+      var refreshPath = shell.dataset.refreshPath || "";
+      var projectionPath = shell.dataset.projectionPath || "";
+      var initialStatus = shell.dataset.status || "launch_requested";
+      var requestedAt = Date.now();
+      var pollDelay = 900;
+
+      if (window.ASSproutLogo && typeof window.ASSproutLogo.init === "function") {
+        window.ASSproutLogo.init(shell);
+      }
+
+      function readJSONResponse(response) {
+        return response.text().then(function (body) {
+          if (!body) return {};
+          try {
+            return JSON.parse(body);
+          } catch (err) {
+            if (!response.ok) {
+              return { error: body.trim() || ("Request failed: " + response.status) };
+            }
+            throw err;
+          }
+        });
+      }
+
+      function setProgress(progress, statusValue) {
+        if (!progressBar || !progressFill) return;
+        progressBar.setAttribute("aria-valuenow", String(progress));
+        progressBar.classList.toggle("is-ready", statusValue === "healthy");
+        progressBar.classList.toggle("is-failed", window.ASLaunchState && window.ASLaunchState.isTerminalExecutionStatus(statusValue));
+        progressFill.style.width = progress + "%";
+        if (sprout && window.ASSproutLogo && typeof window.ASSproutLogo.setProgress === "function") {
+          window.ASSproutLogo.setProgress(sprout, progress / 100);
+        }
+      }
+
+      function completionTarget(session) {
+        if (refreshPath) return refreshPath;
+        if (session && session.open_path && session.open_path.indexOf("/__runs/") !== 0) return session.open_path;
+        return window.location.pathname + window.location.search;
+      }
+
+      function render(snapshot, transientError) {
+        var session = snapshot && snapshot.session ? snapshot.session : { status: initialStatus };
+        var events = snapshot && Array.isArray(snapshot.events) ? snapshot.events : [];
+        var startedAt = session && session.started_at ? Date.parse(session.started_at) : NaN;
+        var elapsedMs = Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : Math.max(0, Date.now() - requestedAt);
+        var step = window.ASLaunchState ? window.ASLaunchState.stepLabel(session, events) : "Starting execution";
+        var copy = window.ASLaunchState ? window.ASLaunchState.copyText(session, events, reference, elapsedMs, transientError) : "";
+        var progress = window.ASLaunchState ? window.ASLaunchState.displayedProgress(session, events, { requestedAt: requestedAt, minimumDisplayMs: 0, reference: reference }, elapsedMs, false) : 10;
+        var debug = window.ASLaunchState ? window.ASLaunchState.debugLine(session, events, { requestedAt: requestedAt, reference: reference }, elapsedMs, transientError) : "";
+
+        if (stepLine) stepLine.textContent = step;
+        if (copyLine) copyLine.textContent = copy;
+        if (timerLine) timerLine.textContent = "Elapsed " + (window.ASLaunchState ? window.ASLaunchState.formatElapsed(elapsedMs) : "0.0s");
+        if (routeLine) routeLine.textContent = refreshPath || (session && session.open_path) || routeLine.textContent;
+        if (statusPill) statusPill.textContent = session && session.status ? session.status : initialStatus;
+        if (debugLine) debugLine.textContent = debug;
+        setProgress(progress, session && session.status ? session.status : initialStatus);
+
+        if (session && session.status === "healthy" && (session.open_path || refreshPath)) {
+          window.location.replace(completionTarget(session));
+          return true;
+        }
+        if (window.ASLaunchState && window.ASLaunchState.isTerminalExecutionStatus(session && session.status ? session.status : "")) {
+          return true;
+        }
+        return false;
+      }
+
+      if (!projectionPath) {
+        setProgress(100, initialStatus);
+        return;
+      }
+
+      async function poll() {
+        try {
+          var response = await fetch(projectionPath, {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { "Accept": "application/json" }
+          });
+          var payload = await readJSONResponse(response);
+          if (!response.ok) {
+            throw new Error((payload && payload.error) || ("Execution poll failed: " + response.status));
+          }
+          if (render(payload, "")) return;
+          var nextStatus = payload && payload.session && payload.session.status ? payload.session.status : initialStatus;
+          pollDelay = nextStatus === "launch_requested" ? 700 : 900;
+        } catch (err) {
+          render({ session: { status: initialStatus } }, err && err.message ? err.message : "poll_error");
+        }
+        window.setTimeout(poll, pollDelay);
+      }
+
+      render({ session: { status: initialStatus } }, "");
+      window.setTimeout(poll, 250);
+    })();
   </script>
 </body>
 </html>
@@ -900,17 +1057,18 @@ type registryView struct {
 }
 
 type realizationUnavailableView struct {
-	CSPNonce          string
-	Reference         string
-	ExecutionID       string
-	Status            string
-	ReasonCode        string
-	Message           string
-	RemediationTarget string
-	RemediationHint   string
-	RouteDescription  string
-	RefreshPath       string
-	RefreshAfter      int
+	CSPNonce                string
+	Reference               string
+	ExecutionID             string
+	Status                  string
+	ReasonCode              string
+	Message                 string
+	RemediationTarget       string
+	RemediationHint         string
+	RouteDescription        string
+	RefreshPath             string
+	RefreshAfter            int
+	ExecutionProjectionPath string
 }
 
 type registryFootprintView struct {
@@ -1729,6 +1887,13 @@ func currentRequestTarget(r *http.Request) string {
 	return target
 }
 
+func executionSessionProjectionPath(executionID string) string {
+	if strings.TrimSpace(executionID) == "" {
+		return ""
+	}
+	return "/boot/projections/realization-execution/sessions/" + url.PathEscape(strings.TrimSpace(executionID))
+}
+
 func preferredLaunchTarget(ctx context.Context, runtimeService *interactions.RuntimeService, reference string) launchTarget {
 	execItems, err := runtimeService.ListRealizationExecutions(ctx, strings.TrimSpace(reference), 20)
 	if err != nil || len(execItems) == 0 {
@@ -2143,15 +2308,16 @@ func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTa
 		message = "The launch job is queued and waiting for the execution worker to finish startup."
 	}
 	renderUnavailablePage(w, r, realizationUnavailableView{
-		CSPNonce:         server.CSPNonceFromContext(r.Context()),
-		Reference:        reference,
-		ExecutionID:      strings.TrimSpace(target.ExecutionID),
-		Status:           firstNonEmpty(strings.TrimSpace(target.Status), "launch_requested"),
-		ReasonCode:       "launch_in_progress",
-		Message:          message,
-		RouteDescription: firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
-		RefreshPath:      firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
-		RefreshAfter:     2,
+		CSPNonce:                server.CSPNonceFromContext(r.Context()),
+		Reference:               reference,
+		ExecutionID:             strings.TrimSpace(target.ExecutionID),
+		Status:                  firstNonEmpty(strings.TrimSpace(target.Status), "launch_requested"),
+		ReasonCode:              "launch_in_progress",
+		Message:                 message,
+		RouteDescription:        firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
+		RefreshPath:             firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
+		RefreshAfter:            2,
+		ExecutionProjectionPath: executionSessionProjectionPath(strings.TrimSpace(target.ExecutionID)),
 	})
 }
 

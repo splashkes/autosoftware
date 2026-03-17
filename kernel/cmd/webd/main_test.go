@@ -124,6 +124,42 @@ func TestSelectLaunchTargetPrefersMostAdvancedPendingExecution(t *testing.T) {
 	}
 }
 
+func TestExecutionSessionProjectionPath(t *testing.T) {
+	got := executionSessionProjectionPath("exec_demo_123")
+	want := "/boot/projections/realization-execution/sessions/exec_demo_123"
+	if got != want {
+		t.Fatalf("execution session projection path = %q, want %q", got, want)
+	}
+}
+
+func TestRenderLaunchingPageIncludesSharedLaunchAssetsAndProjectionPath(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/event-ledger/", nil)
+	rec := httptest.NewRecorder()
+
+	renderLaunchingPage(rec, req, launchTarget{
+		ExecutionID: "exec_event_123",
+		Reference:   "0004-event-listings/a-ledger-web",
+		Status:      "starting",
+	}, "/event-ledger/")
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	body := rec.Body.String()
+	wantContains := []string{
+		`src="/assets/launch-state.js"`,
+		`data-projection-path="/boot/projections/realization-execution/sessions/exec_event_123"`,
+		`data-refresh-path="/event-ledger/"`,
+		`Permanent Route`,
+		`View Home`,
+	}
+	for _, want := range wantContains {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected body to contain %q, got %q", want, body)
+		}
+	}
+}
+
 func testMountedRoutingPreservesRawPath(t *testing.T, mountPrefix string) {
 	t.Helper()
 
