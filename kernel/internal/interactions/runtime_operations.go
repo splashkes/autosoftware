@@ -290,6 +290,9 @@ func (s *RuntimeService) PruneOperationalTelemetry(ctx context.Context, ttl time
 	if _, err := tx.Exec(ctx, `delete from runtime_process_samples where observed_at < $1`, cutoff); err != nil {
 		return wrapErr("prune process samples", err)
 	}
+	if _, err := tx.Exec(ctx, `delete from runtime_realization_execution_logs where occurred_at < $1`, cutoff); err != nil {
+		return wrapErr("prune realization execution logs", err)
+	}
 	if _, err := tx.Exec(ctx, `delete from runtime_service_events where occurred_at < $1`, cutoff); err != nil {
 		return wrapErr("prune service events", err)
 	}

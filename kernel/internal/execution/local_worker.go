@@ -32,6 +32,11 @@ type LocalWorker struct {
 	breachCounts        map[string]int
 }
 
+type runtimeLaunchObserver struct {
+	worker      *LocalWorker
+	executionID string
+}
+
 type ResourceBudgets struct {
 	MaxRSSBytes         int64
 	MaxCPUPercent       float64
@@ -64,7 +69,7 @@ func NewLocalWorker(repoRoot string, runtime *interactions.RuntimeService, capab
 		},
 		breachCounts: make(map[string]int),
 	}
-	worker.executor = NewLocalExecutor(worker.handleProcessExit)
+	worker.executor = NewLocalExecutor(worker.handleProcessExit, worker.handleProcessLog)
 	return worker
 }
 
@@ -138,7 +143,7 @@ func (w *LocalWorker) handleLaunch(ctx context.Context, job interactions.Job) er
 		},
 	})
 
-	spec, err := BuildLocalSpec(w.RepoRoot, reference, executionID, w.Capabilities)
+	spec, err := BuildLocalSpecWithObserver(w.RepoRoot, reference, executionID, w.Capabilities, runtimeLaunchObserver{worker: w, executionID: executionID})
 	if err != nil {
 		_, _ = w.Runtime.UpdateRealizationExecution(ctx, executionID, interactions.UpdateRealizationExecutionInput{
 			Status:    "failed",
@@ -545,6 +550,77 @@ func (w *LocalWorker) pruneTelemetry(ctx context.Context) error {
 	}
 	w.lastPrunedAt = time.Now()
 	return nil
+}
+
+func (o runtimeLaunchObserver) BuildStarted(targetPath string) {
+	if o.worker == nil || o.worker.Runtime == nil {
+		return
+	}
+	_, _ = o.worker.Runtime.RecordRealizationExecutionEvent(context.Background(), interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: o.executionID,
+		Name:        "build_started",
+		Data:        map[string]interface{}{"target_path": strings.TrimSpace(targetPath)},
+	})
+}
+
+func (o runtimeLaunchObserver) BuildOutput(stream, output string) {
+	if o.worker == nil {
+		return
+	}
+	for _, line := range strings.Split(output, "\n") {
+		o.worker.recordExecutionLog(ExecutionLogRecord{
+			ExecutionID: o.executionID,
+			Source:      "build",
+			Stream:      strings.TrimSpace(stream),
+			Message:     strings.TrimSpace(line),
+			OccurredAt:  time.Now().UTC(),
+		})
+	}
+}
+
+func (o runtimeLaunchObserver) BuildFinished(targetPath string) {
+	if o.worker == nil || o.worker.Runtime == nil {
+		return
+	}
+	_, _ = o.worker.Runtime.RecordRealizationExecutionEvent(context.Background(), interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: o.executionID,
+		Name:        "build_finished",
+		Data:        map[string]interface{}{"target_path": strings.TrimSpace(targetPath)},
+	})
+}
+
+func (o runtimeLaunchObserver) BuildFailed(targetPath, output string, err error) {
+	o.BuildOutput("combined", output)
+	if o.worker == nil || o.worker.Runtime == nil {
+		return
+	}
+	_, _ = o.worker.Runtime.RecordRealizationExecutionEvent(context.Background(), interactions.RecordRealizationExecutionEventInput{
+		ExecutionID: o.executionID,
+		Name:        "build_failed",
+		Data: map[string]interface{}{
+			"target_path": strings.TrimSpace(targetPath),
+			"error":       err.Error(),
+		},
+	})
+}
+
+func (w *LocalWorker) handleProcessLog(entry ExecutionLogRecord) {
+	w.recordExecutionLog(entry)
+}
+
+func (w *LocalWorker) recordExecutionLog(entry ExecutionLogRecord) {
+	if w == nil || w.Runtime == nil || strings.TrimSpace(entry.ExecutionID) == "" || strings.TrimSpace(entry.Message) == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _ = w.Runtime.RecordRealizationExecutionLog(ctx, interactions.RecordRealizationExecutionLogInput{
+		ExecutionID: entry.ExecutionID,
+		Source:      strings.TrimSpace(entry.Source),
+		Stream:      strings.TrimSpace(entry.Stream),
+		Message:     strings.TrimSpace(entry.Message),
+		OccurredAt:  timePtr(entry.OccurredAt),
+	})
 }
 
 func maxInt(value, fallback int) int {

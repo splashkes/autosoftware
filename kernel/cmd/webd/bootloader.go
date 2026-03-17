@@ -1560,6 +1560,7 @@ func consoleLoaderScript() string {
     if (statusValue === "terminated") return "Process terminated";
     if (hasExecutionEvent(events, "route_registered")) return "Route registered";
     if (hasExecutionEvent(events, "health_check_started")) return "Waiting for health check";
+    if (hasExecutionEvent(events, "build_started")) return "Building launch artifact";
     if (hasExecutionEvent(events, "process_started")) return "Process started";
     if (hasExecutionEvent(events, "launch_spec_resolved")) return "Runtime manifest resolved";
     if (hasExecutionEvent(events, "launch_started")) return "Worker claimed launch";
@@ -1588,6 +1589,12 @@ func consoleLoaderScript() string {
     }
     if (hasExecutionEvent(events, "health_check_started")) {
       return "The process is running. Waiting for it to answer health checks on /healthz or its root route.";
+    }
+    if (hasExecutionEvent(events, "build_started")) {
+      if (elapsedMs > 30000) {
+        return "The worker is still building the launch artifact for this realization. Cold builds can take longer the first time or after source changes.";
+      }
+      return "The execution worker is building a local launch artifact before the process can start.";
     }
     if (hasExecutionEvent(events, "process_started")) {
       return "The process has started. Beginning health checks and route registration.";
@@ -1626,6 +1633,7 @@ func consoleLoaderScript() string {
     var progress = 8;
     if (statusValue === "launch_requested" || hasExecutionEvent(events, "launch_requested")) progress = 12;
     if (hasExecutionEvent(events, "launch_started")) progress = 24;
+    if (hasExecutionEvent(events, "build_started")) progress = 34;
     if (hasExecutionEvent(events, "launch_spec_resolved")) progress = 42;
     if (hasExecutionEvent(events, "process_started") || (session && session.upstream_addr)) progress = 62;
     if (hasExecutionEvent(events, "health_check_started")) progress = 78 + Math.min(14, Math.floor(elapsedMs / 1500));

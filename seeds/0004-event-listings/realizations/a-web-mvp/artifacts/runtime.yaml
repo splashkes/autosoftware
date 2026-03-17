@@ -4,10 +4,8 @@ runtime: go
 entrypoint: artifacts/event-listings-app/main.go
 working_directory: artifacts/event-listings-app
 run:
-  command: go
-  args:
-    - run
-    - .
+  command: prebuilt
+  args: []
 environment:
   AS_ADMIN_PASSWORD: admin
   AS_DATA_FILE: data/events.json
