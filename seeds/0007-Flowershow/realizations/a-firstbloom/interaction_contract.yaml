@@ -1,91 +1,283 @@
-contract_version: 1
+contract_version: v1
+surface_kind: interactive
 seed_id: 0007-Flowershow
 realization_id: a-firstbloom
-
-commands:
-  - shows.create
-  - shows.update
-  - entries.create
-  - entries.update
-  - entries.set_placement
-  - classes.create
-  - classes.update
-  - schedule.create
-  - divisions.create
-  - sections.create
-  - persons.create
-  - persons.update
-  - awards.create
-  - awards.compute
-  - rubrics.create
-  - criteria.create
-  - scorecards.submit
-  - media.attach
-  - standards.create
-  - editions.create
-  - sources.create
-  - citations.create
-  - rules.create
-  - overrides.create
-  - taxons.create
-
-projections:
-  - name: shows.directory
-    description: List of all shows with summary info.
-    auth: anonymous
-  - name: shows.detail
-    description: Single show with schedule, entries, awards.
-    auth: anonymous
-  - name: shows.record
-    description: Full show record including admin-level detail.
-    auth: session
-  - name: shows.ledger
-    description: Append-only claim history for a show's objects.
-    auth: session
-  - name: entries.list
-    description: Entries for a show or class.
-    auth: anonymous
-  - name: entries.detail
-    description: Single entry with scores, media, taxonomy.
-    auth: anonymous
-  - name: classes.list
-    description: Classes within a schedule, division, or section.
-    auth: anonymous
-  - name: taxonomy.browse
-    description: Taxon listing and cross-references.
-    auth: anonymous
-  - name: leaderboard
-    description: Season leaderboard per organization.
-    auth: anonymous
-  - name: admin.dashboard
-    description: Show admin overview with counts and status.
-    auth: session
-
+summary: First-bloom realization — standards-backed flower show management with schedule hierarchy, rubric scoring, taxonomy, and real-time show admin.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
 auth_modes:
   - anonymous
   - session
   - service_token
-
+capabilities:
+  - name: schedule_hierarchy
+    summary: Division, section, class hierarchy for show schedules.
+  - name: rubric_scoring
+    summary: Criterion-level scoring with judging rubrics and scorecards.
+  - name: taxonomy
+    summary: Flexible taxon graph for botanical and design classification.
+  - name: standards_provenance
+    summary: Standard documents, editions, source citations, and rule inheritance.
+  - name: awards
+    summary: Organization-scoped awards computed from taxonomy filters and scoring rules.
+  - name: real_time_admin
+    summary: SSE-driven show admin with live updates across multiple operators.
 domain_objects:
-  - organization
-  - show
-  - show_schedule
-  - division
-  - section
-  - show_class
-  - person
-  - entry
-  - media
-  - taxon
-  - taxon_relation
-  - award_definition
-  - standard_document
-  - standard_edition
-  - source_document
-  - source_citation
-  - standard_rule
-  - class_rule_override
-  - judging_rubric
-  - judging_criterion
-  - entry_scorecard
-  - entry_criterion_score
+  - kind: show
+    summary: A single flower show competition event hosted by an organization.
+    schema_ref: ../../design.md
+    capabilities:
+      - schedule_hierarchy
+      - real_time_admin
+  - kind: entry
+    summary: A submission into a class within a show, linked to a person.
+    schema_ref: ../../design.md
+    capabilities:
+      - rubric_scoring
+      - taxonomy
+  - kind: show_class
+    summary: A class within a section of a division in a show schedule.
+    schema_ref: ../../design.md
+    capabilities:
+      - schedule_hierarchy
+      - standards_provenance
+  - kind: person
+    summary: An entrant, judge, or member with private identity.
+    schema_ref: ../../design.md
+  - kind: taxon
+    summary: A concept in the taxonomy graph (botanical, design, etc).
+    schema_ref: ../../design.md
+    capabilities:
+      - taxonomy
+  - kind: award_definition
+    summary: An award defined per organization and season with scoring rules.
+    schema_ref: ../../design.md
+    capabilities:
+      - awards
+commands:
+  - name: shows.create
+    summary: Create a new flower show.
+    path: /v1/commands/0007-Flowershow/shows.create
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+  - name: shows.update
+    summary: Update show details.
+    path: /v1/commands/0007-Flowershow/shows.update
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+  - name: entries.create
+    summary: Create a new entry in a show class.
+    path: /v1/commands/0007-Flowershow/entries.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: entries.update
+    summary: Update an existing entry.
+    path: /v1/commands/0007-Flowershow/entries.update
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: entries.set_placement
+    summary: Set placement and points for an entry.
+    path: /v1/commands/0007-Flowershow/entries.set_placement
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: classes.create
+    summary: Add a class to a section in the schedule.
+    path: /v1/commands/0007-Flowershow/classes.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: persons.create
+    summary: Register a new person (entrant, judge, or member).
+    path: /v1/commands/0007-Flowershow/persons.create
+    object_kinds:
+      - person
+    auth_modes:
+      - session
+      - service_token
+  - name: awards.create
+    summary: Define a new award for an organization.
+    path: /v1/commands/0007-Flowershow/awards.create
+    object_kinds:
+      - award_definition
+    auth_modes:
+      - session
+      - service_token
+  - name: awards.compute
+    summary: Compute award results from matching entries.
+    path: /v1/commands/0007-Flowershow/awards.compute
+    object_kinds:
+      - award_definition
+    auth_modes:
+      - session
+      - service_token
+  - name: taxons.create
+    summary: Add a taxon to the taxonomy.
+    path: /v1/commands/0007-Flowershow/taxons.create
+    object_kinds:
+      - taxon
+    auth_modes:
+      - session
+      - service_token
+  - name: rubrics.create
+    summary: Create a judging rubric.
+    path: /v1/commands/0007-Flowershow/rubrics.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: criteria.create
+    summary: Add a criterion to a rubric.
+    path: /v1/commands/0007-Flowershow/criteria.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: scorecards.submit
+    summary: Submit a scorecard with per-criterion scores.
+    path: /v1/commands/0007-Flowershow/scorecards.submit
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+  - name: standards.create
+    summary: Register a standard document.
+    path: /v1/commands/0007-Flowershow/standards.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: editions.create
+    summary: Add an edition to a standard document.
+    path: /v1/commands/0007-Flowershow/editions.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: sources.create
+    summary: Register a source document.
+    path: /v1/commands/0007-Flowershow/sources.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: citations.create
+    summary: Create a source citation for a target record.
+    path: /v1/commands/0007-Flowershow/citations.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: rules.create
+    summary: Add a standard rule to an edition.
+    path: /v1/commands/0007-Flowershow/rules.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+  - name: overrides.create
+    summary: Create a local class rule override.
+    path: /v1/commands/0007-Flowershow/overrides.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+projections:
+  - name: shows.directory
+    summary: List of all shows with summary info.
+    path: /v1/projections/0007-Flowershow/shows
+    object_kinds:
+      - show
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: shows.detail
+    summary: Single show with schedule, entries, awards.
+    path: /v1/projections/0007-Flowershow/shows/{id}
+    object_kinds:
+      - show
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: entries.list
+    summary: Entries for a show or class.
+    path: /v1/projections/0007-Flowershow/entries
+    object_kinds:
+      - entry
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: classes.list
+    summary: Classes within a schedule.
+    path: /v1/projections/0007-Flowershow/classes
+    object_kinds:
+      - show_class
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: taxonomy.browse
+    summary: Taxon listing and cross-references.
+    path: /v1/projections/0007-Flowershow/taxonomy
+    object_kinds:
+      - taxon
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: leaderboard
+    summary: Season leaderboard per organization.
+    path: /v1/projections/0007-Flowershow/leaderboard
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - anonymous
+    freshness: materialized
+  - name: shows.ledger
+    summary: Append-only claim history for a show's objects.
+    path: /v1/projections/0007-Flowershow/ledger/{objectID}
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    freshness: materialized
+  - name: admin.dashboard
+    summary: Show admin overview with counts.
+    path: /v1/projections/0007-Flowershow/admin/dashboard
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized
