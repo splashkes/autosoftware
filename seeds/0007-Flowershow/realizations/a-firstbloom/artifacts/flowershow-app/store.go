@@ -57,6 +57,8 @@ type flowershowStore interface {
 	showByID(id string) (*Show, bool)
 	showBySlug(slug string) (*Show, bool)
 	allShows() []*Show
+	assignJudgeToShow(showID, personID string) (*ShowJudgeAssignment, error)
+	judgesByShow(showID string) []*ShowJudgeAssignment
 
 	// Persons
 	createPerson(PersonInput) (*Person, error)
@@ -66,6 +68,7 @@ type flowershowStore interface {
 
 	// Schedule
 	createSchedule(ShowSchedule) (*ShowSchedule, error)
+	updateSchedule(showID string, input ShowSchedule) (*ShowSchedule, error)
 	scheduleByShowID(showID string) (*ShowSchedule, bool)
 
 	// Divisions
@@ -88,6 +91,7 @@ type flowershowStore interface {
 	// Entries
 	createEntry(EntryInput) (*Entry, error)
 	updateEntry(id string, input EntryInput) (*Entry, error)
+	setEntrySuppressed(entryID string, suppressed bool) error
 	setPlacement(entryID string, placement int, points float64) error
 	entryByID(id string) (*Entry, bool)
 	entriesByShow(showID string) []*Entry
@@ -116,6 +120,8 @@ type flowershowStore interface {
 	createStandardDocument(StandardDocument) (*StandardDocument, error)
 	allStandardDocuments() []*StandardDocument
 	createStandardEdition(StandardEdition) (*StandardEdition, error)
+	standardEditionByID(id string) (*StandardEdition, bool)
+	allStandardEditions() []*StandardEdition
 	editionsByStandard(standardDocID string) []*StandardEdition
 
 	// Sources
@@ -173,6 +179,7 @@ type memoryStore struct {
 	organizations  map[string]*Organization
 	shows          map[string]*Show
 	persons        map[string]*Person
+	showJudges     map[string]*ShowJudgeAssignment
 	schedules      map[string]*ShowSchedule
 	divisions      map[string]*Division
 	sections       map[string]*Section
@@ -202,6 +209,7 @@ func newMemoryStore() *memoryStore {
 		organizations:  make(map[string]*Organization),
 		shows:          make(map[string]*Show),
 		persons:        make(map[string]*Person),
+		showJudges:     make(map[string]*ShowJudgeAssignment),
 		schedules:      make(map[string]*ShowSchedule),
 		divisions:      make(map[string]*Division),
 		sections:       make(map[string]*Section),
@@ -351,6 +359,44 @@ func (s *memoryStore) allShows() []*Show {
 	return out
 }
 
+func (s *memoryStore) assignJudgeToShow(showID, personID string) (*ShowJudgeAssignment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.shows[showID]; !ok {
+		return nil, errors.New("show not found")
+	}
+	if _, ok := s.persons[personID]; !ok {
+		return nil, errors.New("person not found")
+	}
+	for _, assignment := range s.showJudges {
+		if assignment.ShowID == showID && assignment.PersonID == personID {
+			return assignment, nil
+		}
+	}
+	assignment := &ShowJudgeAssignment{
+		ID:         newID("judge"),
+		ShowID:     showID,
+		PersonID:   personID,
+		AssignedAt: time.Now().UTC(),
+	}
+	s.showJudges[assignment.ID] = assignment
+	s.appendClaim(assignment.ID, "show_judge_assignment", "show_judge.assigned", assignment)
+	return assignment, nil
+}
+
+func (s *memoryStore) judgesByShow(showID string) []*ShowJudgeAssignment {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*ShowJudgeAssignment
+	for _, assignment := range s.showJudges {
+		if assignment.ShowID == showID {
+			out = append(out, assignment)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].AssignedAt.Before(out[j].AssignedAt) })
+	return out
+}
+
 // --- Persons ---
 
 func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
@@ -413,6 +459,20 @@ func (s *memoryStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) 
 	s.schedules[sched.ID] = &sched
 	s.appendClaim(sched.ID, "schedule", "schedule.created", sched)
 	return &sched, nil
+}
+
+func (s *memoryStore) updateSchedule(showID string, input ShowSchedule) (*ShowSchedule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sched, ok := s.scheduleByShowIDLocked(showID)
+	if !ok {
+		return nil, errors.New("schedule not found")
+	}
+	sched.SourceDocumentID = input.SourceDocumentID
+	sched.EffectiveStandardEditionID = input.EffectiveStandardEditionID
+	sched.Notes = input.Notes
+	s.appendClaim(sched.ID, "schedule", "schedule.updated", sched)
+	return sched, nil
 }
 
 func (s *memoryStore) scheduleByShowID(showID string) (*ShowSchedule, bool) {
@@ -633,6 +693,20 @@ func (s *memoryStore) updateEntry(id string, input EntryInput) (*Entry, error) {
 	e.TaxonRefs = input.TaxonRefs
 	s.appendClaim(e.ID, "entry", "entry.updated", e)
 	return e, nil
+}
+
+func (s *memoryStore) setEntrySuppressed(entryID string, suppressed bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	e.Suppressed = suppressed
+	s.appendClaim(e.ID, "entry", "entry.visibility_set", map[string]any{
+		"suppressed": suppressed,
+	})
+	return nil
 }
 
 func (s *memoryStore) setPlacement(entryID string, placement int, points float64) error {
@@ -882,6 +956,9 @@ func (s *memoryStore) filterEntriesByTaxons(taxonFilters []string, orgID, season
 		// No filter — return all entries for org+season
 		var out []*Entry
 		for _, e := range s.entries {
+			if e.Suppressed {
+				continue
+			}
 			show, ok := s.shows[e.ShowID]
 			if ok && show.OrganizationID == orgID && show.Season == season {
 				out = append(out, e)
@@ -895,6 +972,9 @@ func (s *memoryStore) filterEntriesByTaxons(taxonFilters []string, orgID, season
 	}
 	var out []*Entry
 	for _, e := range s.entries {
+		if e.Suppressed {
+			continue
+		}
 		show, ok := s.shows[e.ShowID]
 		if !ok || show.OrganizationID != orgID || show.Season != season {
 			continue
@@ -941,6 +1021,29 @@ func (s *memoryStore) createStandardEdition(ed StandardEdition) (*StandardEditio
 	s.stdEditions[ed.ID] = &ed
 	s.appendClaim(ed.ID, "standard_edition", "standard_edition.created", ed)
 	return &ed, nil
+}
+
+func (s *memoryStore) standardEditionByID(id string) (*StandardEdition, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ed, ok := s.stdEditions[id]
+	return ed, ok
+}
+
+func (s *memoryStore) allStandardEditions() []*StandardEdition {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*StandardEdition
+	for _, ed := range s.stdEditions {
+		out = append(out, ed)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].PublicationYear == out[j].PublicationYear {
+			return out[i].EditionLabel < out[j].EditionLabel
+		}
+		return out[i].PublicationYear > out[j].PublicationYear
+	})
+	return out
 }
 
 func (s *memoryStore) editionsByStandard(standardDocID string) []*StandardEdition {
@@ -1260,6 +1363,9 @@ func (s *memoryStore) leaderboard(orgID, season string) []LeaderboardEntry {
 	stats := make(map[string]*personStats)
 
 	for _, e := range s.entries {
+		if e.Suppressed {
+			continue
+		}
 		show, ok := s.shows[e.ShowID]
 		if !ok || show.OrganizationID != orgID || show.Season != season {
 			continue
@@ -1474,6 +1580,15 @@ func (s *memoryStore) seedDemoData() {
 		s.entries[entries[i].ID] = &entries[i]
 	}
 
+	// Show judges
+	assignments := []ShowJudgeAssignment{
+		{ID: "judge_assign_01", ShowID: show1.ID, PersonID: "person_03", AssignedAt: time.Now().UTC()},
+		{ID: "judge_assign_02", ShowID: show1.ID, PersonID: "person_02", AssignedAt: time.Now().UTC()},
+	}
+	for i := range assignments {
+		s.showJudges[assignments[i].ID] = &assignments[i]
+	}
+
 	// Awards
 	awards := []AwardDefinition{
 		{ID: "award_hp", OrganizationID: org.ID, Name: "High Points", Season: "2025", ScoringRule: "sum"},
@@ -1496,6 +1611,97 @@ func (s *memoryStore) seedDemoData() {
 	}
 	for i := range criteria {
 		s.criteria[criteria[i].ID] = &criteria[i]
+	}
+
+	// Standards, provenance, and rules
+	std := &StandardDocument{
+		ID:          "std_ojes",
+		Name:        "Official Judging and Exhibiting Standards",
+		IssuingOrg:  org.ID,
+		DomainScope: "horticulture",
+		Description: "National judging and exhibiting standard for rose shows.",
+	}
+	s.stdDocs[std.ID] = std
+	edition := &StandardEdition{
+		ID:                 "edition_ojes_2019",
+		StandardDocumentID: std.ID,
+		EditionLabel:       "2019",
+		PublicationYear:    2019,
+		Status:             "current",
+		SourceURL:          "https://example.com/ojes-2019.pdf",
+		SourceKind:         "official_pdf",
+	}
+	s.stdEditions[edition.ID] = edition
+	source := &SourceDocument{
+		ID:             "source_spring_schedule",
+		OrganizationID: org.ID,
+		ShowID:         show1.ID,
+		Title:          "Spring Rose Show 2025 Schedule",
+		DocumentType:   "schedule",
+		SourceURL:      "https://example.com/spring-rose-show-2025-schedule.pdf",
+		Checksum:       "demo-schedule-checksum",
+	}
+	s.srcDocs[source.ID] = source
+	sched.EffectiveStandardEditionID = edition.ID
+	sched.SourceDocumentID = source.ID
+	sched.Notes = "Governed by OJES 2019 and the spring schedule."
+
+	rules := []StandardRule{
+		{
+			ID:                "rule_ojes_container",
+			StandardEditionID: edition.ID,
+			Domain:            "horticulture",
+			RuleType:          "presentation",
+			SubjectLabel:      "Hybrid Tea specimens",
+			Body:              "Specimens must be exhibited in a clear container with foliage below the water line removed.",
+			PageRef:           "p. 42",
+		},
+		{
+			ID:                "rule_ojes_naming",
+			StandardEditionID: edition.ID,
+			Domain:            "horticulture",
+			RuleType:          "naming",
+			SubjectLabel:      "Variety naming",
+			Body:              "Exhibitor must identify the cultivar name on the entry card when known.",
+			PageRef:           "p. 19",
+		},
+	}
+	for i := range rules {
+		s.stdRules[rules[i].ID] = &rules[i]
+	}
+	override := &ClassRuleOverride{
+		ID:                 "override_class_01_tag",
+		ShowClassID:        "class_01",
+		BaseStandardRuleID: "rule_ojes_container",
+		OverrideType:       "narrow",
+		Body:               "Use the provided green bottles for this venue to fit the staging tables.",
+		Rationale:          "Venue staging depth is limited for class 101.",
+	}
+	s.classOverrides[override.ID] = override
+	citations := []SourceCitation{
+		{
+			ID:                   "cite_class_01",
+			SourceDocumentID:     source.ID,
+			TargetType:           "show_class",
+			TargetID:             "class_01",
+			PageFrom:             "7",
+			PageTo:               "7",
+			QuotedText:           "Class 101 is for one hybrid tea bloom staged in the provided green bottle.",
+			ExtractionConfidence: 0.94,
+		},
+		{
+			ID:                   "cite_rule_01",
+			SourceDocumentID:     source.ID,
+			TargetType:           "standard_rule",
+			TargetID:             "rule_ojes_container",
+			PageFrom:             "11",
+			PageTo:               "11",
+			QuotedText:           "Exhibitors must use society-provided containers for class 101.",
+			ExtractionConfidence: 0.89,
+		},
+	}
+	for i := range citations {
+		s.srcCitations[citations[i].ID] = &citations[i]
 	}
 }
 
@@ -1588,6 +1794,13 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_shows (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS as_flowershow_m_show_judges (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  person_id TEXT NOT NULL,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
   id TEXT PRIMARY KEY,
   first_name TEXT NOT NULL,
@@ -1645,6 +1858,7 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
   person_id TEXT NOT NULL,
   name TEXT NOT NULL,
   notes TEXT NOT NULL DEFAULT '',
+  suppressed BOOLEAN NOT NULL DEFAULT FALSE,
   placement INTEGER NOT NULL DEFAULT 0,
   points DOUBLE PRECISION NOT NULL DEFAULT 0,
   taxon_refs TEXT[] NOT NULL DEFAULT '{}',
@@ -1794,6 +2008,10 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
 			p.ID, p.FirstName, p.LastName, p.Initials, p.Email)
 	}
+	for _, assignment := range mem.showJudges {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_judges (id, show_id, person_id, assigned_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+			assignment.ID, assignment.ShowID, assignment.PersonID, assignment.AssignedAt)
+	}
 	for _, sched := range mem.schedules {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_schedules (id, show_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
 			sched.ID, sched.ShowID)
@@ -1811,8 +2029,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			c.ID, c.SectionID, c.ClassNumber, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
 	}
 	for _, e := range mem.entries {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
-			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Placement, e.Points, e.TaxonRefs, e.CreatedAt)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.TaxonRefs, e.CreatedAt)
 	}
 	for _, t := range mem.taxons {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
@@ -1821,6 +2039,30 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 	for _, a := range mem.awards {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, season, taxon_filters, scoring_rule) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
 			a.ID, a.OrganizationID, a.Name, a.Season, a.TaxonFilters, a.ScoringRule)
+	}
+	for _, std := range mem.stdDocs {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_documents (id, name, issuing_org_id, domain_scope, description) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+			std.ID, std.Name, std.IssuingOrg, std.DomainScope, std.Description)
+	}
+	for _, ed := range mem.stdEditions {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_editions (id, standard_document_id, edition_label, publication_year, revision_date, status, source_url, source_kind) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
+			ed.ID, ed.StandardDocumentID, ed.EditionLabel, ed.PublicationYear, ed.RevisionDate, ed.Status, ed.SourceURL, ed.SourceKind)
+	}
+	for _, doc := range mem.srcDocs {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_documents (id, organization_id, show_id, title, document_type, publication_date, source_url, local_path, checksum) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+			doc.ID, doc.OrganizationID, doc.ShowID, doc.Title, doc.DocumentType, doc.PublicationDate, doc.SourceURL, doc.LocalPath, doc.Checksum)
+	}
+	for _, cite := range mem.srcCitations {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_citations (id, source_document_id, target_type, target_id, page_from, page_to, quoted_text, extraction_confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
+			cite.ID, cite.SourceDocumentID, cite.TargetType, cite.TargetID, cite.PageFrom, cite.PageTo, cite.QuotedText, cite.ExtractionConfidence)
+	}
+	for _, rule := range mem.stdRules {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_rules (id, standard_edition_id, domain, rule_type, subject_label, body, page_ref) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+			rule.ID, rule.StandardEditionID, rule.Domain, rule.RuleType, rule.SubjectLabel, rule.Body, rule.PageRef)
+	}
+	for _, override := range mem.classOverrides {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_class_rule_overrides (id, show_class_id, base_standard_rule_id, override_type, body, rationale) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+			override.ID, override.ShowClassID, override.BaseStandardRuleID, override.OverrideType, override.Body, override.Rationale)
 	}
 	for _, r := range mem.rubrics {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_rubrics (id, domain, title) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
@@ -1856,6 +2098,12 @@ func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) {
 	return s.mem.showBySlug(slug)
 }
 func (s *postgresFlowershowStore) allShows() []*Show { return s.mem.allShows() }
+func (s *postgresFlowershowStore) assignJudgeToShow(showID, personID string) (*ShowJudgeAssignment, error) {
+	return s.mem.assignJudgeToShow(showID, personID)
+}
+func (s *postgresFlowershowStore) judgesByShow(showID string) []*ShowJudgeAssignment {
+	return s.mem.judgesByShow(showID)
+}
 func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) {
 	return s.mem.createPerson(input)
 }
@@ -1866,6 +2114,9 @@ func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return
 func (s *postgresFlowershowStore) allPersons() []*Person                { return s.mem.allPersons() }
 func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) {
 	return s.mem.createSchedule(sched)
+}
+func (s *postgresFlowershowStore) updateSchedule(showID string, input ShowSchedule) (*ShowSchedule, error) {
+	return s.mem.updateSchedule(showID, input)
 }
 func (s *postgresFlowershowStore) scheduleByShowID(showID string) (*ShowSchedule, bool) {
 	return s.mem.scheduleByShowID(showID)
@@ -1906,6 +2157,9 @@ func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) 
 }
 func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) {
 	return s.mem.updateEntry(id, input)
+}
+func (s *postgresFlowershowStore) setEntrySuppressed(entryID string, suppressed bool) error {
+	return s.mem.setEntrySuppressed(entryID, suppressed)
 }
 func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error {
 	return s.mem.setPlacement(entryID, placement, points)
@@ -1954,6 +2208,12 @@ func (s *postgresFlowershowStore) allStandardDocuments() []*StandardDocument {
 }
 func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) {
 	return s.mem.createStandardEdition(ed)
+}
+func (s *postgresFlowershowStore) standardEditionByID(id string) (*StandardEdition, bool) {
+	return s.mem.standardEditionByID(id)
+}
+func (s *postgresFlowershowStore) allStandardEditions() []*StandardEdition {
+	return s.mem.allStandardEditions()
 }
 func (s *postgresFlowershowStore) editionsByStandard(standardDocID string) []*StandardEdition {
 	return s.mem.editionsByStandard(standardDocID)

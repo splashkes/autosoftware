@@ -1,0 +1,782 @@
+{{define "admin_info_panel"}}
+<div class="card-grid">
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Show Profile</h3>
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}" hx-post="{{bp}}/admin/shows/{{.Show.ID}}" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form">
+        <div class="form-group">
+          <label>Show Name</label>
+          <input type="text" name="name" value="{{.Show.Name}}" class="form-input" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Organization</label>
+            <select name="organization_id" class="form-input">
+              {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.Show.OrganizationID}}selected{{end}}>{{.Name}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" name="location" value="{{.Show.Location}}" class="form-input">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" name="date" value="{{.Show.Date}}" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Season</label>
+            <input type="text" name="season" value="{{.Show.Season}}" class="form-input">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Update Show</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Judges</h3>
+      <p class="card-meta">Only assigned judges can submit scorecards for this show.</p>
+      {{if .Judges}}
+      <div class="judge-list">
+        {{range .Judges}}
+        <div class="judge-chip">
+          <strong>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Assignment.PersonID}}{{end}}</strong>
+          <span class="card-meta">assigned {{.Assignment.AssignedAt.Format "2006-01-02"}}</span>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="empty-state">No judges assigned yet.</p>
+      {{end}}
+
+      {{if .AvailableJudges}}
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
+        <select name="person_id" class="form-input" required>
+          <option value="">Select person...</option>
+          {{range .AvailableJudges}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">Assign Judge</button>
+      </form>
+      {{else}}
+      <p class="card-meta">All current people are already assigned as judges for this show.</p>
+      {{end}}
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "admin_schedule_panel"}}
+<div class="card">
+  <div class="card-body">
+    <h3 class="card-title">{{if .Schedule}}Schedule Governance{{else}}Create Schedule{{end}}</h3>
+    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Effective Standard Edition</label>
+          <select name="edition_id" class="form-input">
+            <option value="">No linked standard</option>
+            {{range .StandardEditions}}
+            <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.EffectiveStandardEditionID}}selected{{end}}{{end}}>
+              {{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}
+            </option>
+            {{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Source Document</label>
+          <select name="source_document_id" class="form-input">
+            <option value="">No linked source</option>
+            {{range .Sources}}
+            <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.SourceDocumentID}}selected{{end}}{{end}}>{{.Title}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" name="notes" value="{{if .Schedule}}{{.Schedule.Notes}}{{end}}" class="form-input" placeholder="e.g. OJES 2019 with local staging addendum">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">{{if .Schedule}}Update Schedule Governance{{else}}Create Schedule{{end}}</button>
+    </form>
+    {{if .ScheduleEdition}}
+    <p class="card-meta">Current standard: <strong>{{.ScheduleEdition.EditionLabel}}</strong> {{if .ScheduleEdition.PublicationYear}}({{.ScheduleEdition.PublicationYear}}){{end}}</p>
+    {{end}}
+  </div>
+</div>
+
+{{if .Schedule}}
+{{range .Divisions}}
+<div class="schedule-division admin-division">
+  <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+  {{range .Sections}}
+  <div class="schedule-section admin-section">
+    <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+    {{range .Classes}}
+    <div class="class-item admin-class-item">
+      <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
+      {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+    </div>
+    {{end}}
+    <details class="add-form">
+      <summary class="btn btn-outline btn-sm">+ Add Class</summary>
+      <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+        <input type="hidden" name="section_id" value="{{.Section.ID}}">
+        <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
+        <input type="text" name="title" placeholder="Title" class="form-input" required>
+        <select name="domain" class="form-input form-sm">
+          <option value="horticulture">Horticulture</option>
+          <option value="design">Design</option>
+          <option value="special">Special</option>
+          <option value="other">Other</option>
+        </select>
+        <input type="text" name="description" placeholder="Description" class="form-input">
+        <input type="number" name="specimen_count" placeholder="Specimens" class="form-input form-sm" value="1">
+        <button type="submit" class="btn btn-primary btn-sm">Add Class</button>
+      </form>
+    </details>
+  </div>
+  {{end}}
+  <details class="add-form">
+    <summary class="btn btn-outline btn-sm">+ Add Section</summary>
+    <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+      <input type="hidden" name="division_id" value="{{.Division.ID}}">
+      <input type="text" name="code" placeholder="Code" class="form-input form-sm">
+      <input type="text" name="title" placeholder="Section title" class="form-input" required>
+      <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+      <button type="submit" class="btn btn-primary btn-sm">Add Section</button>
+    </form>
+  </details>
+</div>
+{{end}}
+
+<details class="add-form">
+  <summary class="btn btn-outline btn-sm">+ Add Division</summary>
+  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+    <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
+    <input type="text" name="code" placeholder="Code" class="form-input form-sm">
+    <input type="text" name="title" placeholder="Division title" class="form-input" required>
+    <select name="domain" class="form-input form-sm">
+      <option value="horticulture">Horticulture</option>
+      <option value="design">Design</option>
+      <option value="special">Special</option>
+      <option value="other">Other</option>
+    </select>
+    <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+    <button type="submit" class="btn btn-primary btn-sm">Add Division</button>
+  </form>
+</details>
+{{end}}
+{{end}}
+
+{{define "admin_entries_panel"}}
+<div class="card">
+  <div class="card-body">
+    <h3 class="card-title">Add Entry</h3>
+    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Class</label>
+          <select name="class_id" class="form-input" required>
+            <option value="">Select class...</option>
+            {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}}: {{.Title}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Person</label>
+          <select name="person_id" class="form-input" required>
+            <option value="">Select person...</option>
+            {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Entry Name</label>
+          <input type="text" name="name" class="form-input" required placeholder="e.g. Peace">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Add Entry</button>
+    </form>
+  </div>
+</div>
+
+<h3>All Entries ({{len .Entries}})</h3>
+{{if .Entries}}
+<table class="table">
+  <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Public</th><th>Placement</th><th>Points</th><th>Media</th></tr></thead>
+  <tbody>
+    {{range .Entries}}
+    <tr class="{{placementClass .Entry.Placement}}">
+      <td>
+        {{.Entry.Name}}
+        {{if .Entry.Suppressed}}<span class="badge badge-muted">suppressed</span>{{end}}
+      </td>
+      <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
+      <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
+      <td>
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="inline">
+          <input type="hidden" name="suppressed" value="{{if .Entry.Suppressed}}false{{else}}true{{end}}">
+          <button type="submit" class="btn btn-outline btn-sm">{{if .Entry.Suppressed}}Restore{{else}}Suppress{{end}}</button>
+        </form>
+      </td>
+      <td>{{placementLabel .Entry.Placement}}</td>
+      <td>{{.Entry.Points}}</td>
+      <td>
+        {{if .Media}}
+        <div class="tag-list">
+          {{range .Media}}
+          <a href="{{bp}}/media/{{.ID}}" class="tag" target="_blank">{{.FileName}}</a>
+          {{end}}
+        </div>
+        {{end}}
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/media" hx-encoding="multipart/form-data" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:.5rem;">
+          <input type="file" name="media" class="form-input form-sm" multiple required>
+          <button type="submit" class="btn btn-outline btn-sm">Upload</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty-state">No entries yet.</p>
+{{end}}
+{{end}}
+
+{{define "admin_winners_panel"}}
+<h3>Set Placements</h3>
+{{if .Entries}}
+{{range .Entries}}
+<div class="winner-row">
+  <span class="winner-name">{{.Entry.Name}} {{if .Class}}<span class="card-meta">({{.Class.ClassNumber}})</span>{{end}}</span>
+  <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-winners-panel" hx-swap="innerHTML" class="form form-inline">
+    <select name="placement" class="form-input form-sm">
+      <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
+      <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>
+      <option value="2" {{if eq .Entry.Placement 2}}selected{{end}}>2nd</option>
+      <option value="3" {{if eq .Entry.Placement 3}}selected{{end}}>3rd</option>
+    </select>
+    <input type="number" name="points" value="{{.Entry.Points}}" class="form-input form-sm" step="0.5" placeholder="Pts">
+    <button type="submit" class="btn btn-primary btn-sm">Set</button>
+  </form>
+</div>
+{{end}}
+{{else}}
+<p class="empty-state">No entries to place.</p>
+{{end}}
+{{end}}
+
+{{define "admin_scoring_panel"}}
+<div class="card-grid">
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Rubrics</h3>
+      <form method="POST" action="{{bp}}/admin/rubrics" hx-post="{{bp}}/admin/rubrics" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Title</label>
+            <input type="text" name="title" class="form-input" placeholder="Horticulture Specimen Judging" required>
+          </div>
+          <div class="form-group">
+            <label>Domain</label>
+            <select name="domain" class="form-input">
+              <option value="horticulture">Horticulture</option>
+              <option value="design">Design</option>
+              <option value="special">Special</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Standard Edition</label>
+          <select name="standard_edition_id" class="form-input">
+            <option value="">Show-local rubric</option>
+            {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Create Rubric</button>
+      </form>
+
+      {{if .RubricViews}}
+      <div class="governance-list">
+        {{range .RubricViews}}
+        <div class="rule-group">
+          <div class="rule-header">
+            <strong>{{.Rubric.Title}}</strong>
+            <span class="badge badge-muted">{{.Rubric.Domain}}</span>
+          </div>
+          {{if .Criteria}}
+          <ul class="criteria-list">
+            {{range .Criteria}}<li>{{.Name}} <span class="card-meta">/ {{.MaxPoints}} pts</span></li>{{end}}
+          </ul>
+          {{else}}
+          <p class="card-meta">No criteria yet.</p>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Criteria</h3>
+      {{if .RubricViews}}
+      <form method="POST" action="{{bp}}/admin/criteria" hx-post="{{bp}}/admin/criteria" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-group">
+          <label>Rubric</label>
+          <select name="rubric_id" class="form-input" required>
+            {{range .RubricViews}}<option value="{{.Rubric.ID}}">{{.Rubric.Title}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" class="form-input" placeholder="Form" required>
+          </div>
+          <div class="form-group">
+            <label>Max Points</label>
+            <input type="number" name="max_points" class="form-input" value="10" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>Sort Order</label>
+            <input type="number" name="sort_order" class="form-input" value="1" min="1" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Add Criterion</button>
+      </form>
+      {{else}}
+      <p class="empty-state">Create a rubric first.</p>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h3 class="card-title">Submit Scorecard</h3>
+    {{if and .RubricViews .Entries .Judges}}
+    <form method="POST" action="{{bp}}/admin/scorecards" hx-post="{{bp}}/admin/scorecards" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" id="scorecard-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Entry</label>
+          <select name="entry_id" class="form-input" required>
+            {{range .Entries}}<option value="{{.Entry.ID}}">{{.Entry.Name}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Judge</label>
+          <select name="judge_id" class="form-input" required>
+            {{range .Judges}}<option value="{{.Assignment.PersonID}}">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Assignment.PersonID}}{{end}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Rubric</label>
+          <select name="rubric_id" class="form-input" required onchange="flowershowToggleRubricCriteria(this)">
+            {{range $index, $item := .RubricViews}}<option value="{{$item.Rubric.ID}}" {{if eq $index 0}}selected{{end}}>{{$item.Rubric.Title}}</option>{{end}}
+          </select>
+        </div>
+      </div>
+
+      <div class="criteria-groups">
+        {{range $index, $item := .RubricViews}}
+        <div class="criteria-group{{if eq $index 0}} active{{end}}" data-rubric-id="{{$item.Rubric.ID}}">
+          {{if $item.Criteria}}
+          <div class="criteria-grid">
+            {{range $item.Criteria}}
+            <div class="form-group criteria-card">
+              <label>{{.Name}} <span class="card-meta">/ {{.MaxPoints}} pts</span></label>
+              <input type="number" name="score_{{.ID}}" class="form-input" min="0" max="{{.MaxPoints}}" step="0.5" placeholder="0-{{.MaxPoints}}">
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="empty-state">This rubric has no criteria yet.</p>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" name="notes" class="form-input" placeholder="Judge notes">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Submit Scorecard</button>
+    </form>
+    {{else}}
+    <p class="empty-state">Add assigned judges, rubrics, and entries before scoring.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h3 class="card-title">Compute Placements From Scorecards</h3>
+    {{if .Classes}}
+    <div class="winner-list">
+      {{range .Classes}}
+      <div class="winner-row">
+        <span class="winner-name">{{.ClassNumber}} — {{.Title}}</span>
+        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}/compute-placements" hx-post="{{bp}}/admin/classes/{{.ID}}/compute-placements" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="inline">
+          <button type="submit" class="btn btn-outline btn-sm">Compute Placements</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="empty-state">Add classes before computing placements.</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "admin_governance_panel"}}
+<div class="card-grid">
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Standards</h3>
+      <form method="POST" action="{{bp}}/admin/standards" hx-post="{{bp}}/admin/standards" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" name="name" class="form-input" placeholder="Official Judging and Exhibiting Standards" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Issuing Organization</label>
+            <select name="issuing_org_id" class="form-input">
+              <option value="">Select organization...</option>
+              {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Domain Scope</label>
+            <input type="text" name="domain_scope" class="form-input" placeholder="horticulture">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" name="description" class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Create Standard</button>
+      </form>
+
+      {{if .StandardViews}}
+      <div class="governance-list">
+        {{range .StandardViews}}
+        <div class="rule-group">
+          <div class="rule-header">
+            <strong>{{.Standard.Name}}</strong>
+            <span class="badge badge-muted">{{.Standard.DomainScope}}</span>
+          </div>
+          {{if .Editions}}
+          <ul class="criteria-list">
+            {{range .Editions}}<li>{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}} <span class="card-meta">{{.Status}}</span></li>{{end}}
+          </ul>
+          {{else}}
+          <p class="card-meta">No editions yet.</p>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Standard Editions</h3>
+      {{if .Standards}}
+      <form method="POST" action="{{bp}}/admin/editions" hx-post="{{bp}}/admin/editions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-group">
+          <label>Standard</label>
+          <select name="standard_document_id" class="form-input" required>
+            {{range .Standards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Edition Label</label>
+            <input type="text" name="edition_label" class="form-input" placeholder="2019" required>
+          </div>
+          <div class="form-group">
+            <label>Publication Year</label>
+            <input type="number" name="publication_year" class="form-input" value="2025" required>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-input">
+              <option value="current">current</option>
+              <option value="superseded">superseded</option>
+              <option value="draft">draft</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Source URL</label>
+            <input type="url" name="source_url" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Source Kind</label>
+            <select name="source_kind" class="form-input">
+              <option value="official_pdf">official_pdf</option>
+              <option value="print_only">print_only</option>
+              <option value="excerpt_pdf">excerpt_pdf</option>
+              <option value="catalog_record">catalog_record</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Create Edition</button>
+      </form>
+      {{else}}
+      <p class="empty-state">Create a standard first.</p>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Source Documents</h3>
+      <form method="POST" action="{{bp}}/admin/sources" hx-post="{{bp}}/admin/sources" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Organization</label>
+            <select name="organization_id" class="form-input">
+              {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.Show.OrganizationID}}selected{{end}}>{{.Name}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Title</label>
+            <input type="text" name="title" class="form-input" placeholder="Spring Rose Show 2025 Schedule" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Document Type</label>
+            <select name="document_type" class="form-input">
+              <option value="schedule">schedule</option>
+              <option value="rulebook">rulebook</option>
+              <option value="results_sheet">results_sheet</option>
+              <option value="catalog_record">catalog_record</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Source URL</label>
+            <input type="url" name="source_url" class="form-input">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Register Source</button>
+      </form>
+
+      {{if .Sources}}
+      <div class="governance-list">
+        {{range .Sources}}
+        <div class="rule-group">
+          <div class="rule-header">
+            <strong>{{.Title}}</strong>
+            <span class="badge badge-muted">{{.DocumentType}}</span>
+          </div>
+          {{if .SourceURL}}<p class="card-meta">{{.SourceURL}}</p>{{end}}
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<div class="card-grid" style="margin-top:1rem;">
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Rules & Overrides</h3>
+      {{if .StandardEditions}}
+      <form method="POST" action="{{bp}}/admin/rules" hx-post="{{bp}}/admin/rules" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-group">
+          <label>Standard Edition</label>
+          <select name="standard_edition_id" class="form-input" required>
+            {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Domain</label>
+            <input type="text" name="domain" class="form-input" placeholder="horticulture" required>
+          </div>
+          <div class="form-group">
+            <label>Rule Type</label>
+            <select name="rule_type" class="form-input">
+              <option value="definition">definition</option>
+              <option value="presentation">presentation</option>
+              <option value="measurement">measurement</option>
+              <option value="eligibility">eligibility</option>
+              <option value="scale_of_points">scale_of_points</option>
+              <option value="naming">naming</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Subject</label>
+          <input type="text" name="subject_label" class="form-input" placeholder="Hybrid Tea specimens" required>
+        </div>
+        <div class="form-group">
+          <label>Body</label>
+          <textarea name="body" class="form-input" rows="3" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Page Reference</label>
+          <input type="text" name="page_ref" class="form-input" placeholder="p. 42">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Add Standard Rule</button>
+      </form>
+      {{else}}
+      <p class="empty-state">Create a standard edition first.</p>
+      {{end}}
+
+      {{if and .ClassRuleViews .StandardEditions}}
+      <form method="POST" action="{{bp}}/admin/overrides" hx-post="{{bp}}/admin/overrides" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Class</label>
+            <select name="show_class_id" class="form-input" required>
+              {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}} — {{.Title}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Base Rule</label>
+            <select name="base_standard_rule_id" class="form-input">
+              <option value="">Local-only override</option>
+              {{range .ClassRuleViews}}{{range .Rules}}{{if .Rule}}<option value="{{.Rule.ID}}">{{.Rule.SubjectLabel}}</option>{{end}}{{end}}{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Override Type</label>
+            <select name="override_type" class="form-input">
+              <option value="replace">replace</option>
+              <option value="narrow">narrow</option>
+              <option value="extend">extend</option>
+              <option value="local_only">local_only</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Override Body</label>
+          <textarea name="body" class="form-input" rows="3" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Rationale</label>
+          <input type="text" name="rationale" class="form-input" placeholder="Reason for local override">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Add Override</button>
+      </form>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Citations</h3>
+      {{if and .Sources .CitationTargets}}
+      <form method="POST" action="{{bp}}/admin/citations" hx-post="{{bp}}/admin/citations" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Source Document</label>
+            <select name="source_document_id" class="form-input" required>
+              {{range .Sources}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target</label>
+            <select name="target_ref" class="form-input" required>
+              {{range .CitationTargets}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Page From</label>
+            <input type="text" name="page_from" class="form-input" placeholder="7">
+          </div>
+          <div class="form-group">
+            <label>Page To</label>
+            <input type="text" name="page_to" class="form-input" placeholder="7">
+          </div>
+          <div class="form-group">
+            <label>Confidence</label>
+            <input type="number" name="extraction_confidence" class="form-input" min="0" max="1" step="0.01" value="0.90">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Quoted Text</label>
+          <textarea name="quoted_text" class="form-input" rows="3"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Attach Citation</button>
+      </form>
+      {{else}}
+      <p class="empty-state">Register source documents and rule/class targets first.</p>
+      {{end}}
+
+      <h3 class="card-title" style="margin-top:1.5rem;">Ingestion</h3>
+      <form method="POST" action="{{bp}}/admin/ingestions" hx-post="{{bp}}/admin/ingestions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+        <input type="hidden" name="show_id" value="{{.Show.ID}}">
+        <div class="form-group">
+          <label>Structured Extraction JSON</label>
+          <textarea name="payload" class="form-input" rows="10" placeholder='{"source_document":{"title":"Imported PDF","document_type":"rulebook"},"citations":[{"target_type":"show_class","target_id":"class_01","page_from":"2","quoted_text":"..." }]}' required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Import Extraction</button>
+      </form>
+      <p class="card-meta">The ingestion API stores the source document and all submitted citations so provenance survives the import.</p>
+    </div>
+  </div>
+</div>
+
+{{if .ClassRuleViews}}
+<div class="card" style="margin-top:1rem;">
+  <div class="card-body">
+    <h3 class="card-title">Effective Rules By Class</h3>
+    {{range .ClassRuleViews}}
+    <div class="rule-group">
+      <div class="rule-header">
+        <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
+        {{if .Citations}}<span class="badge badge-muted">{{len .Citations}} citation{{if ne (len .Citations) 1}}s{{end}}</span>{{end}}
+      </div>
+      <table class="table table-sm">
+        <thead><tr><th>Source</th><th>Subject</th><th>Rule</th><th>Override</th></tr></thead>
+        <tbody>
+          {{range .Rules}}
+          <tr>
+            <td><span class="badge badge-muted">{{.Source}}</span></td>
+            <td>{{if .Rule}}{{.Rule.SubjectLabel}}{{end}}</td>
+            <td>{{if .Rule}}{{.Rule.Body}}{{end}}</td>
+            <td>{{if .Override}}{{.Override.Body}} <span class="badge badge-muted">{{.Override.OverrideType}}</span>{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{if .Citations}}
+      <div class="governance-list">
+        {{range .Citations}}
+        <div class="card-meta">Citation: pages {{.PageFrom}}{{if .PageTo}}-{{.PageTo}}{{end}} • confidence {{printf "%.2f" .ExtractionConfidence}}</div>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

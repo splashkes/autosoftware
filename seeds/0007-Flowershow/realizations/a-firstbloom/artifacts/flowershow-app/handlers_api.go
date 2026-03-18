@@ -29,12 +29,21 @@ func (a *app) handleAPIShowDetail(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleAPIEntries(w http.ResponseWriter, r *http.Request) {
 	showID := r.URL.Query().Get("show_id")
 	classID := r.URL.Query().Get("class_id")
+	filterVisible := func(items []*Entry) []*Entry {
+		var out []*Entry
+		for _, entry := range items {
+			if isPublicEntry(entry) {
+				out = append(out, entry)
+			}
+		}
+		return out
+	}
 	if classID != "" {
-		writeJSON(w, http.StatusOK, a.store.entriesByClass(classID))
+		writeJSON(w, http.StatusOK, filterVisible(a.store.entriesByClass(classID)))
 		return
 	}
 	if showID != "" {
-		writeJSON(w, http.StatusOK, a.store.entriesByShow(showID))
+		writeJSON(w, http.StatusOK, filterVisible(a.store.entriesByShow(showID)))
 		return
 	}
 	writeJSON(w, http.StatusBadRequest, map[string]string{"error": "show_id or class_id required"})
@@ -360,6 +369,22 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, cite)
+
+	case "ingestions.import":
+		var input ingestionImportRequest
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		doc, citations, err := a.importIngestion(input, input.SourceDocument.ShowID)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"source_document": doc,
+			"citations":       citations,
+		})
 
 	case "rules.create":
 		var input StandardRule

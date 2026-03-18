@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // --- Login ---
@@ -101,26 +102,42 @@ func (a *app) handleAdminShowCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 type adminShowDetailData struct {
-	Title     string
-	Show      *Show
-	Schedule  *ShowSchedule
-	Divisions []*divisionView
-	Entries   []*entryView
-	Persons   []*Person
-	Classes   []*ShowClass
-	Awards    []*AwardDefinition
-	Rubrics   []*JudgingRubric
-	Orgs      []*Organization
-	Standards []*StandardDocument
-	Sources   []*SourceDocument
+	Title            string
+	Show             *Show
+	Schedule         *ShowSchedule
+	ScheduleEdition  *StandardEdition
+	Divisions        []*divisionView
+	Entries          []*entryView
+	Persons          []*Person
+	Classes          []*ShowClass
+	Awards           []*AwardDefinition
+	Rubrics          []*JudgingRubric
+	RubricViews      []*rubricView
+	Orgs             []*Organization
+	Standards        []*StandardDocument
+	StandardViews    []*standardView
+	StandardEditions []*StandardEdition
+	Sources          []*SourceDocument
+	Judges           []*showJudgeView
+	AvailableJudges  []*Person
+	ClassRuleViews   []*classRuleView
+	CitationTargets  []citationTargetOption
 }
 
 func (a *app) handleAdminShowDetail(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("showID")
-	show, ok := a.store.showByID(showID)
-	if !ok {
+	data, err := a.adminShowDetailData(showID)
+	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	a.render(w, "show_admin.html", data)
+}
+
+func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
+	show, ok := a.store.showByID(showID)
+	if !ok {
+		return adminShowDetailData{}, fmt.Errorf("show not found")
 	}
 
 	sched, _ := a.store.scheduleByShowID(show.ID)
@@ -156,21 +173,41 @@ func (a *app) handleAdminShowDetail(w http.ResponseWriter, r *http.Request) {
 	for _, org := range orgs {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
+	standardViews := a.standardViews()
+	rubricViews := a.rubricViewsForShow(show.ID)
+	var scheduleEdition *StandardEdition
+	if sched != nil && sched.EffectiveStandardEditionID != "" {
+		scheduleEdition, _ = a.store.standardEditionByID(sched.EffectiveStandardEditionID)
+	}
+	classRuleViews := a.classRuleViews(show.ID, func() string {
+		if sched == nil {
+			return ""
+		}
+		return sched.EffectiveStandardEditionID
+	}())
 
-	a.render(w, "show_admin.html", adminShowDetailData{
-		Title:     "Admin: " + show.Name,
-		Show:      show,
-		Schedule:  sched,
-		Divisions: divisions,
-		Entries:   entries,
-		Persons:   a.store.allPersons(),
-		Classes:   a.store.classesByShowID(show.ID),
-		Awards:    awards,
-		Rubrics:   a.store.allRubrics(),
-		Orgs:      orgs,
-		Standards: a.store.allStandardDocuments(),
-		Sources:   a.store.allSourceDocuments(),
-	})
+	return adminShowDetailData{
+		Title:            "Admin: " + show.Name,
+		Show:             show,
+		Schedule:         sched,
+		ScheduleEdition:  scheduleEdition,
+		Divisions:        divisions,
+		Entries:          entries,
+		Persons:          a.store.allPersons(),
+		Classes:          a.store.classesByShowID(show.ID),
+		Awards:           awards,
+		Rubrics:          a.store.allRubrics(),
+		RubricViews:      rubricViews,
+		Orgs:             orgs,
+		Standards:        a.store.allStandardDocuments(),
+		StandardViews:    standardViews,
+		StandardEditions: a.store.allStandardEditions(),
+		Sources:          a.store.allSourceDocuments(),
+		Judges:           a.judgeViewsForShow(show.ID),
+		AvailableJudges:  a.availableJudgesForShow(show.ID),
+		ClassRuleViews:   classRuleViews,
+		CitationTargets:  a.citationTargetsForShow(show.ID, classRuleViews),
+	}, nil
 }
 
 func (a *app) handleAdminShowUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +225,8 @@ func (a *app) handleAdminShowUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Show updated</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "info")
+	a.respondAdminSectionOrRedirect(w, r, showID, "info")
 }
 
 // --- Schedule & Hierarchy ---
@@ -196,8 +234,24 @@ func (a *app) handleAdminShowUpdate(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleAdminScheduleCreate(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("showID")
 	r.ParseForm()
+	if _, ok := a.store.scheduleByShowID(showID); ok {
+		_, err := a.store.updateSchedule(showID, ShowSchedule{
+			SourceDocumentID:           r.FormValue("source_document_id"),
+			EffectiveStandardEditionID: r.FormValue("edition_id"),
+			Notes:                      r.FormValue("notes"),
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		a.sseBroker.publish(showID, "schedule-created", `<div class="toast">Schedule governance updated</div>`)
+		a.publishAdminSections(showID, "schedule", "governance", "scoring")
+		a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
+		return
+	}
 	_, err := a.store.createSchedule(ShowSchedule{
 		ShowID:                     showID,
+		SourceDocumentID:           r.FormValue("source_document_id"),
 		EffectiveStandardEditionID: r.FormValue("edition_id"),
 		Notes:                      r.FormValue("notes"),
 	})
@@ -206,7 +260,20 @@ func (a *app) handleAdminScheduleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	a.sseBroker.publish(showID, "schedule-created", `<div class="toast">Schedule created</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "schedule", "governance", "scoring")
+	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
+}
+
+func (a *app) handleAdminJudgeAssign(w http.ResponseWriter, r *http.Request) {
+	showID := r.PathValue("showID")
+	r.ParseForm()
+	if _, err := a.store.assignJudgeToShow(showID, r.FormValue("person_id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Judge assigned</div>`)
+	a.publishAdminSections(showID, "info", "scoring")
+	a.respondAdminSectionOrRedirect(w, r, showID, "info")
 }
 
 func (a *app) handleAdminDivisionCreate(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +293,8 @@ func (a *app) handleAdminDivisionCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	a.sseBroker.publish(showID, "division-created", `<div class="toast">Division added</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "schedule", "entries", "scoring", "governance")
+	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
 }
 
 func (a *app) handleAdminSectionCreate(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +312,8 @@ func (a *app) handleAdminSectionCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sseBroker.publish(showID, "section-created", `<div class="toast">Section added</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "schedule", "entries", "scoring", "governance")
+	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
 }
 
 func (a *app) handleAdminClassCreate(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +333,8 @@ func (a *app) handleAdminClassCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sseBroker.publish(showID, "class-created", `<div class="toast">Class added</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "schedule", "entries", "scoring", "governance")
+	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
 }
 
 // --- Entries ---
@@ -284,7 +354,9 @@ func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sseBroker.publish(showID, "entry-created", `<div class="toast">Entry added</div>`)
-	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
+	a.publishAdminSections(showID, "entries", "winners", "scoring", "governance")
+	a.publishShowSummary(showID)
+	a.respondAdminSectionOrRedirect(w, r, showID, "entries")
 }
 
 func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) {
@@ -305,6 +377,10 @@ func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) 
 	if entry, ok := a.store.entryByID(entryID); ok {
 		a.sseBroker.publish(entry.ShowID, "placement-set",
 			fmt.Sprintf(`<div class="toast">Placement set: %s → %d</div>`, entry.Name, placement))
+		a.publishAdminSections(entry.ShowID, "entries", "winners")
+		a.publishShowSummary(entry.ShowID)
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "winners")
+		return
 	}
 
 	referer := r.Header.Get("Referer")
@@ -312,6 +388,28 @@ func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) 
 		referer = "/admin"
 	}
 	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
+func (a *app) handleAdminEntryVisibility(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	r.ParseForm()
+	suppressed := r.FormValue("suppressed") == "true" || r.FormValue("suppressed") == "on"
+	if err := a.store.setEntrySuppressed(entryID, suppressed); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if entry, ok := a.store.entryByID(entryID); ok {
+		label := "Entry visible publicly"
+		if suppressed {
+			label = "Entry suppressed from public view"
+		}
+		a.sseBroker.publish(entry.ShowID, "placement-set", fmt.Sprintf(`<div class="toast">%s</div>`, label))
+		a.publishAdminSections(entry.ShowID, "entries", "winners", "scoring", "governance")
+		a.publishShowSummary(entry.ShowID)
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
+		return
+	}
+	redirect(w, r)
 }
 
 func (a *app) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
@@ -340,11 +438,13 @@ func (a *app) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		referer = "/admin"
+	if entry, ok := a.store.entryByID(entryID); ok {
+		a.publishAdminSections(entry.ShowID, "entries")
+		a.publishShowSummary(entry.ShowID)
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
+		return
 	}
-	http.Redirect(w, r, referer, http.StatusSeeOther)
+	redirect(w, r)
 }
 
 func (a *app) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
@@ -362,11 +462,13 @@ func (a *app) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		referer = "/admin"
+	if entry, ok := a.store.entryByID(media.EntryID); ok {
+		a.publishAdminSections(entry.ShowID, "entries")
+		a.publishShowSummary(entry.ShowID)
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
+		return
 	}
-	http.Redirect(w, r, referer, http.StatusSeeOther)
+	redirect(w, r)
 }
 
 // --- Persons ---
@@ -444,6 +546,11 @@ func (a *app) handleAdminStandardCreate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance", "schedule", "scoring")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
 	redirect(w, r)
 }
 
@@ -462,6 +569,11 @@ func (a *app) handleAdminEditionCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance", "schedule", "scoring")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
 	redirect(w, r)
 }
 
@@ -478,16 +590,30 @@ func (a *app) handleAdminSourceCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance", "schedule")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
 	redirect(w, r)
 }
 
 func (a *app) handleAdminCitationCreate(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
+	targetType := r.FormValue("target_type")
+	targetID := r.FormValue("target_id")
+	if ref := strings.TrimSpace(r.FormValue("target_ref")); ref != "" {
+		parts := strings.SplitN(ref, ":", 2)
+		if len(parts) == 2 {
+			targetType = parts[0]
+			targetID = parts[1]
+		}
+	}
 	confidence, _ := strconv.ParseFloat(r.FormValue("extraction_confidence"), 64)
 	_, err := a.store.createSourceCitation(SourceCitation{
 		SourceDocumentID:     r.FormValue("source_document_id"),
-		TargetType:           r.FormValue("target_type"),
-		TargetID:             r.FormValue("target_id"),
+		TargetType:           targetType,
+		TargetID:             targetID,
 		PageFrom:             r.FormValue("page_from"),
 		PageTo:               r.FormValue("page_to"),
 		QuotedText:           r.FormValue("quoted_text"),
@@ -496,6 +622,18 @@ func (a *app) handleAdminCitationCreate(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
+	for _, doc := range a.store.allSourceDocuments() {
+		if doc.ID == r.FormValue("source_document_id") && doc.ShowID != "" {
+			a.publishAdminSections(doc.ShowID, "governance")
+			a.respondAdminSectionOrRedirect(w, r, doc.ShowID, "governance")
+			return
+		}
 	}
 	redirect(w, r)
 }
@@ -514,6 +652,18 @@ func (a *app) handleAdminRuleCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance", "schedule")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
+	for _, show := range a.store.allShows() {
+		if sched, ok := a.store.scheduleByShowID(show.ID); ok && sched.EffectiveStandardEditionID == r.FormValue("standard_edition_id") {
+			a.publishAdminSections(show.ID, "governance", "schedule")
+			a.respondAdminSectionOrRedirect(w, r, show.ID, "governance")
+			return
+		}
+	}
 	redirect(w, r)
 }
 
@@ -530,6 +680,18 @@ func (a *app) handleAdminOverrideCreate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "governance")
+		a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+		return
+	}
+	if cls, ok := a.store.classByID(r.FormValue("show_class_id")); ok {
+		if showID := showIDForClass(a.store, cls.ID); showID != "" {
+			a.publishAdminSections(showID, "governance")
+			a.respondAdminSectionOrRedirect(w, r, showID, "governance")
+			return
+		}
+	}
 	redirect(w, r)
 }
 
@@ -545,6 +707,11 @@ func (a *app) handleAdminRubricCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "scoring")
+		a.respondAdminSectionOrRedirect(w, r, showID, "scoring")
 		return
 	}
 	redirect(w, r)
@@ -564,6 +731,16 @@ func (a *app) handleAdminCriterionCreate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "scoring")
+		a.respondAdminSectionOrRedirect(w, r, showID, "scoring")
+		return
+	}
+	if rubric, ok := a.store.rubricByID(r.FormValue("rubric_id")); ok && rubric.ShowID != "" {
+		a.publishAdminSections(rubric.ShowID, "scoring")
+		a.respondAdminSectionOrRedirect(w, r, rubric.ShowID, "scoring")
+		return
+	}
 	redirect(w, r)
 }
 
@@ -573,6 +750,22 @@ func (a *app) handleAdminScorecardSubmit(w http.ResponseWriter, r *http.Request)
 	judgeID := r.FormValue("judge_id")
 	rubricID := r.FormValue("rubric_id")
 	notes := r.FormValue("notes")
+	entry, ok := a.store.entryByID(entryID)
+	if !ok {
+		http.Error(w, "entry not found", http.StatusBadRequest)
+		return
+	}
+	judgeAllowed := false
+	for _, assignment := range a.store.judgesByShow(entry.ShowID) {
+		if assignment.PersonID == judgeID {
+			judgeAllowed = true
+			break
+		}
+	}
+	if !judgeAllowed {
+		http.Error(w, "judge is not assigned to this show", http.StatusBadRequest)
+		return
+	}
 
 	criteria := a.store.criteriaByRubric(rubricID)
 	var scores []EntryCriterionScore
@@ -595,17 +788,23 @@ func (a *app) handleAdminScorecardSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if entry, ok := a.store.entryByID(entryID); ok {
-		a.sseBroker.publish(entry.ShowID, "scorecard-submitted",
-			fmt.Sprintf(`<div class="toast">Scorecard submitted for %s</div>`, entry.Name))
-	}
-	redirect(w, r)
+	a.sseBroker.publish(entry.ShowID, "scorecard-submitted",
+		fmt.Sprintf(`<div class="toast">Scorecard submitted for %s</div>`, entry.Name))
+	a.publishAdminSections(entry.ShowID, "scoring", "winners", "entries")
+	a.publishShowSummary(entry.ShowID)
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "scoring")
 }
 
 func (a *app) handleAdminComputePlacements(w http.ResponseWriter, r *http.Request) {
 	classID := r.PathValue("classID")
 	if err := a.store.computePlacementsFromScores(classID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if showID := showIDForClass(a.store, classID); showID != "" {
+		a.publishAdminSections(showID, "scoring", "winners", "entries")
+		a.publishShowSummary(showID)
+		a.respondAdminSectionOrRedirect(w, r, showID, "scoring")
 		return
 	}
 	redirect(w, r)
