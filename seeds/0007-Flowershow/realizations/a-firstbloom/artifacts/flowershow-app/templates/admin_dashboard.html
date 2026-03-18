@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="admin-header">
   <h1>Admin Dashboard</h1>
-  <form method="POST" action="/admin/logout" class="inline">
+  <form method="POST" action="{{bp}}/admin/logout" class="inline">
     <button type="submit" class="btn btn-outline btn-sm">Logout</button>
   </form>
 </div>
@@ -24,12 +24,12 @@
 <section class="section">
   <div class="section-header">
     <h2>Shows</h2>
-    <a href="/admin/shows/new" class="btn btn-primary btn-sm">New Show</a>
+    <a href="{{bp}}/admin/shows/new" class="btn btn-primary btn-sm">New Show</a>
   </div>
   {{if .Shows}}
   <div class="card-grid">
     {{range .Shows}}
-    <a href="/admin/shows/{{.ID}}" class="card show-card">
+    <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
       <div class="card-body">
         <h3 class="card-title">{{.Name}}</h3>
         <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
@@ -47,7 +47,7 @@
   <div class="section-header">
     <h2>Persons</h2>
   </div>
-  <a href="/admin/persons" class="btn btn-outline btn-sm">Manage Persons</a>
+  <a href="{{bp}}/admin/persons" class="btn btn-outline btn-sm">Manage Persons</a>
 </section>
 {{end}}
 

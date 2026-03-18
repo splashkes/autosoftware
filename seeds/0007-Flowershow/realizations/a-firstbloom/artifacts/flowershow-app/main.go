@@ -193,7 +193,10 @@ func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+var globalBasePath = strings.TrimSuffix(strings.TrimSpace(os.Getenv("AS_PATH_PREFIX")), "/")
+
 var templateFuncMap = template.FuncMap{
+	"bp": func() string { return globalBasePath },
 	"placementLabel": func(p int) string {
 		switch p {
 		case 1:

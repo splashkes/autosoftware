@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="/">Home</a> &rsaquo;
-  {{if .Show}}<a href="/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;{{end}}
+  <a href="{{bp}}/">Home</a> &rsaquo;
+  {{if .Show}}<a href="{{bp}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;{{end}}
   <span>{{.Entry.Name}}</span>
 </div>
 
@@ -26,7 +26,7 @@
   <h2>Taxonomy</h2>
   <div class="tag-list">
     {{range .Taxons}}
-    <a href="/taxonomy/{{.ID}}" class="tag">{{.Name}}</a>
+    <a href="{{bp}}/taxonomy/{{.ID}}" class="tag">{{.Name}}</a>
     {{end}}
   </div>
 </section>

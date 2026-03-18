@@ -1,10 +1,10 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="/admin">Admin</a> &rsaquo; <span>New Show</span>
+  <a href="{{bp}}/admin">Admin</a> &rsaquo; <span>New Show</span>
 </div>
 
 <h1>Create Show</h1>
-<form method="POST" action="/admin/shows" class="form">
+<form method="POST" action="{{bp}}/admin/shows" class="form">
   <div class="form-group">
     <label for="name">Show Name</label>
     <input type="text" id="name" name="name" class="form-input" required>

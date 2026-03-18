@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="/">Home</a> &rsaquo; <a href="/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo; <span>Classes</span>
+  <a href="{{bp}}/">Home</a> &rsaquo; <a href="{{bp}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo; <span>Classes</span>
 </div>
 
 <h1>Classes — {{.Show.Name}}</h1>
@@ -13,7 +13,7 @@
     <h3>Section {{.Section.Code}}: {{.Section.Title}}</h3>
     <div class="class-grid">
       {{range .Classes}}
-      <a href="/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="card class-card">
+      <a href="{{bp}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="card class-card">
         <div class="card-body">
           <span class="class-number">{{.ClassNumber}}</span>
           <h4 class="card-title">{{.Title}}</h4>

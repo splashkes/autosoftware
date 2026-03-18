@@ -1,14 +1,14 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="/admin">Admin</a> &rsaquo; <span>{{.Show.Name}}</span>
+  <a href="{{bp}}/admin">Admin</a> &rsaquo; <span>{{.Show.Name}}</span>
 </div>
 
 <div class="admin-header">
   <h1>{{.Show.Name}}</h1>
-  <a href="/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
+  <a href="{{bp}}/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
 </div>
 
-<div hx-ext="sse" sse-connect="/admin/shows/{{.Show.ID}}/stream">
+<div hx-ext="sse" sse-connect="{{bp}}/admin/shows/{{.Show.ID}}/stream">
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
 </div>
 
@@ -23,7 +23,7 @@
 
 <!-- Info Tab -->
 <div id="tab-info" class="tab-content active">
-  <form method="POST" action="/admin/shows/{{.Show.ID}}" class="form">
+  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}" class="form">
     <div class="form-group">
       <label>Show Name</label>
       <input type="text" name="name" value="{{.Show.Name}}" class="form-input" required>
@@ -57,7 +57,7 @@
 <!-- Schedule Tab -->
 <div id="tab-schedule" class="tab-content">
   {{if not .Schedule}}
-  <form method="POST" action="/admin/shows/{{.Show.ID}}/schedule" class="form">
+  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/schedule" class="form">
     <h3>Create Schedule</h3>
     <div class="form-group">
       <label>Notes</label>
@@ -84,7 +84,7 @@
       <!-- Add class form -->
       <details class="add-form">
         <summary class="btn btn-outline btn-sm">+ Add Class</summary>
-        <form method="POST" action="/admin/shows/{{$.Show.ID}}/classes" class="form form-compact">
+        <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" class="form form-compact">
           <input type="hidden" name="section_id" value="{{.Section.ID}}">
           <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
           <input type="text" name="title" placeholder="Title" class="form-input" required>
@@ -104,7 +104,7 @@
     <!-- Add section form -->
     <details class="add-form">
       <summary class="btn btn-outline btn-sm">+ Add Section</summary>
-      <form method="POST" action="/admin/shows/{{$.Show.ID}}/sections" class="form form-compact">
+      <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/sections" class="form form-compact">
         <input type="hidden" name="division_id" value="{{.Division.ID}}">
         <input type="text" name="code" placeholder="Code (e.g. A)" class="form-input form-sm">
         <input type="text" name="title" placeholder="Section title" class="form-input" required>
@@ -118,7 +118,7 @@
   <!-- Add division form -->
   <details class="add-form">
     <summary class="btn btn-outline btn-sm">+ Add Division</summary>
-    <form method="POST" action="/admin/shows/{{.Show.ID}}/divisions" class="form form-compact">
+    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/divisions" class="form form-compact">
       <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
       <input type="text" name="code" placeholder="Code (e.g. I)" class="form-input form-sm">
       <input type="text" name="title" placeholder="Division title" class="form-input" required>
@@ -138,7 +138,7 @@
 <!-- Entries Tab -->
 <div id="tab-entries" class="tab-content">
   <h3>Add Entry</h3>
-  <form method="POST" action="/admin/shows/{{.Show.ID}}/entries" class="form form-compact">
+  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/entries" class="form form-compact">
     <div class="form-row">
       <div class="form-group">
         <label>Class</label>
@@ -196,7 +196,7 @@
   {{range .Entries}}
   <div class="winner-row">
     <span class="winner-name">{{.Entry.Name}} {{if .Class}}<span class="card-meta">({{.Class.ClassNumber}})</span>{{end}}</span>
-    <form method="POST" action="/admin/entries/{{.Entry.ID}}/placement" class="form form-inline">
+    <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/placement" class="form form-inline">
       <select name="placement" class="form-input form-sm">
         <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
         <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>
@@ -217,7 +217,7 @@
 <div id="tab-scoring" class="tab-content">
   <h3>Submit Scorecard</h3>
   {{if and .Rubrics .Entries}}
-  <form method="POST" action="/admin/scorecards" class="form">
+  <form method="POST" action="{{bp}}/admin/scorecards" class="form">
     <div class="form-row">
       <div class="form-group">
         <label>Entry</label>
