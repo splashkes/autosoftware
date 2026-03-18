@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"strings"
 	"testing"
@@ -378,6 +379,12 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	if !strings.Contains(body, "Assign Judge") {
 		t.Fatal("admin show missing judge assignment controls")
 	}
+	if !strings.Contains(body, "Add Photo") {
+		t.Fatal("admin show missing mobile photo add control")
+	}
+	if !strings.Contains(body, `accept="image/jpeg,image/png,image/webp"`) {
+		t.Fatal("admin show missing constrained mobile photo accept types")
+	}
 }
 
 func TestHTMXJudgeAssignReturnsInfoPanel(t *testing.T) {
@@ -689,6 +696,40 @@ func TestMediaUploadAndRender(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "/media/"+media[0].ID) {
 		t.Fatal("entry detail missing uploaded media")
+	}
+}
+
+func TestMediaUploadRejectsHEIC(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="media"; filename="rose.heic"`)
+	header.Set("Content-Type", "image/heic")
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("fake heic bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/admin/entries/entry_01/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "HEIC/HEIF is not supported") {
+		t.Fatal("expected HEIC rejection message")
 	}
 }
 
