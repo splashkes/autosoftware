@@ -111,7 +111,7 @@ func BuildLocalSpecWithObserver(repoRoot, reference, executionID string, urls Ca
 	workingDir := filepath.Join(entry.RootDir, filepath.FromSlash(strings.TrimSpace(meta.RuntimeManifest.WorkingDirectory)))
 	envMap := make(map[string]string, len(meta.RuntimeManifest.Environment)+8)
 	for key, value := range meta.RuntimeManifest.Environment {
-		envMap[strings.TrimSpace(key)] = value
+		envMap[strings.TrimSpace(key)] = resolveRuntimeEnvValue(value)
 	}
 	envMap["AS_ADDR"] = upstreamAddr
 	envMap["AS_SEED_ID"] = entry.SeedID
@@ -379,4 +379,18 @@ func keepHostEnv(key string) bool {
 	default:
 		return strings.HasPrefix(key, "LC_")
 	}
+}
+
+func resolveRuntimeEnvValue(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "${") && strings.HasSuffix(trimmed, "}") {
+		name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "${"), "}"))
+		if name != "" {
+			if value, ok := os.LookupEnv(name); ok {
+				return value
+			}
+			return ""
+		}
+	}
+	return raw
 }

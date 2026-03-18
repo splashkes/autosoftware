@@ -94,6 +94,12 @@ type flowershowStore interface {
 	entriesByClass(classID string) []*Entry
 	entriesByPerson(personID string) []*Entry
 
+	// Media
+	attachMedia(Media) (*Media, error)
+	mediaByEntry(entryID string) []*Media
+	mediaByID(id string) (*Media, bool)
+	deleteMedia(id string) error
+
 	// Taxonomy
 	createTaxon(TaxonInput) (*Taxon, error)
 	taxonByID(id string) (*Taxon, bool)
@@ -141,6 +147,11 @@ type flowershowStore interface {
 	// Leaderboard
 	leaderboard(orgID, season string) []LeaderboardEntry
 
+	// Roles
+	assignUserRole(UserRoleInput) (*UserRole, error)
+	rolesBySubject(cognitoSub string) []*UserRole
+	allUserRoles() []*UserRole
+
 	// Ledger
 	ledgerByObjectID(objectID string) ([]FlowershowClaim, error)
 
@@ -158,30 +169,32 @@ type effectiveRule struct {
 // ============================================================================
 
 type memoryStore struct {
-	mu            sync.RWMutex
-	organizations map[string]*Organization
-	shows         map[string]*Show
-	persons       map[string]*Person
-	schedules     map[string]*ShowSchedule
-	divisions     map[string]*Division
-	sections      map[string]*Section
-	classes       map[string]*ShowClass
-	entries       map[string]*Entry
-	taxons        map[string]*Taxon
-	awards        map[string]*AwardDefinition
-	stdDocs       map[string]*StandardDocument
-	stdEditions   map[string]*StandardEdition
-	srcDocs       map[string]*SourceDocument
-	srcCitations  map[string]*SourceCitation
-	stdRules      map[string]*StandardRule
+	mu             sync.RWMutex
+	organizations  map[string]*Organization
+	shows          map[string]*Show
+	persons        map[string]*Person
+	schedules      map[string]*ShowSchedule
+	divisions      map[string]*Division
+	sections       map[string]*Section
+	classes        map[string]*ShowClass
+	entries        map[string]*Entry
+	media          map[string]*Media
+	taxons         map[string]*Taxon
+	awards         map[string]*AwardDefinition
+	stdDocs        map[string]*StandardDocument
+	stdEditions    map[string]*StandardEdition
+	srcDocs        map[string]*SourceDocument
+	srcCitations   map[string]*SourceCitation
+	stdRules       map[string]*StandardRule
 	classOverrides map[string]*ClassRuleOverride
-	rubrics       map[string]*JudgingRubric
-	criteria      map[string]*JudgingCriterion
-	scorecards    map[string]*EntryScorecard
-	critScores    map[string]*EntryCriterionScore
-	objects       map[string]*FlowershowObject
-	claims        []FlowershowClaim
-	claimSeq      int64
+	rubrics        map[string]*JudgingRubric
+	criteria       map[string]*JudgingCriterion
+	scorecards     map[string]*EntryScorecard
+	critScores     map[string]*EntryCriterionScore
+	userRoles      map[string]*UserRole
+	objects        map[string]*FlowershowObject
+	claims         []FlowershowClaim
+	claimSeq       int64
 }
 
 func newMemoryStore() *memoryStore {
@@ -194,6 +207,7 @@ func newMemoryStore() *memoryStore {
 		sections:       make(map[string]*Section),
 		classes:        make(map[string]*ShowClass),
 		entries:        make(map[string]*Entry),
+		media:          make(map[string]*Media),
 		taxons:         make(map[string]*Taxon),
 		awards:         make(map[string]*AwardDefinition),
 		stdDocs:        make(map[string]*StandardDocument),
@@ -206,6 +220,7 @@ func newMemoryStore() *memoryStore {
 		criteria:       make(map[string]*JudgingCriterion),
 		scorecards:     make(map[string]*EntryScorecard),
 		critScores:     make(map[string]*EntryCriterionScore),
+		userRoles:      make(map[string]*UserRole),
 		objects:        make(map[string]*FlowershowObject),
 	}
 	s.seedDemoData()
@@ -676,6 +691,55 @@ func (s *memoryStore) entriesByPerson(personID string) []*Entry {
 		}
 	}
 	return out
+}
+
+// --- Media ---
+
+func (s *memoryStore) attachMedia(m Media) (*Media, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if m.ID == "" {
+		m.ID = newID("media")
+	}
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = time.Now().UTC()
+	}
+	cp := m
+	s.media[cp.ID] = &cp
+	s.appendClaim(cp.ID, "media", "media.attached", cp)
+	return &cp, nil
+}
+
+func (s *memoryStore) mediaByEntry(entryID string) []*Media {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Media
+	for _, m := range s.media {
+		if m.EntryID == entryID {
+			out = append(out, m)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
+}
+
+func (s *memoryStore) mediaByID(id string) (*Media, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, ok := s.media[id]
+	return m, ok
+}
+
+func (s *memoryStore) deleteMedia(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.media[id]
+	if !ok {
+		return errors.New("media not found")
+	}
+	delete(s.media, id)
+	s.appendClaim(id, "media", "media.deleted", m)
+	return nil
 }
 
 // --- Taxonomy ---
@@ -1234,6 +1298,62 @@ func (s *memoryStore) leaderboard(orgID, season string) []LeaderboardEntry {
 	return out
 }
 
+// --- Roles ---
+
+func (s *memoryStore) assignUserRole(input UserRoleInput) (*UserRole, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(input.CognitoSub) == "" {
+		return nil, errors.New("cognito subject required")
+	}
+	if strings.TrimSpace(input.Role) == "" {
+		return nil, errors.New("role required")
+	}
+	for _, existing := range s.userRoles {
+		if existing.CognitoSub == input.CognitoSub &&
+			existing.OrganizationID == input.OrganizationID &&
+			existing.ShowID == input.ShowID &&
+			existing.Role == input.Role {
+			return existing, nil
+		}
+	}
+	role := &UserRole{
+		ID:             newID("role"),
+		CognitoSub:     input.CognitoSub,
+		OrganizationID: input.OrganizationID,
+		ShowID:         input.ShowID,
+		Role:           input.Role,
+		CreatedAt:      time.Now().UTC(),
+	}
+	s.userRoles[role.ID] = role
+	s.appendClaim(role.ID, "user_role", "user_role.assigned", role)
+	return role, nil
+}
+
+func (s *memoryStore) rolesBySubject(cognitoSub string) []*UserRole {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*UserRole
+	for _, role := range s.userRoles {
+		if role.CognitoSub == cognitoSub {
+			out = append(out, role)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
+}
+
+func (s *memoryStore) allUserRoles() []*UserRole {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*UserRole
+	for _, role := range s.userRoles {
+		out = append(out, role)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
+}
+
 // --- Ledger ---
 
 func (s *memoryStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
@@ -1718,70 +1838,191 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 // This allows the app to start with Postgres (migrated schema) while using
 // the memory store pattern for development speed.
 
-func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organization, error) { return s.mem.createOrganization(o) }
-func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) { return s.mem.organizationByID(id) }
+func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organization, error) {
+	return s.mem.createOrganization(o)
+}
+func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) {
+	return s.mem.organizationByID(id)
+}
 func (s *postgresFlowershowStore) allOrganizations() []*Organization { return s.mem.allOrganizations() }
-func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) { return s.mem.createShow(input) }
-func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show, error) { return s.mem.updateShow(id, input) }
+func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) {
+	return s.mem.createShow(input)
+}
+func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show, error) {
+	return s.mem.updateShow(id, input)
+}
 func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) { return s.mem.showByID(id) }
-func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) { return s.mem.showBySlug(slug) }
+func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) {
+	return s.mem.showBySlug(slug)
+}
 func (s *postgresFlowershowStore) allShows() []*Show { return s.mem.allShows() }
-func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) { return s.mem.createPerson(input) }
-func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*Person, error) { return s.mem.updatePerson(id, input) }
+func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) {
+	return s.mem.createPerson(input)
+}
+func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*Person, error) {
+	return s.mem.updatePerson(id, input)
+}
 func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.mem.personByID(id) }
-func (s *postgresFlowershowStore) allPersons() []*Person { return s.mem.allPersons() }
-func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) { return s.mem.createSchedule(sched) }
-func (s *postgresFlowershowStore) scheduleByShowID(showID string) (*ShowSchedule, bool) { return s.mem.scheduleByShowID(showID) }
-func (s *postgresFlowershowStore) createDivision(input DivisionInput) (*Division, error) { return s.mem.createDivision(input) }
-func (s *postgresFlowershowStore) divisionsBySchedule(scheduleID string) []*Division { return s.mem.divisionsBySchedule(scheduleID) }
-func (s *postgresFlowershowStore) divisionByID(id string) (*Division, bool) { return s.mem.divisionByID(id) }
-func (s *postgresFlowershowStore) createSection(input SectionInput) (*Section, error) { return s.mem.createSection(input) }
-func (s *postgresFlowershowStore) sectionsByDivision(divisionID string) []*Section { return s.mem.sectionsByDivision(divisionID) }
-func (s *postgresFlowershowStore) sectionByID(id string) (*Section, bool) { return s.mem.sectionByID(id) }
-func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass, error) { return s.mem.createClass(input) }
-func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) { return s.mem.updateClass(id, input) }
-func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass { return s.mem.classesBySection(sectionID) }
+func (s *postgresFlowershowStore) allPersons() []*Person                { return s.mem.allPersons() }
+func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) {
+	return s.mem.createSchedule(sched)
+}
+func (s *postgresFlowershowStore) scheduleByShowID(showID string) (*ShowSchedule, bool) {
+	return s.mem.scheduleByShowID(showID)
+}
+func (s *postgresFlowershowStore) createDivision(input DivisionInput) (*Division, error) {
+	return s.mem.createDivision(input)
+}
+func (s *postgresFlowershowStore) divisionsBySchedule(scheduleID string) []*Division {
+	return s.mem.divisionsBySchedule(scheduleID)
+}
+func (s *postgresFlowershowStore) divisionByID(id string) (*Division, bool) {
+	return s.mem.divisionByID(id)
+}
+func (s *postgresFlowershowStore) createSection(input SectionInput) (*Section, error) {
+	return s.mem.createSection(input)
+}
+func (s *postgresFlowershowStore) sectionsByDivision(divisionID string) []*Section {
+	return s.mem.sectionsByDivision(divisionID)
+}
+func (s *postgresFlowershowStore) sectionByID(id string) (*Section, bool) {
+	return s.mem.sectionByID(id)
+}
+func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass, error) {
+	return s.mem.createClass(input)
+}
+func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) {
+	return s.mem.updateClass(id, input)
+}
+func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass {
+	return s.mem.classesBySection(sectionID)
+}
 func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) { return s.mem.classByID(id) }
-func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass { return s.mem.classesByShowID(showID) }
-func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) { return s.mem.createEntry(input) }
-func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) { return s.mem.updateEntry(id, input) }
-func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error { return s.mem.setPlacement(entryID, placement, points) }
+func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass {
+	return s.mem.classesByShowID(showID)
+}
+func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) {
+	return s.mem.createEntry(input)
+}
+func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) {
+	return s.mem.updateEntry(id, input)
+}
+func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error {
+	return s.mem.setPlacement(entryID, placement, points)
+}
 func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) { return s.mem.entryByID(id) }
-func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry { return s.mem.entriesByShow(showID) }
-func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry { return s.mem.entriesByClass(classID) }
-func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry { return s.mem.entriesByPerson(personID) }
-func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) { return s.mem.createTaxon(input) }
+func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry {
+	return s.mem.entriesByShow(showID)
+}
+func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry {
+	return s.mem.entriesByClass(classID)
+}
+func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry {
+	return s.mem.entriesByPerson(personID)
+}
+func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) { return s.mem.attachMedia(m) }
+func (s *postgresFlowershowStore) mediaByEntry(entryID string) []*Media {
+	return s.mem.mediaByEntry(entryID)
+}
+func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) { return s.mem.mediaByID(id) }
+func (s *postgresFlowershowStore) deleteMedia(id string) error        { return s.mem.deleteMedia(id) }
+func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) {
+	return s.mem.createTaxon(input)
+}
 func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) { return s.mem.taxonByID(id) }
-func (s *postgresFlowershowStore) allTaxons() []*Taxon { return s.mem.allTaxons() }
-func (s *postgresFlowershowStore) taxonsByType(taxonType string) []*Taxon { return s.mem.taxonsByType(taxonType) }
-func (s *postgresFlowershowStore) createAward(input AwardInput) (*AwardDefinition, error) { return s.mem.createAward(input) }
-func (s *postgresFlowershowStore) awardByID(id string) (*AwardDefinition, bool) { return s.mem.awardByID(id) }
-func (s *postgresFlowershowStore) awardsByOrganization(orgID string) []*AwardDefinition { return s.mem.awardsByOrganization(orgID) }
-func (s *postgresFlowershowStore) computeAward(awardID string) ([]AwardResult, error) { return s.mem.computeAward(awardID) }
-func (s *postgresFlowershowStore) createStandardDocument(doc StandardDocument) (*StandardDocument, error) { return s.mem.createStandardDocument(doc) }
-func (s *postgresFlowershowStore) allStandardDocuments() []*StandardDocument { return s.mem.allStandardDocuments() }
-func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) { return s.mem.createStandardEdition(ed) }
-func (s *postgresFlowershowStore) editionsByStandard(standardDocID string) []*StandardEdition { return s.mem.editionsByStandard(standardDocID) }
-func (s *postgresFlowershowStore) createSourceDocument(doc SourceDocument) (*SourceDocument, error) { return s.mem.createSourceDocument(doc) }
-func (s *postgresFlowershowStore) allSourceDocuments() []*SourceDocument { return s.mem.allSourceDocuments() }
-func (s *postgresFlowershowStore) createSourceCitation(cite SourceCitation) (*SourceCitation, error) { return s.mem.createSourceCitation(cite) }
-func (s *postgresFlowershowStore) citationsByTarget(targetType, targetID string) []*SourceCitation { return s.mem.citationsByTarget(targetType, targetID) }
-func (s *postgresFlowershowStore) createStandardRule(rule StandardRule) (*StandardRule, error) { return s.mem.createStandardRule(rule) }
-func (s *postgresFlowershowStore) rulesByEdition(editionID string) []*StandardRule { return s.mem.rulesByEdition(editionID) }
-func (s *postgresFlowershowStore) createClassRuleOverride(override ClassRuleOverride) (*ClassRuleOverride, error) { return s.mem.createClassRuleOverride(override) }
-func (s *postgresFlowershowStore) overridesByClass(classID string) []*ClassRuleOverride { return s.mem.overridesByClass(classID) }
-func (s *postgresFlowershowStore) effectiveRulesForClass(classID string, editionID string) []effectiveRule { return s.mem.effectiveRulesForClass(classID, editionID) }
-func (s *postgresFlowershowStore) createRubric(r JudgingRubric) (*JudgingRubric, error) { return s.mem.createRubric(r) }
-func (s *postgresFlowershowStore) rubricByID(id string) (*JudgingRubric, bool) { return s.mem.rubricByID(id) }
+func (s *postgresFlowershowStore) allTaxons() []*Taxon                { return s.mem.allTaxons() }
+func (s *postgresFlowershowStore) taxonsByType(taxonType string) []*Taxon {
+	return s.mem.taxonsByType(taxonType)
+}
+func (s *postgresFlowershowStore) createAward(input AwardInput) (*AwardDefinition, error) {
+	return s.mem.createAward(input)
+}
+func (s *postgresFlowershowStore) awardByID(id string) (*AwardDefinition, bool) {
+	return s.mem.awardByID(id)
+}
+func (s *postgresFlowershowStore) awardsByOrganization(orgID string) []*AwardDefinition {
+	return s.mem.awardsByOrganization(orgID)
+}
+func (s *postgresFlowershowStore) computeAward(awardID string) ([]AwardResult, error) {
+	return s.mem.computeAward(awardID)
+}
+func (s *postgresFlowershowStore) createStandardDocument(doc StandardDocument) (*StandardDocument, error) {
+	return s.mem.createStandardDocument(doc)
+}
+func (s *postgresFlowershowStore) allStandardDocuments() []*StandardDocument {
+	return s.mem.allStandardDocuments()
+}
+func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) {
+	return s.mem.createStandardEdition(ed)
+}
+func (s *postgresFlowershowStore) editionsByStandard(standardDocID string) []*StandardEdition {
+	return s.mem.editionsByStandard(standardDocID)
+}
+func (s *postgresFlowershowStore) createSourceDocument(doc SourceDocument) (*SourceDocument, error) {
+	return s.mem.createSourceDocument(doc)
+}
+func (s *postgresFlowershowStore) allSourceDocuments() []*SourceDocument {
+	return s.mem.allSourceDocuments()
+}
+func (s *postgresFlowershowStore) createSourceCitation(cite SourceCitation) (*SourceCitation, error) {
+	return s.mem.createSourceCitation(cite)
+}
+func (s *postgresFlowershowStore) citationsByTarget(targetType, targetID string) []*SourceCitation {
+	return s.mem.citationsByTarget(targetType, targetID)
+}
+func (s *postgresFlowershowStore) createStandardRule(rule StandardRule) (*StandardRule, error) {
+	return s.mem.createStandardRule(rule)
+}
+func (s *postgresFlowershowStore) rulesByEdition(editionID string) []*StandardRule {
+	return s.mem.rulesByEdition(editionID)
+}
+func (s *postgresFlowershowStore) createClassRuleOverride(override ClassRuleOverride) (*ClassRuleOverride, error) {
+	return s.mem.createClassRuleOverride(override)
+}
+func (s *postgresFlowershowStore) overridesByClass(classID string) []*ClassRuleOverride {
+	return s.mem.overridesByClass(classID)
+}
+func (s *postgresFlowershowStore) effectiveRulesForClass(classID string, editionID string) []effectiveRule {
+	return s.mem.effectiveRulesForClass(classID, editionID)
+}
+func (s *postgresFlowershowStore) createRubric(r JudgingRubric) (*JudgingRubric, error) {
+	return s.mem.createRubric(r)
+}
+func (s *postgresFlowershowStore) rubricByID(id string) (*JudgingRubric, bool) {
+	return s.mem.rubricByID(id)
+}
 func (s *postgresFlowershowStore) allRubrics() []*JudgingRubric { return s.mem.allRubrics() }
-func (s *postgresFlowershowStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, error) { return s.mem.createCriterion(c) }
-func (s *postgresFlowershowStore) criteriaByRubric(rubricID string) []*JudgingCriterion { return s.mem.criteriaByRubric(rubricID) }
-func (s *postgresFlowershowStore) submitScorecard(sc EntryScorecard, scores []EntryCriterionScore) (*EntryScorecard, error) { return s.mem.submitScorecard(sc, scores) }
-func (s *postgresFlowershowStore) scorecardsByEntry(entryID string) []*EntryScorecard { return s.mem.scorecardsByEntry(entryID) }
-func (s *postgresFlowershowStore) criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore { return s.mem.criterionScoresByScorecard(scorecardID) }
-func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) error { return s.mem.computePlacementsFromScores(classID) }
-func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry { return s.mem.leaderboard(orgID, season) }
-func (s *postgresFlowershowStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) { return s.mem.ledgerByObjectID(objectID) }
+func (s *postgresFlowershowStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, error) {
+	return s.mem.createCriterion(c)
+}
+func (s *postgresFlowershowStore) criteriaByRubric(rubricID string) []*JudgingCriterion {
+	return s.mem.criteriaByRubric(rubricID)
+}
+func (s *postgresFlowershowStore) submitScorecard(sc EntryScorecard, scores []EntryCriterionScore) (*EntryScorecard, error) {
+	return s.mem.submitScorecard(sc, scores)
+}
+func (s *postgresFlowershowStore) scorecardsByEntry(entryID string) []*EntryScorecard {
+	return s.mem.scorecardsByEntry(entryID)
+}
+func (s *postgresFlowershowStore) criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore {
+	return s.mem.criterionScoresByScorecard(scorecardID)
+}
+func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) error {
+	return s.mem.computePlacementsFromScores(classID)
+}
+func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry {
+	return s.mem.leaderboard(orgID, season)
+}
+func (s *postgresFlowershowStore) assignUserRole(input UserRoleInput) (*UserRole, error) {
+	return s.mem.assignUserRole(input)
+}
+func (s *postgresFlowershowStore) rolesBySubject(cognitoSub string) []*UserRole {
+	return s.mem.rolesBySubject(cognitoSub)
+}
+func (s *postgresFlowershowStore) allUserRoles() []*UserRole { return s.mem.allUserRoles() }
+func (s *postgresFlowershowStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
+	return s.mem.ledgerByObjectID(objectID)
+}
 
 // Ensure compile-time check
 var _ flowershowStore = (*memoryStore)(nil)

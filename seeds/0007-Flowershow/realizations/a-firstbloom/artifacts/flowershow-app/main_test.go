@@ -1,21 +1,31 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
 
 func testApp() *app {
+	dir, err := os.MkdirTemp("", "flowershow-media-test-*")
+	if err != nil {
+		panic(err)
+	}
 	return &app{
-		store:         newMemoryStore(),
-		templates:     parseTemplates(),
-		adminPassword: "admin",
-		serviceToken:  "test-token",
-		sseBroker:     newSSEBroker(),
+		store:           newMemoryStore(),
+		templates:       parseTemplates(),
+		adminPassword:   "admin",
+		serviceToken:    "test-token",
+		sseBroker:       newSSEBroker(),
+		media:           &localMediaStore{dir: dir},
+		sessionSecret:   []byte("test-secret"),
+		bootstrapAdmins: map[string]bool{},
 	}
 }
 
@@ -206,6 +216,35 @@ func TestAdminRequiresAuth(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303 redirect, got %d", w.Code)
+	}
+}
+
+func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
+	a := testApp()
+	_, err := a.store.assignUserRole(UserRoleInput{
+		CognitoSub: "sub_admin",
+		Role:       "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	w := httptest.NewRecorder()
+	if err := a.setUserSession(w, UserIdentity{CognitoSub: "sub_admin", Email: "admin@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, cookie := range w.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
 
@@ -427,6 +466,53 @@ func TestStoreMemoryBasics(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatal("expected award results")
+	}
+}
+
+func TestMediaUploadAndRender(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
+	mux.HandleFunc("GET /entries/{entryID}", a.handleEntryDetail)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("media", "rose.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("fake image bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/admin/entries/entry_01/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	media := a.store.mediaByEntry("entry_01")
+	if len(media) != 1 {
+		t.Fatalf("expected 1 media record, got %d", len(media))
+	}
+	if _, err := os.Stat(media[0].StorageKey); err != nil {
+		t.Fatalf("expected uploaded media on disk: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/entries/entry_01", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "/media/"+media[0].ID) {
+		t.Fatal("entry detail missing uploaded media")
 	}
 }
 

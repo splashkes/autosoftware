@@ -53,6 +53,7 @@ type entryView struct {
 	Entry  *Entry
 	Person *Person
 	Class  *ShowClass
+	Media  []*Media
 }
 
 func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +86,12 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 	for _, e := range a.store.entriesByShow(show.ID) {
 		person, _ := a.store.personByID(e.PersonID)
 		cls, _ := a.store.classByID(e.ClassID)
-		entries = append(entries, &entryView{Entry: e, Person: person, Class: cls})
+		entries = append(entries, &entryView{
+			Entry:  e,
+			Person: person,
+			Class:  cls,
+			Media:  a.store.mediaByEntry(e.ID),
+		})
 	}
 
 	awards := a.store.awardsByOrganization(show.OrganizationID)
@@ -179,7 +185,12 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 	var entries []*entryView
 	for _, e := range a.store.entriesByClass(classID) {
 		person, _ := a.store.personByID(e.PersonID)
-		entries = append(entries, &entryView{Entry: e, Person: person, Class: cls})
+		entries = append(entries, &entryView{
+			Entry:  e,
+			Person: person,
+			Class:  cls,
+			Media:  a.store.mediaByEntry(e.ID),
+		})
 	}
 
 	a.render(w, "class_detail.html", classDetailData{
@@ -204,6 +215,7 @@ type entryDetailData struct {
 	Show        *Show
 	Taxons      []*Taxon
 	Scorecards  []*scorecardView
+	Media       []*Media
 }
 
 type scorecardView struct {
@@ -251,6 +263,7 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 		Show:        show,
 		Taxons:      taxons,
 		Scorecards:  scorecardViews,
+		Media:       a.store.mediaByEntry(entry.ID),
 	})
 }
 
@@ -302,7 +315,12 @@ func (a *app) handleTaxonDetail(w http.ResponseWriter, r *http.Request) {
 				if ref == taxonID {
 					person, _ := a.store.personByID(e.PersonID)
 					cls, _ := a.store.classByID(e.ClassID)
-					entries = append(entries, &entryView{Entry: e, Person: person, Class: cls})
+					entries = append(entries, &entryView{
+						Entry:  e,
+						Person: person,
+						Class:  cls,
+						Media:  a.store.mediaByEntry(e.ID),
+					})
 					break
 				}
 			}

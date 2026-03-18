@@ -171,7 +171,7 @@
   <h3>All Entries ({{len .Entries}})</h3>
   {{if .Entries}}
   <table class="table">
-    <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Placement</th><th>Points</th></tr></thead>
+    <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Placement</th><th>Points</th><th>Media</th></tr></thead>
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
@@ -180,6 +180,19 @@
         <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>
+        <td>
+          {{if .Media}}
+          <div class="tag-list">
+            {{range .Media}}
+            <a href="{{bp}}/media/{{.ID}}" class="tag" target="_blank">{{.FileName}}</a>
+            {{end}}
+          </div>
+          {{end}}
+          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" class="form form-compact" style="margin-top:.5rem;">
+            <input type="file" name="media" class="form-input form-sm" multiple required>
+            <button type="submit" class="btn btn-outline btn-sm">Upload</button>
+          </form>
+        </td>
       </tr>
       {{end}}
     </tbody>
@@ -250,4 +263,3 @@
   {{end}}
 </div>
 {{end}}
-

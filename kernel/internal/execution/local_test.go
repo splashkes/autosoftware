@@ -122,3 +122,82 @@ run:
 		t.Fatalf("expected prebuilt command %q, got %q", want, got)
 	}
 }
+
+func TestBuildLocalSpecResolvesRuntimeEnvironmentFromHost(t *testing.T) {
+	repoRoot := t.TempDir()
+	for _, dir := range []string{
+		filepath.Join(repoRoot, "genesis"),
+		filepath.Join(repoRoot, "kernel"),
+		filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-runtime", "artifacts", "app"),
+	} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+
+	manifestPath := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-runtime", "realization.yaml")
+	runtimePath := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-runtime", "artifacts", "runtime.yaml")
+	entrypointPath := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-runtime", "artifacts", "app", "main.go")
+	if err := os.WriteFile(manifestPath, []byte(strings.TrimSpace(`
+realization_id: a-runtime
+seed_id: 1234-demo
+approach_id: a-runtime
+summary: Runtime demo.
+status: draft
+artifacts:
+  - artifacts/runtime.yaml
+`)), 0644); err != nil {
+		t.Fatalf("write realization manifest: %v", err)
+	}
+	if err := os.WriteFile(runtimePath, []byte(strings.TrimSpace(`
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/app/main.go
+working_directory: artifacts/app
+run:
+  command: prebuilt
+environment:
+  APP_SECRET: ${TEST_FLOWERSHOW_SECRET}
+`)), 0644); err != nil {
+		t.Fatalf("write runtime manifest: %v", err)
+	}
+	if err := os.WriteFile(entrypointPath, []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write entrypoint: %v", err)
+	}
+	prebuiltDir := filepath.Join(repoRoot, "materialized", "realizations", "1234-demo", "a-runtime", "runtime", "prebuilt", DOKSRuntimeGOOS+"-"+DOKSRuntimeGOARCH)
+	if err := os.MkdirAll(prebuiltDir, 0755); err != nil {
+		t.Fatalf("mkdir prebuilt dir: %v", err)
+	}
+	prebuiltBinary := filepath.Join(prebuiltDir, "launch-test")
+	if err := os.WriteFile(prebuiltBinary, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("write prebuilt binary: %v", err)
+	}
+	metadata, err := json.Marshal(goPrebuiltMetadata{
+		Runtime:          "go",
+		GOOS:             DOKSRuntimeGOOS,
+		GOARCH:           DOKSRuntimeGOARCH,
+		Fingerprint:      "test",
+		Binary:           filepath.Base(prebuiltBinary),
+		Entrypoint:       "artifacts/app/main.go",
+		WorkingDirectory: "artifacts/app",
+		BuiltAt:          time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("marshal prebuilt metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(prebuiltDir, goPrebuiltMetadataFile), append(metadata, '\n'), 0644); err != nil {
+		t.Fatalf("write prebuilt metadata: %v", err)
+	}
+
+	t.Setenv("TEST_FLOWERSHOW_SECRET", "resolved-secret")
+	spec, err := BuildLocalSpec(repoRoot, "1234-demo/a-runtime", "exec_demo_456", CapabilityURLs{})
+	if err != nil {
+		t.Fatalf("BuildLocalSpec: %v", err)
+	}
+
+	joined := strings.Join(spec.Environment, "\n")
+	if !strings.Contains(joined, "APP_SECRET=resolved-secret") {
+		t.Fatalf("expected resolved host env in environment, got %q", joined)
+	}
+}
