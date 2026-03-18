@@ -74,6 +74,48 @@ func TestRealizationRoutingMiddlewarePreservesRawPathForPreviewMount(t *testing.
 	testMountedRoutingPreservesRawPath(t, "/__runs/exec_demo_123/")
 }
 
+func TestRealizationRoutingMiddlewareFallsBackToRegistryPathRouteForRegistryHost(t *testing.T) {
+	type observedRequest struct {
+		Path            string `json:"path"`
+		ForwardedPrefix string `json:"forwarded_prefix"`
+	}
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(observedRequest{
+			Path:            r.URL.Path,
+			ForwardedPrefix: r.Header.Get("X-Forwarded-Prefix"),
+		})
+	}))
+	defer backend.Close()
+
+	handler := realizationRoutingMiddleware([]realizationRoute{{
+		Reference:  "0006-registry-browser/a-ledger-reading-room",
+		PathPrefix: registryRoutePathPrefix,
+		ProxyAddr:  strings.TrimPrefix(backend.URL, "http://"),
+	}}, nil, nil, "", nil, "autosoftware.app", http.NotFoundHandler())
+
+	req := httptest.NewRequest(http.MethodGet, "http://registry.autosoftware.app/objects", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("proxy response status = %d, want 200", rec.Code)
+	}
+
+	var got observedRequest
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode proxy response: %v", err)
+	}
+
+	if got.Path != "/objects" {
+		t.Fatalf("path = %q, want %q", got.Path, "/objects")
+	}
+	if got.ForwardedPrefix != "" {
+		t.Fatalf("X-Forwarded-Prefix = %q, want empty", got.ForwardedPrefix)
+	}
+}
+
 func TestSelectLaunchTargetPrefersRoutableExecutionOverNewerQueuedExecution(t *testing.T) {
 	items := []interactions.RealizationExecution{
 		{
