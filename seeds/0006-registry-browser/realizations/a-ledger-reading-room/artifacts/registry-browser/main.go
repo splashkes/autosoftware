@@ -533,6 +533,8 @@ const (
 	publicRegistryBaseURL = "https://registry.autosoftware.app"
 	publicRegistryHost    = "registry.autosoftware.app"
 	publicAPIBaseURL      = "https://registry.autosoftware.app"
+	legacyRegistryPathRoot = "/registry/reading-room"
+	legacyRegistryPathPrefix = legacyRegistryPathRoot + "/"
 )
 
 func (app *App) loadTemplates() {
@@ -618,7 +620,7 @@ const requestedPermalinkContextKey permalinkContextKey = "requested_permalink_ha
 func (app *App) canonicalHostMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shouldRedirectToCanonicalRegistryHost(r) {
-			http.Redirect(w, r, canonicalRegistryURL(requestTargetPath(r)), http.StatusFound)
+			http.Redirect(w, r, canonicalRegistryURL(canonicalRequestTargetPath(r)), http.StatusFound)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -1088,6 +1090,26 @@ func requestTargetPath(r *http.Request) string {
 	}
 	if path == "" {
 		path = "/"
+	}
+	if r.URL.RawQuery != "" {
+		path += "?" + r.URL.RawQuery
+	}
+	return path
+}
+
+func canonicalRequestTargetPath(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return "/"
+	}
+	path := r.URL.EscapedPath()
+	if path == "" {
+		path = r.URL.Path
+	}
+	switch {
+	case path == "" || path == legacyRegistryPathRoot:
+		path = "/"
+	case strings.HasPrefix(path, legacyRegistryPathPrefix):
+		path = "/" + strings.TrimPrefix(path, legacyRegistryPathPrefix)
 	}
 	if r.URL.RawQuery != "" {
 		path += "?" + r.URL.RawQuery
