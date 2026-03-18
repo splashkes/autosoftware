@@ -34,10 +34,17 @@
             <span class="identity-label">Current</span>
             <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
           </div>
+          {{if .ShareURL}}
+          <div class="identity-row">
+            <span class="identity-label">Share</span>
+            <a href="{{hrefURL .ShareURL}}" class="identity-link">{{.ShareURL}}</a>
+          </div>
+          {{else}}
           <div class="identity-row">
             <span class="identity-label">Versioned</span>
             <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
           </div>
+          {{end}}
           {{if .SourcePath}}
           <div class="identity-row">
             <span class="identity-label">Source</span>

@@ -1160,6 +1160,32 @@ func main() {
 		}
 		http.Redirect(w, r, redirectPath, http.StatusFound)
 	})
+	mux.HandleFunc("GET /r/{hash}", func(w http.ResponseWriter, r *http.Request) {
+		if hashIndex == nil {
+			http.Error(w, "registry share lookup unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		contentHashPrefix := strings.ToLower(strings.TrimSpace(r.PathValue("hash")))
+		if len(contentHashPrefix) < registrycatalog.ShortShareHashLength || len(contentHashPrefix) > 64 {
+			http.NotFound(w, r)
+			return
+		}
+		record, err := hashIndex.ResolvePrefix(r.Context(), contentHashPrefix)
+		if err != nil {
+			if errors.Is(err, registrycatalog.ErrHashLookupNotFound) || errors.Is(err, registrycatalog.ErrHashLookupAmbiguous) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		redirectPath := registryPermalinkRedirectPath(record)
+		if strings.TrimSpace(redirectPath) == "" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, redirectPath, http.StatusFound)
+	})
 	if bootExecutionEnabled {
 		jsontransport.NewExecutionAPI(repoRoot, runtimeService).RegisterPrefix(mux, "/boot")
 	}
@@ -1752,6 +1778,8 @@ func realizationRoutingMiddleware(
 		requestPath := strings.TrimSpace(r.URL.Path)
 		registryReservedNamespace := requestPath == "/reg" ||
 			strings.HasPrefix(requestPath, "/reg/") ||
+			requestPath == "/r" ||
+			strings.HasPrefix(requestPath, "/r/") ||
 			requestPath == "/v1/registry" ||
 			strings.HasPrefix(requestPath, "/v1/registry/") ||
 			requestPath == "/v1/contracts" ||
