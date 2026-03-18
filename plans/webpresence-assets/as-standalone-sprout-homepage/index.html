@@ -62,6 +62,29 @@ body {
   z-index: 2;
 }
 
+.concept-list {
+  text-align: left;
+  margin: 14px auto 0;
+  padding-left: 18px;
+  color: #6b7080;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.concept-list li {
+  margin-top: 5px;
+}
+
+.live-seed-link {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #8a8e99;
+}
+
+.live-seed-link a {
+  color: #16a34a;
+}
+
 .divider {
   width: 32px;
   height: 1px;
@@ -363,6 +386,14 @@ body {
     <div class="wordmark">AS</div>
     <div class="tagline">autosoftware</div>
     <div class="desc">Software that evolves from within.</div>
+    <ul class="concept-list">
+      <li>User- and agent-driven growth keeps intent visible.</li>
+      <li>Code can be rerun as tools and contracts evolve.</li>
+      <li>Security and scale are centrally managed for the shared platform.</li>
+      <li>Accepted changes stay in an immutable registry for replay and rollback.</li>
+      <li>APIs are the default integration path with scoped keys for agents.</li>
+    </ul>
+    <p class="live-seed-link"><a href="https://autosoftware.app/#seed-catalog" target="_blank" rel="noopener">View active seeds and realized systems</a></p>
   </div>
 
   <div class="divider"></div>
@@ -464,7 +495,7 @@ body {
   <div id="boot-status">standalone preserved homepage mock</div>
 </div>
 
-<button class="sprout-btn" onclick="openSprout()" title="Plant a seed">
+<button class="sprout-btn" onclick="openSprout()" title="Understand this page, request improvements, or fork">
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
        stroke="currentColor" stroke-width="1.5"
        stroke-linecap="round" stroke-linejoin="round">
@@ -476,7 +507,7 @@ body {
 
 <div class="overlay" id="sprout-modal" onclick="closeSprout(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>What should change?</h2>
+    <h2>Purpose, improvements, or fork</h2>
     <input type="text" id="sprout-summary" placeholder="Summary" maxlength="120">
     <textarea id="sprout-detail" placeholder="Describe what you want to see"></textarea>
     <div class="modal-actions">

@@ -1,7 +1,13 @@
 # AS Standalone Sprout Homepage
 
-This bundle preserves a closer copy of the earlier standalone AS homepage with
-the three mocked seed options:
+This bundle preserves a closer copy of the standalone AS homepage with
+seed concepts, mutation actions, and the live seed direction messaging.
+
+For the definitive seed catalog, the active site is the preferred source:
+
+- https://autosoftware.app/#seed-catalog
+
+The mocked seed list includes:
 
 - Customer Service App
 - Event Listings
