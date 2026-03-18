@@ -1,22 +1,16 @@
 {{define "content"}}
 {{$p := .Projection}}
 <div class="page-head">
+  <div class="page-kicker">Read Model · {{$p.SeedID}}</div>
   <h2>{{$p.Name}}</h2>
   <p>{{$p.Summary}}</p>
-  <span class="api-route">GET {{.APIRoute}}</span>
-</div>
-
-<div class="detail-section">
-  <h3>Read Model Identity</h3>
-  <table class="field-table">
-    <tr><td>Name</td><td>{{$p.Name}}</td></tr>
-    <tr><td>Seed</td><td>{{$p.SeedID}}</td></tr>
-    <tr><td>Realization</td><td><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></td></tr>
-    <tr><td>Path</td><td><code>{{$p.Path}}</code></td></tr>
-    <tr><td>Auth</td><td>{{if $p.AuthModes}}{{join $p.AuthModes ", "}}{{else}}Not declared{{end}}</td></tr>
-    <tr><td>Freshness</td><td>{{$p.Freshness}}</td></tr>
-    <tr><td>Realization Contract</td><td><a href="{{hrefURL $p.Contract}}">{{$p.ContractFile}}</a> · <a href="{{repoSourceURL $p.ContractFile}}">GitHub</a></td></tr>
-  </table>
+  <div class="page-meta">
+    <span class="page-chip"><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></span>
+    <span class="page-chip">{{$p.Freshness}}</span>
+    {{if $p.AuthModes}}<span class="page-chip">{{join $p.AuthModes ", "}}</span>{{end}}
+    <span class="api-route">{{$p.Path}}</span>
+    <span class="api-route">GET {{.APIRoute}}</span>
+  </div>
 </div>
 
 {{if $p.Capabilities}}
@@ -44,4 +38,12 @@
   </ul>
 </div>
 {{end}}
+
+<div class="detail-section">
+  <h3>Definition Source</h3>
+  <table class="field-table">
+    <tr><td>Realization</td><td><a href="{{realizationPath $p.Reference}}">{{$p.Reference}}</a></td></tr>
+    <tr><td>Definition</td><td><a href="{{hrefURL $p.Contract}}">{{$p.ContractFile}}</a> · <a href="{{repoSourceURL $p.ContractFile}}">GitHub</a></td></tr>
+  </table>
+</div>
 {{end}}

@@ -1,17 +1,18 @@
 {{define "content"}}
 {{$o := .Object}}
 <div class="page-head">
+  <div class="page-kicker">Object · {{$o.SeedID}}</div>
   <h2>{{$o.Kind}}</h2>
   <p>{{$o.Summary}}</p>
-  <span class="api-route">GET {{.APIRoute}}</span>
-</div>
-
-<div class="detail-section">
-  <h3>Object Identity</h3>
-  <table class="field-table">
-    <tr><td>Seed</td><td>{{$o.SeedID}}</td></tr>
-    <tr><td>Kind</td><td>{{$o.Kind}}</td></tr>
-  </table>
+  <div class="page-meta">
+    <span class="page-chip">{{$o.SeedID}}</span>
+    <span class="page-chip">{{len $o.Realizations}} realizations</span>
+    <span class="page-chip">{{len $o.Commands}} actions</span>
+    <span class="page-chip">{{len $o.Projections}} read models</span>
+    <span class="page-chip">{{len $o.Schemas}} schemas</span>
+    {{if $o.Capabilities}}<span class="page-chip">{{len $o.Capabilities}} capabilities</span>{{end}}
+    <span class="api-route">GET {{.APIRoute}}</span>
+  </div>
 </div>
 
 {{if or $o.IncomingRelations $o.OutgoingRelations}}
@@ -24,23 +25,14 @@
 </div>
 {{end}}
 
-{{if hasDataLayout $o.DataLayout}}
-<div class="detail-section">
-  <h3>Data Layout</h3>
-  <p>This is the machine-readable shape that alternate clients should use when deciding what is shared, public, private, or runtime-only.</p>
-  <pre class="shape-block">{{layoutShape $o.DataLayout}}</pre>
-</div>
-
 {{with $o.DataLayout.SharedMetadata}}
 {{if .Fields}}
 <div class="detail-section">
   <h3>{{layoutSectionTitle "shared_metadata"}}</h3>
   {{if .Summary}}<p>{{.Summary}}</p>{{end}}
-  <table class="field-table">
-    {{range .Fields}}
-    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-    {{end}}
-  </table>
+  <div class="field-pills">
+    {{range .Fields}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+  </div>
 </div>
 {{end}}
 {{end}}
@@ -50,11 +42,9 @@
 <div class="detail-section">
   <h3>{{layoutSectionTitle "public_payload"}}</h3>
   {{if .Summary}}<p>{{.Summary}}</p>{{end}}
-  <table class="field-table">
-    {{range .Fields}}
-    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-    {{end}}
-  </table>
+  <div class="field-pills">
+    {{range .Fields}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+  </div>
 </div>
 {{end}}
 {{end}}
@@ -64,11 +54,9 @@
 <div class="detail-section">
   <h3>{{layoutSectionTitle "private_payload"}}</h3>
   {{if .Summary}}<p>{{.Summary}}</p>{{end}}
-  <table class="field-table">
-    {{range .Fields}}
-    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-    {{end}}
-  </table>
+  <div class="field-pills">
+    {{range .Fields}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+  </div>
 </div>
 {{end}}
 {{end}}
@@ -78,13 +66,10 @@
 <div class="detail-section">
   <h3>{{layoutSectionTitle "runtime_only"}}</h3>
   {{if .Summary}}<p>{{.Summary}}</p>{{end}}
-  <table class="field-table">
-    {{range .Fields}}
-    <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-    {{end}}
-  </table>
+  <div class="field-pills">
+    {{range .Fields}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+  </div>
 </div>
-{{end}}
 {{end}}
 {{end}}
 
@@ -94,26 +79,19 @@
   <ul class="resource-list">
     {{range $o.OutgoingRelations}}
     <li class="resource-item">
-      <div class="name">{{.Kind}}</div>
+      <div class="name"><code>{{$o.Kind}}</code> <span class="lineage-arrow">→</span> {{range $i, $target := .ToObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $target.Kind}}">{{$target.Kind}}</a>{{end}}</div>
       <div class="meta">
+        <span>{{.Kind}}</span>
         <span>{{.Cardinality}}</span>
         <span>{{.Visibility}}</span>
         <span>{{.RealizationID}}</span>
+        <a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "outgoing" .Kind}}">Browse targets</a>
       </div>
       {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
-      {{if .ToObjects}}
-      <div class="summary">
-        to:
-        {{range $i, $target := .ToObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $target.Kind}}">{{$target.Kind}}</a>{{end}}
-      </div>
-      {{end}}
-      <div class="read-only-notice"><a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "outgoing" .Kind}}">Browse matching target objects</a></div>
       {{if .Attributes}}
-      <table class="field-table">
-        {{range .Attributes}}
-        <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-        {{end}}
-      </table>
+      <div class="field-pills">
+        {{range .Attributes}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+      </div>
       {{end}}
     </li>
     {{end}}
@@ -127,26 +105,19 @@
   <ul class="resource-list">
     {{range $o.IncomingRelations}}
     <li class="resource-item">
-      <div class="name">{{.Kind}}</div>
+      <div class="name">{{range $i, $source := .FromObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $source.Kind}}">{{$source.Kind}}</a>{{end}} <span class="lineage-arrow">→</span> <code>{{$o.Kind}}</code></div>
       <div class="meta">
+        <span>{{.Kind}}</span>
         <span>{{.Cardinality}}</span>
         <span>{{.Visibility}}</span>
         <span>{{.RealizationID}}</span>
+        <a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "incoming" .Kind}}">Browse sources</a>
       </div>
       {{if .Summary}}<div class="summary">{{.Summary}}</div>{{end}}
-      {{if .FromObjects}}
-      <div class="summary">
-        from:
-        {{range $i, $source := .FromObjects}}{{if $i}}, {{end}}<a href="{{objectPath $.Object.SeedID $source.Kind}}">{{$source.Kind}}</a>{{end}}
-      </div>
-      {{end}}
-      <div class="read-only-notice"><a href="{{relatedObjectsPath $.Object.SeedID $.Object.Kind "incoming" .Kind}}">Browse matching source objects</a></div>
       {{if .Attributes}}
-      <table class="field-table">
-        {{range .Attributes}}
-        <tr><td>{{.Name}}</td><td><code>{{.Type}}</code><br>{{.Summary}}</td></tr>
-        {{end}}
-      </table>
+      <div class="field-pills">
+        {{range .Attributes}}<span class="field-pill"><strong>{{.Name}}</strong>{{if .Type}} <code>{{.Type}}</code>{{end}}</span>{{end}}
+      </div>
       {{end}}
     </li>
     {{end}}
@@ -226,6 +197,13 @@
     </li>
     {{end}}
   </ul>
+</div>
+{{end}}
+
+{{if hasDataLayout $o.DataLayout}}
+<div class="detail-section">
+  <h3>Raw Data Layout</h3>
+  <pre class="shape-block">{{layoutShape $o.DataLayout}}</pre>
 </div>
 {{end}}
 {{end}}
