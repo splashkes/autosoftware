@@ -17,7 +17,7 @@
   <ul class="resource-list">
     {{range $s.Objects}}
     <li class="resource-item">
-      <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <a href="{{objectPath .SeedID .Kind}}" class="name">{{.Kind}}</a>
       <div class="meta">
         <span>{{.CommandCount}} {{plural .CommandCount "action" "actions"}}</span>
         <span>{{.ProjectionCount}} {{plural .ProjectionCount "read model" "read models"}}</span>

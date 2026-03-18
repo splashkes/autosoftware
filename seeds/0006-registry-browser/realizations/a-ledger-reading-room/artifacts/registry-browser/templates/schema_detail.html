@@ -26,7 +26,7 @@
   <ul class="resource-list">
     {{range $s.ObjectUses}}
     <li class="resource-item">
-      <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <a href="{{objectPath .SeedID .Kind}}" class="name">{{.Kind}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
         <span><a href="{{realizationPath .Reference}}">{{.RealizationID}}</a></span>

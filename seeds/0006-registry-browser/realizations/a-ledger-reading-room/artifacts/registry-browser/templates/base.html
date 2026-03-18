@@ -12,14 +12,14 @@
 <body>
   <header>
     <div class="container">
-      <h1><a href="/">Ledger Reading Room</a></h1>
+      <h1><a href="{{hrefURL "/"}}">Ledger Reading Room</a></h1>
       <nav>
-        <a class="{{if eq .Nav "systems"}}active{{end}}" href="/systems">Systems</a>
-        <a class="{{if eq .Nav "objects"}}active{{end}}" href="/objects">Objects</a>
-        <a class="{{if eq .Nav "actions"}}active{{end}}" href="/actions">Actions</a>
-        <a class="{{if eq .Nav "read-models"}}active{{end}}" href="/read-models">Read Models</a>
-        <a class="{{if eq .Nav "contracts"}}active{{end}}" href="/contracts">Realizations</a>
-        <a class="{{if eq .Nav "registry-internals"}}active{{end}}" href="/registry-internals">Registry Internals</a>
+        <a class="{{if eq .Nav "systems"}}active{{end}}" href="{{hrefURL "/systems"}}">Systems</a>
+        <a class="{{if eq .Nav "objects"}}active{{end}}" href="{{hrefURL "/objects"}}">Objects</a>
+        <a class="{{if eq .Nav "actions"}}active{{end}}" href="{{hrefURL "/actions"}}">Actions</a>
+        <a class="{{if eq .Nav "read-models"}}active{{end}}" href="{{hrefURL "/read-models"}}">Read Models</a>
+        <a class="{{if eq .Nav "contracts"}}active{{end}}" href="{{hrefURL "/contracts"}}">Realizations</a>
+        <a class="{{if eq .Nav "registry-internals"}}active{{end}}" href="{{hrefURL "/registry-internals"}}">Registry Internals</a>
       </nav>
     </div>
   </header>
@@ -57,7 +57,7 @@
   </main>
   <footer>
     <div class="container">
-      <p>Read-only human-facing view of accepted registry state. Agents should use the <a href="/v1/registry/catalog">authoritative API</a> directly.</p>
+      <p>Read-only human-facing view of accepted registry state. Agents should use the <a href="{{apiURL "/v1/registry/catalog"}}">authoritative API</a> directly.</p>
     </div>
   </footer>
 </body>

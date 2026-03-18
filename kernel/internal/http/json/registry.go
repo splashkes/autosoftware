@@ -893,7 +893,7 @@ func registryDiscoveryPaths() map[string]string {
 		"object":       "/v1/registry/object?seed_id={seed_id}&kind={kind}",
 		"schemas":      "/v1/registry/schemas",
 		"schema":       "/v1/registry/schema?ref={ref}",
-		"permalink":    "/reg/{sha256}",
+		"permalink":    "https://registry.autosoftware.app/reg/{sha256}",
 		"contracts":    "/v1/contracts",
 	}
 }

@@ -5,7 +5,7 @@
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
-<form class="search-bar" method="get" action="/schemas">
+<form class="search-bar" method="get" action="{{hrefURL "/schemas"}}">
   <input type="text" name="q" value="{{.Query}}" placeholder="Search schemas...">
   {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
   <button type="submit">Search</button>
