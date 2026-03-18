@@ -28,13 +28,28 @@
       {{template "content" .}}
       {{if .PermalinkURL}}
       <details class="resource-identity">
-        <summary>Identity and hashes</summary>
-        <div class="identity-grid">
-          <span class="identity-label">Canonical</span>
-          <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
-          <span class="identity-label">Permalink</span>
-          <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
-          {{if .ContentHash}}<span class="identity-label">SHA-256</span><code class="identity-hash" title="sha256:{{.ContentHash}}">sha256:{{.ContentHash}}</code>{{end}}
+        <summary>Current and versioned links</summary>
+        <div class="identity-rows">
+          <div class="identity-row">
+            <span class="identity-label">Current</span>
+            <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
+          </div>
+          <div class="identity-row">
+            <span class="identity-label">Versioned</span>
+            <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
+          </div>
+          {{if .SourcePath}}
+          <div class="identity-row">
+            <span class="identity-label">Source</span>
+            <a href="{{repoSourceURL .SourcePath}}" class="identity-link">{{.SourcePath}}</a>
+          </div>
+          {{end}}
+          {{if .ContentHash}}
+          <div class="identity-row">
+            <span class="identity-label">SHA-256</span>
+            <code class="identity-hash" title="sha256:{{.ContentHash}}">sha256:{{.ContentHash}}</code>
+          </div>
+          {{end}}
         </div>
       </details>
       {{end}}
