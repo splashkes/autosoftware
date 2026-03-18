@@ -1,0 +1,12 @@
+approach_id: a-network-operations-hub
+summary: Operations-first calendar sync console centered on topology, health, incidents, and propagation lineage.
+status: proposed
+strategy:
+  implementation_style: operator-console
+  review_style: reliability-first
+  interface_bias: topology-and-queues
+  authority_model: hub-and-spoke
+realizer:
+  model: codex-gpt-5
+  prompt_profile: calendar-sync-operations
+  coding_ruleset: provenance-and-observability-first

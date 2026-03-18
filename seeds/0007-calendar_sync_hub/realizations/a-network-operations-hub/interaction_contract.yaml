@@ -1,0 +1,196 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0007-calendar_sync_hub
+realization_id: a-network-operations-hub
+summary: Operations-first contract for managing sync topology, event lineage, and propagation reliability across connected calendars.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - session
+  - service_token
+capabilities:
+  - name: access_links
+    summary: Inspect source, hub, and destination connectivity with health and freshness state.
+  - name: activity_events
+    summary: Trace an event from source ingestion through production approval and downstream propagation.
+  - name: jobs
+    summary: Trigger or inspect source sync runs and their resulting incidents.
+  - name: publications
+    summary: Retry, pause, or inspect per-destination propagation edges.
+  - name: risk_events
+    summary: Filter review-needed items, connector failures, and delivery errors.
+domain_objects:
+  - kind: calendar_source
+    summary: Upstream calendar or feed connected for ingestion.
+    schema_ref: ../../SCHEMA.md
+    capabilities:
+      - access_links
+      - jobs
+      - risk_events
+  - kind: calendar_destination
+    summary: Downstream calendar or feed used for outbound propagation.
+    schema_ref: ../../SCHEMA.md
+    capabilities:
+      - access_links
+      - publications
+      - risk_events
+  - kind: normalized_event
+    summary: Hub-owned normalized interpretation of inbound event data.
+    schema_ref: ../../SCHEMA.md
+    capabilities:
+      - activity_events
+      - risk_events
+  - kind: production_event
+    summary: Approved event record that serves as internal propagation authority.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+      - publications
+  - kind: propagation_edge
+    summary: Per-destination delivery state for a production event.
+    schema_ref: ../../SCHEMA.md
+    capabilities:
+      - activity_events
+      - publications
+      - risk_events
+  - kind: sync_incident
+    summary: Operator-visible sync or propagation problem requiring inspection or retry.
+    schema_ref: ../../design.md
+    capabilities:
+      - risk_events
+      - jobs
+      - publications
+commands:
+  - name: calendar_sources.register
+    summary: Register or update an upstream calendar source for ingestion.
+    path: /v1/commands/0007-calendar_sync_hub/calendar_sources.register
+    object_kinds:
+      - calendar_source
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - access_links
+      - jobs
+    projection: topology.overview
+    consistency: read_your_writes
+  - name: calendar_sources.sync_now
+    summary: Trigger an immediate sync for one source and record resulting incidents.
+    path: /v1/commands/0007-calendar_sync_hub/calendar_sources.sync_now
+    object_kinds:
+      - calendar_source
+      - normalized_event
+      - sync_incident
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../INGESTION.md
+    result_schema_ref: README.md
+    capabilities:
+      - jobs
+      - risk_events
+    projection: sync.incidents
+    consistency: eventual
+  - name: normalized_events.promote_to_production
+    summary: Approve a normalized event version as production truth for downstream propagation.
+    path: /v1/commands/0007-calendar_sync_hub/normalized_events.promote_to_production
+    object_kinds:
+      - normalized_event
+      - production_event
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+      - publications
+    projection: events.lineage_detail
+    consistency: read_your_writes
+  - name: propagation_edges.retry
+    summary: Retry a failed propagation edge for a production event.
+    path: /v1/commands/0007-calendar_sync_hub/propagation_edges.retry
+    object_kinds:
+      - propagation_edge
+      - sync_incident
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../PROPAGATION.md
+    result_schema_ref: README.md
+    capabilities:
+      - publications
+      - risk_events
+    projection: propagation.status
+    consistency: eventual
+projections:
+  - name: topology.overview
+    summary: Topology board showing connected calendars, hub state, and sync health.
+    path: /v1/projections/0007-calendar_sync_hub/topology
+    object_kinds:
+      - calendar_source
+      - calendar_destination
+      - sync_incident
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - access_links
+      - risk_events
+    freshness: materialized
+  - name: sync.incidents
+    summary: Incident queue for connector failures, review-needed items, and retry candidates.
+    path: /v1/projections/0007-calendar_sync_hub/incidents
+    object_kinds:
+      - sync_incident
+      - calendar_source
+      - propagation_edge
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - risk_events
+      - jobs
+      - publications
+    freshness: materialized
+  - name: events.lineage_detail
+    summary: Event lineage view across source records, normalized interpretation, production truth, and delivery edges.
+    path: /v1/projections/0007-calendar_sync_hub/events/{event_id}
+    object_kinds:
+      - normalized_event
+      - production_event
+      - propagation_edge
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - publications
+    freshness: materialized
+  - name: propagation.status
+    summary: Per-destination propagation board grouped by pending, pushed, and failed delivery state.
+    path: /v1/projections/0007-calendar_sync_hub/propagation
+    object_kinds:
+      - production_event
+      - propagation_edge
+      - calendar_destination
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - publications
+      - risk_events
+    freshness: materialized
+consistency:
+  write_visibility: eventual
+  projection_freshness: materialized

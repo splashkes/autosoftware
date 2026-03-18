@@ -1,0 +1,12 @@
+approach_id: b-production-calendar-workbench
+summary: Production-calendar-first workspace centered on intake review, timeline curation, and controlled publication to destinations.
+status: proposed
+strategy:
+  implementation_style: production-workbench
+  review_style: workflow-first
+  interface_bias: timeline-and-review
+  authority_model: hub-and-spoke
+realizer:
+  model: codex-gpt-5
+  prompt_profile: production-calendar-workbench
+  coding_ruleset: operator-review-and-safe-propagation

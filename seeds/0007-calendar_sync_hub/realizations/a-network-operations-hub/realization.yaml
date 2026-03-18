@@ -1,0 +1,5 @@
+realization_id: a-network-operations-hub
+seed_id: 0007-calendar_sync_hub
+approach_id: a-network-operations-hub
+summary: Draft operations-first realization for sync topology, lineage, and propagation reliability.
+status: draft
