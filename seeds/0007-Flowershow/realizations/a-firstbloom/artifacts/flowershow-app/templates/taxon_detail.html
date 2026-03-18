@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="/">Home</a> &rsaquo; <a href="/taxonomy">Taxonomy</a> &rsaquo; <span>{{.Taxon.Name}}</span>
+  <a href="{{bp}}/">Home</a> &rsaquo; <a href="{{bp}}/taxonomy">Taxonomy</a> &rsaquo; <span>{{.Taxon.Name}}</span>
 </div>
 
 <h1>{{.Taxon.Name}}</h1>
@@ -13,7 +13,7 @@
   <h2>Sub-taxa</h2>
   <div class="tag-list">
     {{range .Children}}
-    <a href="/taxonomy/{{.ID}}" class="tag">{{.Name}}</a>
+    <a href="{{bp}}/taxonomy/{{.ID}}" class="tag">{{.Name}}</a>
     {{end}}
   </div>
 </section>
@@ -27,7 +27,7 @@
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
-        <td><a href="/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
         <td>{{if .Class}}{{.Class.ClassNumber}}{{end}}</td>
         <td>{{if .Person}}{{.Person.Initials}}{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>

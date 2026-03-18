@@ -2,7 +2,7 @@
 <div class="login-container">
   <h1>Admin Login</h1>
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
-  <form method="POST" action="/admin/login" class="form login-form">
+  <form method="POST" action="{{bp}}/admin/login" class="form login-form">
     <div class="form-group">
       <label for="password">Password</label>
       <input type="password" id="password" name="password" class="form-input" required autofocus>
