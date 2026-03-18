@@ -197,7 +197,7 @@ func TestRenderLaunchingPageIncludesSharedLaunchAssetsAndProjectionPath(t *testi
 		ExecutionID: "exec_event_123",
 		Reference:   "0004-event-listings/a-ledger-web",
 		Status:      "starting",
-	}, "/event-ledger/")
+	}, "/event-ledger/", "/event-ledger/")
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
@@ -207,12 +207,53 @@ func TestRenderLaunchingPageIncludesSharedLaunchAssetsAndProjectionPath(t *testi
 		`src="/assets/launch-state.js"`,
 		`data-projection-path="/boot/projections/realization-execution/sessions/exec_event_123"`,
 		`data-refresh-path="/event-ledger/"`,
+		`href="/event-ledger/"`,
 		`Permanent Route`,
 		`View Home`,
 	}
 	for _, want := range wantContains {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected body to contain %q, got %q", want, body)
+		}
+	}
+}
+
+func TestRenderLaunchingPageMountedRouteDoesNotDoublePrefixRouteLinks(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/flowershow/shows/spring-rose-show-2025", nil)
+	rec := httptest.NewRecorder()
+
+	renderLaunchingPage(rec, req, launchTarget{
+		ExecutionID: "exec_flowershow_123",
+		Reference:   "0007-Flowershow/a-firstbloom",
+		Status:      "launch_requested",
+	}, "/flowershow/shows/spring-rose-show-2025", "/flowershow/")
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	body := rec.Body.String()
+	wantContains := []string{
+		`href="/assets/sprout-logo.css"`,
+		`src="/assets/launch-state.js"`,
+		`data-refresh-path="/flowershow/shows/spring-rose-show-2025"`,
+		`href="/flowershow/shows/spring-rose-show-2025"`,
+		`href="/flowershow/"`,
+	}
+	wantAbsent := []string{
+		`/flowershow/flowershow/shows/spring-rose-show-2025`,
+		`href="/flowershow/assets/sprout-logo.css"`,
+		`src="/flowershow/assets/launch-state.js"`,
+	}
+
+	for _, want := range wantContains {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected body to contain %q, got %q", want, body)
+		}
+	}
+	for _, absent := range wantAbsent {
+		if strings.Contains(body, absent) {
+			t.Fatalf("expected body not to contain %q, got %q", absent, body)
 		}
 	}
 }
