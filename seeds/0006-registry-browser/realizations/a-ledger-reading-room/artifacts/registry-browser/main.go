@@ -532,7 +532,7 @@ const (
 	repoBlobBaseURL       = "https://github.com/splashkes/autosoftware/blob/main/"
 	publicRegistryBaseURL = "https://registry.autosoftware.app"
 	publicRegistryHost    = "registry.autosoftware.app"
-	publicAPIBaseURL      = "https://api.autosoftware.app"
+	publicAPIBaseURL      = "https://registry.autosoftware.app"
 )
 
 func (app *App) loadTemplates() {

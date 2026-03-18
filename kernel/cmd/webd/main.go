@@ -1749,27 +1749,39 @@ func realizationRoutingMiddleware(
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestHost := normalizedHost(r.Host)
+		requestPath := strings.TrimSpace(r.URL.Path)
+		registryReservedNamespace := requestPath == "/reg" ||
+			strings.HasPrefix(requestPath, "/reg/") ||
+			requestPath == "/v1/registry" ||
+			strings.HasPrefix(requestPath, "/v1/registry/") ||
+			requestPath == "/v1/contracts" ||
+			strings.HasPrefix(requestPath, "/v1/contracts/")
 		if registryHost = normalizedHost(registryHost); registryHost != "" && requestHost == registryHost {
-			if route, ok := subdomainMap["registry"]; ok {
-				proxyToRealization(route, w, r)
-				return
-			}
-			for _, route := range routes {
-				if normalizeRoutePrefix(route.PathPrefix) == registryRoutePathPrefix {
+			if !registryReservedNamespace {
+				if route, ok := subdomainMap["registry"]; ok {
 					proxyToRealization(route, w, r)
 					return
 				}
+				for _, route := range routes {
+					if normalizeRoutePrefix(route.PathPrefix) == registryRoutePathPrefix {
+						proxyToRealization(route, w, r)
+						return
+					}
+				}
+				r = prefixMountedRequestPath(r, registryRoutePathPrefix)
 			}
-			r = prefixMountedRequestPath(r, registryRoutePathPrefix)
 		}
 
 		// Subdomain takes priority.
 		if sub := extractSubdomain(requestHost, baseDomain); sub != "" {
+			skipRegistrySubdomainProxy := sub == "registry" && registryReservedNamespace
 			if route, ok := subdomainMap[sub]; ok {
-				proxyToRealization(route, w, r)
-				return
+				if !skipRegistrySubdomainProxy {
+					proxyToRealization(route, w, r)
+					return
+				}
 			}
-			if sub == "registry" {
+			if sub == "registry" && !skipRegistrySubdomainProxy {
 				for _, route := range routes {
 					if normalizeRoutePrefix(route.PathPrefix) == registryRoutePathPrefix {
 						proxyToRealization(route, w, r)
