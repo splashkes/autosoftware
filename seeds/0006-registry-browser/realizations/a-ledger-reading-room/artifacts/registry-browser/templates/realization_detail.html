@@ -1,22 +1,18 @@
 {{define "content"}}
 {{$r := .Realization}}
 <div class="page-head">
+  <div class="page-kicker">Realization · {{$r.SeedID}}</div>
   <h2>{{$r.RealizationID}}</h2>
   <p>{{$r.Summary}}</p>
-  <span class="api-route">GET {{.APIRoute}}</span>
-</div>
-
-<div class="detail-section">
-  <h3>Realization Identity</h3>
-  <table class="field-table">
-    <tr><td>Reference</td><td>{{$r.Reference}}</td></tr>
-    <tr><td>Seed</td><td>{{$r.SeedID}}</td></tr>
-    <tr><td>Realization</td><td>{{$r.RealizationID}}</td></tr>
-    <tr><td>Approach</td><td>{{$r.ApproachID}}</td></tr>
-    <tr><td>Status</td><td>{{$r.Status}}</td></tr>
-    <tr><td>Surface Kind</td><td>{{$r.SurfaceKind}}</td></tr>
-    <tr><td>Realization Definition</td><td><a href="{{hrefURL $r.Contract}}">{{$r.ContractFile}}</a> · <a href="{{repoSourceURL $r.ContractFile}}">GitHub</a></td></tr>
-  </table>
+  <div class="page-meta">
+    <span class="page-chip">{{$r.Status}}</span>
+    <span class="page-chip">{{$r.SurfaceKind}}</span>
+    {{if $r.ApproachID}}<span class="page-chip">{{$r.ApproachID}}</span>{{end}}
+    <span class="page-chip">{{len $r.Objects}} objects</span>
+    <span class="page-chip">{{len $r.Commands}} actions</span>
+    <span class="page-chip">{{len $r.Projections}} read models</span>
+    <span class="api-route">GET {{.APIRoute}}</span>
+  </div>
 </div>
 
 {{if $r.AuthModes}}
@@ -115,4 +111,12 @@
   </ul>
 </div>
 {{end}}
+
+<div class="detail-section">
+  <h3>Definition Source</h3>
+  <table class="field-table">
+    <tr><td>Reference</td><td><code>{{$r.Reference}}</code></td></tr>
+    <tr><td>Definition</td><td><a href="{{hrefURL $r.Contract}}">{{$r.ContractFile}}</a> · <a href="{{repoSourceURL $r.ContractFile}}">GitHub</a></td></tr>
+  </table>
+</div>
 {{end}}

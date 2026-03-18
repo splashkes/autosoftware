@@ -25,16 +25,19 @@
   </header>
   <main>
     <div class="container">
-      {{if .PermalinkURL}}
-      <aside class="resource-identity">
-        <span class="identity-label">Canonical</span>
-        <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
-        <span class="identity-label">Permalink</span>
-        <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
-        {{if .ContentHash}}<code class="identity-hash">sha256:{{.ContentHash}}</code>{{end}}
-      </aside>
-      {{end}}
       {{template "content" .}}
+      {{if .PermalinkURL}}
+      <details class="resource-identity">
+        <summary>Identity and hashes</summary>
+        <div class="identity-grid">
+          <span class="identity-label">Canonical</span>
+          <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
+          <span class="identity-label">Permalink</span>
+          <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
+          {{if .ContentHash}}<span class="identity-label">SHA-256</span><code class="identity-hash" title="sha256:{{.ContentHash}}">sha256:{{.ContentHash}}</code>{{end}}
+        </div>
+      </details>
+      {{end}}
     </div>
   </main>
   <footer>

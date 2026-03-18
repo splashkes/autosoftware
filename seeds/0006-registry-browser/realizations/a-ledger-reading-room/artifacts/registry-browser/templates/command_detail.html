@@ -1,22 +1,17 @@
 {{define "content"}}
 {{$c := .Command}}
 <div class="page-head">
+  <div class="page-kicker">Action · {{$c.SeedID}}</div>
   <h2>{{$c.Name}}</h2>
   <p>{{$c.Summary}}</p>
-  <span class="api-route">GET {{.APIRoute}}</span>
-</div>
-
-<div class="detail-section">
-  <h3>What This Action Is</h3>
-  <table class="field-table">
-    <tr><td>Name</td><td>{{$c.Name}}</td></tr>
-    <tr><td>Seed</td><td>{{$c.SeedID}}</td></tr>
-    <tr><td>Realization</td><td><a href="{{realizationPath $c.Reference}}">{{$c.RealizationID}}</a></td></tr>
-    <tr><td>Path</td><td><code>{{$c.Path}}</code></td></tr>
-    <tr><td>Idempotency</td><td>{{$c.Idempotency}}</td></tr>
-    <tr><td>Consistency</td><td>{{$c.Consistency}}</td></tr>
-    <tr><td>Realization Contract</td><td><a href="{{hrefURL $c.Contract}}">{{$c.ContractFile}}</a> · <a href="{{repoSourceURL $c.ContractFile}}">GitHub</a></td></tr>
-  </table>
+  <div class="page-meta">
+    <span class="page-chip"><a href="{{realizationPath $c.Reference}}">{{$c.RealizationID}}</a></span>
+    <span class="page-chip">{{$c.Idempotency}}</span>
+    <span class="page-chip">{{$c.Consistency}}</span>
+    {{if $c.AuthModes}}<span class="page-chip">{{join $c.AuthModes ", "}}</span>{{end}}
+    <span class="api-route">{{$c.Path}}</span>
+    <span class="api-route">GET {{.APIRoute}}</span>
+  </div>
 </div>
 
 {{if $c.AuthModes}}
@@ -47,4 +42,12 @@
   <p><a href="{{projectionPath $c.Reference $c.Projection}}">{{$c.Projection}}</a></p>
 </div>
 {{end}}
+
+<div class="detail-section">
+  <h3>Definition Source</h3>
+  <table class="field-table">
+    <tr><td>Realization</td><td><a href="{{realizationPath $c.Reference}}">{{$c.Reference}}</a></td></tr>
+    <tr><td>Definition</td><td><a href="{{hrefURL $c.Contract}}">{{$c.ContractFile}}</a> · <a href="{{repoSourceURL $c.ContractFile}}">GitHub</a></td></tr>
+  </table>
+</div>
 {{end}}
