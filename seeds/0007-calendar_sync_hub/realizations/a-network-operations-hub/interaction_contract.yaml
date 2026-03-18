@@ -90,7 +90,7 @@ commands:
     auth_modes:
       - session
       - service_token
-    idempotency: best_effort
+    idempotency: recommended
     input_schema_ref: ../../INGESTION.md
     result_schema_ref: README.md
     capabilities:
@@ -124,7 +124,7 @@ commands:
     auth_modes:
       - session
       - service_token
-    idempotency: best_effort
+    idempotency: recommended
     input_schema_ref: ../../PROPAGATION.md
     result_schema_ref: README.md
     capabilities:
