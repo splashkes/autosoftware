@@ -582,7 +582,7 @@ cause={{.ReasonCode}}{{end}}</pre>
 
       <div class="actions">
         {{if .RefreshPath}}<a class="action primary" href="{{.RefreshPath}}">Refresh now</a>{{end}}
-        <a class="action" href="/">View Home</a>
+        <a class="action" href="{{.HomePath}}">View Home</a>
       </div>
     </section>
   </main>
@@ -1070,7 +1070,9 @@ type realizationUnavailableView struct {
 	RemediationTarget       string
 	RemediationHint         string
 	RouteDescription        string
+	MountPrefix             string
 	RefreshPath             string
+	HomePath                string
 	RefreshAfter            int
 	ExecutionProjectionPath string
 }
@@ -1875,7 +1877,7 @@ func realizationRoutingMiddleware(
 						http.Redirect(w, r, targetPath, http.StatusFound)
 						return
 					}
-					renderLaunchingPage(w, r, existingLaunch, currentRequestTarget(r))
+					renderLaunchingPage(w, r, existingLaunch, currentRequestTarget(r), matchedPrefix)
 					return
 				}
 				if launchExecution, err := enqueueLaunchForMissingPath(r.Context(), runtimeService, repoRoot, reference, r); err == nil {
@@ -1883,7 +1885,7 @@ func realizationRoutingMiddleware(
 						ExecutionID: launchExecution.ExecutionID,
 						Reference:   launchExecution.Reference,
 						Status:      launchExecution.Status,
-					}, currentRequestTarget(r))
+					}, currentRequestTarget(r), matchedPrefix)
 					return
 				} else if err != nil {
 					log.Printf("warning: could not auto-launch %s for path %s: %v", reference, r.URL.Path, err)
@@ -2458,7 +2460,7 @@ func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w 
 			ExecutionID: execution.ExecutionID,
 			Reference:   execution.Reference,
 			Status:      execution.Status,
-		}, currentRequestTarget(r))
+		}, currentRequestTarget(r), "")
 		return true
 	}
 	renderUnavailablePage(w, r, realizationUnavailableView{
@@ -2472,6 +2474,7 @@ func renderInactiveExecutionPage(runtimeService *interactions.RuntimeService, w 
 			"This realization is not active on a live route right now. If the execution can be restored, this screen will retry automatically; if it was terminated, the cause is shown here.",
 		),
 		RouteDescription: strings.TrimSpace(execution.PreviewPathPrefix),
+		MountPrefix:      strings.TrimSpace(execution.PreviewPathPrefix),
 	})
 	return true
 }
@@ -2491,10 +2494,11 @@ func renderSuspensionPage(w http.ResponseWriter, r *http.Request, item interacti
 		RemediationTarget: strings.TrimSpace(item.RemediationTarget),
 		RemediationHint:   strings.TrimSpace(item.RemediationHint),
 		RouteDescription:  routeDescription,
+		MountPrefix:       strings.TrimSpace(item.RoutePathPrefix),
 	})
 }
 
-func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTarget, refreshPath string) {
+func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTarget, refreshPath, mountPrefix string) {
 	reference := firstNonEmpty(strings.TrimSpace(target.Reference), "Unknown realization")
 	message := "The kernel is launching this realization. The stable URL will refresh automatically when the route is ready."
 	switch strings.TrimSpace(target.Status) {
@@ -2511,6 +2515,7 @@ func renderLaunchingPage(w http.ResponseWriter, r *http.Request, target launchTa
 		ReasonCode:              "launch_in_progress",
 		Message:                 message,
 		RouteDescription:        firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
+		MountPrefix:             strings.TrimSpace(mountPrefix),
 		RefreshPath:             firstNonEmpty(strings.TrimSpace(refreshPath), currentRequestTarget(r)),
 		RefreshAfter:            2,
 		ExecutionProjectionPath: executionSessionProjectionPath(strings.TrimSpace(target.ExecutionID)),
@@ -2523,6 +2528,12 @@ func renderUnavailablePage(w http.ResponseWriter, r *http.Request, view realizat
 	}
 	if view.Message == "" {
 		view.Message = "This realization is not currently available."
+	}
+	view.MountPrefix = normalizeRoutePrefix(view.MountPrefix)
+	view.RefreshPath = prefixedMountedPath(strings.TrimSpace(view.RefreshPath), view.MountPrefix)
+	view.HomePath = prefixedMountedPath("/", view.MountPrefix)
+	if view.HomePath == "" {
+		view.HomePath = "/"
 	}
 	var body bytes.Buffer
 	if err := realizationUnavailableTemplate.Execute(&body, view); err != nil {
