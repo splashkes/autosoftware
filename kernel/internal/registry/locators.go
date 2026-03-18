@@ -127,7 +127,7 @@ func PermalinkResolvePath(canonicalURL, contentHash string) string {
 	if canonicalPath == "" || contentHash == "" {
 		return ""
 	}
-	return publicRegistryURL("/@sha256-" + contentHash + canonicalPath)
+	return publicRegistryURL("/@" + contentHash + canonicalPath)
 }
 
 func IsSHA256Hex(value string) bool {
