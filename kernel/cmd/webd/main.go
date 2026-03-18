@@ -2333,6 +2333,32 @@ func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
 		`data-copy='/`, `data-copy='`+prefix,
 	).Replace(string(body))
 
+	doublePrefix := strings.TrimSuffix(mountPrefix, "/") + mountPrefix
+	rewritten = strings.NewReplacer(
+		`href="`+doublePrefix, `href="`+mountPrefix,
+		`href='`+doublePrefix, `href='`+mountPrefix,
+		`src="`+doublePrefix, `src="`+mountPrefix,
+		`src='`+doublePrefix, `src='`+mountPrefix,
+		`action="`+doublePrefix, `action="`+mountPrefix,
+		`action='`+doublePrefix, `action='`+mountPrefix,
+		`formaction="`+doublePrefix, `formaction="`+mountPrefix,
+		`formaction='`+doublePrefix, `formaction='`+mountPrefix,
+		`hx-get="`+doublePrefix, `hx-get="`+mountPrefix,
+		`hx-get='`+doublePrefix, `hx-get='`+mountPrefix,
+		`hx-post="`+doublePrefix, `hx-post="`+mountPrefix,
+		`hx-post='`+doublePrefix, `hx-post='`+mountPrefix,
+		`hx-put="`+doublePrefix, `hx-put="`+mountPrefix,
+		`hx-put='`+doublePrefix, `hx-put='`+mountPrefix,
+		`hx-delete="`+doublePrefix, `hx-delete="`+mountPrefix,
+		`hx-delete='`+doublePrefix, `hx-delete='`+mountPrefix,
+		`hx-patch="`+doublePrefix, `hx-patch="`+mountPrefix,
+		`hx-patch='`+doublePrefix, `hx-patch='`+mountPrefix,
+		`sse-connect="`+doublePrefix, `sse-connect="`+mountPrefix,
+		`sse-connect='`+doublePrefix, `sse-connect='`+mountPrefix,
+		`data-copy="`+doublePrefix, `data-copy="`+mountPrefix,
+		`data-copy='`+doublePrefix, `data-copy='`+mountPrefix,
+	).Replace(rewritten)
+
 	reserved := strings.TrimSuffix(mountPrefix, "/") + "/__"
 	rewritten = strings.NewReplacer(
 		`href="`+reserved, `href="/__`,

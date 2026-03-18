@@ -240,6 +240,33 @@ func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
 	}
 }
 
+func TestRewriteMountedHTMLDoesNotDoublePrefixMountedPaths(t *testing.T) {
+	body := []byte(`<link rel="stylesheet" href="/flowershow/assets/app.css"><a href="/flowershow/shows/spring-rose-show-2025">Show</a><script src="/flowershow/assets/app.js"></script>`)
+	got := string(rewriteMountedHTML(body, "/flowershow/"))
+
+	wantContains := []string{
+		`href="/flowershow/assets/app.css"`,
+		`href="/flowershow/shows/spring-rose-show-2025"`,
+		`src="/flowershow/assets/app.js"`,
+	}
+	wantAbsent := []string{
+		`/flowershow/flowershow/assets/app.css`,
+		`/flowershow/flowershow/shows/spring-rose-show-2025`,
+		`/flowershow/flowershow/assets/app.js`,
+	}
+
+	for _, want := range wantContains {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected rewritten HTML to contain %q, got %q", want, got)
+		}
+	}
+	for _, absent := range wantAbsent {
+		if strings.Contains(got, absent) {
+			t.Fatalf("expected rewritten HTML not to contain %q, got %q", absent, got)
+		}
+	}
+}
+
 func TestMountedRealizationContentSecurityPolicyAllowsCurrentRealizationAssets(t *testing.T) {
 	csp := mountedRealizationContentSecurityPolicy()
 
