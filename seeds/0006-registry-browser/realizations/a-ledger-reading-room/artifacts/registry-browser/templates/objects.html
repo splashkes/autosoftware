@@ -5,7 +5,7 @@
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
-<form class="search-bar" method="get" action="/objects">
+<form class="search-bar" method="get" action="{{hrefURL "/objects"}}">
   <input type="text" name="q" value="{{.Query}}" placeholder="Search objects...">
   {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
   {{if .SchemaRef}}<input type="hidden" name="schema_ref" value="{{.SchemaRef}}">{{end}}
@@ -44,7 +44,7 @@
 <ul class="resource-list">
   {{range .Objects}}
   <li class="resource-item">
-    <a href="/objects/{{pathEscape .SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+    <a href="{{objectPath .SeedID .Kind}}" class="name">{{.Kind}}</a>
     <div class="meta">
       <span>{{.SeedID}}</span>
       <span>{{.RealizationCount}} {{plural .RealizationCount "realization" "realizations"}}</span>

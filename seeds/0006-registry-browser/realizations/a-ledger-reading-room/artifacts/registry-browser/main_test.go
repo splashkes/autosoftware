@@ -94,8 +94,8 @@ func newMockRegistry() *httptest.Server {
 					Commands:     []ResourceLink{{Name: "notes.create"}, {Name: "notes.update"}},
 					Projections:  []ResourceLink{{Name: "notes.room"}},
 					Self:         "/v1/registry/realization?reference=0001-notepad%2Fa-go-htmx",
-					CanonicalURL: "/contracts/0001-notepad/a-go-htmx",
-					PermalinkURL: "/reg/" + realizationHash,
+					CanonicalURL: "https://registry.autosoftware.app/contracts/0001-notepad/a-go-htmx",
+					PermalinkURL: "https://registry.autosoftware.app/reg/" + realizationHash,
 					ContentHash:  realizationHash,
 				},
 			})
@@ -287,8 +287,8 @@ func newMockRegistry() *httptest.Server {
 						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Kind: "shared_note", Summary: "A shared note"},
 					},
 					Self:         "/v1/registry/schema?ref=seeds%2F0001-notepad%2Fdesign.md",
-					CanonicalURL: "/schemas/seeds%2F0001-notepad%2Fdesign.md",
-					PermalinkURL: "/reg/" + schemaHash,
+					CanonicalURL: "https://registry.autosoftware.app/schemas/seeds/0001-notepad/design.md",
+					PermalinkURL: "https://registry.autosoftware.app/reg/" + schemaHash,
 					ContentHash:  schemaHash,
 				},
 			})
@@ -304,49 +304,49 @@ func newMockRegistry() *httptest.Server {
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "realization",
-				CanonicalURL: "/contracts/0001-notepad/a-go-htmx",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/contracts/0001-notepad/a-go-htmx",
+				CanonicalURL: "https://registry.autosoftware.app/contracts/0001-notepad/a-go-htmx",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/contracts/0001-notepad/a-go-htmx",
 			}})
 		case commandCreateHash:
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "command",
-				CanonicalURL: "/actions/0001-notepad/a-go-htmx/notes.create",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.create",
+				CanonicalURL: "https://registry.autosoftware.app/actions/0001-notepad/a-go-htmx/notes.create",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.create",
 			}})
 		case commandUpdateHash:
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "command",
-				CanonicalURL: "/actions/0001-notepad/a-go-htmx/notes.update",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.update",
+				CanonicalURL: "https://registry.autosoftware.app/actions/0001-notepad/a-go-htmx/notes.update",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/actions/0001-notepad/a-go-htmx/notes.update",
 			}})
 		case projectionHash:
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "projection",
-				CanonicalURL: "/read-models/0001-notepad/a-go-htmx/notes.room",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/read-models/0001-notepad/a-go-htmx/notes.room",
+				CanonicalURL: "https://registry.autosoftware.app/read-models/0001-notepad/a-go-htmx/notes.room",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/read-models/0001-notepad/a-go-htmx/notes.room",
 			}})
 		case objectHash:
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "object",
-				CanonicalURL: "/objects/0001-notepad/shared_note",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/objects/0001-notepad/shared_note",
+				CanonicalURL: "https://registry.autosoftware.app/objects/0001-notepad/shared_note",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/objects/0001-notepad/shared_note",
 			}})
 		case schemaHash:
 			json.NewEncoder(w).Encode(map[string]any{"lookup": HashLookupDetail{
 				ContentHash:  hash,
 				ResourceKind: "schema",
-				CanonicalURL: "/schemas/seeds%2F0001-notepad%2Fdesign.md",
-				PermalinkURL: "/reg/" + hash,
-				RedirectURL:  "/@sha256-" + hash + "/schemas/seeds%2F0001-notepad%2Fdesign.md",
+				CanonicalURL: "https://registry.autosoftware.app/schemas/seeds/0001-notepad/design.md",
+				PermalinkURL: "https://registry.autosoftware.app/reg/" + hash,
+				RedirectURL:  "https://registry.autosoftware.app/@sha256-" + hash + "/schemas/seeds/0001-notepad/design.md",
 			}})
 		default:
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
@@ -794,7 +794,7 @@ func TestCommandDetailPermalinkPage(t *testing.T) {
 		t.Fatalf("unexpected ETag %q", got)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<link rel="canonical" href="/actions/0001-notepad/a-go-htmx/notes.create">`) {
+	if !strings.Contains(body, `<link rel="canonical" href="https://registry.autosoftware.app/actions/0001-notepad/a-go-htmx/notes.create">`) {
 		t.Fatal("command permalink page missing canonical link tag")
 	}
 	if !strings.Contains(body, "/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create") {
@@ -818,8 +818,26 @@ func TestRegistryShortPermalinkRedirect(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("short permalink returned %d", rec.Code)
 	}
-	if got, want := rec.Header().Get("Location"), "/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create"; got != want {
+	if got, want := rec.Header().Get("Location"), "https://registry.autosoftware.app/@sha256-"+hash+"/actions/0001-notepad/a-go-htmx/notes.create"; got != want {
 		t.Fatalf("short permalink redirect = %q, want %q", got, want)
+	}
+}
+
+func TestCanonicalHostRedirectsLegacyMountRequests(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "http://autosoftware.app/systems?q=registry", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("legacy host request returned %d", rec.Code)
+	}
+	if got, want := rec.Header().Get("Location"), "https://registry.autosoftware.app/systems?q=registry"; got != want {
+		t.Fatalf("legacy host redirect = %q, want %q", got, want)
 	}
 }
 
@@ -1076,7 +1094,7 @@ func TestSchemaDetailMissingRef(t *testing.T) {
 
 func TestBrowseSchemaPath(t *testing.T) {
 	got := string(browseSchemaPath("seeds/0001-notepad/design.md"))
-	want := "/schemas/seeds%2F0001-notepad%2Fdesign.md"
+	want := "https://registry.autosoftware.app/schemas/seeds/0001-notepad/design.md"
 	if got != want {
 		t.Fatalf("browseSchemaPath() = %q, want %q", got, want)
 	}

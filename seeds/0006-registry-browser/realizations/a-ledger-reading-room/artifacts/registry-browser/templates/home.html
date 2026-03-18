@@ -5,27 +5,27 @@
 </div>
 
 <div class="card-grid">
-  <a href="/systems" class="card">
+  <a href="{{hrefURL "/systems"}}" class="card">
     <div class="count">{{len .DomainSystems}}</div>
     <div class="label">{{plural (len .DomainSystems) "System" "Systems"}}</div>
   </a>
-  <a href="/objects" class="card">
+  <a href="{{hrefURL "/objects"}}" class="card">
     <div class="count">{{.Summary.Objects}}</div>
     <div class="label">Objects</div>
   </a>
-  <a href="/actions" class="card">
+  <a href="{{hrefURL "/actions"}}" class="card">
     <div class="count">{{.Summary.Commands}}</div>
     <div class="label">Actions</div>
   </a>
-  <a href="/read-models" class="card">
+  <a href="{{hrefURL "/read-models"}}" class="card">
     <div class="count">{{.Summary.Projections}}</div>
     <div class="label">Read Models</div>
   </a>
-  <a href="/contracts" class="card">
+  <a href="{{hrefURL "/contracts"}}" class="card">
     <div class="count">{{.Summary.Realizations}}</div>
     <div class="label">Realizations</div>
   </a>
-  <a href="/registry-internals" class="card">
+  <a href="{{hrefURL "/registry-internals"}}" class="card">
     <div class="count">{{len .InternalSystems}}</div>
     <div class="label">Registry Internals</div>
   </a>
@@ -37,7 +37,7 @@
   <ul class="resource-list">
     {{range .DomainSystems}}
     <li class="resource-item">
-      <a href="/systems/{{pathEscape .SeedID}}" class="name">{{.Title}}</a>
+      <a href="{{systemPath .SeedID}}" class="name">{{.Title}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
         {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}
@@ -59,7 +59,7 @@
   <ul class="resource-list">
     {{range .InternalSystems}}
     <li class="resource-item">
-      <a href="/registry-internals" class="name">{{.Title}}</a>
+      <a href="{{hrefURL "/registry-internals"}}" class="name">{{.Title}}</a>
       <div class="meta">
         <span>{{.SeedID}}</span>
         <span>{{.ObjectCount}} {{plural .ObjectCount "object" "objects"}}</span>

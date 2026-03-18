@@ -11,6 +11,8 @@ import (
 
 var ErrHashLookupNotFound = errors.New("registry hash not found")
 
+const publicRegistryBaseURL = "https://registry.autosoftware.app"
+
 type ResourceLocator struct {
 	ResourceKind string
 	CanonicalURL string
@@ -63,33 +65,52 @@ func ResourceContentHash(kind string, payload any) string {
 func BrowseRealizationPath(reference string) string {
 	seedID, realizationID, ok := splitBrowseReference(reference)
 	if !ok {
-		return "/contracts/" + url.PathEscape(reference)
+		return publicRegistryURL("/contracts/" + url.PathEscape(reference))
 	}
-	return "/contracts/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID)
+	return publicRegistryURL("/contracts/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID))
 }
 
 func BrowseCommandPath(reference, name string) string {
 	seedID, realizationID, ok := splitBrowseReference(reference)
 	if !ok {
-		return "/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+		return publicRegistryURL("/actions/" + url.PathEscape(reference) + "/" + url.PathEscape(name))
 	}
-	return "/actions/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+	return publicRegistryURL("/actions/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name))
 }
 
 func BrowseProjectionPath(reference, name string) string {
 	seedID, realizationID, ok := splitBrowseReference(reference)
 	if !ok {
-		return "/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name)
+		return publicRegistryURL("/read-models/" + url.PathEscape(reference) + "/" + url.PathEscape(name))
 	}
-	return "/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name)
+	return publicRegistryURL("/read-models/" + url.PathEscape(seedID) + "/" + url.PathEscape(realizationID) + "/" + url.PathEscape(name))
 }
 
 func BrowseObjectPath(seedID, kind string) string {
-	return "/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind)
+	return publicRegistryURL("/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind))
 }
 
 func BrowseSchemaPath(ref string) string {
-	return "/schemas/" + url.PathEscape(strings.TrimSpace(ref))
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return publicRegistryURL("/schemas")
+	}
+	pathPart, anchorPart, _ := strings.Cut(ref, "#")
+	pathPart = strings.Trim(pathPart, "/")
+	segments := strings.Split(pathPart, "/")
+	escapedSegments := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			continue
+		}
+		escapedSegments = append(escapedSegments, url.PathEscape(segment))
+	}
+	browsePath := "/schemas/" + strings.Join(escapedSegments, "/")
+	if anchorPart = strings.TrimSpace(anchorPart); anchorPart != "" {
+		browsePath += "/anchors/" + url.PathEscape(anchorPart)
+	}
+	return publicRegistryURL(browsePath)
 }
 
 func PermalinkBrowsePath(contentHash string) string {
@@ -97,16 +118,16 @@ func PermalinkBrowsePath(contentHash string) string {
 	if contentHash == "" {
 		return ""
 	}
-	return "/reg/" + contentHash
+	return publicRegistryURL("/reg/" + contentHash)
 }
 
 func PermalinkResolvePath(canonicalURL, contentHash string) string {
-	canonicalURL = strings.TrimSpace(canonicalURL)
 	contentHash = strings.ToLower(strings.TrimSpace(contentHash))
-	if canonicalURL == "" || contentHash == "" {
+	canonicalPath := registryPath(canonicalURL)
+	if canonicalPath == "" || contentHash == "" {
 		return ""
 	}
-	return "/@sha256-" + contentHash + canonicalURL
+	return publicRegistryURL("/@sha256-" + contentHash + canonicalPath)
 }
 
 func IsSHA256Hex(value string) bool {
@@ -133,6 +154,45 @@ func resourceLocator(kind, canonicalURL string, payload any) ResourceLocator {
 		PermalinkURL: PermalinkBrowsePath(contentHash),
 		ContentHash:  contentHash,
 	}
+}
+
+func publicRegistryURL(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return publicRegistryBaseURL
+	}
+	if parsed, err := url.Parse(path); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return parsed.String()
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return publicRegistryBaseURL + path
+}
+
+func registryPath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		path := parsed.EscapedPath()
+		if path == "" {
+			path = parsed.Path
+		}
+		if path == "" {
+			return ""
+		}
+		if parsed.RawQuery != "" {
+			path += "?" + parsed.RawQuery
+		}
+		return path
+	}
+	if !strings.HasPrefix(value, "/") {
+		return ""
+	}
+	return value
 }
 
 func splitBrowseReference(reference string) (string, string, bool) {

@@ -528,7 +528,12 @@ type App struct {
 	tmpl     map[string]*template.Template
 }
 
-const repoBlobBaseURL = "https://github.com/splashkes/autosoftware/blob/main/"
+const (
+	repoBlobBaseURL       = "https://github.com/splashkes/autosoftware/blob/main/"
+	publicRegistryBaseURL = "https://registry.autosoftware.app"
+	publicRegistryHost    = "registry.autosoftware.app"
+	publicAPIBaseURL      = "https://api.autosoftware.app"
+)
 
 func (app *App) loadTemplates() {
 	funcMap := template.FuncMap{
@@ -536,6 +541,7 @@ func (app *App) loadTemplates() {
 		"pathEscape": func(s string) string {
 			return url.PathEscape(s)
 		},
+		"systemPath":         browseSystemPath,
 		"objectPath":         browseObjectPath,
 		"objectsPath":        browseObjectsPath,
 		"relatedObjectsPath": browseRelatedObjectsPath,
@@ -544,6 +550,7 @@ func (app *App) loadTemplates() {
 		"projectionPath":     browseProjectionPath,
 		"schemaPath":         browseSchemaPath,
 		"hrefURL":            trustedURL,
+		"apiURL":             trustedAPIURL,
 		"repoSourceURL":      repoSourceURL,
 		"queryEscape": func(s string) string {
 			return url.QueryEscape(s)
@@ -601,12 +608,22 @@ func (app *App) renderError(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `<!doctype html><html><head><title>Error</title>
 <link rel="stylesheet" href="/assets/style.css"></head>
-<body><div class="container"><h1>%d</h1><p>%s</p><p><a href="/">Back to home</a></p></div></body></html>`, status, template.HTMLEscapeString(msg))
+<body><div class="container"><h1>%d</h1><p>%s</p><p><a href="%s">Back to home</a></p></div></body></html>`, status, template.HTMLEscapeString(msg), canonicalRegistryURL("/"))
 }
 
 type permalinkContextKey string
 
 const requestedPermalinkContextKey permalinkContextKey = "requested_permalink_hash"
+
+func (app *App) canonicalHostMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldRedirectToCanonicalRegistryHost(r) {
+			http.Redirect(w, r, canonicalRegistryURL(requestTargetPath(r)), http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func (app *App) permalinkMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -916,6 +933,14 @@ func browseRelatedObjectsPath(seedID, kind, direction, relationKind string) temp
 	return browseObjectsPath(seedID, "", "", seedID, strings.TrimSpace(kind), direction, relationKind)
 }
 
+func browseSystemPath(seedID string) template.URL {
+	seedID = strings.TrimSpace(seedID)
+	if seedID == "" {
+		return trustedURL("/systems")
+	}
+	return trustedURL("/systems/" + url.PathEscape(seedID))
+}
+
 func browseSchemaPath(ref string) template.URL {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -940,16 +965,30 @@ func browseSchemaPath(ref string) template.URL {
 }
 
 func permalinkResolvePath(canonicalURL, contentHash string) string {
-	canonicalURL = strings.TrimSpace(canonicalURL)
 	contentHash = strings.ToLower(strings.TrimSpace(contentHash))
-	if canonicalURL == "" || contentHash == "" {
+	canonicalPath := registryPath(canonicalURL)
+	if canonicalPath == "" || contentHash == "" {
 		return ""
 	}
-	return "/@sha256-" + contentHash + canonicalURL
+	return canonicalRegistryURL("/@sha256-" + contentHash + canonicalPath)
 }
 
 func trustedURL(value string) template.URL {
-	return template.URL(strings.TrimSpace(value))
+	return template.URL(canonicalRegistryURL(value))
+}
+
+func trustedAPIURL(value string) template.URL {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(value); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return template.URL(parsed.String())
+	}
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+	return template.URL(publicAPIBaseURL + value)
 }
 
 func repoSourceURL(path string) template.URL {
@@ -967,6 +1006,93 @@ func repoSourceURL(path string) template.URL {
 		link += "#" + fragment
 	}
 	return trustedURL(link)
+}
+
+func canonicalRegistryURL(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return publicRegistryBaseURL
+	}
+	if parsed, err := url.Parse(value); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return parsed.String()
+	}
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+	return publicRegistryBaseURL + value
+}
+
+func registryPath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		path := parsed.EscapedPath()
+		if path == "" {
+			path = parsed.Path
+		}
+		if path == "" {
+			return ""
+		}
+		if parsed.RawQuery != "" {
+			path += "?" + parsed.RawQuery
+		}
+		return path
+	}
+	if !strings.HasPrefix(value, "/") {
+		return ""
+	}
+	return value
+}
+
+func requestHost(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	host := strings.TrimSpace(r.Host)
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	return strings.ToLower(strings.TrimSpace(host))
+}
+
+func isLocalRequestHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "", "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldRedirectToCanonicalRegistryHost(r *http.Request) bool {
+	host := requestHost(r)
+	if isLocalRequestHost(host) {
+		return false
+	}
+	if host == publicRegistryHost {
+		return false
+	}
+	return host == "autosoftware.app" || strings.HasSuffix(host, ".autosoftware.app")
+}
+
+func requestTargetPath(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return "/"
+	}
+	path := r.URL.EscapedPath()
+	if path == "" {
+		path = r.URL.Path
+	}
+	if path == "" {
+		path = "/"
+	}
+	if r.URL.RawQuery != "" {
+		path += "?" + r.URL.RawQuery
+	}
+	return path
 }
 
 func splitBrowseReference(reference string) (string, string, bool) {
@@ -1946,7 +2072,7 @@ func main() {
 	mux.HandleFunc("GET /reg/", app.handlePermalinkLookup)
 	mux.HandleFunc("GET /assets/style.css", app.handleStyleCSS)
 
-	handler := logMiddleware(app.permalinkMiddleware(mux))
+	handler := logMiddleware(app.canonicalHostMiddleware(app.permalinkMiddleware(mux)))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

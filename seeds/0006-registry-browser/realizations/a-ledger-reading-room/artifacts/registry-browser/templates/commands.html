@@ -5,7 +5,7 @@
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
-<form class="search-bar" method="get" action="/actions">
+<form class="search-bar" method="get" action="{{hrefURL "/actions"}}">
   <input type="text" name="q" value="{{.Query}}" placeholder="Search actions...">
   {{if .SeedID}}<input type="hidden" name="seed_id" value="{{.SeedID}}">{{end}}
   <button type="submit">Search</button>

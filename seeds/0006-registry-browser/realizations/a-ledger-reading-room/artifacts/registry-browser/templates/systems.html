@@ -5,7 +5,7 @@
   <span class="api-route">GET {{.APIRoute}}</span>
 </div>
 
-<form class="search-bar" method="get" action="/systems">
+<form class="search-bar" method="get" action="{{hrefURL "/systems"}}">
   <input type="text" name="q" value="{{.Query}}" placeholder="Search systems...">
   <button type="submit">Search</button>
 </form>
@@ -14,7 +14,7 @@
 <ul class="resource-list">
   {{range .Systems}}
   <li class="resource-item">
-    <a href="/systems/{{pathEscape .SeedID}}" class="name">{{.Title}}</a>
+    <a href="{{systemPath .SeedID}}" class="name">{{.Title}}</a>
     <div class="meta">
       <span>{{.SeedID}}</span>
       {{if .Statuses}}<span>{{join .Statuses ", "}}</span>{{end}}

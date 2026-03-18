@@ -35,7 +35,7 @@
   <ul class="resource-list">
     {{range $r.Objects}}
     <li class="resource-item">
-      <a href="/objects/{{pathEscape $r.SeedID}}/{{pathEscape .Kind}}" class="name">{{.Kind}}</a>
+      <a href="{{objectPath $r.SeedID .Kind}}" class="name">{{.Kind}}</a>
     </li>
     {{end}}
   </ul>
