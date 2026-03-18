@@ -25,6 +25,29 @@ const (
 	maxVideoSize = 50 << 20
 )
 
+var allowedPhotoTypes = map[string]string{
+	"image/jpeg": "image/jpeg",
+	"image/png":  "image/png",
+	"image/webp": "image/webp",
+}
+
+var allowedVideoTypes = map[string]string{
+	"video/mp4":  "video/mp4",
+	"video/webm": "video/webm",
+}
+
+var allowedPhotoExtensions = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+}
+
+var allowedVideoExtensions = map[string]string{
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+}
+
 type mediaStore interface {
 	Store(ctx context.Context, entryID string, header *multipart.FileHeader) (*Media, error)
 	GetURL(ctx context.Context, media *Media) (string, error)
@@ -72,22 +95,6 @@ func newMediaStore() (mediaStore, error) {
 	return &localMediaStore{dir: dir}, nil
 }
 
-func detectMediaType(contentType, filename string) string {
-	if strings.HasPrefix(contentType, "video/") {
-		return "video"
-	}
-	if strings.HasPrefix(contentType, "image/") {
-		return "photo"
-	}
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".mp4", ".mov", ".webm":
-		return "video"
-	default:
-		return "photo"
-	}
-}
-
 func validateMediaSize(mediaType string, size int64) error {
 	switch mediaType {
 	case "video":
@@ -104,6 +111,10 @@ func validateMediaSize(mediaType string, size int64) error {
 
 func mediaContentType(header *multipart.FileHeader) string {
 	contentType := header.Header.Get("Content-Type")
+	if idx := strings.Index(contentType, ";"); idx >= 0 {
+		contentType = contentType[:idx]
+	}
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
 	if contentType != "" {
 		return contentType
 	}
@@ -123,6 +134,33 @@ func sanitizeFileName(name string) string {
 	return base
 }
 
+func canonicalMediaType(header *multipart.FileHeader) (string, string, error) {
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	contentType := mediaContentType(header)
+	if ext == ".heic" || ext == ".heif" || contentType == "image/heic" || contentType == "image/heif" {
+		return "", "", errors.New("HEIC/HEIF is not supported; use JPEG, PNG, or WebP")
+	}
+	if canonical, ok := allowedPhotoTypes[contentType]; ok {
+		return "photo", canonical, nil
+	}
+	if canonical, ok := allowedVideoTypes[contentType]; ok {
+		return "video", canonical, nil
+	}
+	if canonical, ok := allowedPhotoExtensions[ext]; ok {
+		return "photo", canonical, nil
+	}
+	if canonical, ok := allowedVideoExtensions[ext]; ok {
+		return "video", canonical, nil
+	}
+	if strings.HasPrefix(contentType, "image/") {
+		return "", "", fmt.Errorf("unsupported photo type %q; use JPEG, PNG, or WebP", contentType)
+	}
+	if strings.HasPrefix(contentType, "video/") {
+		return "", "", fmt.Errorf("unsupported video type %q; use MP4 or WebM", contentType)
+	}
+	return "", "", errors.New("unsupported media type; use JPEG, PNG, WebP, MP4, or WebM")
+}
+
 func (m *localMediaStore) Store(_ context.Context, entryID string, header *multipart.FileHeader) (*Media, error) {
 	file, err := header.Open()
 	if err != nil {
@@ -130,8 +168,10 @@ func (m *localMediaStore) Store(_ context.Context, entryID string, header *multi
 	}
 	defer file.Close()
 
-	contentType := mediaContentType(header)
-	mediaType := detectMediaType(contentType, header.Filename)
+	mediaType, contentType, err := canonicalMediaType(header)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateMediaSize(mediaType, header.Size); err != nil {
 		return nil, err
 	}
@@ -193,8 +233,10 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 	}
 	defer file.Close()
 
-	contentType := mediaContentType(header)
-	mediaType := detectMediaType(contentType, header.Filename)
+	mediaType, contentType, err := canonicalMediaType(header)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateMediaSize(mediaType, header.Size); err != nil {
 		return nil, err
 	}

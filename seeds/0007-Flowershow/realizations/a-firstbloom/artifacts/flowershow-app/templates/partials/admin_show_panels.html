@@ -236,9 +236,33 @@
           {{end}}
         </div>
         {{end}}
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/media" hx-encoding="multipart/form-data" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:.5rem;">
-          <input type="file" name="media" class="form-input form-sm" multiple required>
-          <button type="submit" class="btn btn-outline btn-sm">Upload</button>
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-entries-panel" class="media-add-form" style="margin-top:.5rem;">
+          <input
+            type="file"
+            id="media-input-{{.Entry.ID}}"
+            name="media"
+            class="visually-hidden"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            required>
+          <button type="button" class="media-add-button" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('media-input-{{.Entry.ID}}').click()">
+            {{if .Media}}
+              {{with index .Media 0}}
+                {{if eq .MediaType "photo"}}
+                <img src="{{bp}}/media/{{.ID}}" alt="{{.FileName}}" class="media-add-thumb">
+                {{else}}
+                <span class="media-add-plus">+</span>
+                {{end}}
+              {{end}}
+            {{else}}
+            <span class="media-add-plus">+</span>
+            {{end}}
+            <span class="media-add-badge">+</span>
+          </button>
+          <div class="media-add-copy">
+            <strong>Add Photo</strong>
+            <span class="card-meta">Phone capture normalizes to JPEG, max 2048px. HEIC is rejected.</span>
+          </div>
         </form>
       </td>
     </tr>

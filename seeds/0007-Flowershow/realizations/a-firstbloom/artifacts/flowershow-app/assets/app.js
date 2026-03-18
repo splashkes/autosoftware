@@ -14,10 +14,146 @@ function showTab(name) {
   });
 }
 
+function flowershowToast(message, isError) {
+  const container = document.getElementById('sse-toasts') || document.querySelector('.toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' alert alert-error' : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+function flowershowToggleRubricCriteria(select) {
+  var rubricID = select.value;
+  document.querySelectorAll('.criteria-group').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.rubricId === rubricID);
+  });
+}
+
+async function flowershowNormalizeImage(file) {
+  const maxEdge = 2048;
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise(function(resolve, reject) {
+      const img = new Image();
+      img.onload = function() { resolve(img); };
+      img.onerror = reject;
+      img.src = url;
+    });
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(function(resolve) {
+      canvas.toBlob(resolve, 'image/jpeg', 0.86);
+    });
+    if (!blob) {
+      throw new Error('Could not prepare photo for upload.');
+    }
+    const name = (file.name || 'capture')
+      .replace(/\.[^.]+$/, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'capture';
+    return new File([blob], name + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function flowershowSubmitPhotoForm(form, file) {
+  const target = document.querySelector(form.dataset.target || '#admin-entries-panel');
+  const button = form.querySelector('.media-add-button');
+  const body = new FormData();
+  body.append('media', file, file.name);
+  if (button) {
+    button.disabled = true;
+    button.classList.add('is-uploading');
+  }
+  try {
+    const response = await fetch(form.action, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: {
+        'HX-Request': 'true'
+      }
+    });
+    const html = await response.text();
+    if (!response.ok) {
+      throw new Error(html || 'Photo upload failed.');
+    }
+    if (target) {
+      target.innerHTML = html;
+      if (window.htmx) {
+        window.htmx.process(target);
+      }
+      flowershowInit(target);
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('is-uploading');
+    }
+  }
+}
+
+function flowershowBindPhotoForm(form) {
+  if (form.dataset.bound === 'true') return;
+  const input = form.querySelector('input[type="file"]');
+  const button = form.querySelector('.media-add-button');
+  if (!input || !button) return;
+  form.dataset.bound = 'true';
+  input.addEventListener('change', async function() {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const lowerName = (file.name || '').toLowerCase();
+    const mime = (file.type || '').toLowerCase();
+    if (lowerName.endsWith('.heic') || lowerName.endsWith('.heif') || mime === 'image/heic' || mime === 'image/heif') {
+      flowershowToast('HEIC/HEIF is not supported. Use JPEG, PNG, or WebP.', true);
+      input.value = '';
+      return;
+    }
+    if (!/^image\/(jpeg|png|webp)$/i.test(mime) && !/\.(jpe?g|png|webp)$/i.test(lowerName)) {
+      flowershowToast('Unsupported photo type. Use JPEG, PNG, or WebP.', true);
+      input.value = '';
+      return;
+    }
+    try {
+      const normalized = await flowershowNormalizeImage(file);
+      const preview = URL.createObjectURL(normalized);
+      button.innerHTML = '<img src="' + preview + '" alt="Selected photo" class="media-add-thumb"><span class="media-add-badge">+</span>';
+      await flowershowSubmitPhotoForm(form, normalized);
+    } catch (error) {
+      flowershowToast(error && error.message ? error.message : 'Photo upload failed.', true);
+    } finally {
+      input.value = '';
+    }
+  });
+}
+
+function flowershowInit(root) {
+  (root || document).querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
+  const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
+  if (select) flowershowToggleRubricCriteria(select);
+}
+
 // Auto-remove toasts after 4 seconds
 document.addEventListener('htmx:afterSettle', function(evt) {
   const toasts = document.querySelectorAll('.toast');
   toasts.forEach(t => {
     setTimeout(() => t.remove(), 4000);
   });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  flowershowInit(document);
+});
+
+document.addEventListener('htmx:afterSwap', function(evt) {
+  flowershowInit(evt.target);
 });
