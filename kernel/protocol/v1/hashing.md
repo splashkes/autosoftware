@@ -12,7 +12,7 @@ Current contract:
 - `permalink_url` names an immutable browse location for exactly one hashed
   representation of that resource
 - `/reg` is a reserved registry namespace
-- `/@sha256-<content_hash><canonical_url>` remains the hash-validated browse
+- `/@<content_hash><canonical_url>` remains the hash-validated browse
   route that `permalink_url` resolves into
 
 Implications:

@@ -642,7 +642,7 @@ func trimPermalinkRequest(r *http.Request) (string, *http.Request, bool) {
 		return "", r, false
 	}
 	path := strings.TrimSpace(r.URL.Path)
-	if !strings.HasPrefix(path, "/@sha256-") {
+	if !strings.HasPrefix(path, "/@") {
 		return "", r, false
 	}
 	rest := strings.TrimPrefix(path, "/")
@@ -650,7 +650,7 @@ func trimPermalinkRequest(r *http.Request) (string, *http.Request, bool) {
 	if !ok {
 		return "", r, false
 	}
-	hash := strings.TrimPrefix(segment, "@sha256-")
+	hash := strings.TrimPrefix(segment, "@")
 	if !isSHA256Hex(hash) {
 		return "", r, false
 	}
@@ -970,7 +970,7 @@ func permalinkResolvePath(canonicalURL, contentHash string) string {
 	if canonicalPath == "" || contentHash == "" {
 		return ""
 	}
-	return canonicalRegistryURL("/@sha256-" + contentHash + canonicalPath)
+	return canonicalRegistryURL("/@" + contentHash + canonicalPath)
 }
 
 func trustedURL(value string) template.URL {
