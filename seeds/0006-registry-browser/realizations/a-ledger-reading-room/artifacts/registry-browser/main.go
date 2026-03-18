@@ -917,7 +917,26 @@ func browseRelatedObjectsPath(seedID, kind, direction, relationKind string) temp
 }
 
 func browseSchemaPath(ref string) template.URL {
-	return trustedURL("/schemas/" + url.PathEscape(strings.TrimSpace(ref)))
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return trustedURL("/schemas")
+	}
+	pathPart, anchorPart, _ := strings.Cut(ref, "#")
+	pathPart = strings.Trim(pathPart, "/")
+	segments := strings.Split(pathPart, "/")
+	escapedSegments := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			continue
+		}
+		escapedSegments = append(escapedSegments, url.PathEscape(segment))
+	}
+	browsePath := "/schemas/" + strings.Join(escapedSegments, "/")
+	if anchorPart = strings.TrimSpace(anchorPart); anchorPart != "" {
+		browsePath += "/anchors/" + url.PathEscape(anchorPart)
+	}
+	return trustedURL(browsePath)
 }
 
 func permalinkResolvePath(canonicalURL, contentHash string) string {
@@ -1025,6 +1044,55 @@ func layoutShape(layout DataLayout) string {
 	}
 	lines = append(lines, "}")
 	return strings.Join(lines, "\n")
+}
+
+func parseSchemaBrowseRef(r *http.Request) (string, bool) {
+	if r == nil || r.URL == nil {
+		return "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, "/schemas/") {
+		return "", false
+	}
+	rest = strings.Trim(strings.TrimPrefix(rest, "/schemas/"), "/")
+	if rest == "" || rest == "detail" {
+		return "", false
+	}
+
+	pathPart := rest
+	anchorPart := ""
+	if before, after, ok := strings.Cut(rest, "/anchors/"); ok {
+		pathPart = before
+		anchorPart = after
+	}
+
+	var pathSegments []string
+	for _, segment := range strings.Split(pathPart, "/") {
+		if strings.TrimSpace(segment) == "" {
+			continue
+		}
+		decoded, err := url.PathUnescape(segment)
+		if err != nil || strings.TrimSpace(decoded) == "" {
+			return "", false
+		}
+		pathSegments = append(pathSegments, decoded)
+	}
+	if len(pathSegments) == 0 {
+		return "", false
+	}
+
+	ref := strings.Join(pathSegments, "/")
+	if anchorPart = strings.TrimSpace(anchorPart); anchorPart != "" {
+		decodedAnchor, err := url.PathUnescape(anchorPart)
+		if err != nil || strings.TrimSpace(decodedAnchor) == "" {
+			return "", false
+		}
+		ref += "#" + decodedAnchor
+	}
+	return ref, true
 }
 
 // --- Handlers ---
@@ -1176,6 +1244,7 @@ func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) 
 		"Nav":         "contracts",
 		"Realization": item,
 		"Schemas":     schemas,
+		"SourcePath":  item.ContractFile,
 		"APIRoute":    item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
@@ -1225,6 +1294,7 @@ func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
 		"Title":    item.Name,
 		"Nav":      "actions",
 		"Command":  item,
+		"SourcePath": item.ContractFile,
 		"APIRoute": item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
@@ -1274,6 +1344,7 @@ func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
 		"Title":      item.Name,
 		"Nav":        "read-models",
 		"Projection": item,
+		"SourcePath": item.ContractFile,
 		"APIRoute":   item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }
@@ -1389,11 +1460,7 @@ func (app *App) handleSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
-	ref, ok := parseSinglePathParam(r, "/schemas/")
-	if ok && strings.EqualFold(strings.TrimSpace(ref), "detail") {
-		ref = ""
-		ok = false
-	}
+	ref, ok := parseSchemaBrowseRef(r)
 	if !ok {
 		ref = strings.TrimSpace(r.URL.Query().Get("ref"))
 		if ref == "" {
@@ -1424,6 +1491,7 @@ func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
 		"Title":    item.Ref,
 		"Nav":      "contracts",
 		"Schema":   item,
+		"SourcePath": item.Ref,
 		"APIRoute": item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
 }

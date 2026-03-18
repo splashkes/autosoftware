@@ -1,19 +1,22 @@
 {{define "content"}}
 {{$s := .Schema}}
 <div class="page-head">
-  <h2>{{$s.Ref}}</h2>
-  {{if $s.Anchor}}<p>Anchor: {{$s.Anchor}}</p>{{end}}
-  <span class="api-route">GET {{.APIRoute}}</span>
+  <div class="page-kicker">Schema{{if $s.Anchor}} · #{{$s.Anchor}}{{end}}</div>
+  <h2>{{$s.Path}}</h2>
+  <p>{{if $s.Anchor}}Anchored schema reference for the accepted graph definition.{{else}}Accepted schema source for the registry.{{end}}</p>
+  <div class="page-meta">
+    <span class="page-chip">{{len $s.ObjectUses}} object uses</span>
+    <span class="page-chip">{{len $s.CommandInputs}} command inputs</span>
+    <span class="page-chip">{{len $s.CommandResults}} command results</span>
+    <span class="api-route">GET {{.APIRoute}}</span>
+  </div>
 </div>
 
 <div class="detail-section">
-  <h3>Identity</h3>
+  <h3>Source</h3>
   <table class="field-table">
-    <tr><td>Ref</td><td>{{$s.Ref}}</td></tr>
-    <tr><td>Path</td><td>{{$s.Path}}</td></tr>
-    <tr><td>Browse URL</td><td><a href="{{schemaPath $s.Ref}}">{{schemaPath $s.Ref}}</a></td></tr>
-    <tr><td>Source</td><td><a href="{{repoSourceURL $s.Ref}}">GitHub</a></td></tr>
-    {{if $s.Anchor}}<tr><td>Anchor</td><td>{{$s.Anchor}}</td></tr>{{end}}
+    <tr><td>File</td><td><a href="{{repoSourceURL $s.Path}}">{{$s.Path}}</a></td></tr>
+    {{if $s.Anchor}}<tr><td>Anchor</td><td><a href="{{repoSourceURL $s.Ref}}">#{{$s.Anchor}}</a></td></tr>{{end}}
   </table>
 </div>
 
