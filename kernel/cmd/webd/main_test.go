@@ -36,6 +36,30 @@ func TestLaunchRedirectPathPreservesPermalinkAndEncodedReference(t *testing.T) {
 	}
 }
 
+func TestShouldRenderLaunchingPageInsteadOfRedirectForMountedPreviewRoot(t *testing.T) {
+	targetPath := launchRedirectPath(
+		"/__runs/exec_0007_Flowershow_a_firstbloom_76e4c9/",
+		"/flowershow/",
+		"/flowershow/",
+	)
+
+	if !shouldRenderLaunchingPageInsteadOfRedirect("/__runs/exec_0007_Flowershow_a_firstbloom_76e4c9/", targetPath, "/flowershow/") {
+		t.Fatalf("expected mounted stable root request to stay on the mounted route instead of redirecting to %q", targetPath)
+	}
+}
+
+func TestShouldNotRenderLaunchingPageInsteadOfRedirectForMountedDeepLink(t *testing.T) {
+	targetPath := launchRedirectPath(
+		"/__runs/exec_demo_123/",
+		"/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply",
+		"/registry/reading-room/",
+	)
+
+	if shouldRenderLaunchingPageInsteadOfRedirect("/__runs/exec_demo_123/", targetPath, "/registry/reading-room/") {
+		t.Fatalf("expected mounted deep link to continue redirecting to preview path %q", targetPath)
+	}
+}
+
 func TestRequestRedirectPathPrefersEscapedPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/registry/reading-room/actions/0003-customer-service-app%2Fa-web-mvp/tickets.reply", nil)
 	req.URL.Path = "/registry/reading-room/actions/0003-customer-service-app/a-web-mvp/tickets.reply"
