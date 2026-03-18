@@ -8,8 +8,7 @@
     <span class="page-chip"><a href="{{realizationPath $p.Reference}}">{{$p.RealizationID}}</a></span>
     <span class="page-chip">{{$p.Freshness}}</span>
     {{if $p.AuthModes}}<span class="page-chip">{{join $p.AuthModes ", "}}</span>{{end}}
-    <span class="api-route">{{$p.Path}}</span>
-    <span class="api-route">GET {{.APIRoute}}</span>
+    {{template "resource_share_meta" .}}
   </div>
 </div>
 

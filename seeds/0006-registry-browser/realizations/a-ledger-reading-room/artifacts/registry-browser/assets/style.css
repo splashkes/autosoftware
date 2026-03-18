@@ -88,6 +88,8 @@ footer{border-top:1px solid #e0e0e0;padding:1rem 0;font-size:.8rem;color:#888;te
 .agent-box p{font-size:.85rem;color:#444;margin-bottom:.5rem}
 .agent-box code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.8rem;background:#efe9d8;padding:.1rem .3rem;border-radius:3px}
 .agent-box pre{background:#efe9d8;padding:.5rem;border-radius:4px;font-size:.8rem;overflow-x:auto;margin:.5rem 0}
+.agent-routes{display:flex;flex-direction:column;gap:.45rem;margin:.5rem 0 .75rem}
+.agent-route{display:block;width:100%;word-break:break-all;white-space:normal}
 
 /* Empty state */
 .empty{text-align:center;padding:2rem;color:#888;font-size:.9rem}

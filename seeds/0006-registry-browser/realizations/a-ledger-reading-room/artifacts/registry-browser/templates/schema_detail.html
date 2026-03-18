@@ -8,7 +8,7 @@
     <span class="page-chip">{{len $s.ObjectUses}} object uses</span>
     <span class="page-chip">{{len $s.CommandInputs}} command inputs</span>
     <span class="page-chip">{{len $s.CommandResults}} command results</span>
-    <span class="api-route">GET {{.APIRoute}}</span>
+    {{template "resource_share_meta" .}}
   </div>
 </div>
 
