@@ -11,7 +11,7 @@
     <span class="page-chip">{{len $r.Objects}} objects</span>
     <span class="page-chip">{{len $r.Commands}} actions</span>
     <span class="page-chip">{{len $r.Projections}} read models</span>
-    <span class="api-route">GET {{.APIRoute}}</span>
+    {{template "resource_share_meta" .}}
   </div>
 </div>
 

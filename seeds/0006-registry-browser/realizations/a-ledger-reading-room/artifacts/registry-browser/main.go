@@ -747,6 +747,25 @@ func withResourceIdentity(data map[string]any, canonicalURL, permalinkURL, conte
 	return data
 }
 
+func withAgentAccess(data map[string]any, apiRoute string, extraRoutes ...string) map[string]any {
+	apiRoute = strings.TrimSpace(apiRoute)
+	if apiRoute != "" {
+		data["AgentAPIRoute"] = apiRoute
+	}
+	routes := make([]string, 0, len(extraRoutes))
+	for _, route := range extraRoutes {
+		route = strings.TrimSpace(route)
+		if route == "" {
+			continue
+		}
+		routes = append(routes, route)
+	}
+	if len(routes) > 0 {
+		data["AgentExtraRoutes"] = routes
+	}
+	return data
+}
+
 func setResourceIdentityHeaders(w http.ResponseWriter, canonicalURL, permalinkURL, contentHash string) {
 	if w == nil {
 		return
@@ -1396,14 +1415,14 @@ func (app *App) handleRealizationDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "realization_detail", withResourceIdentity(map[string]any{
+	app.render(w, "realization_detail", withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":       item.RealizationID,
 		"Nav":         "contracts",
 		"Realization": item,
 		"Schemas":     schemas,
 		"SourcePath":  item.ContractFile,
 		"APIRoute":    item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self))
 }
 
 func (app *App) handleCommands(w http.ResponseWriter, r *http.Request) {
@@ -1447,13 +1466,13 @@ func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "command_detail", withResourceIdentity(map[string]any{
+	app.render(w, "command_detail", withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":    item.Name,
 		"Nav":      "actions",
 		"Command":  item,
 		"SourcePath": item.ContractFile,
 		"APIRoute": item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self, item.Path))
 }
 
 func (app *App) handleProjections(w http.ResponseWriter, r *http.Request) {
@@ -1497,13 +1516,13 @@ func (app *App) handleProjectionDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "projection_detail", withResourceIdentity(map[string]any{
+	app.render(w, "projection_detail", withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":      item.Name,
 		"Nav":        "read-models",
 		"Projection": item,
 		"SourcePath": item.ContractFile,
 		"APIRoute":   item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self, item.Path))
 }
 
 func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
@@ -1589,12 +1608,12 @@ func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "object_detail", withResourceIdentity(map[string]any{
+	app.render(w, "object_detail", withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":    item.Kind,
 		"Nav":      "objects",
 		"Object":   item,
 		"APIRoute": item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self))
 }
 
 func (app *App) handleSchemas(w http.ResponseWriter, r *http.Request) {
@@ -1644,13 +1663,13 @@ func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "schema_detail", withResourceIdentity(map[string]any{
+	app.render(w, "schema_detail", withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":    item.Ref,
 		"Nav":      "contracts",
 		"Schema":   item,
 		"SourcePath": item.Ref,
 		"APIRoute": item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self))
 }
 
 func (app *App) handlePermalinkLookup(w http.ResponseWriter, r *http.Request) {

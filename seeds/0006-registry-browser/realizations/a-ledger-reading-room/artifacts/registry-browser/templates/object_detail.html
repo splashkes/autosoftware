@@ -11,7 +11,7 @@
     <span class="page-chip">{{len $o.Projections}} read models</span>
     <span class="page-chip">{{len $o.Schemas}} schemas</span>
     {{if $o.Capabilities}}<span class="page-chip">{{len $o.Capabilities}} capabilities</span>{{end}}
-    <span class="api-route">GET {{.APIRoute}}</span>
+    {{template "resource_share_meta" .}}
   </div>
 </div>
 

@@ -26,6 +26,21 @@
   <main>
     <div class="container">
       {{template "content" .}}
+      {{if .AgentAPIRoute}}
+      <div class="agent-box">
+        <h3>Note for Agents</h3>
+        <p>Access this registry resource at <a href="{{apiURL .AgentAPIRoute}}"><code>{{apiURL .AgentAPIRoute}}</code></a>.</p>
+        {{if .AgentExtraRoutes}}
+        <p>Other relevant machine routes:</p>
+        <div class="agent-routes">
+          {{range .AgentExtraRoutes}}
+          <code class="agent-route">{{.}}</code>
+          {{end}}
+        </div>
+        {{end}}
+        <p>For broader discovery, start from <a href="{{apiURL "/v1/registry/catalog"}}"><code>{{apiURL "/v1/registry/catalog"}}</code></a>.</p>
+      </div>
+      {{end}}
       {{if .PermalinkURL}}
       <details class="resource-identity">
         <summary>Current and versioned links</summary>
@@ -34,17 +49,10 @@
             <span class="identity-label">Current</span>
             <a href="{{hrefURL .CanonicalURL}}" class="identity-link">{{.CanonicalURL}}</a>
           </div>
-          {{if .ShareURL}}
-          <div class="identity-row">
-            <span class="identity-label">Share</span>
-            <a href="{{hrefURL .ShareURL}}" class="identity-link">{{.ShareURL}}</a>
-          </div>
-          {{else}}
           <div class="identity-row">
             <span class="identity-label">Versioned</span>
             <a href="{{hrefURL .PermalinkURL}}" class="identity-link">{{.PermalinkURL}}</a>
           </div>
-          {{end}}
           {{if .SourcePath}}
           <div class="identity-row">
             <span class="identity-label">Source</span>
@@ -70,5 +78,7 @@
 </body>
 </html>
 {{end}}
+
+{{define "resource_share_meta"}}{{if .ShareURL}}<a class="api-route" href="{{hrefURL .ShareURL}}">{{.ShareURL}}</a>{{end}}{{end}}
 
 {{define "content"}}{{end}}

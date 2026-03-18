@@ -9,8 +9,7 @@
     <span class="page-chip">{{$c.Idempotency}}</span>
     <span class="page-chip">{{$c.Consistency}}</span>
     {{if $c.AuthModes}}<span class="page-chip">{{join $c.AuthModes ", "}}</span>{{end}}
-    <span class="api-route">{{$c.Path}}</span>
-    <span class="api-route">GET {{.APIRoute}}</span>
+    {{template "resource_share_meta" .}}
   </div>
 </div>
 
