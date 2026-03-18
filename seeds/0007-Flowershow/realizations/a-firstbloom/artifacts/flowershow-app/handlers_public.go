@@ -84,6 +84,9 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 
 	var entries []*entryView
 	for _, e := range a.store.entriesByShow(show.ID) {
+		if !isPublicEntry(e) {
+			continue
+		}
 		person, _ := a.store.personByID(e.PersonID)
 		cls, _ := a.store.classByID(e.ClassID)
 		entries = append(entries, &entryView{
@@ -184,6 +187,9 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 
 	var entries []*entryView
 	for _, e := range a.store.entriesByClass(classID) {
+		if !isPublicEntry(e) {
+			continue
+		}
 		person, _ := a.store.personByID(e.PersonID)
 		entries = append(entries, &entryView{
 			Entry:  e,
@@ -227,7 +233,7 @@ type scorecardView struct {
 func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 	entryID := r.PathValue("entryID")
 	entry, ok := a.store.entryByID(entryID)
-	if !ok {
+	if !ok || !isPublicEntry(entry) {
 		http.NotFound(w, r)
 		return
 	}
@@ -264,6 +270,57 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 		Taxons:      taxons,
 		Scorecards:  scorecardViews,
 		Media:       a.store.mediaByEntry(entry.ID),
+	})
+}
+
+// --- Person History ---
+
+type personDetailData struct {
+	Title       string
+	CurrentPath string
+	Person      *Person
+	Entries     []*entryView
+	EntryCount  int
+	FirstCount  int
+	TotalPoints float64
+}
+
+func (a *app) handlePersonDetail(w http.ResponseWriter, r *http.Request) {
+	personID := r.PathValue("personID")
+	person, ok := a.store.personByID(personID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	var entries []*entryView
+	var firstCount int
+	var totalPoints float64
+	for _, entry := range a.store.entriesByPerson(personID) {
+		if !isPublicEntry(entry) {
+			continue
+		}
+		cls, _ := a.store.classByID(entry.ClassID)
+		totalPoints += entry.Points
+		if entry.Placement == 1 {
+			firstCount++
+		}
+		entries = append(entries, &entryView{
+			Entry:  entry,
+			Person: person,
+			Class:  cls,
+			Media:  a.store.mediaByEntry(entry.ID),
+		})
+	}
+
+	a.render(w, "person_detail.html", personDetailData{
+		Title:       "History — " + person.Initials,
+		CurrentPath: "/people/" + personID,
+		Person:      person,
+		Entries:     entries,
+		EntryCount:  len(entries),
+		FirstCount:  firstCount,
+		TotalPoints: totalPoints,
 	})
 }
 
@@ -311,6 +368,9 @@ func (a *app) handleTaxonDetail(w http.ResponseWriter, r *http.Request) {
 	var entries []*entryView
 	for _, show := range a.store.allShows() {
 		for _, e := range a.store.entriesByShow(show.ID) {
+			if !isPublicEntry(e) {
+				continue
+			}
 			for _, ref := range e.TaxonRefs {
 				if ref == taxonID {
 					person, _ := a.store.personByID(e.PersonID)
@@ -342,8 +402,11 @@ type leaderboardData struct {
 	Title       string
 	CurrentPath string
 	Entries     []LeaderboardEntry
+	Boards      []*leaderboardBoard
 	OrgName     string
 	Season      string
+	Orgs        []*Organization
+	SelectedOrg string
 }
 
 func (a *app) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -355,19 +418,111 @@ func (a *app) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var orgName string
-	if orgID == "" && len(orgs) > 0 {
-		orgID = orgs[0].ID
+	var entries []LeaderboardEntry
+	var boards []*leaderboardBoard
+	if orgID == "" {
+		orgID = "all"
 	}
-	if org, ok := a.store.organizationByID(orgID); ok {
-		orgName = org.Name
+	if orgID == "all" {
+		orgName = "All Organizations"
+		boards = a.leaderboardBoards(season)
+	} else {
+		if org, ok := a.store.organizationByID(orgID); ok {
+			orgName = org.Name
+		}
+		entries = a.store.leaderboard(orgID, season)
 	}
 
 	a.render(w, "leaderboard.html", leaderboardData{
 		Title:       "Leaderboard",
 		CurrentPath: "/leaderboard",
-		Entries:     a.store.leaderboard(orgID, season),
+		Entries:     entries,
+		Boards:      boards,
 		OrgName:     orgName,
 		Season:      season,
+		Orgs:        orgs,
+		SelectedOrg: orgID,
+	})
+}
+
+// --- Winner Summary ---
+
+func (a *app) handleShowSummary(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	data, err := a.winnerSummaryDataBySlug(slug)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a.render(w, "show_summary.html", data)
+}
+
+func (a *app) handleShowSummaryStream(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	show, ok := a.store.showBySlug(slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+	ch := a.sseBroker.subscribe(show.ID)
+	defer a.sseBroker.unsubscribe(show.ID, ch)
+	_, _ = w.Write([]byte(": connected\n\n"))
+	flusher.Flush()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			_, _ = w.Write([]byte(msg))
+			flusher.Flush()
+		}
+	}
+}
+
+// --- Browse ---
+
+func (a *app) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	orgID := r.URL.Query().Get("org")
+	taxonID := r.URL.Query().Get("taxon")
+	judgeID := r.URL.Query().Get("judge")
+	domain := r.URL.Query().Get("domain")
+	var judges []*Person
+	seenJudges := map[string]bool{}
+	for _, show := range a.store.allShows() {
+		for _, assignment := range a.store.judgesByShow(show.ID) {
+			if seenJudges[assignment.PersonID] {
+				continue
+			}
+			if judge, ok := a.store.personByID(assignment.PersonID); ok {
+				judges = append(judges, judge)
+				seenJudges[assignment.PersonID] = true
+			}
+		}
+	}
+	a.render(w, "browse.html", browseData{
+		Title:           "Browse",
+		CurrentPath:     "/browse",
+		Query:           query,
+		SelectedOrgID:   orgID,
+		SelectedTaxonID: taxonID,
+		SelectedJudgeID: judgeID,
+		SelectedDomain:  domain,
+		Orgs:            a.store.allOrganizations(),
+		Taxons:          a.store.allTaxons(),
+		Judges:          judges,
+		Results:         a.browseResults(query, orgID, taxonID, judgeID, domain),
 	})
 }
 
@@ -375,13 +530,13 @@ func (a *app) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 type standardsData struct {
 	Title     string
-	Standards []*StandardDocument
+	Standards []*standardView
 }
 
 func (a *app) handleStandards(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "standards.html", standardsData{
 		Title:     "Standards",
-		Standards: a.store.allStandardDocuments(),
+		Standards: a.standardViews(),
 	})
 }
 

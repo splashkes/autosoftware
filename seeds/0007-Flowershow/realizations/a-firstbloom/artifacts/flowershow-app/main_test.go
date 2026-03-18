@@ -84,6 +84,29 @@ func TestShowDetailBySlug(t *testing.T) {
 	}
 }
 
+func TestShowSummaryPage(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}/summary", a.handleShowSummary)
+
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025/summary", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Live Winner Summary") {
+		t.Fatal("winner summary missing live heading")
+	}
+	if !strings.Contains(body, "Formal Class Results") {
+		t.Fatal("winner summary missing formal class list")
+	}
+	if !strings.Contains(body, "Peace") {
+		t.Fatal("winner summary missing seeded winner")
+	}
+}
+
 func TestShowDetailNotFound(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -114,6 +137,26 @@ func TestClassBrowse(t *testing.T) {
 	}
 }
 
+func TestPersonHistoryPage(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /people/{personID}", a.handlePersonDetail)
+
+	req := httptest.NewRequest("GET", "/people/person_01", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "MC") {
+		t.Fatal("person history missing entrant initials")
+	}
+	if !strings.Contains(body, "Peace") {
+		t.Fatal("person history missing seeded entry")
+	}
+}
+
 func TestEntryDetail(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -132,6 +175,34 @@ func TestEntryDetail(t *testing.T) {
 	// Privacy check: should show initials, not full name in public view
 	if !strings.Contains(body, "MC") {
 		t.Fatal("entry detail missing initials")
+	}
+}
+
+func TestSuppressedEntryHiddenFromPublicViews(t *testing.T) {
+	a := testApp()
+	if err := a.store.setEntrySuppressed("entry_01", true); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /entries/{entryID}", a.handleEntryDetail)
+	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+
+	req := httptest.NewRequest("GET", "/entries/entry_01", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for suppressed entry, got %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/shows/spring-rose-show-2025", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "Peace") {
+		t.Fatal("suppressed entry should not appear on public show page")
 	}
 }
 
@@ -160,6 +231,40 @@ func TestLeaderboard(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "Leaderboard") {
 		t.Fatal("leaderboard page missing title")
+	}
+}
+
+func TestLeaderboardAllOrganizations(t *testing.T) {
+	a := testApp()
+	req := httptest.NewRequest("GET", "/leaderboard?org=all&season=2025", nil)
+	w := httptest.NewRecorder()
+	a.handleLeaderboard(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "All Organizations") {
+		t.Fatal("all-org leaderboard missing heading")
+	}
+	if !strings.Contains(body, "Metro Rose Society") {
+		t.Fatal("all-org leaderboard missing organization board")
+	}
+}
+
+func TestBrowsePageFiltersResults(t *testing.T) {
+	a := testApp()
+	req := httptest.NewRequest("GET", "/browse?q=Peace&domain=horticulture&taxon=taxon_ht", nil)
+	w := httptest.NewRecorder()
+	a.handleBrowse(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Peace") {
+		t.Fatal("browse page missing matched entry")
+	}
+	if strings.Contains(body, "Garden Elegance") {
+		t.Fatal("browse page included non-matching entry")
 	}
 }
 
@@ -245,6 +350,52 @@ func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowDetail))
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Schedule Governance") {
+		t.Fatal("admin show missing schedule governance section")
+	}
+	if !strings.Contains(body, "Official Judging and Exhibiting Standards") {
+		t.Fatal("admin show missing seeded standard")
+	}
+	if !strings.Contains(body, `name="score_crit_form"`) {
+		t.Fatal("admin show missing per-criterion scoring inputs")
+	}
+	if !strings.Contains(body, "Assign Judge") {
+		t.Fatal("admin show missing judge assignment controls")
+	}
+}
+
+func TestHTMXJudgeAssignReturnsInfoPanel(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireAdmin(a.handleAdminJudgeAssign))
+
+	req := httptest.NewRequest("POST", "/admin/shows/show_fall2025/judges", strings.NewReader("person_id=person_01"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 HTMX fragment, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Judge assigned") && !strings.Contains(w.Body.String(), "assigned") {
+		t.Fatal("expected refreshed info panel with assigned judge")
 	}
 }
 
@@ -396,6 +547,31 @@ func TestFullAPIFlow(t *testing.T) {
 	}
 }
 
+func TestIngestionImportAPI(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/ingestions.import", a.handleAPICommand)
+
+	payload := `{
+		"source_document":{"title":"Imported Rulebook","document_type":"rulebook","show_id":"show_spring2025"},
+		"citations":[{"target_type":"show_class","target_id":"class_01","page_from":"2","quoted_text":"Imported citation"}]
+	}`
+	req := httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/ingestions.import", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	if len(a.store.allSourceDocuments()) < 2 {
+		t.Fatal("expected imported source document to be stored")
+	}
+	if len(a.store.citationsByTarget("show_class", "class_01")) < 2 {
+		t.Fatal("expected imported citation to be stored")
+	}
+}
+
 func TestStoreMemoryBasics(t *testing.T) {
 	s := newMemoryStore()
 
@@ -513,6 +689,40 @@ func TestMediaUploadAndRender(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "/media/"+media[0].ID) {
 		t.Fatal("entry detail missing uploaded media")
+	}
+}
+
+func TestScorecardRequiresAssignedJudge(t *testing.T) {
+	a := testApp()
+	person, err := a.store.createPerson(PersonInput{FirstName: "Una", LastName: "Signed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/scorecards", a.requireAdmin(a.handleAdminScorecardSubmit))
+
+	body := strings.NewReader("entry_id=entry_01&judge_id=" + person.ID + "&rubric_id=rubric_hort&score_crit_form=10")
+	req := httptest.NewRequest("POST", "/admin/scorecards", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unassigned judge, got %d", w.Code)
+	}
+
+	body = strings.NewReader("entry_id=entry_01&judge_id=person_03&rubric_id=rubric_hort&score_crit_form=20&score_crit_color=20")
+	req = httptest.NewRequest("POST", "/admin/scorecards", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 for assigned judge, got %d", w.Code)
+	}
+	if len(a.store.scorecardsByEntry("entry_01")) == 0 {
+		t.Fatal("expected scorecard to be recorded for assigned judge")
 	}
 }
 

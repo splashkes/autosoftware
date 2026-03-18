@@ -1,0 +1,78 @@
+{{define "content"}}
+<h1>Browse</h1>
+<p class="section-desc">Filter visible results by flower, category, scientific name, judge, or club.</p>
+
+<section class="section">
+  <form method="GET" action="{{bp}}/browse" class="card">
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Search</label>
+          <input type="text" name="q" value="{{.Query}}" class="form-input" placeholder="Peace, Rosa, Hybrid Tea">
+        </div>
+        <div class="form-group">
+          <label>Club</label>
+          <select name="org" class="form-input">
+            <option value="">All clubs</option>
+            {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.SelectedOrgID}}selected{{end}}>{{.Name}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select name="domain" class="form-input">
+            <option value="">All categories</option>
+            <option value="horticulture" {{if eq .SelectedDomain "horticulture"}}selected{{end}}>horticulture</option>
+            <option value="design" {{if eq .SelectedDomain "design"}}selected{{end}}>design</option>
+            <option value="special" {{if eq .SelectedDomain "special"}}selected{{end}}>special</option>
+            <option value="other" {{if eq .SelectedDomain "other"}}selected{{end}}>other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Flower / Scientific Name</label>
+          <select name="taxon" class="form-input">
+            <option value="">All taxa</option>
+            {{range .Taxons}}<option value="{{.ID}}" {{if eq .ID $.SelectedTaxonID}}selected{{end}}>{{.Name}}{{if .ScientificName}} — {{.ScientificName}}{{end}}</option>{{end}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Judge</label>
+          <select name="judge" class="form-input">
+            <option value="">Any judge</option>
+            {{range .Judges}}<option value="{{.ID}}" {{if eq .ID $.SelectedJudgeID}}selected{{end}}>{{.FirstName}} {{.LastName}}</option>{{end}}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Apply Filters</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2>Results{{if .Results}} ({{len .Results}}){{end}}</h2>
+  {{if .Results}}
+  <div class="card-grid">
+    {{range .Results}}
+    <article class="card browse-card">
+      <div class="card-body">
+        <h3 class="card-title"><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></h3>
+        <p class="card-meta">{{.Show.Name}} · {{.Show.Date}}</p>
+        {{if .Class}}<p class="card-meta">Class {{.Class.ClassNumber}} · {{.Class.Title}}</p>{{end}}
+        <div class="entry-meta">
+          {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{.Person.Initials}}</a>{{end}}
+          {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
+          {{range .MatchedTaxons}}<a href="{{bp}}/taxonomy/{{.ID}}" class="badge badge-muted">{{.Name}}</a>{{end}}
+        </div>
+        {{if .Judges}}
+        <p class="card-meta">Judged by {{range $i, $judge := .Judges}}{{if $i}}, {{end}}{{$judge.Initials}}{{end}}</p>
+        {{end}}
+      </div>
+    </article>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No entries matched those filters.</p>
+  {{end}}
+</section>
+{{end}}

@@ -7,9 +7,23 @@
   {{range .Standards}}
   <div class="card">
     <div class="card-body">
-      <h3 class="card-title">{{.Name}}</h3>
-      {{if .DomainScope}}<span class="badge badge-muted">{{.DomainScope}}</span>{{end}}
-      {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
+      <h3 class="card-title">{{.Standard.Name}}</h3>
+      {{if .Standard.DomainScope}}<span class="badge badge-muted">{{.Standard.DomainScope}}</span>{{end}}
+      {{if .Standard.Description}}<p class="card-meta">{{.Standard.Description}}</p>{{end}}
+      {{if .Editions}}
+      <div class="card-meta" style="margin-top:.75rem;">
+        {{range .Editions}}
+        <div>
+          <strong>{{.EditionLabel}}</strong>
+          {{if .PublicationYear}}<span>({{.PublicationYear}})</span>{{end}}
+          <span class="badge badge-muted">{{.Status}}</span>
+          {{if .SourceURL}}<a href="{{.SourceURL}}" target="_blank" rel="noopener">source</a>{{end}}
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="card-meta">No editions registered yet.</p>
+      {{end}}
     </div>
   </div>
   {{end}}
@@ -18,4 +32,3 @@
 <p class="empty-state">No standards registered yet.</p>
 {{end}}
 {{end}}
-

@@ -29,7 +29,7 @@
       <tr class="{{placementClass .Entry.Placement}}">
         <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
         <td>{{if .Class}}{{.Class.ClassNumber}}{{end}}</td>
-        <td>{{if .Person}}{{.Person.Initials}}{{end}}</td>
+        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{.Person.Initials}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
       </tr>
       {{end}}
@@ -38,4 +38,3 @@
 </section>
 {{end}}
 {{end}}
-

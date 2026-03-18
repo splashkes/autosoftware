@@ -108,6 +108,170 @@ body {
 .show-meta { color: var(--gray-500); margin: .5rem 0; }
 .show-actions { display: flex; gap: .5rem; margin-top: .75rem; }
 
+/* Winner summary */
+.summary-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(242, 204, 195, .9), transparent 35%),
+    radial-gradient(circle at top right, rgba(230, 200, 77, .5), transparent 28%),
+    linear-gradient(135deg, #173b2d 0%, #24543f 54%, #356d53 100%);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+.summary-kicker {
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  font-size: .78rem;
+  color: rgba(255,255,255,.72);
+  margin-bottom: .5rem;
+}
+.summary-hero h1 {
+  font-size: clamp(2rem, 5vw, 3.6rem);
+  line-height: 1.05;
+  max-width: 11ch;
+}
+.summary-hero .hero-sub {
+  color: rgba(255,255,255,.82);
+  max-width: 52rem;
+}
+.summary-actions {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.summary-actions .btn-outline {
+  color: white;
+  border-color: rgba(255,255,255,.48);
+}
+.summary-actions .btn-outline:hover {
+  background: rgba(255,255,255,.1);
+}
+.summary-actions .btn-primary {
+  background: var(--gold);
+  color: #2f2500;
+}
+.summary-actions .btn-primary:hover {
+  background: var(--gold-light);
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+}
+.winner-mag-card {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 48px rgba(0,0,0,.18);
+}
+.winner-media-stage {
+  position: relative;
+  min-height: 255px;
+  background: linear-gradient(160deg, rgba(255,255,255,.1), rgba(0,0,0,.15));
+}
+.winner-media-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.winner-media-frame.cycle {
+  opacity: 0;
+  animation: winnerCycle 16s linear infinite;
+}
+.winner-media-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.04)),
+    linear-gradient(160deg, rgba(232,165,152,.45), rgba(45,106,79,.35));
+}
+.winner-media-fallback span {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: rgba(255,255,255,.88);
+}
+.winner-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .5rem;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,.72));
+}
+.winner-class-label {
+  font-size: .88rem;
+  color: rgba(255,255,255,.88);
+}
+.winner-mag-body {
+  padding: 1rem 1rem 1.1rem;
+}
+.winner-mag-body h3 {
+  font-size: 1.2rem;
+  margin-bottom: .25rem;
+}
+.winner-mag-meta {
+  color: rgba(255,255,255,.76);
+  font-size: .9rem;
+}
+@keyframes winnerCycle {
+  0% { opacity: 0; }
+  5% { opacity: 1; }
+  25% { opacity: 1; }
+  30% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* Browse */
+.browse-card {
+  position: relative;
+  overflow: hidden;
+}
+.browse-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--pink), var(--green));
+}
+.browse-card .card-body {
+  padding-left: 1.5rem;
+}
+
+/* Person history */
+.person-hero {
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, white, var(--pink-pale));
+  box-shadow: var(--shadow);
+}
+.person-hero h1 {
+  color: var(--green);
+}
+
 /* Schedule tree */
 .schedule-division { margin: 1.5rem 0; padding: 1rem; background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow); }
 .schedule-division h3 { color: var(--green); margin-bottom: .75rem; }
@@ -144,6 +308,7 @@ body {
 .form-group { margin-bottom: .75rem; }
 .form-group label { display: block; font-weight: 500; font-size: .85rem; margin-bottom: .25rem; color: var(--gray-700); }
 .form-input { width: 100%; padding: .5rem .75rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: .9rem; transition: border-color .2s; }
+textarea.form-input { min-height: 5rem; resize: vertical; }
 .form-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-pale); }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
 .form-inline { display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap; }
@@ -185,12 +350,23 @@ body {
 /* Winners */
 .winner-row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--gray-200); }
 .winner-name { flex: 1; font-weight: 500; }
+.winner-list { display: flex; flex-direction: column; gap: .25rem; }
 
 /* Admin section items */
 .admin-division { border-left: 3px solid var(--green); }
 .admin-section { border-left: 2px solid var(--gray-300); padding-left: 1rem; }
 .admin-class-item { padding: .375rem .5rem; border-radius: var(--radius); }
 .admin-class-item:hover { background: var(--green-pale); }
+.judge-list, .governance-list { display: flex; flex-direction: column; gap: .75rem; margin-top: 1rem; }
+.judge-chip, .rule-group { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: .75rem; background: white; }
+.rule-header { display: flex; justify-content: space-between; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.criteria-list { padding-left: 1.2rem; color: var(--gray-700); }
+.criteria-list li { margin: .25rem 0; }
+.criteria-groups { margin: 1rem 0; }
+.criteria-group { display: none; }
+.criteria-group.active { display: block; }
+.criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
+.criteria-card { padding: .75rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); }
 
 /* Toasts */
 .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
@@ -213,6 +389,10 @@ body {
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
   .winner-row { flex-direction: column; align-items: flex-start; }
   .tabs { overflow-x: auto; }
+  .summary-hero { padding: 1.25rem; }
+  .summary-header { flex-direction: column; align-items: flex-start; }
+  .summary-actions { justify-content: flex-start; }
+  .winner-mag-card { min-height: 300px; }
 }
 
 /* Print */

@@ -1,0 +1,70 @@
+{{define "winner_summary_content"}}
+<section class="summary-hero">
+  <div class="summary-header">
+    <div>
+      <p class="summary-kicker">Live Winner Summary</p>
+      <h1>{{.Show.Name}}</h1>
+      <p class="hero-sub">{{.Show.Location}} · {{.Show.Date}} · placements update live as judges and operators post results.</p>
+    </div>
+    <div class="summary-actions">
+      <a href="{{bp}}/shows/{{.Show.Slug}}" class="btn btn-outline">Back To Show</a>
+      <a href="{{bp}}/leaderboard?org={{.Show.OrganizationID}}&season={{.Show.Season}}" class="btn btn-primary">Season Leaderboard</a>
+    </div>
+  </div>
+
+  {{if .HeroCards}}
+  <div class="summary-grid">
+    {{range .HeroCards}}
+    <article class="winner-mag-card">
+      <div class="winner-media-stage">
+        {{if .Media}}
+          {{range $i, $media := .Media}}
+          <img src="{{bp}}/media/{{$media.ID}}" alt="{{$media.FileName}}" class="winner-media-frame{{if gt (len $.HeroCards) 0}} cycle{{end}}" style="animation-delay: {{cycleDelay $i}};">
+          {{end}}
+        {{else}}
+        <div class="winner-media-fallback">
+          <span>{{if .Class}}{{.Class.ClassNumber}}{{end}}</span>
+        </div>
+        {{end}}
+        <div class="winner-overlay">
+          <span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>
+          {{if .Class}}<span class="winner-class-label">{{.Class.ClassNumber}} · {{.Class.Title}}</span>{{end}}
+        </div>
+      </div>
+      <div class="winner-mag-body">
+        <h3>{{.Entry.Name}}</h3>
+        <p class="winner-mag-meta">{{if .Person}}Entrant {{.Person.Initials}}{{end}}{{if .Entry.Points}} · {{.Entry.Points}} pts{{end}}</p>
+      </div>
+    </article>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No placements have been posted yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <h2>Formal Class Results</h2>
+  </div>
+  {{if .ClassRows}}
+  <table class="table">
+    <thead>
+      <tr><th>Class</th><th>1st</th><th>2nd</th><th>3rd</th></tr>
+    </thead>
+    <tbody>
+      {{range .ClassRows}}
+      <tr>
+        <td><strong>{{.Class.ClassNumber}}</strong> {{.Class.Title}}</td>
+        <td>{{if .First}}<a href="{{bp}}/entries/{{.First.Entry.ID}}">{{.First.Entry.Name}}</a>{{if .First.Person}} <span class="card-meta">({{.First.Person.Initials}})</span>{{end}}{{end}}</td>
+        <td>{{if .Second}}<a href="{{bp}}/entries/{{.Second.Entry.ID}}">{{.Second.Entry.Name}}</a>{{if .Second.Person}} <span class="card-meta">({{.Second.Person.Initials}})</span>{{end}}{{end}}</td>
+        <td>{{if .Third}}<a href="{{bp}}/entries/{{.Third.Entry.ID}}">{{.Third.Entry.Name}}</a>{{if .Third.Person}} <span class="card-meta">({{.Third.Person.Initials}})</span>{{end}}{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">Class results will appear here as winners are assigned.</p>
+  {{end}}
+</section>
+{{end}}

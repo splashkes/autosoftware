@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
@@ -78,8 +79,12 @@ func main() {
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
+	mux.HandleFunc("GET /shows/{slug}/summary", a.handleShowSummary)
+	mux.HandleFunc("GET /shows/{slug}/summary/stream", a.handleShowSummaryStream)
 	mux.HandleFunc("GET /shows/{slug}/rules", a.handleShowRules)
 	mux.HandleFunc("GET /entries/{entryID}", a.handleEntryDetail)
+	mux.HandleFunc("GET /people/{personID}", a.handlePersonDetail)
+	mux.HandleFunc("GET /browse", a.handleBrowse)
 	mux.HandleFunc("GET /taxonomy", a.handleTaxonomyBrowse)
 	mux.HandleFunc("GET /taxonomy/{taxonID}", a.handleTaxonDetail)
 	mux.HandleFunc("GET /leaderboard", a.handleLeaderboard)
@@ -103,7 +108,9 @@ func main() {
 	mux.HandleFunc("GET /admin/shows/new", a.requireAdmin(a.handleAdminShowNew))
 	mux.HandleFunc("POST /admin/shows", a.requireAdmin(a.handleAdminShowCreate))
 	mux.HandleFunc("GET /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowDetail))
+	mux.HandleFunc("GET /admin/shows/{showID}/fragments/{section}", a.requireAdmin(a.handleAdminShowFragment))
 	mux.HandleFunc("POST /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowUpdate))
+	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireAdmin(a.handleAdminJudgeAssign))
 	mux.HandleFunc("GET /admin/shows/{showID}/stream", a.requireAdmin(a.handleAdminShowStream))
 
 	// Admin schedule management
@@ -115,6 +122,7 @@ func main() {
 	// Admin entries
 	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireAdmin(a.handleAdminEntryCreate))
 	mux.HandleFunc("POST /admin/entries/{entryID}/placement", a.requireAdmin(a.handleAdminEntryPlacement))
+	mux.HandleFunc("POST /admin/entries/{entryID}/visibility", a.requireAdmin(a.handleAdminEntryVisibility))
 	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
 	mux.HandleFunc("POST /admin/media/{mediaID}/delete", a.requireAdmin(a.handleMediaDelete))
 
@@ -131,6 +139,7 @@ func main() {
 	mux.HandleFunc("POST /admin/editions", a.requireAdmin(a.handleAdminEditionCreate))
 	mux.HandleFunc("POST /admin/sources", a.requireAdmin(a.handleAdminSourceCreate))
 	mux.HandleFunc("POST /admin/citations", a.requireAdmin(a.handleAdminCitationCreate))
+	mux.HandleFunc("POST /admin/ingestions", a.requireAdmin(a.handleAdminIngestionImport))
 	mux.HandleFunc("POST /admin/rules", a.requireAdmin(a.handleAdminRuleCreate))
 	mux.HandleFunc("POST /admin/overrides", a.requireAdmin(a.handleAdminOverrideCreate))
 
@@ -167,6 +176,7 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/editions.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/sources.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/citations.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/ingestions.import", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/rules.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/overrides.create", a.handleAPICommand)
 
@@ -258,6 +268,9 @@ var templateFuncMap = template.FuncMap{
 		}
 		return s
 	},
+	"cycleDelay": func(i int) string {
+		return fmt.Sprintf("%ds", i*4)
+	},
 	"statusBadge": func(status string) template.HTML {
 		colors := map[string]string{
 			"draft":     "badge-gray",
@@ -277,9 +290,12 @@ func parseTemplates() map[string]*template.Template {
 	pages := []string{
 		"templates/home.html",
 		"templates/show_detail.html",
+		"templates/show_summary.html",
 		"templates/class_browse.html",
 		"templates/class_detail.html",
 		"templates/entry_detail.html",
+		"templates/browse.html",
+		"templates/person_detail.html",
 		"templates/taxonomy_browse.html",
 		"templates/taxon_detail.html",
 		"templates/leaderboard.html",

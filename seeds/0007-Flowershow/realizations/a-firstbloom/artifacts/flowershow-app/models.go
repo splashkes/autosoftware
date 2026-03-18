@@ -32,6 +32,13 @@ type ShowInput struct {
 	Season         string `json:"season"`
 }
 
+type ShowJudgeAssignment struct {
+	ID         string    `json:"id"`
+	ShowID     string    `json:"show_id"`
+	PersonID   string    `json:"person_id"`
+	AssignedAt time.Time `json:"assigned_at"`
+}
+
 type Person struct {
 	ID        string `json:"id"`
 	FirstName string `json:"first_name"`
@@ -130,16 +137,17 @@ type ShowClassInput struct {
 // --- Entries ---
 
 type Entry struct {
-	ID        string    `json:"id"`
-	ShowID    string    `json:"show_id"`
-	ClassID   string    `json:"class_id"`
-	PersonID  string    `json:"person_id"`
-	Name      string    `json:"name"`
-	Notes     string    `json:"notes,omitempty"`
-	Placement int       `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
-	Points    float64   `json:"points,omitempty"`
-	TaxonRefs []string  `json:"taxon_refs,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	ShowID     string    `json:"show_id"`
+	ClassID    string    `json:"class_id"`
+	PersonID   string    `json:"person_id"`
+	Name       string    `json:"name"`
+	Notes      string    `json:"notes,omitempty"`
+	Suppressed bool      `json:"suppressed,omitempty"`
+	Placement  int       `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
+	Points     float64   `json:"points,omitempty"`
+	TaxonRefs  []string  `json:"taxon_refs,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type EntryInput struct {

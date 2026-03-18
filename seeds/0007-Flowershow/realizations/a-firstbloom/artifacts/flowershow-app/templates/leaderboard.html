@@ -2,7 +2,48 @@
 <h1>Leaderboard</h1>
 <p class="section-desc">{{.OrgName}} — Season {{.Season}}</p>
 
-{{if .Entries}}
+<section class="section">
+  <form method="GET" action="{{bp}}/leaderboard" class="form form-inline">
+    <label>Organization</label>
+    <select name="org" class="form-input">
+      <option value="all" {{if eq .SelectedOrg "all"}}selected{{end}}>All organizations</option>
+      {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.SelectedOrg}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    <label>Season</label>
+    <input type="text" name="season" value="{{.Season}}" class="form-input form-sm">
+    <button type="submit" class="btn btn-primary btn-sm">View</button>
+  </form>
+</section>
+
+{{if .Boards}}
+<div class="card-grid">
+  {{range .Boards}}
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">{{.Org.Name}}</h3>
+      {{if .Entries}}
+      <table class="table table-sm leaderboard-table">
+        <thead>
+          <tr><th>#</th><th>Exhibitor</th><th>Points</th></tr>
+        </thead>
+        <tbody>
+          {{range .Entries}}
+          <tr class="{{if eq .Rank 1}}leaderboard-first{{end}}">
+            <td class="rank">{{.Rank}}</td>
+            <td>{{.Initials}}</td>
+            <td class="points">{{.TotalPoints}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="card-meta">No leaderboard data for this season.</p>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else if .Entries}}
 <table class="table leaderboard-table">
   <thead>
     <tr><th>#</th><th>Exhibitor</th><th>Points</th><th>Entries</th><th>1st Place</th></tr>
@@ -23,4 +64,3 @@
 <p class="empty-state">No leaderboard data for this season.</p>
 {{end}}
 {{end}}
-
