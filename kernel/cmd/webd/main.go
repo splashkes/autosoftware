@@ -1288,7 +1288,8 @@ func main() {
 	})
 
 	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
-	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, http.Handler(mux))
+	registryHost := config.EnvOrDefault("AS_REGISTRY_HOST", "")
+	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, registryHost, http.Handler(mux))
 	if runtimeService != nil {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService},
 			server.RateLimitMiddleware(runtimeService, rateLimitOptions(runtimeConfig), handler),
@@ -1551,6 +1552,7 @@ func buildRoutingHandler(
 	catalogService *materializer.Service,
 	runtimeService *interactions.RuntimeService,
 	baseDomain string,
+	registryHost string,
 	fallback http.Handler,
 ) http.Handler {
 	if runtimeService == nil {
@@ -1561,12 +1563,12 @@ func buildRoutingHandler(
 	routeSource := newRuntimeRouteSource(runtimeService)
 	suspensionSource := newRuntimeSuspensionSource(runtimeService)
 	if routes, err := routeSource.routes(ctx); err == nil && len(routes) > 0 {
-		log.Printf("realization routes: %d runtime (base domain %s)", len(routes), baseDomain)
+		log.Printf("realization routes: %d runtime (base domain %s, registry host %s)", len(routes), baseDomain, registryHost)
 	}
 	if suspensions, err := suspensionSource.suspensions(ctx); err == nil && len(suspensions) > 0 {
 		log.Printf("realization suspensions: %d active", len(suspensions))
 	}
-	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, repoRoot, catalogService, baseDomain, fallback)
+	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, repoRoot, catalogService, baseDomain, registryHost, fallback)
 }
 
 // --- Realization routing (subdomain + path prefix) ---
@@ -1672,10 +1674,7 @@ func (s *runtimeSuspensionSource) suspensions(ctx context.Context) ([]interactio
 }
 
 func extractSubdomain(host, baseDomain string) string {
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	host = strings.ToLower(strings.TrimSpace(host))
+	host = normalizedHost(host)
 	baseDomain = strings.ToLower(strings.TrimSpace(baseDomain))
 
 	if host == baseDomain {
@@ -1688,6 +1687,13 @@ func extractSubdomain(host, baseDomain string) string {
 	return ""
 }
 
+func normalizedHost(host string) string {
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	return strings.ToLower(strings.TrimSpace(host))
+}
+
 func realizationRoutingMiddleware(
 	routes []realizationRoute,
 	suspensions []interactions.RealizationSuspension,
@@ -1695,6 +1701,7 @@ func realizationRoutingMiddleware(
 	repoRoot string,
 	catalogService *materializer.Service,
 	baseDomain string,
+	registryHost string,
 	fallback http.Handler,
 ) http.Handler {
 	subdomainMap := make(map[string]realizationRoute)
@@ -1711,8 +1718,22 @@ func realizationRoutingMiddleware(
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestHost := normalizedHost(r.Host)
+		if registryHost = normalizedHost(registryHost); registryHost != "" && requestHost == registryHost {
+			if route, ok := subdomainMap["registry"]; ok {
+				proxyToRealization(route, w, r)
+				return
+			}
+			for _, route := range routes {
+				if normalizeRoutePrefix(route.PathPrefix) == registryRoutePathPrefix {
+					proxyToRealization(route, w, r)
+					return
+				}
+			}
+		}
+
 		// Subdomain takes priority.
-		if sub := extractSubdomain(r.Host, baseDomain); sub != "" {
+		if sub := extractSubdomain(requestHost, baseDomain); sub != "" {
 			if route, ok := subdomainMap[sub]; ok {
 				proxyToRealization(route, w, r)
 				return
@@ -1795,6 +1816,7 @@ func dynamicRealizationRoutingMiddleware(
 	repoRoot string,
 	catalogService *materializer.Service,
 	baseDomain string,
+	registryHost string,
 	fallback http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1808,7 +1830,7 @@ func dynamicRealizationRoutingMiddleware(
 		if err != nil {
 			log.Printf("warning: could not load realization suspensions: %v", err)
 		}
-		realizationRoutingMiddleware(routes, suspensions, runtimeService, repoRoot, catalogService, baseDomain, fallback).ServeHTTP(w, r)
+		realizationRoutingMiddleware(routes, suspensions, runtimeService, repoRoot, catalogService, baseDomain, registryHost, fallback).ServeHTTP(w, r)
 	})
 }
 
