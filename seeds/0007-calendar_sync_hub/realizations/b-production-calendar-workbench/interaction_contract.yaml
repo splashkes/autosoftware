@@ -134,6 +134,9 @@ projections:
       - normalized_event
       - production_event
       - propagation_edge
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - assignments
       - state_transitions
@@ -145,6 +148,9 @@ projections:
     object_kinds:
       - normalized_event
       - calendar_source
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - assignments
       - activity_events
@@ -155,6 +161,9 @@ projections:
     path: /v1/projections/0007-calendar_sync_hub/production-calendar
     object_kinds:
       - production_event
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - state_transitions
       - risk_events
@@ -167,6 +176,9 @@ projections:
       - production_event
       - propagation_edge
       - calendar_destination
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - state_transitions
       - activity_events
@@ -179,6 +191,9 @@ projections:
       - production_event
       - propagation_edge
       - calendar_destination
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - publications
       - risk_events

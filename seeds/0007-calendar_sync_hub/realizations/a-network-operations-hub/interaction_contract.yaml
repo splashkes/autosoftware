@@ -140,6 +140,9 @@ projections:
       - calendar_source
       - calendar_destination
       - sync_incident
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - access_links
       - risk_events
@@ -151,6 +154,9 @@ projections:
       - sync_incident
       - calendar_source
       - propagation_edge
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - risk_events
       - jobs
@@ -163,6 +169,9 @@ projections:
       - normalized_event
       - production_event
       - propagation_edge
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - activity_events
       - publications
@@ -174,6 +183,9 @@ projections:
       - production_event
       - propagation_edge
       - calendar_destination
+    auth_modes:
+      - session
+      - service_token
     capabilities:
       - activity_events
       - publications
