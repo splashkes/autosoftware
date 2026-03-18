@@ -116,6 +116,21 @@ func TestRealizationRoutingMiddlewareFallsBackToRegistryPathRouteForRegistryHost
 	}
 }
 
+func TestPrefixMountedRequestPathPreservesRawPath(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://registry.autosoftware.app/objects/0003-customer-service-app%2Fa-web-mvp/tickets.reply", nil)
+	req.URL.Path = "/objects/0003-customer-service-app/a-web-mvp/tickets.reply"
+	req.URL.RawPath = "/objects/0003-customer-service-app%2Fa-web-mvp/tickets.reply"
+
+	prefixed := prefixMountedRequestPath(req, registryRoutePathPrefix)
+
+	if got, want := prefixed.URL.Path, "/registry/reading-room/objects/0003-customer-service-app/a-web-mvp/tickets.reply"; got != want {
+		t.Fatalf("prefixed path = %q, want %q", got, want)
+	}
+	if got, want := prefixed.URL.RawPath, "/registry/reading-room/objects/0003-customer-service-app%2Fa-web-mvp/tickets.reply"; got != want {
+		t.Fatalf("prefixed raw path = %q, want %q", got, want)
+	}
+}
+
 func TestSelectLaunchTargetPrefersRoutableExecutionOverNewerQueuedExecution(t *testing.T) {
 	items := []interactions.RealizationExecution{
 		{

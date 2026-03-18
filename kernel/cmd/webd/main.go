@@ -1694,6 +1694,36 @@ func normalizedHost(host string) string {
 	return strings.ToLower(strings.TrimSpace(host))
 }
 
+func prefixMountedRequestPath(r *http.Request, mountPrefix string) *http.Request {
+	r2 := r.Clone(r.Context())
+	mountPrefix = normalizeRoutePrefix(mountPrefix)
+	if mountPrefix == "" {
+		return r2
+	}
+	mountBase := strings.TrimSuffix(mountPrefix, "/")
+	if strings.HasPrefix(r.URL.Path, mountPrefix) || r.URL.Path == mountBase {
+		return r2
+	}
+	path := r.URL.Path
+	if path == "" {
+		path = "/"
+	}
+	if path == "/" {
+		r2.URL.Path = mountPrefix
+	} else {
+		r2.URL.Path = mountBase + path
+	}
+	if r.URL.RawPath != "" {
+		rawPath := r.URL.RawPath
+		if rawPath == "/" {
+			r2.URL.RawPath = mountPrefix
+		} else {
+			r2.URL.RawPath = mountBase + rawPath
+		}
+	}
+	return r2
+}
+
 func realizationRoutingMiddleware(
 	routes []realizationRoute,
 	suspensions []interactions.RealizationSuspension,
@@ -1730,6 +1760,7 @@ func realizationRoutingMiddleware(
 					return
 				}
 			}
+			r = prefixMountedRequestPath(r, registryRoutePathPrefix)
 		}
 
 		// Subdomain takes priority.
