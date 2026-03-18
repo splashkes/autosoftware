@@ -21,6 +21,28 @@
 </section>
 {{end}}
 
+{{if .Media}}
+<section class="section">
+  <h2>Media</h2>
+  <div class="card-grid">
+    {{range .Media}}
+    <div class="card">
+      <div class="card-body">
+        {{if eq .MediaType "video"}}
+        <video controls preload="metadata" style="width:100%;">
+          <source src="{{bp}}/media/{{.ID}}" type="{{.ContentType}}">
+        </video>
+        {{else}}
+        <img src="{{bp}}/media/{{.ID}}" alt="{{.FileName}}" style="width:100%;border-radius:12px;">
+        {{end}}
+        <p class="card-meta" style="margin-top:.75rem;">{{.FileName}}</p>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
 {{if .Taxons}}
 <section class="section">
   <h2>Taxonomy</h2>
@@ -60,4 +82,3 @@
 </section>
 {{end}}
 {{end}}
-

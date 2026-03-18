@@ -9,6 +9,17 @@ run:
 environment:
   AS_ADMIN_PASSWORD: admin
   AS_PATH_PREFIX: /flowershow
+  AWS_REGION: us-east-2
+  AS_S3_BUCKET: flowershow-media-741375879542
+  AS_COGNITO_USER_POOL_ID: us-east-2_rsf8nxr0G
+  AS_COGNITO_CLIENT_ID: 6jb5gppphg086vel9us7ehneoa
+  AS_COGNITO_DOMAIN: https://flowershow-741375879542.auth.us-east-2.amazoncognito.com
+  AS_COGNITO_REDIRECT_URL: https://autosoftware.app/flowershow/auth/callback
+  AS_COGNITO_LOGOUT_URL: https://autosoftware.app/flowershow/
+  AWS_ACCESS_KEY_ID: ${AS_FLOWERSHOW_AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY}
+  AS_SESSION_SECRET: ${AS_FLOWERSHOW_SESSION_SECRET}
+  AS_COGNITO_ADMIN_EMAILS: ${AS_FLOWERSHOW_COGNITO_ADMIN_EMAILS}
 notes:
   - AS_ADDR is injected by the kernel execution backend at launch time.
   - AS_RUNTIME_DATABASE_URL is injected by the kernel execution backend at launch time.

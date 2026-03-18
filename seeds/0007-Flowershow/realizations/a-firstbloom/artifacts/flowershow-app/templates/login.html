@@ -2,6 +2,11 @@
 <div class="login-container">
   <h1>Admin Login</h1>
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+  {{if .CognitoEnabled}}
+  <p class="card-meta">Cognito is enabled for this deployment.</p>
+  <a href="{{bp}}/auth/login" class="btn btn-primary">Continue With Cognito</a>
+  <p class="card-meta" style="margin-top:1rem;">Local password login remains available for bootstrap and CI.</p>
+  {{end}}
   <form method="POST" action="{{bp}}/admin/login" class="form login-form">
     <div class="form-group">
       <label for="password">Password</label>
@@ -11,4 +16,3 @@
   </form>
 </div>
 {{end}}
-

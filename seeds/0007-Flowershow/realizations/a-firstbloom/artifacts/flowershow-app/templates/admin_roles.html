@@ -1,0 +1,73 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="{{bp}}/admin">Admin</a> &rsaquo; <span>Roles</span>
+</div>
+
+<div class="admin-header">
+  <h1>Role Management</h1>
+  <form method="POST" action="{{bp}}/auth/logout" class="inline">
+    <button type="submit" class="btn btn-outline btn-sm">Logout Cognito Session</button>
+  </form>
+</div>
+
+{{if .User}}
+<p class="card-meta">Signed in as {{if .User.Email}}{{.User.Email}}{{else}}{{.User.CognitoSub}}{{end}}</p>
+{{end}}
+
+<section class="section">
+  <h2>Assign Role</h2>
+  <form method="POST" action="{{bp}}/admin/roles" class="form">
+    <div class="form-group">
+      <label>Cognito Subject</label>
+      <input type="text" name="cognito_sub" class="form-input" required>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Organization</label>
+        <select name="organization_id" class="form-input">
+          <option value="">Global</option>
+          {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Show</label>
+        <select name="show_id" class="form-input">
+          <option value="">Any show</option>
+          {{range .Shows}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select name="role" class="form-input" required>
+          <option value="admin">admin</option>
+          <option value="judge">judge</option>
+          <option value="entrant">entrant</option>
+          <option value="public">public</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Assign Role</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2>Current Roles</h2>
+  {{if .Roles}}
+  <table class="table">
+    <thead><tr><th>Subject</th><th>Role</th><th>Organization</th><th>Show</th></tr></thead>
+    <tbody>
+      {{range .Roles}}
+      <tr>
+        <td>{{.CognitoSub}}</td>
+        <td>{{.Role}}</td>
+        <td>{{.OrganizationID}}</td>
+        <td>{{.ShowID}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">No Cognito roles assigned yet.</p>
+  {{end}}
+</section>
+{{end}}

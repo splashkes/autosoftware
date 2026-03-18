@@ -10,7 +10,8 @@ import (
 
 func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "login.html", map[string]any{
-		"Title": "Admin Login",
+		"Title":          "Admin Login",
+		"CognitoEnabled": a.authEnabled(),
 	})
 }
 
@@ -19,8 +20,9 @@ func (a *app) handleAdminLoginPost(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	if password != a.adminPassword {
 		a.render(w, "login.html", map[string]any{
-			"Title": "Admin Login",
-			"Error": "Invalid password",
+			"Title":          "Admin Login",
+			"Error":          "Invalid password",
+			"CognitoEnabled": a.authEnabled(),
 		})
 		return
 	}
@@ -35,6 +37,7 @@ func (a *app) handleAdminLoginPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	a.clearUserSession(w)
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminCookieName,
 		Value:    "",
@@ -140,7 +143,12 @@ func (a *app) handleAdminShowDetail(w http.ResponseWriter, r *http.Request) {
 	for _, e := range a.store.entriesByShow(show.ID) {
 		person, _ := a.store.personByID(e.PersonID)
 		cls, _ := a.store.classByID(e.ClassID)
-		entries = append(entries, &entryView{Entry: e, Person: person, Class: cls})
+		entries = append(entries, &entryView{
+			Entry:  e,
+			Person: person,
+			Class:  cls,
+			Media:  a.store.mediaByEntry(e.ID),
+		})
 	}
 
 	orgs := a.store.allOrganizations()
@@ -299,6 +307,61 @@ func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) 
 			fmt.Sprintf(`<div class="toast">Placement set: %s → %d</div>`, entry.Name, placement))
 	}
 
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = "/admin"
+	}
+	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
+func (a *app) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	if _, ok := a.store.entryByID(entryID); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseMultipartForm(maxFormMemory); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	headers := r.MultipartForm.File["media"]
+	if len(headers) == 0 {
+		http.Error(w, "media file required", http.StatusBadRequest)
+		return
+	}
+	for _, header := range headers {
+		media, err := a.media.Store(r.Context(), entryID, header)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, err := a.store.attachMedia(*media); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = "/admin"
+	}
+	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
+func (a *app) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
+	mediaID := r.PathValue("mediaID")
+	media, ok := a.store.mediaByID(mediaID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := a.media.Delete(r.Context(), media); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if err := a.store.deleteMedia(mediaID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	referer := r.Header.Get("Referer")
 	if referer == "" {
 		referer = "/admin"

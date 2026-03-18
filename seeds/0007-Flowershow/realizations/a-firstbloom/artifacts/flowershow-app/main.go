@@ -28,11 +28,15 @@ var templates embed.FS
 var assets embed.FS
 
 type app struct {
-	store         flowershowStore
-	templates     map[string]*template.Template
-	adminPassword string
-	serviceToken  string
-	sseBroker     *sseBroker
+	store           flowershowStore
+	templates       map[string]*template.Template
+	adminPassword   string
+	serviceToken    string
+	sseBroker       *sseBroker
+	auth            authProvider
+	media           mediaStore
+	sessionSecret   []byte
+	bootstrapAdmins map[string]bool
 }
 
 func main() {
@@ -42,13 +46,25 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
+	auth, err := newAuthProviderFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	media, err := newMediaStore()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	a := &app{
-		store:         store,
-		templates:     parseTemplates(),
-		adminPassword: envOrDefault("AS_ADMIN_PASSWORD", "admin"),
-		serviceToken:  strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
-		sseBroker:     newSSEBroker(),
+		store:           store,
+		templates:       parseTemplates(),
+		adminPassword:   envOrDefault("AS_ADMIN_PASSWORD", "admin"),
+		serviceToken:    strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
+		sseBroker:       newSSEBroker(),
+		auth:            auth,
+		media:           media,
+		sessionSecret:   newSessionSecret(),
+		bootstrapAdmins: bootstrapAdminMap(),
 	}
 
 	mux := http.NewServeMux()
@@ -68,14 +84,20 @@ func main() {
 	mux.HandleFunc("GET /taxonomy/{taxonID}", a.handleTaxonDetail)
 	mux.HandleFunc("GET /leaderboard", a.handleLeaderboard)
 	mux.HandleFunc("GET /standards", a.handleStandards)
+	mux.HandleFunc("GET /media/{mediaID}", a.handleMediaOpen)
 
 	// Admin auth
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
 	mux.HandleFunc("POST /admin/login", a.handleAdminLoginPost)
 	mux.HandleFunc("POST /admin/logout", a.handleAdminLogout)
+	mux.HandleFunc("GET /auth/login", a.handleCognitoLogin)
+	mux.HandleFunc("GET /auth/callback", a.handleCognitoCallback)
+	mux.HandleFunc("POST /auth/logout", a.handleCognitoLogout)
 
 	// Admin pages
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+	mux.HandleFunc("GET /admin/roles", a.requireAdmin(a.handleRoleManagement))
+	mux.HandleFunc("POST /admin/roles", a.requireAdmin(a.handleRoleAssign))
 
 	// Admin shows
 	mux.HandleFunc("GET /admin/shows/new", a.requireAdmin(a.handleAdminShowNew))
@@ -93,6 +115,8 @@ func main() {
 	// Admin entries
 	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireAdmin(a.handleAdminEntryCreate))
 	mux.HandleFunc("POST /admin/entries/{entryID}/placement", a.requireAdmin(a.handleAdminEntryPlacement))
+	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
+	mux.HandleFunc("POST /admin/media/{mediaID}/delete", a.requireAdmin(a.handleMediaDelete))
 
 	// Admin persons
 	mux.HandleFunc("GET /admin/persons", a.requireAdmin(a.handleAdminPersons))
@@ -266,6 +290,7 @@ func parseTemplates() map[string]*template.Template {
 		"templates/admin_dashboard.html",
 		"templates/admin_show_new.html",
 		"templates/admin_persons.html",
+		"templates/admin_roles.html",
 	}
 
 	base := template.Must(template.New("base").Funcs(templateFuncMap).ParseFS(
@@ -293,11 +318,6 @@ func (a *app) render(w http.ResponseWriter, name string, data any) {
 		log.Printf("render %s: %v", name, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-}
-
-func (a *app) isAdmin(r *http.Request) bool {
-	cookie, err := r.Cookie(adminCookieName)
-	return err == nil && cookie.Value == "ok"
 }
 
 func (a *app) requireAdmin(next http.HandlerFunc) http.HandlerFunc {

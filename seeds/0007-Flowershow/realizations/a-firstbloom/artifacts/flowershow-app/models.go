@@ -55,11 +55,11 @@ type PersonOrganization struct {
 // --- Schedule Hierarchy ---
 
 type ShowSchedule struct {
-	ID                        string `json:"id"`
-	ShowID                    string `json:"show_id"`
-	SourceDocumentID          string `json:"source_document_id,omitempty"`
+	ID                         string `json:"id"`
+	ShowID                     string `json:"show_id"`
+	SourceDocumentID           string `json:"source_document_id,omitempty"`
 	EffectiveStandardEditionID string `json:"effective_standard_edition_id,omitempty"`
-	Notes                     string `json:"notes,omitempty"`
+	Notes                      string `json:"notes,omitempty"`
 }
 
 type Division struct {
@@ -158,8 +158,10 @@ type Media struct {
 	EntryID      string    `json:"entry_id"`
 	MediaType    string    `json:"media_type"` // photo, video
 	URL          string    `json:"url"`
+	ContentType  string    `json:"content_type,omitempty"`
 	ThumbnailURL string    `json:"thumbnail_url,omitempty"`
 	FileName     string    `json:"file_name"`
+	StorageKey   string    `json:"storage_key,omitempty"`
 	FileSize     int64     `json:"file_size"`
 	Width        int       `json:"width,omitempty"`
 	Height       int       `json:"height,omitempty"`
@@ -220,6 +222,22 @@ type AwardResult struct {
 	PersonID string  `json:"person_id"`
 	Score    float64 `json:"score"`
 	Rank     int     `json:"rank"`
+}
+
+type UserRole struct {
+	ID             string    `json:"id"`
+	CognitoSub     string    `json:"cognito_sub"`
+	OrganizationID string    `json:"organization_id,omitempty"`
+	ShowID         string    `json:"show_id,omitempty"`
+	Role           string    `json:"role"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type UserRoleInput struct {
+	CognitoSub     string `json:"cognito_sub"`
+	OrganizationID string `json:"organization_id,omitempty"`
+	ShowID         string `json:"show_id,omitempty"`
+	Role           string `json:"role"`
 }
 
 type Vote struct {
