@@ -1309,6 +1309,7 @@ func buildFeaturedSeeds(seeds []seedBootView) []featuredSeedView {
 		{SeedID: "0006-registry-browser", Label: "Registry Browser", PreferredReference: "0006-registry-browser/a-ledger-reading-room"},
 		{SeedID: "0004-event-listings", Label: "Event Listings", PreferredReference: "0004-event-listings/a-web-mvp"},
 		{SeedID: "0003-customer-service-app", Label: "Ticketing", PreferredReference: "0003-customer-service-app/a-web-mvp"},
+		{SeedID: "0007-Flowershow", Label: "Flower Show", PreferredReference: "0007-Flowershow/a-firstbloom"},
 	}
 
 	index := make(map[string]seedBootView, len(seeds))
