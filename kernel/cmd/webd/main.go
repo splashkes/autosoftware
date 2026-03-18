@@ -1578,6 +1578,8 @@ type realizationRoute struct {
 	ProxyAddr  string
 }
 
+const registryRoutePathPrefix = "/registry/reading-room/"
+
 type runtimeRouteSource struct {
 	service  *interactions.RuntimeService
 	mu       sync.Mutex
@@ -1714,6 +1716,14 @@ func realizationRoutingMiddleware(
 			if route, ok := subdomainMap[sub]; ok {
 				proxyToRealization(route, w, r)
 				return
+			}
+			if sub == "registry" {
+				for _, route := range routes {
+					if normalizeRoutePrefix(route.PathPrefix) == registryRoutePathPrefix {
+						proxyToRealization(route, w, r)
+						return
+					}
+				}
 			}
 			if suspension, ok := suspensionSubdomainMap[sub]; ok {
 				renderSuspensionPage(w, r, suspension)
