@@ -262,6 +262,9 @@ projections:
       - show
     auth_modes:
       - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
     freshness: materialized
   - name: shows.detail
     summary: Single show with schedule, entries, awards.
@@ -270,6 +273,9 @@ projections:
       - show
     auth_modes:
       - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
     freshness: materialized
   - name: entries.list
     summary: Entries for a show or class.
@@ -278,6 +284,9 @@ projections:
       - entry
     auth_modes:
       - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
     freshness: materialized
   - name: classes.list
     summary: Classes within a schedule.
@@ -286,6 +295,8 @@ projections:
       - show_class
     auth_modes:
       - anonymous
+    capabilities:
+      - activity_events
     freshness: materialized
   - name: taxonomy.browse
     summary: Taxon listing and cross-references.
@@ -294,6 +305,8 @@ projections:
       - taxon
     auth_modes:
       - anonymous
+    capabilities:
+      - search_documents
     freshness: materialized
   - name: leaderboard
     summary: Season leaderboard per organization.
@@ -303,6 +316,8 @@ projections:
       - person
     auth_modes:
       - anonymous
+    capabilities:
+      - activity_events
     freshness: materialized
   - name: shows.ledger
     summary: Append-only claim history for a show's objects.
@@ -312,6 +327,8 @@ projections:
     auth_modes:
       - session
       - service_token
+    capabilities:
+      - activity_events
     freshness: materialized
   - name: admin.dashboard
     summary: Show admin overview with counts.
@@ -321,6 +338,9 @@ projections:
     auth_modes:
       - session
       - service_token
+    capabilities:
+      - activity_events
+      - sessions
     freshness: materialized
 consistency:
   write_visibility: read_your_writes
