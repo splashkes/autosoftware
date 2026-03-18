@@ -1,0 +1,15 @@
+kind: runtime
+version: 1
+runtime: go
+entrypoint: artifacts/flowershow-app/main.go
+working_directory: artifacts/flowershow-app
+run:
+  command: prebuilt
+  args: []
+environment:
+  AS_ADMIN_PASSWORD: admin
+notes:
+  - AS_ADDR is injected by the kernel execution backend at launch time.
+  - AS_RUNTIME_DATABASE_URL is injected by the kernel execution backend at launch time.
+  - Admin login uses AS_ADMIN_PASSWORD and defaults to admin for local development.
+  - Flower show objects, claims, and materialized projections persist in the shared runtime database.

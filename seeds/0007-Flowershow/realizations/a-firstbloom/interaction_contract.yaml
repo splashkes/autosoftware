@@ -1,0 +1,442 @@
+contract_version: v1
+surface_kind: interactive
+seed_id: 0007-Flowershow
+realization_id: a-firstbloom
+summary: First-bloom realization — standards-backed flower show management with schedule hierarchy, rubric scoring, taxonomy, and real-time show admin.
+links:
+  seed_design: ../../design.md
+  seed_brief: ../../brief.md
+  seed_acceptance: ../../acceptance.md
+  realization_readme: README.md
+auth_modes:
+  - anonymous
+  - session
+  - service_token
+capabilities:
+  - name: state_transitions
+    summary: Lifecycle state changes for shows, entries, and awards.
+  - name: activity_events
+    summary: Auditable record of mutations across all domain objects.
+  - name: sessions
+    summary: Authenticated admin and service sessions.
+  - name: search_documents
+    summary: Searchable projections for shows, entries, taxonomy.
+  - name: uploads
+    summary: Media file uploads for entry photos and videos.
+domain_objects:
+  - kind: show
+    summary: A single flower show competition event hosted by an organization.
+    schema_ref: ../../design.md
+    capabilities:
+      - state_transitions
+      - activity_events
+  - kind: entry
+    summary: A submission into a class within a show, linked to a person.
+    schema_ref: ../../design.md
+    capabilities:
+      - state_transitions
+      - activity_events
+      - uploads
+  - kind: show_class
+    summary: A class within a section of a division in a show schedule.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: person
+    summary: An entrant, judge, or member with private identity.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: taxon
+    summary: A concept in the taxonomy graph (botanical, design, etc).
+    schema_ref: ../../design.md
+    capabilities:
+      - search_documents
+  - kind: award_definition
+    summary: An award defined per organization and season with scoring rules.
+    schema_ref: ../../design.md
+    capabilities:
+      - state_transitions
+      - activity_events
+commands:
+  - name: shows.create
+    summary: Create a new flower show.
+    path: /v1/commands/0007-Flowershow/shows.create
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: shows.update
+    summary: Update show details.
+    path: /v1/commands/0007-Flowershow/shows.update
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: entries.create
+    summary: Create a new entry in a show class.
+    path: /v1/commands/0007-Flowershow/entries.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.list
+    consistency: read_your_writes
+  - name: entries.update
+    summary: Update an existing entry.
+    path: /v1/commands/0007-Flowershow/entries.update
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: entries.list
+    consistency: read_your_writes
+  - name: entries.set_placement
+    summary: Set placement and points for an entry.
+    path: /v1/commands/0007-Flowershow/entries.set_placement
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.list
+    consistency: read_your_writes
+  - name: classes.create
+    summary: Add a class to a section in the schedule.
+    path: /v1/commands/0007-Flowershow/classes.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: persons.create
+    summary: Register a new person (entrant, judge, or member).
+    path: /v1/commands/0007-Flowershow/persons.create
+    object_kinds:
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: awards.create
+    summary: Define a new award for an organization.
+    path: /v1/commands/0007-Flowershow/awards.create
+    object_kinds:
+      - award_definition
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: awards.compute
+    summary: Compute award results from matching entries.
+    path: /v1/commands/0007-Flowershow/awards.compute
+    object_kinds:
+      - award_definition
+    auth_modes:
+      - session
+      - service_token
+    idempotency: none
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: taxons.create
+    summary: Add a taxon to the taxonomy.
+    path: /v1/commands/0007-Flowershow/taxons.create
+    object_kinds:
+      - taxon
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - search_documents
+    projection: taxonomy.browse
+    consistency: read_your_writes
+  - name: rubrics.create
+    summary: Create a judging rubric.
+    path: /v1/commands/0007-Flowershow/rubrics.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: criteria.create
+    summary: Add a criterion to a rubric.
+    path: /v1/commands/0007-Flowershow/criteria.create
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: scorecards.submit
+    summary: Submit a scorecard with per-criterion scores.
+    path: /v1/commands/0007-Flowershow/scorecards.submit
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: entries.list
+    consistency: read_your_writes
+  - name: standards.create
+    summary: Register a standard document.
+    path: /v1/commands/0007-Flowershow/standards.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: editions.create
+    summary: Add an edition to a standard document.
+    path: /v1/commands/0007-Flowershow/editions.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: sources.create
+    summary: Register a source document.
+    path: /v1/commands/0007-Flowershow/sources.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: citations.create
+    summary: Create a source citation for a target record.
+    path: /v1/commands/0007-Flowershow/citations.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: rules.create
+    summary: Add a standard rule to an edition.
+    path: /v1/commands/0007-Flowershow/rules.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: overrides.create
+    summary: Create a local class rule override.
+    path: /v1/commands/0007-Flowershow/overrides.create
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+projections:
+  - name: shows.directory
+    summary: List of all shows with summary info.
+    path: /v1/projections/0007-Flowershow/shows
+    object_kinds:
+      - show
+    auth_modes:
+      - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
+    freshness: materialized
+  - name: shows.detail
+    summary: Single show with schedule, entries, awards.
+    path: /v1/projections/0007-Flowershow/shows/{id}
+    object_kinds:
+      - show
+    auth_modes:
+      - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
+    freshness: materialized
+  - name: entries.list
+    summary: Entries for a show or class.
+    path: /v1/projections/0007-Flowershow/entries
+    object_kinds:
+      - entry
+    auth_modes:
+      - anonymous
+    capabilities:
+      - state_transitions
+      - activity_events
+    freshness: materialized
+  - name: classes.list
+    summary: Classes within a schedule.
+    path: /v1/projections/0007-Flowershow/classes
+    object_kinds:
+      - show_class
+    auth_modes:
+      - anonymous
+    capabilities:
+      - activity_events
+    freshness: materialized
+  - name: taxonomy.browse
+    summary: Taxon listing and cross-references.
+    path: /v1/projections/0007-Flowershow/taxonomy
+    object_kinds:
+      - taxon
+    auth_modes:
+      - anonymous
+    capabilities:
+      - search_documents
+    freshness: materialized
+  - name: leaderboard
+    summary: Season leaderboard per organization.
+    path: /v1/projections/0007-Flowershow/leaderboard
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - anonymous
+    capabilities:
+      - activity_events
+    freshness: materialized
+  - name: shows.ledger
+    summary: Append-only claim history for a show's objects.
+    path: /v1/projections/0007-Flowershow/ledger/{objectID}
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+    freshness: materialized
+  - name: admin.dashboard
+    summary: Show admin overview with counts.
+    path: /v1/projections/0007-Flowershow/admin/dashboard
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - sessions
+    freshness: materialized
+consistency:
+  write_visibility: read_your_writes
+  projection_freshness: materialized

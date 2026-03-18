@@ -1,0 +1,253 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/admin">Admin</a> &rsaquo; <span>{{.Show.Name}}</span>
+</div>
+
+<div class="admin-header">
+  <h1>{{.Show.Name}}</h1>
+  <a href="/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
+</div>
+
+<div hx-ext="sse" sse-connect="/admin/shows/{{.Show.ID}}/stream">
+  <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('info')">Info</button>
+  <button class="tab" onclick="showTab('schedule')">Schedule</button>
+  <button class="tab" onclick="showTab('entries')">Entries</button>
+  <button class="tab" onclick="showTab('winners')">Winners</button>
+  <button class="tab" onclick="showTab('scoring')">Scoring</button>
+</div>
+
+<!-- Info Tab -->
+<div id="tab-info" class="tab-content active">
+  <form method="POST" action="/admin/shows/{{.Show.ID}}" class="form">
+    <div class="form-group">
+      <label>Show Name</label>
+      <input type="text" name="name" value="{{.Show.Name}}" class="form-input" required>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Organization</label>
+        <select name="organization_id" class="form-input">
+          {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.Show.OrganizationID}}selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" name="location" value="{{.Show.Location}}" class="form-input">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" name="date" value="{{.Show.Date}}" class="form-input">
+      </div>
+      <div class="form-group">
+        <label>Season</label>
+        <input type="text" name="season" value="{{.Show.Season}}" class="form-input">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Update Show</button>
+  </form>
+</div>
+
+<!-- Schedule Tab -->
+<div id="tab-schedule" class="tab-content">
+  {{if not .Schedule}}
+  <form method="POST" action="/admin/shows/{{.Show.ID}}/schedule" class="form">
+    <h3>Create Schedule</h3>
+    <div class="form-group">
+      <label>Notes</label>
+      <input type="text" name="notes" class="form-input" placeholder="e.g. Spring 2025 Fair Book">
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Create Schedule</button>
+  </form>
+  {{else}}
+  <p class="card-meta">Schedule ID: {{.Schedule.ID}}</p>
+
+  <!-- Existing schedule tree -->
+  {{range .Divisions}}
+  <div class="schedule-division admin-division">
+    <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+    {{range .Sections}}
+    <div class="schedule-section admin-section">
+      <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+      {{range .Classes}}
+      <div class="class-item admin-class-item">
+        <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
+        {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+      </div>
+      {{end}}
+      <!-- Add class form -->
+      <details class="add-form">
+        <summary class="btn btn-outline btn-sm">+ Add Class</summary>
+        <form method="POST" action="/admin/shows/{{$.Show.ID}}/classes" class="form form-compact">
+          <input type="hidden" name="section_id" value="{{.Section.ID}}">
+          <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
+          <input type="text" name="title" placeholder="Title" class="form-input" required>
+          <select name="domain" class="form-input form-sm">
+            <option value="horticulture">Horticulture</option>
+            <option value="design">Design</option>
+            <option value="special">Special</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="text" name="description" placeholder="Description" class="form-input">
+          <input type="number" name="specimen_count" placeholder="Specimens" class="form-input form-sm" value="1">
+          <button type="submit" class="btn btn-primary btn-sm">Add Class</button>
+        </form>
+      </details>
+    </div>
+    {{end}}
+    <!-- Add section form -->
+    <details class="add-form">
+      <summary class="btn btn-outline btn-sm">+ Add Section</summary>
+      <form method="POST" action="/admin/shows/{{$.Show.ID}}/sections" class="form form-compact">
+        <input type="hidden" name="division_id" value="{{.Division.ID}}">
+        <input type="text" name="code" placeholder="Code (e.g. A)" class="form-input form-sm">
+        <input type="text" name="title" placeholder="Section title" class="form-input" required>
+        <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+        <button type="submit" class="btn btn-primary btn-sm">Add Section</button>
+      </form>
+    </details>
+  </div>
+  {{end}}
+
+  <!-- Add division form -->
+  <details class="add-form">
+    <summary class="btn btn-outline btn-sm">+ Add Division</summary>
+    <form method="POST" action="/admin/shows/{{.Show.ID}}/divisions" class="form form-compact">
+      <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
+      <input type="text" name="code" placeholder="Code (e.g. I)" class="form-input form-sm">
+      <input type="text" name="title" placeholder="Division title" class="form-input" required>
+      <select name="domain" class="form-input form-sm">
+        <option value="horticulture">Horticulture</option>
+        <option value="design">Design</option>
+        <option value="special">Special</option>
+        <option value="other">Other</option>
+      </select>
+      <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+      <button type="submit" class="btn btn-primary btn-sm">Add Division</button>
+    </form>
+  </details>
+  {{end}}
+</div>
+
+<!-- Entries Tab -->
+<div id="tab-entries" class="tab-content">
+  <h3>Add Entry</h3>
+  <form method="POST" action="/admin/shows/{{.Show.ID}}/entries" class="form form-compact">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Class</label>
+        <select name="class_id" class="form-input" required>
+          <option value="">Select class...</option>
+          {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}}: {{.Title}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Person</label>
+        <select name="person_id" class="form-input" required>
+          <option value="">Select person...</option>
+          {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Entry Name</label>
+        <input type="text" name="name" class="form-input" required placeholder="e.g. Peace, Crimson Glory">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Add Entry</button>
+  </form>
+
+  <h3>All Entries ({{len .Entries}})</h3>
+  {{if .Entries}}
+  <table class="table">
+    <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Placement</th><th>Points</th></tr></thead>
+    <tbody>
+      {{range .Entries}}
+      <tr class="{{placementClass .Entry.Placement}}">
+        <td>{{.Entry.Name}}</td>
+        <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
+        <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
+        <td>{{placementLabel .Entry.Placement}}</td>
+        <td>{{.Entry.Points}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">No entries yet.</p>
+  {{end}}
+</div>
+
+<!-- Winners Tab -->
+<div id="tab-winners" class="tab-content">
+  <h3>Set Placements</h3>
+  {{if .Entries}}
+  {{range .Entries}}
+  <div class="winner-row">
+    <span class="winner-name">{{.Entry.Name}} {{if .Class}}<span class="card-meta">({{.Class.ClassNumber}})</span>{{end}}</span>
+    <form method="POST" action="/admin/entries/{{.Entry.ID}}/placement" class="form form-inline">
+      <select name="placement" class="form-input form-sm">
+        <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
+        <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>
+        <option value="2" {{if eq .Entry.Placement 2}}selected{{end}}>2nd</option>
+        <option value="3" {{if eq .Entry.Placement 3}}selected{{end}}>3rd</option>
+      </select>
+      <input type="number" name="points" value="{{.Entry.Points}}" class="form-input form-sm" step="0.5" placeholder="Pts">
+      <button type="submit" class="btn btn-primary btn-sm">Set</button>
+    </form>
+  </div>
+  {{end}}
+  {{else}}
+  <p class="empty-state">No entries to place.</p>
+  {{end}}
+</div>
+
+<!-- Scoring Tab -->
+<div id="tab-scoring" class="tab-content">
+  <h3>Submit Scorecard</h3>
+  {{if and .Rubrics .Entries}}
+  <form method="POST" action="/admin/scorecards" class="form">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Entry</label>
+        <select name="entry_id" class="form-input" required>
+          {{range .Entries}}<option value="{{.Entry.ID}}">{{.Entry.Name}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Judge</label>
+        <select name="judge_id" class="form-input" required>
+          {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Rubric</label>
+        <select name="rubric_id" class="form-input" required>
+          {{range .Rubrics}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <input type="text" name="notes" class="form-input" placeholder="Judge notes">
+    </div>
+    <p class="card-meta">Enter scores per criterion after selecting a rubric. Scores will be computed from criteria matching the selected rubric.</p>
+    <button type="submit" class="btn btn-primary btn-sm">Submit Scorecard</button>
+  </form>
+  {{else}}
+  <p class="empty-state">Add rubrics and entries before scoring.</p>
+  {{end}}
+</div>
+{{end}}
+

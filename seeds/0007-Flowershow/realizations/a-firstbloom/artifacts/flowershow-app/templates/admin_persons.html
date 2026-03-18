@@ -1,0 +1,39 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/admin">Admin</a> &rsaquo; <span>Persons</span>
+</div>
+
+<h1>Manage Persons</h1>
+
+<section class="section">
+  <h2>Add Person</h2>
+  <form method="POST" action="/admin/persons" class="form form-inline">
+    <input type="text" name="first_name" placeholder="First name" class="form-input" required>
+    <input type="text" name="last_name" placeholder="Last name" class="form-input" required>
+    <input type="email" name="email" placeholder="Email (optional)" class="form-input">
+    <button type="submit" class="btn btn-primary btn-sm">Add</button>
+  </form>
+</section>
+
+<section class="section">
+  <h2>All Persons</h2>
+  {{if .Persons}}
+  <table class="table">
+    <thead><tr><th>ID</th><th>Name</th><th>Initials</th><th>Email</th></tr></thead>
+    <tbody>
+      {{range .Persons}}
+      <tr>
+        <td class="mono">{{.ID}}</td>
+        <td>{{.FirstName}} {{.LastName}}</td>
+        <td>{{.Initials}}</td>
+        <td>{{.Email}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">No persons yet.</p>
+  {{end}}
+</section>
+{{end}}
+

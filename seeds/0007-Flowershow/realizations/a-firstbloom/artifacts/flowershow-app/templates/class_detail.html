@@ -1,0 +1,42 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/">Home</a> &rsaquo;
+  <a href="/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;
+  <a href="/shows/{{.Show.Slug}}/classes">Classes</a> &rsaquo;
+  <span>{{.Class.ClassNumber}}</span>
+</div>
+
+<h1>Class {{.Class.ClassNumber}}: {{.Class.Title}}</h1>
+<p class="class-description">{{.Class.Description}}</p>
+
+<div class="class-meta">
+  {{if .Division}}<span class="badge badge-muted">Division {{.Division.Code}}: {{.Division.Title}}</span>{{end}}
+  {{if .Section}}<span class="badge badge-muted">Section {{.Section.Code}}: {{.Section.Title}}</span>{{end}}
+  <span class="badge badge-muted">{{.Class.Domain}}</span>
+  {{if .Class.SpecimenCount}}<span class="badge badge-green">{{.Class.SpecimenCount}} specimen{{if gt .Class.SpecimenCount 1}}s{{end}}</span>{{end}}
+</div>
+
+<section class="section">
+  <h2>Entries</h2>
+  {{if .Entries}}
+  <table class="table">
+    <thead>
+      <tr><th>Entry</th><th>Entrant</th><th>Placement</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+      {{range .Entries}}
+      <tr class="{{placementClass .Entry.Placement}}">
+        <td><a href="/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td>{{if .Person}}{{.Person.Initials}}{{end}}</td>
+        <td>{{placementLabel .Entry.Placement}}</td>
+        <td>{{.Entry.Points}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">No entries in this class.</p>
+  {{end}}
+</section>
+{{end}}
+

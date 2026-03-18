@@ -1,0 +1,26 @@
+{{define "content"}}
+<h1>Leaderboard</h1>
+<p class="section-desc">{{.OrgName}} — Season {{.Season}}</p>
+
+{{if .Entries}}
+<table class="table leaderboard-table">
+  <thead>
+    <tr><th>#</th><th>Exhibitor</th><th>Points</th><th>Entries</th><th>1st Place</th></tr>
+  </thead>
+  <tbody>
+    {{range .Entries}}
+    <tr class="{{if eq .Rank 1}}leaderboard-first{{end}}">
+      <td class="rank">{{.Rank}}</td>
+      <td>{{.Initials}}</td>
+      <td class="points">{{.TotalPoints}}</td>
+      <td>{{.EntryCount}}</td>
+      <td>{{.FirstCount}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty-state">No leaderboard data for this season.</p>
+{{end}}
+{{end}}
+

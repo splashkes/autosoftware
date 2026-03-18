@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/">Home</a> &rsaquo; <a href="/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo; <span>Classes</span>
+</div>
+
+<h1>Classes — {{.Show.Name}}</h1>
+
+{{range .Divisions}}
+<section class="section">
+  <h2>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h2>
+  {{range .Sections}}
+  <div class="schedule-section">
+    <h3>Section {{.Section.Code}}: {{.Section.Title}}</h3>
+    <div class="class-grid">
+      {{range .Classes}}
+      <a href="/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="card class-card">
+        <div class="card-body">
+          <span class="class-number">{{.ClassNumber}}</span>
+          <h4 class="card-title">{{.Title}}</h4>
+          <p class="card-meta">{{.Description}}</p>
+          {{if .SpecimenCount}}<p class="card-meta">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</p>{{end}}
+        </div>
+      </a>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+

@@ -1,0 +1,84 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/">Home</a> &rsaquo; <span>{{.Show.Name}}</span>
+</div>
+
+<div class="show-header">
+  <h1>{{.Show.Name}}</h1>
+  <p class="show-meta">
+    {{if .Org}}{{.Org.Name}} &middot; {{end}}
+    {{.Show.Location}} &middot; {{.Show.Date}}
+    {{statusBadge .Show.Status}}
+  </p>
+  <div class="show-actions">
+    <a href="/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
+    <a href="/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
+  </div>
+</div>
+
+{{if .Schedule}}
+<section class="section">
+  <h2>Schedule</h2>
+  {{range .Divisions}}
+  <div class="schedule-division">
+    <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+    {{range .Sections}}
+    <div class="schedule-section">
+      <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+      <div class="class-list">
+        {{range .Classes}}
+        <a href="/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="class-item">
+          <span class="class-number">{{.ClassNumber}}</span>
+          <span class="class-title">{{.Title}}</span>
+          {{if .SpecimenCount}}<span class="class-specimens">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+        </a>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+<section class="section">
+  <h2>Entries ({{len .Entries}})</h2>
+  {{if .Entries}}
+  <table class="table">
+    <thead>
+      <tr><th>Entry</th><th>Class</th><th>Entrant</th><th>Placement</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+      {{range .Entries}}
+      <tr class="{{placementClass .Entry.Placement}}">
+        <td><a href="/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
+        <td>{{if .Person}}{{.Person.Initials}}{{end}}</td>
+        <td>{{placementLabel .Entry.Placement}}</td>
+        <td>{{.Entry.Points}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">No entries yet.</p>
+  {{end}}
+</section>
+
+{{if .Awards}}
+<section class="section">
+  <h2>Awards</h2>
+  <div class="card-grid">
+    {{range .Awards}}
+    <div class="card award-card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Name}}</h3>
+        <p class="card-meta">{{.ScoringRule}} scoring &middot; Season {{.Season}}</p>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+{{end}}
+
