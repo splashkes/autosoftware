@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const (
@@ -228,9 +229,11 @@ func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 var globalBasePath = strings.TrimSuffix(strings.TrimSpace(os.Getenv("AS_PATH_PREFIX")), "/")
+var assetVersion = time.Now().UTC().Format("20060102150405")
 
 var templateFuncMap = template.FuncMap{
-	"bp": func() string { return globalBasePath },
+	"bp":           func() string { return globalBasePath },
+	"assetVersion": func() string { return assetVersion },
 	"placementLabel": func(p int) string {
 		switch p {
 		case 1:
