@@ -1,0 +1,11 @@
+approach_id: a-calendar-orchestration-hub
+summary: Central calendar orchestration hub that ingests external sources, normalizes events into one canonical model, and propagates approved production changes to downstream calendars.
+status: proposed
+strategy:
+  implementation_style: docs-first seed planning
+  review_style: lineage-and-operations
+  interface_bias: operator-control-plane
+realizer:
+  model: codex-gpt-5
+  prompt_profile: calendar-sync-orchestration
+  coding_ruleset: seed-local-first
