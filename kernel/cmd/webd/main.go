@@ -1757,6 +1757,21 @@ func realizationRoutingMiddleware(
 			requestPath == "/v1/contracts" ||
 			strings.HasPrefix(requestPath, "/v1/contracts/")
 		if registryHost = normalizedHost(registryHost); registryHost != "" && requestHost == registryHost {
+			registryMountedBase := strings.TrimSuffix(registryRoutePathPrefix, "/")
+			if requestPath == registryMountedBase || strings.HasPrefix(requestPath, registryRoutePathPrefix) {
+				redirectPath := requestRedirectPath(r)
+				switch {
+				case redirectPath == "" || redirectPath == registryMountedBase:
+					redirectPath = "/"
+				case strings.HasPrefix(redirectPath, registryRoutePathPrefix):
+					redirectPath = "/" + strings.TrimPrefix(redirectPath, registryRoutePathPrefix)
+				}
+				if r.URL != nil && r.URL.RawQuery != "" {
+					redirectPath += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, "https://"+registryHost+redirectPath, http.StatusFound)
+				return
+			}
 			if !registryReservedNamespace {
 				if route, ok := subdomainMap["registry"]; ok {
 					proxyToRealization(route, w, r)
