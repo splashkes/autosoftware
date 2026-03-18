@@ -1871,6 +1871,10 @@ func realizationRoutingMiddleware(
 				if existingLaunch := preferredLaunchTarget(r.Context(), runtimeService, reference); existingLaunch.ExecutionID != "" {
 					if existingLaunch.OpenPath != "" {
 						targetPath := launchRedirectPath(existingLaunch.OpenPath, requestPath, matchedPrefix)
+						if shouldRenderLaunchingPageInsteadOfRedirect(existingLaunch.OpenPath, targetPath, matchedPrefix) {
+							renderLaunchingPage(w, r, existingLaunch, currentRequestTarget(r), matchedPrefix)
+							return
+						}
 						if r.URL.RawQuery != "" {
 							targetPath += "?" + r.URL.RawQuery
 						}
@@ -1979,6 +1983,13 @@ func launchRedirectPath(openPath, requestPath, matchedPrefix string) string {
 		return strings.TrimSpace(openPath) + remainder
 	}
 	return strings.TrimSpace(openPath) + "/" + remainder
+}
+
+func shouldRenderLaunchingPageInsteadOfRedirect(openPath, targetPath, matchedPrefix string) bool {
+	openPath = strings.TrimSpace(openPath)
+	targetPath = strings.TrimSpace(targetPath)
+	matchedPrefix = strings.TrimSpace(matchedPrefix)
+	return matchedPrefix != "" && strings.HasPrefix(openPath, "/__runs/") && targetPath == openPath
 }
 
 func requestRedirectPath(r *http.Request) string {
