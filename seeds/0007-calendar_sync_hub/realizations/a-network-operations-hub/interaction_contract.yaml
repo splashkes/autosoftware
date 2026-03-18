@@ -12,57 +12,57 @@ auth_modes:
   - session
   - service_token
 capabilities:
-  - name: inspect_sync_topology
+  - name: access_links
     summary: Inspect source, hub, and destination connectivity with health and freshness state.
-  - name: inspect_event_lineage
+  - name: activity_events
     summary: Trace an event from source ingestion through production approval and downstream propagation.
-  - name: manage_sync_runs
+  - name: jobs
     summary: Trigger or inspect source sync runs and their resulting incidents.
-  - name: manage_propagation
+  - name: publications
     summary: Retry, pause, or inspect per-destination propagation edges.
-  - name: inspect_incidents
+  - name: risk_events
     summary: Filter review-needed items, connector failures, and delivery errors.
 domain_objects:
   - kind: calendar_source
     summary: Upstream calendar or feed connected for ingestion.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - inspect_sync_topology
-      - manage_sync_runs
-      - inspect_incidents
+      - access_links
+      - jobs
+      - risk_events
   - kind: calendar_destination
     summary: Downstream calendar or feed used for outbound propagation.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - inspect_sync_topology
-      - manage_propagation
-      - inspect_incidents
+      - access_links
+      - publications
+      - risk_events
   - kind: normalized_event
     summary: Hub-owned normalized interpretation of inbound event data.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - inspect_event_lineage
-      - inspect_incidents
+      - activity_events
+      - risk_events
   - kind: production_event
     summary: Approved event record that serves as internal propagation authority.
     schema_ref: ../../design.md
     capabilities:
-      - inspect_event_lineage
-      - manage_propagation
+      - activity_events
+      - publications
   - kind: propagation_edge
     summary: Per-destination delivery state for a production event.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - inspect_event_lineage
-      - manage_propagation
-      - inspect_incidents
+      - activity_events
+      - publications
+      - risk_events
   - kind: sync_incident
     summary: Operator-visible sync or propagation problem requiring inspection or retry.
     schema_ref: ../../design.md
     capabilities:
-      - inspect_incidents
-      - manage_sync_runs
-      - manage_propagation
+      - risk_events
+      - jobs
+      - publications
 commands:
   - name: calendar_sources.register
     summary: Register or update an upstream calendar source for ingestion.
@@ -76,8 +76,8 @@ commands:
     input_schema_ref: ../../design.md
     result_schema_ref: README.md
     capabilities:
-      - inspect_sync_topology
-      - manage_sync_runs
+      - access_links
+      - jobs
     projection: topology.overview
     consistency: read_your_writes
   - name: calendar_sources.sync_now
@@ -94,8 +94,8 @@ commands:
     input_schema_ref: ../../INGESTION.md
     result_schema_ref: README.md
     capabilities:
-      - manage_sync_runs
-      - inspect_incidents
+      - jobs
+      - risk_events
     projection: sync.incidents
     consistency: eventual
   - name: normalized_events.promote_to_production
@@ -111,8 +111,8 @@ commands:
     input_schema_ref: ../../design.md
     result_schema_ref: README.md
     capabilities:
-      - inspect_event_lineage
-      - manage_propagation
+      - activity_events
+      - publications
     projection: events.lineage_detail
     consistency: read_your_writes
   - name: propagation_edges.retry
@@ -128,8 +128,8 @@ commands:
     input_schema_ref: ../../PROPAGATION.md
     result_schema_ref: README.md
     capabilities:
-      - manage_propagation
-      - inspect_incidents
+      - publications
+      - risk_events
     projection: propagation.status
     consistency: eventual
 projections:
@@ -141,8 +141,8 @@ projections:
       - calendar_destination
       - sync_incident
     capabilities:
-      - inspect_sync_topology
-      - inspect_incidents
+      - access_links
+      - risk_events
     freshness: materialized
   - name: sync.incidents
     summary: Incident queue for connector failures, review-needed items, and retry candidates.
@@ -152,9 +152,9 @@ projections:
       - calendar_source
       - propagation_edge
     capabilities:
-      - inspect_incidents
-      - manage_sync_runs
-      - manage_propagation
+      - risk_events
+      - jobs
+      - publications
     freshness: materialized
   - name: events.lineage_detail
     summary: Event lineage view across source records, normalized interpretation, production truth, and delivery edges.
@@ -164,8 +164,8 @@ projections:
       - production_event
       - propagation_edge
     capabilities:
-      - inspect_event_lineage
-      - manage_propagation
+      - activity_events
+      - publications
     freshness: materialized
   - name: propagation.status
     summary: Per-destination propagation board grouped by pending, pushed, and failed delivery state.
@@ -175,9 +175,9 @@ projections:
       - propagation_edge
       - calendar_destination
     capabilities:
-      - inspect_event_lineage
-      - manage_propagation
-      - inspect_incidents
+      - activity_events
+      - publications
+      - risk_events
     freshness: materialized
 consistency:
   write_visibility: eventual

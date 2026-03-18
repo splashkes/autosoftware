@@ -12,51 +12,51 @@ auth_modes:
   - session
   - service_token
 capabilities:
-  - name: review_intake_queue
+  - name: assignments
     summary: Review inbound normalized events before they become production truth.
-  - name: curate_production_calendar
+  - name: state_transitions
     summary: Organize approved production events in timeline and calendar views.
-  - name: inspect_event_lineage
+  - name: activity_events
     summary: Trace production events back to source lineage and forward to destinations.
-  - name: manage_destination_publication
+  - name: publications
     summary: Configure and retry destination publication for production events.
-  - name: inspect_conflicts
+  - name: risk_events
     summary: Find schedule overlaps, upstream drift, and publication failures that need attention.
 domain_objects:
   - kind: calendar_source
     summary: Upstream calendar or feed connected for ingestion.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - review_intake_queue
-      - inspect_event_lineage
+      - assignments
+      - activity_events
   - kind: normalized_event
     summary: Hub-owned normalized event awaiting review or already linked to production truth.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - review_intake_queue
-      - inspect_event_lineage
-      - inspect_conflicts
+      - assignments
+      - activity_events
+      - risk_events
   - kind: production_event
     summary: Approved event record shown in the central production calendar.
     schema_ref: ../../design.md
     capabilities:
-      - curate_production_calendar
-      - inspect_event_lineage
-      - manage_destination_publication
-      - inspect_conflicts
+      - state_transitions
+      - activity_events
+      - publications
+      - risk_events
   - kind: calendar_destination
     summary: Downstream calendar or feed used for publication from the production calendar.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - manage_destination_publication
-      - inspect_event_lineage
+      - publications
+      - activity_events
   - kind: propagation_edge
     summary: Publication state for a production event on one destination calendar.
     schema_ref: ../../SCHEMA.md
     capabilities:
-      - manage_destination_publication
-      - inspect_event_lineage
-      - inspect_conflicts
+      - publications
+      - activity_events
+      - risk_events
 commands:
   - name: calendar_sources.register
     summary: Register or update an upstream calendar source for ingestion.
@@ -70,7 +70,7 @@ commands:
     input_schema_ref: ../../design.md
     result_schema_ref: README.md
     capabilities:
-      - review_intake_queue
+      - assignments
     projection: intake.queue
     consistency: read_your_writes
   - name: normalized_events.promote_to_production
@@ -86,9 +86,9 @@ commands:
     input_schema_ref: ../../design.md
     result_schema_ref: README.md
     capabilities:
-      - review_intake_queue
-      - curate_production_calendar
-      - inspect_event_lineage
+      - assignments
+      - state_transitions
+      - activity_events
     projection: production.calendar
     consistency: read_your_writes
   - name: production_events.configure_publication
@@ -105,8 +105,8 @@ commands:
     input_schema_ref: ../../PROPAGATION.md
     result_schema_ref: README.md
     capabilities:
-      - manage_destination_publication
-      - inspect_event_lineage
+      - publications
+      - activity_events
     projection: production.event_detail
     consistency: read_your_writes
   - name: propagation_edges.retry
@@ -122,8 +122,8 @@ commands:
     input_schema_ref: ../../PROPAGATION.md
     result_schema_ref: README.md
     capabilities:
-      - manage_destination_publication
-      - inspect_conflicts
+      - publications
+      - risk_events
     projection: publication.status
     consistency: eventual
 projections:
@@ -135,9 +135,9 @@ projections:
       - production_event
       - propagation_edge
     capabilities:
-      - review_intake_queue
-      - curate_production_calendar
-      - inspect_conflicts
+      - assignments
+      - state_transitions
+      - risk_events
     freshness: materialized
   - name: intake.queue
     summary: Review queue for normalized inbound events that need approval, merge, or deferral.
@@ -146,9 +146,9 @@ projections:
       - normalized_event
       - calendar_source
     capabilities:
-      - review_intake_queue
-      - inspect_event_lineage
-      - inspect_conflicts
+      - assignments
+      - activity_events
+      - risk_events
     freshness: materialized
   - name: production.calendar
     summary: Timeline and calendar projection of approved production events.
@@ -156,8 +156,8 @@ projections:
     object_kinds:
       - production_event
     capabilities:
-      - curate_production_calendar
-      - inspect_conflicts
+      - state_transitions
+      - risk_events
     freshness: materialized
   - name: production.event_detail
     summary: Production-event detail showing source lineage, review history, and destination publication state.
@@ -168,9 +168,9 @@ projections:
       - propagation_edge
       - calendar_destination
     capabilities:
-      - curate_production_calendar
-      - inspect_event_lineage
-      - manage_destination_publication
+      - state_transitions
+      - activity_events
+      - publications
     freshness: materialized
   - name: publication.status
     summary: Publication board grouped by destination state for production events.
@@ -180,9 +180,9 @@ projections:
       - propagation_edge
       - calendar_destination
     capabilities:
-      - manage_destination_publication
-      - inspect_conflicts
-      - inspect_event_lineage
+      - publications
+      - risk_events
+      - activity_events
     freshness: materialized
 consistency:
   write_visibility: eventual
