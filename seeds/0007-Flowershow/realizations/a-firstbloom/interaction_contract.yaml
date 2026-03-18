@@ -67,9 +67,14 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - state_transitions
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: shows.update
     summary: Update show details.
     path: /v1/commands/0007-Flowershow/shows.update
@@ -78,8 +83,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: entries.create
     summary: Create a new entry in a show class.
     path: /v1/commands/0007-Flowershow/entries.create
@@ -88,9 +98,14 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - state_transitions
       - activity_events
+    projection: entries.list
+    consistency: read_your_writes
   - name: entries.update
     summary: Update an existing entry.
     path: /v1/commands/0007-Flowershow/entries.update
@@ -99,8 +114,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: entries.list
+    consistency: read_your_writes
   - name: entries.set_placement
     summary: Set placement and points for an entry.
     path: /v1/commands/0007-Flowershow/entries.set_placement
@@ -109,9 +129,14 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - state_transitions
       - activity_events
+    projection: entries.list
+    consistency: read_your_writes
   - name: classes.create
     summary: Add a class to a section in the schedule.
     path: /v1/commands/0007-Flowershow/classes.create
@@ -120,8 +145,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: persons.create
     summary: Register a new person (entrant, judge, or member).
     path: /v1/commands/0007-Flowershow/persons.create
@@ -130,8 +160,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: awards.create
     summary: Define a new award for an organization.
     path: /v1/commands/0007-Flowershow/awards.create
@@ -140,9 +175,14 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - state_transitions
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: awards.compute
     summary: Compute award results from matching entries.
     path: /v1/commands/0007-Flowershow/awards.compute
@@ -151,9 +191,14 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: none
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - state_transitions
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: taxons.create
     summary: Add a taxon to the taxonomy.
     path: /v1/commands/0007-Flowershow/taxons.create
@@ -162,8 +207,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - search_documents
+    projection: taxonomy.browse
+    consistency: read_your_writes
   - name: rubrics.create
     summary: Create a judging rubric.
     path: /v1/commands/0007-Flowershow/rubrics.create
@@ -172,8 +222,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: criteria.create
     summary: Add a criterion to a rubric.
     path: /v1/commands/0007-Flowershow/criteria.create
@@ -182,8 +237,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: scorecards.submit
     summary: Submit a scorecard with per-criterion scores.
     path: /v1/commands/0007-Flowershow/scorecards.submit
@@ -192,8 +252,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: entries.list
+    consistency: read_your_writes
   - name: standards.create
     summary: Register a standard document.
     path: /v1/commands/0007-Flowershow/standards.create
@@ -202,8 +267,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: editions.create
     summary: Add an edition to a standard document.
     path: /v1/commands/0007-Flowershow/editions.create
@@ -212,8 +282,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: sources.create
     summary: Register a source document.
     path: /v1/commands/0007-Flowershow/sources.create
@@ -222,8 +297,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: citations.create
     summary: Create a source citation for a target record.
     path: /v1/commands/0007-Flowershow/citations.create
@@ -232,8 +312,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: rules.create
     summary: Add a standard rule to an edition.
     path: /v1/commands/0007-Flowershow/rules.create
@@ -242,8 +327,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
   - name: overrides.create
     summary: Create a local class rule override.
     path: /v1/commands/0007-Flowershow/overrides.create
@@ -252,8 +342,13 @@ commands:
     auth_modes:
       - session
       - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
     capabilities:
       - activity_events
+    projection: classes.list
+    consistency: read_your_writes
 projections:
   - name: shows.directory
     summary: List of all shows with summary info.
