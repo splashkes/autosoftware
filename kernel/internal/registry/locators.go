@@ -10,8 +10,10 @@ import (
 )
 
 var ErrHashLookupNotFound = errors.New("registry hash not found")
+var ErrHashLookupAmbiguous = errors.New("registry hash prefix is ambiguous")
 
 const publicRegistryBaseURL = "https://registry.autosoftware.app"
+const ShortShareHashLength = 16
 
 type ResourceLocator struct {
 	ResourceKind string
@@ -119,6 +121,14 @@ func PermalinkBrowsePath(contentHash string) string {
 		return ""
 	}
 	return publicRegistryURL("/reg/" + contentHash)
+}
+
+func ShareBrowsePath(contentHash string) string {
+	contentHash = strings.ToLower(strings.TrimSpace(contentHash))
+	if len(contentHash) < ShortShareHashLength {
+		return ""
+	}
+	return publicRegistryURL("/r/" + contentHash[:ShortShareHashLength])
 }
 
 func PermalinkResolvePath(canonicalURL, contentHash string) string {

@@ -894,6 +894,7 @@ func registryDiscoveryPaths() map[string]string {
 		"schemas":      "/v1/registry/schemas",
 		"schema":       "/v1/registry/schema?ref={ref}",
 		"permalink":    "https://registry.autosoftware.app/reg/{sha256}",
+		"share":        "https://registry.autosoftware.app/r/{sha256_prefix16}",
 		"contracts":    "/v1/contracts",
 	}
 }

@@ -98,6 +98,54 @@ func (idx *RegistryHashIndex) Resolve(ctx context.Context, contentHash string) (
 	return record, nil
 }
 
+func (idx *RegistryHashIndex) ResolvePrefix(ctx context.Context, contentHashPrefix string) (registry.HashLookupRecord, error) {
+	if idx == nil || idx.pool == nil {
+		return registry.HashLookupRecord{}, fmt.Errorf("registry hash index database pool is required")
+	}
+
+	contentHashPrefix = strings.ToLower(strings.TrimSpace(contentHashPrefix))
+	if contentHashPrefix == "" || len(contentHashPrefix) > 64 {
+		return registry.HashLookupRecord{}, registry.ErrHashLookupNotFound
+	}
+	for _, ch := range contentHashPrefix {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return registry.HashLookupRecord{}, registry.ErrHashLookupNotFound
+		}
+	}
+
+	rows, err := idx.pool.Query(ctx, `
+		select content_hash, resource_kind, canonical_url, permalink_url
+		from runtime_registry_hash_index
+		where content_hash like $1
+		order by content_hash
+		limit 2
+	`, contentHashPrefix+"%")
+	if err != nil {
+		return registry.HashLookupRecord{}, fmt.Errorf("resolve registry hash prefix %s: %w", contentHashPrefix, err)
+	}
+	defer rows.Close()
+
+	records := make([]registry.HashLookupRecord, 0, 2)
+	for rows.Next() {
+		var record registry.HashLookupRecord
+		if err := rows.Scan(&record.ContentHash, &record.ResourceKind, &record.CanonicalURL, &record.PermalinkURL); err != nil {
+			return registry.HashLookupRecord{}, fmt.Errorf("scan registry hash prefix %s: %w", contentHashPrefix, err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return registry.HashLookupRecord{}, fmt.Errorf("iterate registry hash prefix %s: %w", contentHashPrefix, err)
+	}
+	switch len(records) {
+	case 0:
+		return registry.HashLookupRecord{}, registry.ErrHashLookupNotFound
+	case 1:
+		return records[0], nil
+	default:
+		return registry.HashLookupRecord{}, registry.ErrHashLookupAmbiguous
+	}
+}
+
 func catalogHashRecords(catalog registry.Catalog) []registry.HashLookupRecord {
 	records := make([]registry.HashLookupRecord, 0, len(catalog.Realizations)+len(catalog.Commands)+len(catalog.Projections)+len(catalog.Objects)+len(catalog.Schemas))
 	for _, item := range catalog.Realizations {

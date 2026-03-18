@@ -742,6 +742,7 @@ func matchesRequestedPermalink(r *http.Request, contentHash string) bool {
 func withResourceIdentity(data map[string]any, canonicalURL, permalinkURL, contentHash string) map[string]any {
 	data["CanonicalURL"] = canonicalURL
 	data["PermalinkURL"] = permalinkURL
+	data["ShareURL"] = shareRegistryURL(contentHash)
 	data["ContentHash"] = contentHash
 	return data
 }
@@ -973,6 +974,14 @@ func permalinkResolvePath(canonicalURL, contentHash string) string {
 		return ""
 	}
 	return canonicalRegistryURL("/@" + contentHash + canonicalPath)
+}
+
+func shareRegistryURL(contentHash string) string {
+	contentHash = strings.ToLower(strings.TrimSpace(contentHash))
+	if len(contentHash) < 16 {
+		return ""
+	}
+	return canonicalRegistryURL("/r/" + contentHash[:16])
 }
 
 func trustedURL(value string) template.URL {
