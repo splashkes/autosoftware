@@ -1,15 +1,7 @@
-# Flower Show Competition – Taxonomy & Data Model (v1.0)
+# Flower Show Competition – Taxonomy & Data Model (v2.0)
 
 ## Overview
-This document defines the full taxonomy and data model for a federated flower show competition system.
-
-It supports:
-- Multiple organizations (clubs, societies, federations)
-- Flexible taxonomy (botanical + design)
-- Cross-linking
-- Awards and scoring
-- Media and entries
-- Privacy and suppression
+Full taxonomy and data model for a federated flower show competition system with standards-backed schedule hierarchy, rubric scoring, and source provenance.
 
 ---
 
@@ -80,12 +72,125 @@ Society → District → Region → Province → Country → Global
 
 ---
 
-# 5. Entry Model
+# 5. Standards & Editions
+
+## standard_document
+- id
+- name
+- issuing_org_id
+- domain_scope
+- description
+
+Examples: OJES (Ontario Judging and Exhibiting Standards), Publication 34
+
+## standard_edition
+- id
+- standard_document_id
+- edition_label
+- publication_year
+- revision_date
+- status (current, superseded, draft)
+- source_url
+- source_kind (official_pdf, print_only, excerpt_pdf, catalog_record)
+
+---
+
+# 6. Source Documents & Citations
+
+## source_document
+- id
+- organization_id
+- show_id (nullable)
+- title
+- document_type (rulebook, schedule, fair_book, newsletter, results_sheet, catalog_record)
+- publication_date
+- source_url
+- local_path (nullable)
+- checksum (nullable)
+
+## source_citation
+- id
+- source_document_id
+- target_type
+- target_id
+- page_from
+- page_to
+- quoted_text (nullable)
+- extraction_confidence
+
+---
+
+# 7. Schedule Hierarchy
+
+## show_schedule
+- id
+- show_id
+- source_document_id
+- effective_standard_edition_id (nullable)
+- notes
+
+## division
+- id
+- show_schedule_id
+- code (nullable)
+- title
+- domain (horticulture, design, special, other)
+- sort_order
+
+## section
+- id
+- division_id
+- code (nullable)
+- title
+- sort_order
+
+## show_class
+- id
+- section_id
+- class_number
+- title
+- domain
+- description
+- specimen_count (nullable)
+- unit (nullable)
+- measurement_rule (nullable)
+- naming_requirement (nullable)
+- container_rule (nullable)
+- eligibility_rule (nullable)
+- schedule_notes (nullable)
+- taxon_refs[]
+
+Replaces the earlier generic `category` concept.
+
+---
+
+# 8. Standard Rules & Overrides
+
+## standard_rule
+- id
+- standard_edition_id
+- domain
+- rule_type (definition, presentation, measurement, eligibility, scale_of_points, naming)
+- subject_label
+- body
+- page_ref (nullable)
+
+## class_rule_override
+- id
+- show_class_id
+- base_standard_rule_id (nullable)
+- override_type (replace, narrow, extend, local_only)
+- body
+- rationale (nullable)
+
+---
+
+# 9. Entry Model
 
 ## Entry
 - id
 - show_id
-- category_id
+- show_class_id
 - person_id
 - placement
 - points
@@ -93,7 +198,7 @@ Society → District → Region → Province → Country → Global
 
 ---
 
-# 6. Taxonomy Model
+# 10. Taxonomy Model
 
 ## Taxon
 - id
@@ -120,7 +225,7 @@ Society → District → Region → Province → Country → Global
 
 ---
 
-# 7. Domain-Specific Models
+# 11. Domain-Specific Models
 
 ## FlowerCategory
 - category_number
@@ -138,7 +243,7 @@ Society → District → Region → Province → Country → Global
 
 ---
 
-# 8. Scientific Names
+# 12. Scientific Names
 
 Structured:
 - genus
@@ -148,7 +253,42 @@ Structured:
 
 ---
 
-# 9. Awards
+# 13. Judging & Rubric Scoring
+
+## judging_rubric
+- id
+- standard_edition_id (nullable)
+- show_id (nullable)
+- domain
+- title
+
+## judging_criterion
+- id
+- judging_rubric_id
+- name
+- max_points
+- sort_order
+
+## entry_scorecard
+- id
+- entry_id
+- judge_id
+- rubric_id
+- total_score
+- notes (nullable)
+
+## entry_criterion_score
+- id
+- entry_scorecard_id
+- criterion_id
+- score
+- comment (nullable)
+
+Placements and awards computed from scorecards when present.
+
+---
+
+# 14. Awards
 
 ## AwardDefinition
 - name
@@ -165,7 +305,7 @@ Examples:
 
 ---
 
-# 10. Voting
+# 15. Voting
 
 ## Vote
 - entry_id
@@ -174,18 +314,21 @@ Examples:
 
 ---
 
-# 11. Media
+# 16. Media
 
 ## Media
 - id
 - entry_id
 - url
-- type
-- metadata
+- type (photo, video)
+- metadata (dimensions, duration, original_filename)
+- storage_key (S3 key)
+
+Multiple photos and videos per entry. Client sends optimized files; server transcodes if exceeding threshold.
 
 ---
 
-# 12. Privacy & Suppression
+# 17. Privacy & Suppression
 
 - Public: entries, results, media
 - Private: identity linkage
@@ -193,9 +336,13 @@ Examples:
 
 ---
 
-# 13. Key Design Principles
+# 18. Key Design Principles
 
+- Standards and provenance as first-class layers
+- Schedule hierarchy (division → section → class)
+- Rule inheritance with local overrides
 - Graph-first taxonomy
+- Rubric-capable scoring
 - Structured domains
 - Flexible awards
 - API-first ingestion
@@ -203,8 +350,10 @@ Examples:
 
 ---
 
-# 14. Future Extensions
+# 19. Future Extensions
 
 - Cross-organization awards
 - Federation analytics
 - AI-assisted taxonomy normalization
+- Real-time ingestion tools
+- Historical data migration

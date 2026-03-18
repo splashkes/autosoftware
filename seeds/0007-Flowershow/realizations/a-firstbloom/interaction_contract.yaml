@@ -1,0 +1,91 @@
+contract_version: 1
+seed_id: 0007-Flowershow
+realization_id: a-firstbloom
+
+commands:
+  - shows.create
+  - shows.update
+  - entries.create
+  - entries.update
+  - entries.set_placement
+  - classes.create
+  - classes.update
+  - schedule.create
+  - divisions.create
+  - sections.create
+  - persons.create
+  - persons.update
+  - awards.create
+  - awards.compute
+  - rubrics.create
+  - criteria.create
+  - scorecards.submit
+  - media.attach
+  - standards.create
+  - editions.create
+  - sources.create
+  - citations.create
+  - rules.create
+  - overrides.create
+  - taxons.create
+
+projections:
+  - name: shows.directory
+    description: List of all shows with summary info.
+    auth: anonymous
+  - name: shows.detail
+    description: Single show with schedule, entries, awards.
+    auth: anonymous
+  - name: shows.record
+    description: Full show record including admin-level detail.
+    auth: session
+  - name: shows.ledger
+    description: Append-only claim history for a show's objects.
+    auth: session
+  - name: entries.list
+    description: Entries for a show or class.
+    auth: anonymous
+  - name: entries.detail
+    description: Single entry with scores, media, taxonomy.
+    auth: anonymous
+  - name: classes.list
+    description: Classes within a schedule, division, or section.
+    auth: anonymous
+  - name: taxonomy.browse
+    description: Taxon listing and cross-references.
+    auth: anonymous
+  - name: leaderboard
+    description: Season leaderboard per organization.
+    auth: anonymous
+  - name: admin.dashboard
+    description: Show admin overview with counts and status.
+    auth: session
+
+auth_modes:
+  - anonymous
+  - session
+  - service_token
+
+domain_objects:
+  - organization
+  - show
+  - show_schedule
+  - division
+  - section
+  - show_class
+  - person
+  - entry
+  - media
+  - taxon
+  - taxon_relation
+  - award_definition
+  - standard_document
+  - standard_edition
+  - source_document
+  - source_citation
+  - standard_rule
+  - class_rule_override
+  - judging_rubric
+  - judging_criterion
+  - entry_scorecard
+  - entry_criterion_score

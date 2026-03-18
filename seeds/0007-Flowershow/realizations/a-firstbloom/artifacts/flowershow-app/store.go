@@ -1,0 +1,1794 @@
+package main
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// --- ID generation ---
+
+func newID(prefix string) string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("%s_%d", prefix, time.Now().UTC().UnixNano())
+	}
+	return prefix + "_" + hex.EncodeToString(buf)
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r == ' ' || r == '-' || r == '_' {
+			return '-'
+		}
+		return -1
+	}, s)
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	return strings.Trim(s, "-")
+}
+
+// --- Store interface ---
+
+type flowershowStore interface {
+	// Organizations
+	createOrganization(Organization) (*Organization, error)
+	organizationByID(id string) (*Organization, bool)
+	allOrganizations() []*Organization
+
+	// Shows
+	createShow(ShowInput) (*Show, error)
+	updateShow(id string, input ShowInput) (*Show, error)
+	showByID(id string) (*Show, bool)
+	showBySlug(slug string) (*Show, bool)
+	allShows() []*Show
+
+	// Persons
+	createPerson(PersonInput) (*Person, error)
+	updatePerson(id string, input PersonInput) (*Person, error)
+	personByID(id string) (*Person, bool)
+	allPersons() []*Person
+
+	// Schedule
+	createSchedule(ShowSchedule) (*ShowSchedule, error)
+	scheduleByShowID(showID string) (*ShowSchedule, bool)
+
+	// Divisions
+	createDivision(DivisionInput) (*Division, error)
+	divisionsBySchedule(scheduleID string) []*Division
+	divisionByID(id string) (*Division, bool)
+
+	// Sections
+	createSection(SectionInput) (*Section, error)
+	sectionsByDivision(divisionID string) []*Section
+	sectionByID(id string) (*Section, bool)
+
+	// Classes
+	createClass(ShowClassInput) (*ShowClass, error)
+	updateClass(id string, input ShowClassInput) (*ShowClass, error)
+	classesBySection(sectionID string) []*ShowClass
+	classByID(id string) (*ShowClass, bool)
+	classesByShowID(showID string) []*ShowClass
+
+	// Entries
+	createEntry(EntryInput) (*Entry, error)
+	updateEntry(id string, input EntryInput) (*Entry, error)
+	setPlacement(entryID string, placement int, points float64) error
+	entryByID(id string) (*Entry, bool)
+	entriesByShow(showID string) []*Entry
+	entriesByClass(classID string) []*Entry
+	entriesByPerson(personID string) []*Entry
+
+	// Taxonomy
+	createTaxon(TaxonInput) (*Taxon, error)
+	taxonByID(id string) (*Taxon, bool)
+	allTaxons() []*Taxon
+	taxonsByType(taxonType string) []*Taxon
+
+	// Awards
+	createAward(AwardInput) (*AwardDefinition, error)
+	awardByID(id string) (*AwardDefinition, bool)
+	awardsByOrganization(orgID string) []*AwardDefinition
+	computeAward(awardID string) ([]AwardResult, error)
+
+	// Standards
+	createStandardDocument(StandardDocument) (*StandardDocument, error)
+	allStandardDocuments() []*StandardDocument
+	createStandardEdition(StandardEdition) (*StandardEdition, error)
+	editionsByStandard(standardDocID string) []*StandardEdition
+
+	// Sources
+	createSourceDocument(SourceDocument) (*SourceDocument, error)
+	allSourceDocuments() []*SourceDocument
+	createSourceCitation(SourceCitation) (*SourceCitation, error)
+	citationsByTarget(targetType, targetID string) []*SourceCitation
+
+	// Rules
+	createStandardRule(StandardRule) (*StandardRule, error)
+	rulesByEdition(editionID string) []*StandardRule
+	createClassRuleOverride(ClassRuleOverride) (*ClassRuleOverride, error)
+	overridesByClass(classID string) []*ClassRuleOverride
+	effectiveRulesForClass(classID string, editionID string) []effectiveRule
+
+	// Rubrics
+	createRubric(JudgingRubric) (*JudgingRubric, error)
+	rubricByID(id string) (*JudgingRubric, bool)
+	allRubrics() []*JudgingRubric
+	createCriterion(JudgingCriterion) (*JudgingCriterion, error)
+	criteriaByRubric(rubricID string) []*JudgingCriterion
+
+	// Scorecards
+	submitScorecard(EntryScorecard, []EntryCriterionScore) (*EntryScorecard, error)
+	scorecardsByEntry(entryID string) []*EntryScorecard
+	criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore
+	computePlacementsFromScores(classID string) error
+
+	// Leaderboard
+	leaderboard(orgID, season string) []LeaderboardEntry
+
+	// Ledger
+	ledgerByObjectID(objectID string) ([]FlowershowClaim, error)
+
+	Close()
+}
+
+type effectiveRule struct {
+	Rule     *StandardRule      `json:"rule,omitempty"`
+	Override *ClassRuleOverride `json:"override,omitempty"`
+	Source   string             `json:"source"` // "standard", "override", "local_only"
+}
+
+// ============================================================================
+// In-memory store (development & tests)
+// ============================================================================
+
+type memoryStore struct {
+	mu            sync.RWMutex
+	organizations map[string]*Organization
+	shows         map[string]*Show
+	persons       map[string]*Person
+	schedules     map[string]*ShowSchedule
+	divisions     map[string]*Division
+	sections      map[string]*Section
+	classes       map[string]*ShowClass
+	entries       map[string]*Entry
+	taxons        map[string]*Taxon
+	awards        map[string]*AwardDefinition
+	stdDocs       map[string]*StandardDocument
+	stdEditions   map[string]*StandardEdition
+	srcDocs       map[string]*SourceDocument
+	srcCitations  map[string]*SourceCitation
+	stdRules      map[string]*StandardRule
+	classOverrides map[string]*ClassRuleOverride
+	rubrics       map[string]*JudgingRubric
+	criteria      map[string]*JudgingCriterion
+	scorecards    map[string]*EntryScorecard
+	critScores    map[string]*EntryCriterionScore
+	objects       map[string]*FlowershowObject
+	claims        []FlowershowClaim
+	claimSeq      int64
+}
+
+func newMemoryStore() *memoryStore {
+	s := &memoryStore{
+		organizations:  make(map[string]*Organization),
+		shows:          make(map[string]*Show),
+		persons:        make(map[string]*Person),
+		schedules:      make(map[string]*ShowSchedule),
+		divisions:      make(map[string]*Division),
+		sections:       make(map[string]*Section),
+		classes:        make(map[string]*ShowClass),
+		entries:        make(map[string]*Entry),
+		taxons:         make(map[string]*Taxon),
+		awards:         make(map[string]*AwardDefinition),
+		stdDocs:        make(map[string]*StandardDocument),
+		stdEditions:    make(map[string]*StandardEdition),
+		srcDocs:        make(map[string]*SourceDocument),
+		srcCitations:   make(map[string]*SourceCitation),
+		stdRules:       make(map[string]*StandardRule),
+		classOverrides: make(map[string]*ClassRuleOverride),
+		rubrics:        make(map[string]*JudgingRubric),
+		criteria:       make(map[string]*JudgingCriterion),
+		scorecards:     make(map[string]*EntryScorecard),
+		critScores:     make(map[string]*EntryCriterionScore),
+		objects:        make(map[string]*FlowershowObject),
+	}
+	s.seedDemoData()
+	return s
+}
+
+func (s *memoryStore) Close() {}
+
+func (s *memoryStore) appendClaim(objectID, objectType, claimType string, payload any) {
+	s.claimSeq++
+	if _, ok := s.objects[objectID]; !ok {
+		s.objects[objectID] = &FlowershowObject{
+			ID:         objectID,
+			ObjectType: objectType,
+			CreatedAt:  time.Now().UTC(),
+			CreatedBy:  "system",
+		}
+	}
+	s.claims = append(s.claims, FlowershowClaim{
+		ID:         newID("claim"),
+		ObjectID:   objectID,
+		ClaimSeq:   s.claimSeq,
+		ClaimType:  claimType,
+		AcceptedAt: time.Now().UTC(),
+		AcceptedBy: "system",
+		Payload:    payload,
+	})
+}
+
+// --- Organizations ---
+
+func (s *memoryStore) createOrganization(o Organization) (*Organization, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o.ID == "" {
+		o.ID = newID("org")
+	}
+	s.organizations[o.ID] = &o
+	s.appendClaim(o.ID, "organization", "organization.created", o)
+	return &o, nil
+}
+
+func (s *memoryStore) organizationByID(id string) (*Organization, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	o, ok := s.organizations[id]
+	return o, ok
+}
+
+func (s *memoryStore) allOrganizations() []*Organization {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Organization
+	for _, o := range s.organizations {
+		out = append(out, o)
+	}
+	return out
+}
+
+// --- Shows ---
+
+func (s *memoryStore) createShow(input ShowInput) (*Show, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	show := &Show{
+		ID:             newID("show"),
+		Slug:           slugify(input.Name),
+		OrganizationID: input.OrganizationID,
+		Name:           input.Name,
+		Location:       input.Location,
+		Date:           input.Date,
+		Season:         input.Season,
+		Status:         "draft",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	s.shows[show.ID] = show
+	s.appendClaim(show.ID, "show", "show.created", show)
+	return show, nil
+}
+
+func (s *memoryStore) updateShow(id string, input ShowInput) (*Show, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	show, ok := s.shows[id]
+	if !ok {
+		return nil, errors.New("show not found")
+	}
+	show.Name = input.Name
+	show.Location = input.Location
+	show.Date = input.Date
+	show.Season = input.Season
+	if input.OrganizationID != "" {
+		show.OrganizationID = input.OrganizationID
+	}
+	show.UpdatedAt = time.Now().UTC()
+	s.appendClaim(show.ID, "show", "show.updated", show)
+	return show, nil
+}
+
+func (s *memoryStore) showByID(id string) (*Show, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	show, ok := s.shows[id]
+	return show, ok
+}
+
+func (s *memoryStore) showBySlug(slug string) (*Show, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, show := range s.shows {
+		if show.Slug == slug {
+			return show, true
+		}
+	}
+	return nil, false
+}
+
+func (s *memoryStore) allShows() []*Show {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Show
+	for _, show := range s.shows {
+		out = append(out, show)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	return out
+}
+
+// --- Persons ---
+
+func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := &Person{
+		ID:        newID("person"),
+		FirstName: input.FirstName,
+		LastName:  input.LastName,
+		Initials:  string([]rune(input.FirstName)[:1]) + string([]rune(input.LastName)[:1]),
+		Email:     input.Email,
+	}
+	s.persons[p.ID] = p
+	s.appendClaim(p.ID, "person", "person.created", p)
+	return p, nil
+}
+
+func (s *memoryStore) updatePerson(id string, input PersonInput) (*Person, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.persons[id]
+	if !ok {
+		return nil, errors.New("person not found")
+	}
+	p.FirstName = input.FirstName
+	p.LastName = input.LastName
+	p.Email = input.Email
+	if len(input.FirstName) > 0 && len(input.LastName) > 0 {
+		p.Initials = string([]rune(input.FirstName)[:1]) + string([]rune(input.LastName)[:1])
+	}
+	s.appendClaim(p.ID, "person", "person.updated", p)
+	return p, nil
+}
+
+func (s *memoryStore) personByID(id string) (*Person, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.persons[id]
+	return p, ok
+}
+
+func (s *memoryStore) allPersons() []*Person {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Person
+	for _, p := range s.persons {
+		out = append(out, p)
+	}
+	return out
+}
+
+// --- Schedule ---
+
+func (s *memoryStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sched.ID == "" {
+		sched.ID = newID("sched")
+	}
+	s.schedules[sched.ID] = &sched
+	s.appendClaim(sched.ID, "schedule", "schedule.created", sched)
+	return &sched, nil
+}
+
+func (s *memoryStore) scheduleByShowID(showID string) (*ShowSchedule, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, sched := range s.schedules {
+		if sched.ShowID == showID {
+			return sched, true
+		}
+	}
+	return nil, false
+}
+
+// --- Divisions ---
+
+func (s *memoryStore) createDivision(input DivisionInput) (*Division, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := &Division{
+		ID:             newID("div"),
+		ShowScheduleID: input.ShowScheduleID,
+		Code:           input.Code,
+		Title:          input.Title,
+		Domain:         input.Domain,
+		SortOrder:      input.SortOrder,
+	}
+	s.divisions[d.ID] = d
+	s.appendClaim(d.ID, "division", "division.created", d)
+	return d, nil
+}
+
+func (s *memoryStore) divisionsBySchedule(scheduleID string) []*Division {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Division
+	for _, d := range s.divisions {
+		if d.ShowScheduleID == scheduleID {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SortOrder < out[j].SortOrder })
+	return out
+}
+
+func (s *memoryStore) divisionByID(id string) (*Division, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	d, ok := s.divisions[id]
+	return d, ok
+}
+
+// --- Sections ---
+
+func (s *memoryStore) createSection(input SectionInput) (*Section, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sec := &Section{
+		ID:         newID("sec"),
+		DivisionID: input.DivisionID,
+		Code:       input.Code,
+		Title:      input.Title,
+		SortOrder:  input.SortOrder,
+	}
+	s.sections[sec.ID] = sec
+	s.appendClaim(sec.ID, "section", "section.created", sec)
+	return sec, nil
+}
+
+func (s *memoryStore) sectionsByDivision(divisionID string) []*Section {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Section
+	for _, sec := range s.sections {
+		if sec.DivisionID == divisionID {
+			out = append(out, sec)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SortOrder < out[j].SortOrder })
+	return out
+}
+
+func (s *memoryStore) sectionByID(id string) (*Section, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sec, ok := s.sections[id]
+	return sec, ok
+}
+
+// --- Classes ---
+
+func (s *memoryStore) createClass(input ShowClassInput) (*ShowClass, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := &ShowClass{
+		ID:                newID("class"),
+		SectionID:         input.SectionID,
+		ClassNumber:       input.ClassNumber,
+		Title:             input.Title,
+		Domain:            input.Domain,
+		Description:       input.Description,
+		SpecimenCount:     input.SpecimenCount,
+		Unit:              input.Unit,
+		MeasurementRule:   input.MeasurementRule,
+		NamingRequirement: input.NamingRequirement,
+		ContainerRule:     input.ContainerRule,
+		EligibilityRule:   input.EligibilityRule,
+		ScheduleNotes:     input.ScheduleNotes,
+		TaxonRefs:         input.TaxonRefs,
+	}
+	s.classes[c.ID] = c
+	s.appendClaim(c.ID, "class", "class.created", c)
+	return c, nil
+}
+
+func (s *memoryStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.classes[id]
+	if !ok {
+		return nil, errors.New("class not found")
+	}
+	c.ClassNumber = input.ClassNumber
+	c.Title = input.Title
+	c.Domain = input.Domain
+	c.Description = input.Description
+	c.SpecimenCount = input.SpecimenCount
+	c.TaxonRefs = input.TaxonRefs
+	s.appendClaim(c.ID, "class", "class.updated", c)
+	return c, nil
+}
+
+func (s *memoryStore) classesBySection(sectionID string) []*ShowClass {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*ShowClass
+	for _, c := range s.classes {
+		if c.SectionID == sectionID {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ClassNumber < out[j].ClassNumber })
+	return out
+}
+
+func (s *memoryStore) classByID(id string) (*ShowClass, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.classes[id]
+	return c, ok
+}
+
+func (s *memoryStore) classesByShowID(showID string) []*ShowClass {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sched, ok := s.scheduleByShowIDLocked(showID)
+	if !ok {
+		return nil
+	}
+	var out []*ShowClass
+	for _, d := range s.divisions {
+		if d.ShowScheduleID != sched.ID {
+			continue
+		}
+		for _, sec := range s.sections {
+			if sec.DivisionID != d.ID {
+				continue
+			}
+			for _, c := range s.classes {
+				if c.SectionID == sec.ID {
+					out = append(out, c)
+				}
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ClassNumber < out[j].ClassNumber })
+	return out
+}
+
+func (s *memoryStore) scheduleByShowIDLocked(showID string) (*ShowSchedule, bool) {
+	for _, sched := range s.schedules {
+		if sched.ShowID == showID {
+			return sched, true
+		}
+	}
+	return nil, false
+}
+
+// --- Entries ---
+
+func (s *memoryStore) createEntry(input EntryInput) (*Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := &Entry{
+		ID:        newID("entry"),
+		ShowID:    input.ShowID,
+		ClassID:   input.ClassID,
+		PersonID:  input.PersonID,
+		Name:      input.Name,
+		Notes:     input.Notes,
+		TaxonRefs: input.TaxonRefs,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.entries[e.ID] = e
+	s.appendClaim(e.ID, "entry", "entry.created", e)
+	return e, nil
+}
+
+func (s *memoryStore) updateEntry(id string, input EntryInput) (*Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[id]
+	if !ok {
+		return nil, errors.New("entry not found")
+	}
+	e.Name = input.Name
+	e.Notes = input.Notes
+	e.ClassID = input.ClassID
+	e.TaxonRefs = input.TaxonRefs
+	s.appendClaim(e.ID, "entry", "entry.updated", e)
+	return e, nil
+}
+
+func (s *memoryStore) setPlacement(entryID string, placement int, points float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	e.Placement = placement
+	e.Points = points
+	s.appendClaim(e.ID, "entry", "entry.placement_set", map[string]any{
+		"placement": placement, "points": points,
+	})
+	return nil
+}
+
+func (s *memoryStore) entryByID(id string) (*Entry, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.entries[id]
+	return e, ok
+}
+
+func (s *memoryStore) entriesByShow(showID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
+		if e.ShowID == showID {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) entriesByClass(classID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
+		if e.ClassID == classID {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) entriesByPerson(personID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
+		if e.PersonID == personID {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// --- Taxonomy ---
+
+func (s *memoryStore) createTaxon(input TaxonInput) (*Taxon, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t := &Taxon{
+		ID:             newID("taxon"),
+		TaxonType:      input.TaxonType,
+		Name:           input.Name,
+		ScientificName: input.ScientificName,
+		Description:    input.Description,
+		ParentID:       input.ParentID,
+	}
+	s.taxons[t.ID] = t
+	s.appendClaim(t.ID, "taxon", "taxon.created", t)
+	return t, nil
+}
+
+func (s *memoryStore) taxonByID(id string) (*Taxon, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.taxons[id]
+	return t, ok
+}
+
+func (s *memoryStore) allTaxons() []*Taxon {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Taxon
+	for _, t := range s.taxons {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func (s *memoryStore) taxonsByType(taxonType string) []*Taxon {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Taxon
+	for _, t := range s.taxons {
+		if t.TaxonType == taxonType {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// --- Awards ---
+
+func (s *memoryStore) createAward(input AwardInput) (*AwardDefinition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := &AwardDefinition{
+		ID:             newID("award"),
+		OrganizationID: input.OrganizationID,
+		Name:           input.Name,
+		Description:    input.Description,
+		Season:         input.Season,
+		TaxonFilters:   input.TaxonFilters,
+		ScoringRule:    input.ScoringRule,
+		MinEntries:     input.MinEntries,
+	}
+	s.awards[a.ID] = a
+	s.appendClaim(a.ID, "award", "award.created", a)
+	return a, nil
+}
+
+func (s *memoryStore) awardByID(id string) (*AwardDefinition, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	a, ok := s.awards[id]
+	return a, ok
+}
+
+func (s *memoryStore) awardsByOrganization(orgID string) []*AwardDefinition {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*AwardDefinition
+	for _, a := range s.awards {
+		if a.OrganizationID == orgID {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) computeAward(awardID string) ([]AwardResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	award, ok := s.awards[awardID]
+	if !ok {
+		return nil, errors.New("award not found")
+	}
+
+	// Collect entries matching taxon filters
+	matchingEntries := s.filterEntriesByTaxons(award.TaxonFilters, award.OrganizationID, award.Season)
+
+	// Aggregate per person
+	personScores := make(map[string]float64)
+	personCounts := make(map[string]int)
+	for _, e := range matchingEntries {
+		personCounts[e.PersonID]++
+		switch award.ScoringRule {
+		case "sum":
+			personScores[e.PersonID] += e.Points
+		case "max":
+			if e.Points > personScores[e.PersonID] {
+				personScores[e.PersonID] = e.Points
+			}
+		case "count":
+			if e.Placement > 0 && e.Placement <= 3 {
+				personScores[e.PersonID]++
+			}
+		}
+	}
+
+	var results []AwardResult
+	for pid, score := range personScores {
+		if award.MinEntries > 0 && personCounts[pid] < award.MinEntries {
+			continue
+		}
+		results = append(results, AwardResult{
+			AwardID:  awardID,
+			PersonID: pid,
+			Score:    score,
+		})
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	for i := range results {
+		results[i].Rank = i + 1
+	}
+	return results, nil
+}
+
+func (s *memoryStore) filterEntriesByTaxons(taxonFilters []string, orgID, season string) []*Entry {
+	if len(taxonFilters) == 0 {
+		// No filter — return all entries for org+season
+		var out []*Entry
+		for _, e := range s.entries {
+			show, ok := s.shows[e.ShowID]
+			if ok && show.OrganizationID == orgID && show.Season == season {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	filterSet := make(map[string]bool)
+	for _, t := range taxonFilters {
+		filterSet[t] = true
+	}
+	var out []*Entry
+	for _, e := range s.entries {
+		show, ok := s.shows[e.ShowID]
+		if !ok || show.OrganizationID != orgID || show.Season != season {
+			continue
+		}
+		for _, ref := range e.TaxonRefs {
+			if filterSet[ref] {
+				out = append(out, e)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// --- Standards ---
+
+func (s *memoryStore) createStandardDocument(doc StandardDocument) (*StandardDocument, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if doc.ID == "" {
+		doc.ID = newID("std")
+	}
+	s.stdDocs[doc.ID] = &doc
+	s.appendClaim(doc.ID, "standard_document", "standard_document.created", doc)
+	return &doc, nil
+}
+
+func (s *memoryStore) allStandardDocuments() []*StandardDocument {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*StandardDocument
+	for _, d := range s.stdDocs {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (s *memoryStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ed.ID == "" {
+		ed.ID = newID("edition")
+	}
+	s.stdEditions[ed.ID] = &ed
+	s.appendClaim(ed.ID, "standard_edition", "standard_edition.created", ed)
+	return &ed, nil
+}
+
+func (s *memoryStore) editionsByStandard(standardDocID string) []*StandardEdition {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*StandardEdition
+	for _, ed := range s.stdEditions {
+		if ed.StandardDocumentID == standardDocID {
+			out = append(out, ed)
+		}
+	}
+	return out
+}
+
+// --- Sources ---
+
+func (s *memoryStore) createSourceDocument(doc SourceDocument) (*SourceDocument, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if doc.ID == "" {
+		doc.ID = newID("source")
+	}
+	s.srcDocs[doc.ID] = &doc
+	s.appendClaim(doc.ID, "source_document", "source_document.created", doc)
+	return &doc, nil
+}
+
+func (s *memoryStore) allSourceDocuments() []*SourceDocument {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*SourceDocument
+	for _, d := range s.srcDocs {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (s *memoryStore) createSourceCitation(cite SourceCitation) (*SourceCitation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cite.ID == "" {
+		cite.ID = newID("cite")
+	}
+	s.srcCitations[cite.ID] = &cite
+	s.appendClaim(cite.ID, "source_citation", "source_citation.created", cite)
+	return &cite, nil
+}
+
+func (s *memoryStore) citationsByTarget(targetType, targetID string) []*SourceCitation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*SourceCitation
+	for _, c := range s.srcCitations {
+		if c.TargetType == targetType && c.TargetID == targetID {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// --- Rules ---
+
+func (s *memoryStore) createStandardRule(rule StandardRule) (*StandardRule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rule.ID == "" {
+		rule.ID = newID("rule")
+	}
+	s.stdRules[rule.ID] = &rule
+	s.appendClaim(rule.ID, "standard_rule", "standard_rule.created", rule)
+	return &rule, nil
+}
+
+func (s *memoryStore) rulesByEdition(editionID string) []*StandardRule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*StandardRule
+	for _, r := range s.stdRules {
+		if r.StandardEditionID == editionID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) createClassRuleOverride(override ClassRuleOverride) (*ClassRuleOverride, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if override.ID == "" {
+		override.ID = newID("override")
+	}
+	s.classOverrides[override.ID] = &override
+	s.appendClaim(override.ID, "class_rule_override", "class_rule_override.created", override)
+	return &override, nil
+}
+
+func (s *memoryStore) overridesByClass(classID string) []*ClassRuleOverride {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*ClassRuleOverride
+	for _, o := range s.classOverrides {
+		if o.ShowClassID == classID {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) effectiveRulesForClass(classID string, editionID string) []effectiveRule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Get standard rules
+	ruleMap := make(map[string]*StandardRule)
+	for _, r := range s.stdRules {
+		if r.StandardEditionID == editionID {
+			ruleMap[r.ID] = r
+		}
+	}
+
+	// Get overrides for class
+	overridesByBase := make(map[string]*ClassRuleOverride)
+	var localOnlyOverrides []*ClassRuleOverride
+	for _, o := range s.classOverrides {
+		if o.ShowClassID != classID {
+			continue
+		}
+		if o.BaseStandardRuleID != "" {
+			overridesByBase[o.BaseStandardRuleID] = o
+		} else {
+			localOnlyOverrides = append(localOnlyOverrides, o)
+		}
+	}
+
+	var results []effectiveRule
+	for _, rule := range ruleMap {
+		if override, ok := overridesByBase[rule.ID]; ok {
+			results = append(results, effectiveRule{
+				Rule:     rule,
+				Override: override,
+				Source:   "override",
+			})
+		} else {
+			results = append(results, effectiveRule{
+				Rule:   rule,
+				Source: "standard",
+			})
+		}
+	}
+	for _, o := range localOnlyOverrides {
+		results = append(results, effectiveRule{
+			Override: o,
+			Source:   "local_only",
+		})
+	}
+	return results
+}
+
+// --- Rubrics ---
+
+func (s *memoryStore) createRubric(r JudgingRubric) (*JudgingRubric, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r.ID == "" {
+		r.ID = newID("rubric")
+	}
+	s.rubrics[r.ID] = &r
+	s.appendClaim(r.ID, "rubric", "rubric.created", r)
+	return &r, nil
+}
+
+func (s *memoryStore) rubricByID(id string) (*JudgingRubric, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.rubrics[id]
+	return r, ok
+}
+
+func (s *memoryStore) allRubrics() []*JudgingRubric {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*JudgingRubric
+	for _, r := range s.rubrics {
+		out = append(out, r)
+	}
+	return out
+}
+
+func (s *memoryStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c.ID == "" {
+		c.ID = newID("crit")
+	}
+	s.criteria[c.ID] = &c
+	return &c, nil
+}
+
+func (s *memoryStore) criteriaByRubric(rubricID string) []*JudgingCriterion {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*JudgingCriterion
+	for _, c := range s.criteria {
+		if c.JudgingRubricID == rubricID {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SortOrder < out[j].SortOrder })
+	return out
+}
+
+// --- Scorecards ---
+
+func (s *memoryStore) submitScorecard(sc EntryScorecard, scores []EntryCriterionScore) (*EntryScorecard, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sc.ID == "" {
+		sc.ID = newID("scorecard")
+	}
+	var total float64
+	for i := range scores {
+		if scores[i].ID == "" {
+			scores[i].ID = newID("crit_score")
+		}
+		scores[i].ScorecardID = sc.ID
+		total += scores[i].Score
+		s.critScores[scores[i].ID] = &scores[i]
+	}
+	sc.TotalScore = total
+	s.scorecards[sc.ID] = &sc
+	s.appendClaim(sc.ID, "scorecard", "scorecard.submitted", map[string]any{
+		"scorecard": sc, "scores": scores,
+	})
+	return &sc, nil
+}
+
+func (s *memoryStore) scorecardsByEntry(entryID string) []*EntryScorecard {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*EntryScorecard
+	for _, sc := range s.scorecards {
+		if sc.EntryID == entryID {
+			out = append(out, sc)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*EntryCriterionScore
+	for _, cs := range s.critScores {
+		if cs.ScorecardID == scorecardID {
+			out = append(out, cs)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) computePlacementsFromScores(classID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find entries in class
+	var classEntries []*Entry
+	for _, e := range s.entries {
+		if e.ClassID == classID {
+			classEntries = append(classEntries, e)
+		}
+	}
+
+	// Average score per entry
+	type entryScore struct {
+		entry    *Entry
+		avgScore float64
+	}
+	var scored []entryScore
+	for _, e := range classEntries {
+		var total float64
+		var count int
+		for _, sc := range s.scorecards {
+			if sc.EntryID == e.ID {
+				total += sc.TotalScore
+				count++
+			}
+		}
+		if count > 0 {
+			scored = append(scored, entryScore{entry: e, avgScore: total / float64(count)})
+		}
+	}
+
+	sort.Slice(scored, func(i, j int) bool { return scored[i].avgScore > scored[j].avgScore })
+
+	pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
+	for i, es := range scored {
+		placement := i + 1
+		if placement <= 3 {
+			es.entry.Placement = placement
+			es.entry.Points = pointsMap[placement]
+		}
+	}
+	return nil
+}
+
+// --- Leaderboard ---
+
+func (s *memoryStore) leaderboard(orgID, season string) []LeaderboardEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type personStats struct {
+		points     float64
+		entryCount int
+		firstCount int
+	}
+	stats := make(map[string]*personStats)
+
+	for _, e := range s.entries {
+		show, ok := s.shows[e.ShowID]
+		if !ok || show.OrganizationID != orgID || show.Season != season {
+			continue
+		}
+		ps, ok := stats[e.PersonID]
+		if !ok {
+			ps = &personStats{}
+			stats[e.PersonID] = ps
+		}
+		ps.entryCount++
+		ps.points += e.Points
+		if e.Placement == 1 {
+			ps.firstCount++
+		}
+	}
+
+	var out []LeaderboardEntry
+	for pid, ps := range stats {
+		person, ok := s.persons[pid]
+		if !ok {
+			continue
+		}
+		out = append(out, LeaderboardEntry{
+			PersonID:    pid,
+			PersonName:  person.FirstName + " " + person.LastName,
+			Initials:    person.Initials,
+			TotalPoints: ps.points,
+			EntryCount:  ps.entryCount,
+			FirstCount:  ps.firstCount,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].TotalPoints > out[j].TotalPoints })
+	for i := range out {
+		out[i].Rank = i + 1
+	}
+	return out
+}
+
+// --- Ledger ---
+
+func (s *memoryStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []FlowershowClaim
+	for _, c := range s.claims {
+		if c.ObjectID == objectID {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// --- Seed Demo Data ---
+
+func (s *memoryStore) seedDemoData() {
+	// Organization
+	org := &Organization{ID: "org_demo1", Name: "Metro Rose Society", Level: "society"}
+	s.organizations[org.ID] = org
+
+	// Persons
+	persons := []Person{
+		{ID: "person_01", FirstName: "Margaret", LastName: "Chen", Initials: "MC"},
+		{ID: "person_02", FirstName: "Robert", LastName: "Williams", Initials: "RW"},
+		{ID: "person_03", FirstName: "Susan", LastName: "Park", Initials: "SP"},
+	}
+	for i := range persons {
+		s.persons[persons[i].ID] = &persons[i]
+	}
+
+	// Shows
+	show1 := &Show{
+		ID: "show_spring2025", Slug: "spring-rose-show-2025", OrganizationID: org.ID,
+		Name: "Spring Rose Show 2025", Location: "Community Garden Center",
+		Date: "2025-04-15", Season: "2025", Status: "published",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	show2 := &Show{
+		ID: "show_fall2025", Slug: "fall-garden-festival-2025", OrganizationID: org.ID,
+		Name: "Fall Garden Festival 2025", Location: "Botanical Gardens Pavilion",
+		Date: "2025-09-20", Season: "2025", Status: "draft",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	s.shows[show1.ID] = show1
+	s.shows[show2.ID] = show2
+
+	// Schedule for spring show
+	sched := &ShowSchedule{ID: "sched_spring", ShowID: show1.ID}
+	s.schedules[sched.ID] = sched
+
+	// Divisions
+	divs := []Division{
+		{ID: "div_hort", ShowScheduleID: sched.ID, Code: "I", Title: "Horticulture Specimens", Domain: "horticulture", SortOrder: 1},
+		{ID: "div_design", ShowScheduleID: sched.ID, Code: "II", Title: "Floral Design", Domain: "design", SortOrder: 2},
+		{ID: "div_special", ShowScheduleID: sched.ID, Code: "III", Title: "Special Exhibits", Domain: "special", SortOrder: 3},
+	}
+	for i := range divs {
+		s.divisions[divs[i].ID] = &divs[i]
+	}
+
+	// Sections
+	secs := []Section{
+		{ID: "sec_hybrid_tea", DivisionID: "div_hort", Code: "A", Title: "Hybrid Tea Roses", SortOrder: 1},
+		{ID: "sec_floribunda", DivisionID: "div_hort", Code: "B", Title: "Floribunda Roses", SortOrder: 2},
+		{ID: "sec_miniature", DivisionID: "div_hort", Code: "C", Title: "Miniature Roses", SortOrder: 3},
+		{ID: "sec_traditional", DivisionID: "div_design", Code: "A", Title: "Traditional Arrangements", SortOrder: 1},
+		{ID: "sec_modern", DivisionID: "div_design", Code: "B", Title: "Modern Design", SortOrder: 2},
+		{ID: "sec_peoples", DivisionID: "div_special", Code: "A", Title: "People's Choice", SortOrder: 1},
+	}
+	for i := range secs {
+		s.sections[secs[i].ID] = &secs[i]
+	}
+
+	// Classes
+	classes := []ShowClass{
+		{ID: "class_01", SectionID: "sec_hybrid_tea", ClassNumber: "101", Title: "One Hybrid Tea Bloom", Domain: "horticulture", Description: "One bloom, hybrid tea, any variety", SpecimenCount: 1},
+		{ID: "class_02", SectionID: "sec_hybrid_tea", ClassNumber: "102", Title: "Three Hybrid Tea Blooms", Domain: "horticulture", Description: "Three blooms, one variety, own root", SpecimenCount: 3},
+		{ID: "class_03", SectionID: "sec_floribunda", ClassNumber: "201", Title: "One Floribunda Spray", Domain: "horticulture", Description: "One spray, any floribunda variety", SpecimenCount: 1},
+		{ID: "class_04", SectionID: "sec_floribunda", ClassNumber: "202", Title: "Three Floribunda Sprays", Domain: "horticulture", Description: "Three sprays, one or more varieties", SpecimenCount: 3},
+		{ID: "class_05", SectionID: "sec_miniature", ClassNumber: "301", Title: "One Miniature Bloom", Domain: "horticulture", Description: "One bloom, any miniature variety", SpecimenCount: 1},
+		{ID: "class_06", SectionID: "sec_miniature", ClassNumber: "302", Title: "Three Miniature Blooms", Domain: "horticulture", Description: "Three blooms, miniature varieties", SpecimenCount: 3},
+		{ID: "class_07", SectionID: "sec_traditional", ClassNumber: "401", Title: "Traditional Line Arrangement", Domain: "design", Description: "A traditional line arrangement using roses"},
+		{ID: "class_08", SectionID: "sec_traditional", ClassNumber: "402", Title: "Mass Arrangement", Domain: "design", Description: "Mass arrangement featuring garden roses"},
+		{ID: "class_09", SectionID: "sec_modern", ClassNumber: "501", Title: "Crescent Design", Domain: "design", Description: "Modern crescent design with roses"},
+		{ID: "class_10", SectionID: "sec_modern", ClassNumber: "502", Title: "Abstract Design", Domain: "design", Description: "Abstract design incorporating roses"},
+		{ID: "class_11", SectionID: "sec_peoples", ClassNumber: "601", Title: "Best Single Rose", Domain: "special", Description: "People's choice — best single rose specimen"},
+		{ID: "class_12", SectionID: "sec_peoples", ClassNumber: "602", Title: "Best Arrangement", Domain: "special", Description: "People's choice — best floral arrangement"},
+	}
+	for i := range classes {
+		s.classes[classes[i].ID] = &classes[i]
+	}
+
+	// Taxons
+	taxons := []Taxon{
+		{ID: "taxon_rose", TaxonType: "botanical", Name: "Rose", ScientificName: "Rosa", Description: "Genus Rosa"},
+		{ID: "taxon_ht", TaxonType: "botanical", Name: "Hybrid Tea", Description: "Hybrid Tea rose class", ParentID: "taxon_rose"},
+		{ID: "taxon_flori", TaxonType: "botanical", Name: "Floribunda", Description: "Floribunda rose class", ParentID: "taxon_rose"},
+		{ID: "taxon_mini", TaxonType: "botanical", Name: "Miniature", Description: "Miniature rose class", ParentID: "taxon_rose"},
+		{ID: "taxon_crescent", TaxonType: "design_type", Name: "Crescent Design", Description: "A curved, crescent-shaped arrangement"},
+	}
+	for i := range taxons {
+		s.taxons[taxons[i].ID] = &taxons[i]
+	}
+
+	// Entries
+	entries := []Entry{
+		{ID: "entry_01", ShowID: show1.ID, ClassID: "class_01", PersonID: "person_01", Name: "Peace", TaxonRefs: []string{"taxon_ht"}, Placement: 1, Points: 6, CreatedAt: time.Now().UTC()},
+		{ID: "entry_02", ShowID: show1.ID, ClassID: "class_01", PersonID: "person_02", Name: "Mr. Lincoln", TaxonRefs: []string{"taxon_ht"}, Placement: 2, Points: 4, CreatedAt: time.Now().UTC()},
+		{ID: "entry_03", ShowID: show1.ID, ClassID: "class_02", PersonID: "person_01", Name: "Double Delight Trio", TaxonRefs: []string{"taxon_ht"}, Placement: 1, Points: 6, CreatedAt: time.Now().UTC()},
+		{ID: "entry_04", ShowID: show1.ID, ClassID: "class_03", PersonID: "person_03", Name: "Iceberg Spray", TaxonRefs: []string{"taxon_flori"}, Placement: 1, Points: 6, CreatedAt: time.Now().UTC()},
+		{ID: "entry_05", ShowID: show1.ID, ClassID: "class_05", PersonID: "person_02", Name: "Baby Love", TaxonRefs: []string{"taxon_mini"}, Placement: 1, Points: 6, CreatedAt: time.Now().UTC()},
+		{ID: "entry_06", ShowID: show1.ID, ClassID: "class_07", PersonID: "person_03", Name: "Garden Elegance", TaxonRefs: []string{"taxon_rose"}, Placement: 2, Points: 4, CreatedAt: time.Now().UTC()},
+		{ID: "entry_07", ShowID: show1.ID, ClassID: "class_09", PersonID: "person_01", Name: "Moonlight Crescent", TaxonRefs: []string{"taxon_crescent", "taxon_rose"}, Placement: 1, Points: 6, CreatedAt: time.Now().UTC()},
+		{ID: "entry_08", ShowID: show1.ID, ClassID: "class_11", PersonID: "person_02", Name: "Crimson Glory", TaxonRefs: []string{"taxon_ht"}, CreatedAt: time.Now().UTC()},
+	}
+	for i := range entries {
+		s.entries[entries[i].ID] = &entries[i]
+	}
+
+	// Awards
+	awards := []AwardDefinition{
+		{ID: "award_hp", OrganizationID: org.ID, Name: "High Points", Season: "2025", ScoringRule: "sum"},
+		{ID: "award_bestrose", OrganizationID: org.ID, Name: "Best Rose", Season: "2025", TaxonFilters: []string{"taxon_rose"}, ScoringRule: "max"},
+	}
+	for i := range awards {
+		s.awards[awards[i].ID] = &awards[i]
+	}
+
+	// Rubric
+	rubric := &JudgingRubric{ID: "rubric_hort", Domain: "horticulture", Title: "Horticulture Specimen Judging"}
+	s.rubrics[rubric.ID] = rubric
+	criteria := []JudgingCriterion{
+		{ID: "crit_form", JudgingRubricID: rubric.ID, Name: "Form", MaxPoints: 25, SortOrder: 1},
+		{ID: "crit_color", JudgingRubricID: rubric.ID, Name: "Color", MaxPoints: 25, SortOrder: 2},
+		{ID: "crit_substance", JudgingRubricID: rubric.ID, Name: "Substance & Texture", MaxPoints: 15, SortOrder: 3},
+		{ID: "crit_stem", JudgingRubricID: rubric.ID, Name: "Stem & Foliage", MaxPoints: 15, SortOrder: 4},
+		{ID: "crit_size", JudgingRubricID: rubric.ID, Name: "Size", MaxPoints: 10, SortOrder: 5},
+		{ID: "crit_grooming", JudgingRubricID: rubric.ID, Name: "Grooming & Condition", MaxPoints: 10, SortOrder: 6},
+	}
+	for i := range criteria {
+		s.criteria[criteria[i].ID] = &criteria[i]
+	}
+}
+
+// ============================================================================
+// Postgres store
+// ============================================================================
+
+type postgresFlowershowStore struct {
+	pool *pgxpool.Pool
+	mem  *memoryStore // fallback for non-migrated methods
+}
+
+func newFlowershowStore(databaseURL string) (flowershowStore, error) {
+	if strings.TrimSpace(databaseURL) == "" {
+		s := newMemoryStore()
+		return s, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("open flowershow database: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping flowershow database: %w", err)
+	}
+
+	store := &postgresFlowershowStore{pool: pool, mem: newMemoryStore()}
+	if err := store.migrate(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if err := store.seedIfEmpty(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return store, nil
+}
+
+func (s *postgresFlowershowStore) Close() {
+	if s != nil && s.pool != nil {
+		s.pool.Close()
+	}
+}
+
+func (s *postgresFlowershowStore) migrate(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS as_flowershow_objects (
+  object_id TEXT PRIMARY KEY,
+  object_type TEXT NOT NULL,
+  slug TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT NOT NULL DEFAULT 'system'
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_claims (
+  claim_id TEXT PRIMARY KEY,
+  object_id TEXT NOT NULL REFERENCES as_flowershow_objects(object_id) ON DELETE CASCADE,
+  claim_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+  claim_type TEXT NOT NULL,
+  accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  accepted_by TEXT NOT NULL DEFAULT 'system',
+  supersedes_claim_id TEXT REFERENCES as_flowershow_claims(claim_id),
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_claims_obj_idx
+  ON as_flowershow_claims (object_id, claim_seq DESC);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_organizations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'society',
+  parent_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_shows (
+  id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  location TEXT NOT NULL DEFAULT '',
+  show_date TEXT NOT NULL DEFAULT '',
+  season TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
+  id TEXT PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  initials TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_schedules (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  source_document_id TEXT,
+  effective_standard_edition_id TEXT,
+  notes TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_divisions (
+  id TEXT PRIMARY KEY,
+  show_schedule_id TEXT NOT NULL,
+  code TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  domain TEXT NOT NULL DEFAULT 'horticulture',
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_sections (
+  id TEXT PRIMARY KEY,
+  division_id TEXT NOT NULL,
+  code TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_classes (
+  id TEXT PRIMARY KEY,
+  section_id TEXT NOT NULL,
+  class_number TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  domain TEXT NOT NULL DEFAULT 'horticulture',
+  description TEXT NOT NULL DEFAULT '',
+  specimen_count INTEGER NOT NULL DEFAULT 0,
+  unit TEXT NOT NULL DEFAULT '',
+  measurement_rule TEXT NOT NULL DEFAULT '',
+  naming_requirement TEXT NOT NULL DEFAULT '',
+  container_rule TEXT NOT NULL DEFAULT '',
+  eligibility_rule TEXT NOT NULL DEFAULT '',
+  schedule_notes TEXT NOT NULL DEFAULT '',
+  taxon_refs TEXT[] NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  class_id TEXT NOT NULL,
+  person_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  placement INTEGER NOT NULL DEFAULT 0,
+  points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  taxon_refs TEXT[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_taxons (
+  id TEXT PRIMARY KEY,
+  taxon_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  scientific_name TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  parent_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_awards (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  season TEXT NOT NULL DEFAULT '',
+  taxon_filters TEXT[] NOT NULL DEFAULT '{}',
+  scoring_rule TEXT NOT NULL DEFAULT 'sum',
+  min_entries INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_standard_documents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  issuing_org_id TEXT NOT NULL DEFAULT '',
+  domain_scope TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_standard_editions (
+  id TEXT PRIMARY KEY,
+  standard_document_id TEXT NOT NULL,
+  edition_label TEXT NOT NULL DEFAULT '',
+  publication_year INTEGER NOT NULL DEFAULT 0,
+  revision_date TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'current',
+  source_url TEXT NOT NULL DEFAULT '',
+  source_kind TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_source_documents (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL DEFAULT '',
+  show_id TEXT,
+  title TEXT NOT NULL,
+  document_type TEXT NOT NULL DEFAULT '',
+  publication_date TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '',
+  local_path TEXT NOT NULL DEFAULT '',
+  checksum TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_source_citations (
+  id TEXT PRIMARY KEY,
+  source_document_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  page_from TEXT NOT NULL DEFAULT '',
+  page_to TEXT NOT NULL DEFAULT '',
+  quoted_text TEXT NOT NULL DEFAULT '',
+  extraction_confidence DOUBLE PRECISION NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_standard_rules (
+  id TEXT PRIMARY KEY,
+  standard_edition_id TEXT NOT NULL,
+  domain TEXT NOT NULL DEFAULT '',
+  rule_type TEXT NOT NULL DEFAULT '',
+  subject_label TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  page_ref TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_class_rule_overrides (
+  id TEXT PRIMARY KEY,
+  show_class_id TEXT NOT NULL,
+  base_standard_rule_id TEXT,
+  override_type TEXT NOT NULL DEFAULT 'local_only',
+  body TEXT NOT NULL DEFAULT '',
+  rationale TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_rubrics (
+  id TEXT PRIMARY KEY,
+  standard_edition_id TEXT,
+  show_id TEXT,
+  domain TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_criteria (
+  id TEXT PRIMARY KEY,
+  judging_rubric_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  max_points INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_scorecards (
+  id TEXT PRIMARY KEY,
+  entry_id TEXT NOT NULL,
+  judge_id TEXT NOT NULL,
+  rubric_id TEXT NOT NULL,
+  total_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+  notes TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_criterion_scores (
+  id TEXT PRIMARY KEY,
+  scorecard_id TEXT NOT NULL,
+  criterion_id TEXT NOT NULL,
+  score DOUBLE PRECISION NOT NULL DEFAULT 0,
+  comment TEXT NOT NULL DEFAULT ''
+);
+`)
+	if err != nil {
+		return fmt.Errorf("migrate flowershow store: %w", err)
+	}
+	return nil
+}
+
+func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
+	var count int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM as_flowershow_m_shows`).Scan(&count); err != nil {
+		return fmt.Errorf("count shows: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	// Seed from memory store's demo data by inserting into Postgres
+	mem := newMemoryStore()
+	for _, org := range mem.organizations {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_organizations (id, name, level, parent_id) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+			org.ID, org.Name, org.Level, org.ParentID)
+	}
+	for _, show := range mem.shows {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_shows (id, slug, organization_id, name, location, show_date, season, status, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+			show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
+	}
+	for _, p := range mem.persons {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+			p.ID, p.FirstName, p.LastName, p.Initials, p.Email)
+	}
+	for _, sched := range mem.schedules {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_schedules (id, show_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+			sched.ID, sched.ShowID)
+	}
+	for _, d := range mem.divisions {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_divisions (id, show_schedule_id, code, title, domain, sort_order) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+			d.ID, d.ShowScheduleID, d.Code, d.Title, d.Domain, d.SortOrder)
+	}
+	for _, sec := range mem.sections {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_sections (id, division_id, code, title, sort_order) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+			sec.ID, sec.DivisionID, sec.Code, sec.Title, sec.SortOrder)
+	}
+	for _, c := range mem.classes {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, title, domain, description, specimen_count, taxon_refs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
+			c.ID, c.SectionID, c.ClassNumber, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
+	}
+	for _, e := range mem.entries {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Placement, e.Points, e.TaxonRefs, e.CreatedAt)
+	}
+	for _, t := range mem.taxons {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+			t.ID, t.TaxonType, t.Name, t.ScientificName, t.Description, t.ParentID)
+	}
+	for _, a := range mem.awards {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, season, taxon_filters, scoring_rule) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+			a.ID, a.OrganizationID, a.Name, a.Season, a.TaxonFilters, a.ScoringRule)
+	}
+	for _, r := range mem.rubrics {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_rubrics (id, domain, title) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+			r.ID, r.Domain, r.Title)
+	}
+	for _, c := range mem.criteria {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criteria (id, judging_rubric_id, name, max_points, sort_order) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+			c.ID, c.JudgingRubricID, c.Name, c.MaxPoints, c.SortOrder)
+	}
+	return nil
+}
+
+// For now, the Postgres store delegates to the memory store for all operations.
+// A full Postgres implementation would replace each method with SQL queries.
+// This allows the app to start with Postgres (migrated schema) while using
+// the memory store pattern for development speed.
+
+func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organization, error) { return s.mem.createOrganization(o) }
+func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) { return s.mem.organizationByID(id) }
+func (s *postgresFlowershowStore) allOrganizations() []*Organization { return s.mem.allOrganizations() }
+func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) { return s.mem.createShow(input) }
+func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show, error) { return s.mem.updateShow(id, input) }
+func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) { return s.mem.showByID(id) }
+func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) { return s.mem.showBySlug(slug) }
+func (s *postgresFlowershowStore) allShows() []*Show { return s.mem.allShows() }
+func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) { return s.mem.createPerson(input) }
+func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*Person, error) { return s.mem.updatePerson(id, input) }
+func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.mem.personByID(id) }
+func (s *postgresFlowershowStore) allPersons() []*Person { return s.mem.allPersons() }
+func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) { return s.mem.createSchedule(sched) }
+func (s *postgresFlowershowStore) scheduleByShowID(showID string) (*ShowSchedule, bool) { return s.mem.scheduleByShowID(showID) }
+func (s *postgresFlowershowStore) createDivision(input DivisionInput) (*Division, error) { return s.mem.createDivision(input) }
+func (s *postgresFlowershowStore) divisionsBySchedule(scheduleID string) []*Division { return s.mem.divisionsBySchedule(scheduleID) }
+func (s *postgresFlowershowStore) divisionByID(id string) (*Division, bool) { return s.mem.divisionByID(id) }
+func (s *postgresFlowershowStore) createSection(input SectionInput) (*Section, error) { return s.mem.createSection(input) }
+func (s *postgresFlowershowStore) sectionsByDivision(divisionID string) []*Section { return s.mem.sectionsByDivision(divisionID) }
+func (s *postgresFlowershowStore) sectionByID(id string) (*Section, bool) { return s.mem.sectionByID(id) }
+func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass, error) { return s.mem.createClass(input) }
+func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) { return s.mem.updateClass(id, input) }
+func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass { return s.mem.classesBySection(sectionID) }
+func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) { return s.mem.classByID(id) }
+func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass { return s.mem.classesByShowID(showID) }
+func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) { return s.mem.createEntry(input) }
+func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) { return s.mem.updateEntry(id, input) }
+func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error { return s.mem.setPlacement(entryID, placement, points) }
+func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) { return s.mem.entryByID(id) }
+func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry { return s.mem.entriesByShow(showID) }
+func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry { return s.mem.entriesByClass(classID) }
+func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry { return s.mem.entriesByPerson(personID) }
+func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) { return s.mem.createTaxon(input) }
+func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) { return s.mem.taxonByID(id) }
+func (s *postgresFlowershowStore) allTaxons() []*Taxon { return s.mem.allTaxons() }
+func (s *postgresFlowershowStore) taxonsByType(taxonType string) []*Taxon { return s.mem.taxonsByType(taxonType) }
+func (s *postgresFlowershowStore) createAward(input AwardInput) (*AwardDefinition, error) { return s.mem.createAward(input) }
+func (s *postgresFlowershowStore) awardByID(id string) (*AwardDefinition, bool) { return s.mem.awardByID(id) }
+func (s *postgresFlowershowStore) awardsByOrganization(orgID string) []*AwardDefinition { return s.mem.awardsByOrganization(orgID) }
+func (s *postgresFlowershowStore) computeAward(awardID string) ([]AwardResult, error) { return s.mem.computeAward(awardID) }
+func (s *postgresFlowershowStore) createStandardDocument(doc StandardDocument) (*StandardDocument, error) { return s.mem.createStandardDocument(doc) }
+func (s *postgresFlowershowStore) allStandardDocuments() []*StandardDocument { return s.mem.allStandardDocuments() }
+func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) { return s.mem.createStandardEdition(ed) }
+func (s *postgresFlowershowStore) editionsByStandard(standardDocID string) []*StandardEdition { return s.mem.editionsByStandard(standardDocID) }
+func (s *postgresFlowershowStore) createSourceDocument(doc SourceDocument) (*SourceDocument, error) { return s.mem.createSourceDocument(doc) }
+func (s *postgresFlowershowStore) allSourceDocuments() []*SourceDocument { return s.mem.allSourceDocuments() }
+func (s *postgresFlowershowStore) createSourceCitation(cite SourceCitation) (*SourceCitation, error) { return s.mem.createSourceCitation(cite) }
+func (s *postgresFlowershowStore) citationsByTarget(targetType, targetID string) []*SourceCitation { return s.mem.citationsByTarget(targetType, targetID) }
+func (s *postgresFlowershowStore) createStandardRule(rule StandardRule) (*StandardRule, error) { return s.mem.createStandardRule(rule) }
+func (s *postgresFlowershowStore) rulesByEdition(editionID string) []*StandardRule { return s.mem.rulesByEdition(editionID) }
+func (s *postgresFlowershowStore) createClassRuleOverride(override ClassRuleOverride) (*ClassRuleOverride, error) { return s.mem.createClassRuleOverride(override) }
+func (s *postgresFlowershowStore) overridesByClass(classID string) []*ClassRuleOverride { return s.mem.overridesByClass(classID) }
+func (s *postgresFlowershowStore) effectiveRulesForClass(classID string, editionID string) []effectiveRule { return s.mem.effectiveRulesForClass(classID, editionID) }
+func (s *postgresFlowershowStore) createRubric(r JudgingRubric) (*JudgingRubric, error) { return s.mem.createRubric(r) }
+func (s *postgresFlowershowStore) rubricByID(id string) (*JudgingRubric, bool) { return s.mem.rubricByID(id) }
+func (s *postgresFlowershowStore) allRubrics() []*JudgingRubric { return s.mem.allRubrics() }
+func (s *postgresFlowershowStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, error) { return s.mem.createCriterion(c) }
+func (s *postgresFlowershowStore) criteriaByRubric(rubricID string) []*JudgingCriterion { return s.mem.criteriaByRubric(rubricID) }
+func (s *postgresFlowershowStore) submitScorecard(sc EntryScorecard, scores []EntryCriterionScore) (*EntryScorecard, error) { return s.mem.submitScorecard(sc, scores) }
+func (s *postgresFlowershowStore) scorecardsByEntry(entryID string) []*EntryScorecard { return s.mem.scorecardsByEntry(entryID) }
+func (s *postgresFlowershowStore) criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore { return s.mem.criterionScoresByScorecard(scorecardID) }
+func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) error { return s.mem.computePlacementsFromScores(classID) }
+func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry { return s.mem.leaderboard(orgID, season) }
+func (s *postgresFlowershowStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) { return s.mem.ledgerByObjectID(objectID) }
+
+// Ensure compile-time check
+var _ flowershowStore = (*memoryStore)(nil)
+var _ flowershowStore = (*postgresFlowershowStore)(nil)
+
+// Suppress unused import warnings
+var (
+	_ = pgx.ErrNoRows
+	_ = json.Marshal
+)

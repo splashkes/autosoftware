@@ -1,12 +1,17 @@
 approach_id: api-first-taxonomy
 
 description: >
-  API-first ingestion with structured domains and graph-like taxonomy.
-  Public UI for browsing; no admin UI initially.
+  API-first ingestion with structured domains, standards-backed schedule
+  hierarchy, rubric scoring, and graph-like taxonomy. Show Admin UI for
+  live operations. Public UI for browsing.
 
 principles:
-  - ingestion via agents
-  - append-only data model - but with plan for redaction/scrubbing if legal requirement
+  - ingestion via agents with source provenance
+  - append-only data model with suppression
+  - standards and editions as first-class entities
+  - schedule hierarchy (division → section → class)
+  - rule inheritance with local overrides
+  - rubric-capable scoring
   - taxonomy-driven discovery
   - organization-scoped computation
 
@@ -14,16 +19,25 @@ components:
   - ingestion API
   - taxonomy system
   - entry registry
-  - media storage
+  - schedule hierarchy manager
+  - standards and citation tracker
+  - judging rubric engine
   - award computation engine
+  - media storage (S3)
+  - show admin UI
   - public viewer UI
+  - authentication (Cognito)
 
 risks:
   - taxonomy inconsistency
   - ingestion errors from unstructured data
   - award rule complexity
+  - OJES may remain unavailable as full digital source
+  - local PDFs may quote standards inconsistently
+  - rubric extraction from schedules may require manual confirmation
 
 future_extensions:
   - real-time ingestion tools
-  - admin UI
   - cross-org federation layer
+  - AI-assisted taxonomy normalization
+  - federation analytics

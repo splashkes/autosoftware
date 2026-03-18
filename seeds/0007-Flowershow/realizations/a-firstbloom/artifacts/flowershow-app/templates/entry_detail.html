@@ -1,0 +1,63 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/">Home</a> &rsaquo;
+  {{if .Show}}<a href="/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;{{end}}
+  <span>{{.Entry.Name}}</span>
+</div>
+
+<h1>{{.Entry.Name}}</h1>
+
+<div class="entry-meta">
+  {{if .Person}}<span class="badge badge-green">Entrant: {{.Person.Initials}}</span>{{end}}
+  {{if .Class}}<span class="badge badge-muted">Class {{.Class.ClassNumber}}: {{.Class.Title}}</span>{{end}}
+  {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
+  {{if .Entry.Points}}<span class="badge badge-muted">{{.Entry.Points}} pts</span>{{end}}
+</div>
+
+{{if .Entry.Notes}}
+<section class="section">
+  <h2>Notes</h2>
+  <p>{{.Entry.Notes}}</p>
+</section>
+{{end}}
+
+{{if .Taxons}}
+<section class="section">
+  <h2>Taxonomy</h2>
+  <div class="tag-list">
+    {{range .Taxons}}
+    <a href="/taxonomy/{{.ID}}" class="tag">{{.Name}}</a>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{if .Scorecards}}
+<section class="section">
+  <h2>Scorecards</h2>
+  {{range .Scorecards}}
+  <div class="card scorecard-card">
+    <div class="card-body">
+      <h3>Score: {{.Scorecard.TotalScore}} {{if .Judge}}<span class="card-meta">Judge: {{.Judge.Initials}}</span>{{end}}</h3>
+      {{if .Scorecard.Notes}}<p>{{.Scorecard.Notes}}</p>{{end}}
+      {{if .Scores}}
+      <table class="table table-sm">
+        <thead><tr><th>Criterion</th><th>Score</th><th>Comment</th></tr></thead>
+        <tbody>
+          {{range .Scores}}
+          <tr>
+            <td>{{.CriterionID}}</td>
+            <td>{{.Score}}</td>
+            <td>{{.Comment}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+

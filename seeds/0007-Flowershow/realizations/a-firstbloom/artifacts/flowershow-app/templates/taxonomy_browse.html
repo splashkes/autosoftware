@@ -1,0 +1,22 @@
+{{define "content"}}
+<h1>Taxonomy</h1>
+<p class="section-desc">Browse the botanical and design taxonomy used across flower shows.</p>
+
+{{if .Taxons}}
+<div class="card-grid">
+  {{range .Taxons}}
+  <a href="/taxonomy/{{.ID}}" class="card taxon-card">
+    <div class="card-body">
+      <h3 class="card-title">{{.Name}}</h3>
+      {{if .ScientificName}}<p class="card-meta scientific">{{.ScientificName}}</p>{{end}}
+      <span class="badge badge-muted">{{.TaxonType}}</span>
+      {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
+    </div>
+  </a>
+  {{end}}
+</div>
+{{else}}
+<p class="empty-state">No taxons defined yet.</p>
+{{end}}
+{{end}}
+

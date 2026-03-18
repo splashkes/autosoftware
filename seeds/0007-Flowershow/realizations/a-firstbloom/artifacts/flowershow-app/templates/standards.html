@@ -1,0 +1,21 @@
+{{define "content"}}
+<h1>Standards</h1>
+<p class="section-desc">Governing rulebooks and reference standards.</p>
+
+{{if .Standards}}
+<div class="card-grid">
+  {{range .Standards}}
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">{{.Name}}</h3>
+      {{if .DomainScope}}<span class="badge badge-muted">{{.DomainScope}}</span>{{end}}
+      {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<p class="empty-state">No standards registered yet.</p>
+{{end}}
+{{end}}
+

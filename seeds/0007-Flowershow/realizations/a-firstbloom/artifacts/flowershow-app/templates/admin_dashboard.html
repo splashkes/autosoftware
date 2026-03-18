@@ -1,0 +1,53 @@
+{{define "content"}}
+<div class="admin-header">
+  <h1>Admin Dashboard</h1>
+  <form method="POST" action="/admin/logout" class="inline">
+    <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+  </form>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <span class="stat-number">{{len .Shows}}</span>
+    <span class="stat-label">Shows</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-number">{{len .Persons}}</span>
+    <span class="stat-label">Persons</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-number">{{len .Awards}}</span>
+    <span class="stat-label">Awards</span>
+  </div>
+</div>
+
+<section class="section">
+  <div class="section-header">
+    <h2>Shows</h2>
+    <a href="/admin/shows/new" class="btn btn-primary btn-sm">New Show</a>
+  </div>
+  {{if .Shows}}
+  <div class="card-grid">
+    {{range .Shows}}
+    <a href="/admin/shows/{{.ID}}" class="card show-card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Name}}</h3>
+        <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
+        <p class="card-meta">{{statusBadge .Status}}</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No shows. Create one to get started.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <h2>Persons</h2>
+  </div>
+  <a href="/admin/persons" class="btn btn-outline btn-sm">Manage Persons</a>
+</section>
+{{end}}
+

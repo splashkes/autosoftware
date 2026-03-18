@@ -1,10 +1,11 @@
-seed_id: 000X-flower-show
-version: 0.1
-status: proposed
+seed_id: 0007-Flowershow
+version: 0.2
+status: designed
 
 summary: >
-  Federated registry for flower show competitions with flexible taxonomy,
-  awards, and cross-organization discovery.
+  Federated registry for flower show competitions with standards-backed
+  schedule hierarchy, rubric scoring, provenance tracking, flexible
+  taxonomy, awards, and cross-organization discovery.
 
 domains:
   - horticulture
@@ -15,8 +16,18 @@ domains:
 key_entities:
   - organization
   - show
+  - show_schedule
+  - division
+  - section
+  - show_class
   - person
   - entry
   - taxonomy
   - award
   - media
+  - standard_document
+  - standard_edition
+  - source_document
+  - source_citation
+  - judging_rubric
+  - entry_scorecard
