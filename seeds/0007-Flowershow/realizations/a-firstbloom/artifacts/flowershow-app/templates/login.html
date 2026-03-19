@@ -2,7 +2,7 @@
 <div class="login-container login-shell">
   <div class="login-header">
     <h1>Admin Login</h1>
-    <p class="card-meta">Use the site-native sign-in flows for password, email code, or password reset.</p>
+    <p class="card-meta">Enter your email first, then sign in with a password or request an emailed sign-in code.</p>
   </div>
 
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
@@ -10,57 +10,48 @@
 
   {{if .CognitoEnabled}}
   <section class="login-card">
-    <h2>Password</h2>
+    <h2>Start With Your Email</h2>
+    <p class="card-meta">Use your password now, or ask the site to email a sign-in code or password reset code.</p>
     <form method="POST" action="{{bp}}/auth/login/password" class="form login-form">
       <div class="form-group">
-        <label for="cognito_email">Email</label>
-        <input type="email" id="cognito_email" name="email" class="form-input" autocomplete="email" required autofocus>
+        <label for="login_email">Email</label>
+        <input type="email" id="login_email" name="email" class="form-input" autocomplete="email" required autofocus>
       </div>
       <div class="form-group">
-        <label for="cognito_password">Password</label>
-        <input type="password" id="cognito_password" name="password" class="form-input" autocomplete="current-password" required>
+        <label for="login_password">Password</label>
+        <input type="password" id="login_password" name="password" class="form-input" autocomplete="current-password">
       </div>
-      <button type="submit" class="btn btn-primary">Sign In With Password</button>
+      <div class="login-actions">
+        <button type="submit" class="btn btn-primary">Sign In</button>
+        <div class="login-actions-secondary">
+          <button type="submit" formaction="{{bp}}/auth/login/email-code" formmethod="POST" formnovalidate class="btn btn-secondary">Send Login Code</button>
+          <button type="submit" formaction="{{bp}}/auth/login/forgot-password" formmethod="POST" formnovalidate class="btn btn-outline">Send Password Reset Code</button>
+        </div>
+      </div>
     </form>
   </section>
 
+  {{if .PendingEmailOTP}}
   <section class="login-card">
-    <h2>Email Code</h2>
-    <p class="card-meta">Send a one-time code to your email and finish sign-in here.</p>
-    <form method="POST" action="{{bp}}/auth/login/email-code" class="form login-form">
-      <div class="form-group">
-        <label for="otp_email">Email</label>
-        <input type="email" id="otp_email" name="email" class="form-input" autocomplete="email" required>
-      </div>
-      <button type="submit" class="btn btn-primary">Send Email Code</button>
-    </form>
-
-    {{if .PendingEmailOTP}}
+    <h2>Verify Login Code</h2>
+    <p class="card-meta">Enter the emailed code for {{.PendingEmail}} to finish signing in.</p>
     <form method="POST" action="{{bp}}/auth/login/email-code/verify" class="form login-form">
       <div class="form-group">
-        <label for="otp_code">Enter Code For {{.PendingEmail}}</label>
+        <label for="otp_code">Login Code</label>
         <input type="text" id="otp_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
       </div>
-      <button type="submit" class="btn btn-primary">Verify Email Code</button>
+      <button type="submit" class="btn btn-primary">Verify Login Code</button>
     </form>
-    {{end}}
   </section>
+  {{end}}
 
+  {{if .PendingReset}}
   <section class="login-card">
-    <h2>Forgot Password</h2>
-    <p class="card-meta">Request a reset code, then set a new password without leaving this site.</p>
-    <form method="POST" action="{{bp}}/auth/login/forgot-password" class="form login-form">
-      <div class="form-group">
-        <label for="forgot_email">Email</label>
-        <input type="email" id="forgot_email" name="email" class="form-input" autocomplete="email" required>
-      </div>
-      <button type="submit" class="btn btn-secondary">Send Reset Code</button>
-    </form>
-
-    {{if .PendingReset}}
+    <h2>Reset Password</h2>
+    <p class="card-meta">Enter the emailed reset code for {{.PendingEmail}}, then choose a new password.</p>
     <form method="POST" action="{{bp}}/auth/login/forgot-password/confirm" class="form login-form">
       <div class="form-group">
-        <label for="forgot_code">Reset Code For {{.PendingEmail}}</label>
+        <label for="forgot_code">Reset Code</label>
         <input type="text" id="forgot_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
       </div>
       <div class="form-group">
@@ -73,27 +64,13 @@
       </div>
       <button type="submit" class="btn btn-primary">Update Password</button>
     </form>
-    {{end}}
-  </section>
-  {{else}}
-  <section class="login-card">
-    <h2>Local Only</h2>
-    <p class="card-meta">Cognito is not configured for this deployment. Use the bootstrap password.</p>
   </section>
   {{end}}
-
-  {{if .BootstrapPassword}}
-  <details class="login-card login-bootstrap">
-    <summary>Bootstrap Override</summary>
-    <p class="card-meta">Local password login remains available for bootstrap, CI, and break-glass access.</p>
-    <form method="POST" action="{{bp}}/admin/login" class="form login-form">
-      <div class="form-group">
-        <label for="bootstrap_password">Bootstrap Password</label>
-        <input type="password" id="bootstrap_password" name="password" class="form-input" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn btn-secondary">Use Bootstrap Password</button>
-    </form>
-  </details>
+  {{else}}
+  <section class="login-card">
+    <h2>Sign-In Unavailable</h2>
+    <p class="card-meta">This deployment does not have direct Cognito sign-in configured yet.</p>
+  </section>
   {{end}}
 </div>
 {{end}}

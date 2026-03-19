@@ -69,7 +69,6 @@ func testApp() *app {
 	return &app{
 		store:           newMemoryStore(),
 		templates:       parseTemplates(),
-		adminPassword:   "admin",
 		serviceToken:    "test-token",
 		sseBroker:       newSSEBroker(),
 		media:           &localMediaStore{dir: dir},
@@ -360,7 +359,6 @@ func TestAdminLoginFlow(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
-	mux.HandleFunc("POST /admin/login", a.handleAdminLoginPost)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
 	// GET login page
@@ -370,38 +368,19 @@ func TestAdminLoginFlow(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Bootstrap Override") {
-		t.Fatal("login page missing bootstrap override section")
+	if strings.Contains(w.Body.String(), "Bootstrap Override") {
+		t.Fatal("login page should not expose bootstrap override access")
+	}
+	if !strings.Contains(w.Body.String(), "Sign-In Unavailable") {
+		t.Fatal("login page should explain missing cognito sign-in configuration")
 	}
 
-	// POST wrong password
-	req = httptest.NewRequest("POST", "/admin/login", strings.NewReader("password=wrong"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w = httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (re-render with error), got %d", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "Invalid bootstrap password") {
-		t.Fatal("expected bootstrap error message")
-	}
-
-	// POST correct password
-	req = httptest.NewRequest("POST", "/admin/login", strings.NewReader("password=admin"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Access admin still requires a signed session with an admin role.
+	req = httptest.NewRequest("GET", "/admin", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", w.Code)
-	}
-
-	// Access admin with cookie
-	req = httptest.NewRequest("GET", "/admin", nil)
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
-	w = httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+		t.Fatalf("expected 303 redirect, got %d", w.Code)
 	}
 }
 
@@ -416,13 +395,13 @@ func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Sign In With Password") {
+	if !strings.Contains(body, "Sign In") {
 		t.Fatal("login page missing direct password sign-in")
 	}
-	if !strings.Contains(body, "Send Email Code") {
+	if !strings.Contains(body, "Send Login Code") {
 		t.Fatal("login page missing email-code sign-in")
 	}
-	if !strings.Contains(body, "Forgot Password") {
+	if !strings.Contains(body, "Send Password Reset Code") {
 		t.Fatal("login page missing forgot-password flow")
 	}
 	if strings.Contains(body, "Continue With Cognito") {
@@ -516,7 +495,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	}
 	loginW := httptest.NewRecorder()
 	mux.ServeHTTP(loginW, loginReq)
-	if !strings.Contains(loginW.Body.String(), "Verify Email Code") {
+	if !strings.Contains(loginW.Body.String(), "Verify Login Code") {
 		t.Fatal("login page missing otp verification form")
 	}
 
@@ -636,7 +615,7 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	mux.HandleFunc("GET /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowDetail))
 
 	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -671,7 +650,7 @@ func TestHTMXJudgeAssignReturnsInfoPanel(t *testing.T) {
 	req := httptest.NewRequest("POST", "/admin/shows/show_fall2025/judges", strings.NewReader("person_id=person_01"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -1562,7 +1541,7 @@ func TestMediaUploadAndRender(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/admin/entries/entry_01/media", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {
@@ -1611,7 +1590,7 @@ func TestMediaUploadRejectsHEIC(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/admin/entries/entry_01/media", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -1635,7 +1614,7 @@ func TestScorecardRequiresAssignedJudge(t *testing.T) {
 	body := strings.NewReader("entry_id=entry_01&judge_id=" + person.ID + "&rubric_id=rubric_hort&score_crit_form=10")
 	req := httptest.NewRequest("POST", "/admin/scorecards", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -1645,7 +1624,7 @@ func TestScorecardRequiresAssignedJudge(t *testing.T) {
 	body = strings.NewReader("entry_id=entry_01&judge_id=person_03&rubric_id=rubric_hort&score_crit_form=20&score_crit_color=20")
 	req = httptest.NewRequest("POST", "/admin/scorecards", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: "ok"})
+	addAdminSession(t, a, req)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {

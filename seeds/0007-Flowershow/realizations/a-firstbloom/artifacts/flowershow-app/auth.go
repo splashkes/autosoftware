@@ -61,14 +61,13 @@ type pendingAuthState struct {
 }
 
 type adminLoginData struct {
-	Title             string
-	Error             string
-	Info              string
-	CognitoEnabled    bool
-	PendingEmail      string
-	PendingEmailOTP   bool
-	PendingReset      bool
-	BootstrapPassword bool
+	Title           string
+	Error           string
+	Info            string
+	CognitoEnabled  bool
+	PendingEmail    string
+	PendingEmailOTP bool
+	PendingReset    bool
 }
 
 type authStartResult struct {
@@ -597,10 +596,6 @@ func (a *app) hasRole(r *http.Request, role string) bool {
 }
 
 func (a *app) isAdmin(r *http.Request) bool {
-	cookie, err := r.Cookie(adminCookieName)
-	if err == nil && cookie.Value == "ok" {
-		return true
-	}
 	return a.hasRole(r, "admin")
 }
 
@@ -739,11 +734,10 @@ func bootstrapAdminMap() map[string]bool {
 
 func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adminLoginData {
 	data := adminLoginData{
-		Title:             "Admin Login",
-		Error:             errMessage,
-		Info:              infoMessage,
-		CognitoEnabled:    a.authEnabled(),
-		BootstrapPassword: strings.TrimSpace(a.adminPassword) != "",
+		Title:          "Admin Login",
+		Error:          errMessage,
+		Info:           infoMessage,
+		CognitoEnabled: a.authEnabled(),
 	}
 	if pending, ok := a.currentPendingAuth(r); ok {
 		data.PendingEmail = pending.Email
@@ -923,13 +917,6 @@ func (a *app) handleCognitoCallback(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleCognitoLogout(w http.ResponseWriter, r *http.Request) {
 	a.clearPendingAuth(w)
 	a.clearUserSession(w)
-	http.SetCookie(w, &http.Cookie{
-		Name:     adminCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 

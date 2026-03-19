@@ -18,10 +18,7 @@ import (
 	"time"
 )
 
-const (
-	adminCookieName = "as_flowershow_admin"
-	maxFormMemory   = 1 << 20
-)
+const maxFormMemory = 1 << 20
 
 //go:embed templates/*
 var templates embed.FS
@@ -32,7 +29,6 @@ var assets embed.FS
 type app struct {
 	store           flowershowStore
 	templates       map[string]*template.Template
-	adminPassword   string
 	serviceToken    string
 	sseBroker       *sseBroker
 	auth            authProvider
@@ -60,7 +56,6 @@ func main() {
 	a := &app{
 		store:           store,
 		templates:       parseTemplates(),
-		adminPassword:   envOrDefault("AS_ADMIN_PASSWORD", "admin"),
 		serviceToken:    strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
 		sseBroker:       newSSEBroker(),
 		auth:            auth,
@@ -96,7 +91,6 @@ func main() {
 
 	// Admin auth
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
-	mux.HandleFunc("POST /admin/login", a.handleAdminLoginPost)
 	mux.HandleFunc("POST /admin/logout", a.handleAdminLogout)
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
