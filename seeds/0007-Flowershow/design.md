@@ -9,6 +9,21 @@ Society → District → Region → Province → Country → Global
 
 Each Show is hosted by an Organization.
 
+This hierarchy is structural at this stage.
+It supports categorization, reporting, browsing, and lookup context.
+
+Parentage does not itself confer control.
+
+Examples:
+
+- a club may belong to a district
+- a district may belong to a region
+- that does not mean the district can edit the club
+- that does not mean the region can edit the district or club
+
+Any cross-organization control must come from explicit accepted grants, not
+from ancestry alone.
+
 ---
 
 ### 2. Show
@@ -208,6 +223,10 @@ Current effective access should be materialized from accepted grant history.
 Revocation should be represented as later accepted history, not by mutating old
 role rows in place and not by inventing status strings like `REVOKED
 executive`.
+
+Organization ancestry is not authority inheritance by default.
+If any future cross-org authority is introduced, it must be explicitly granted
+and explicitly evaluated, not inferred from parent-child organization links.
 
 ---
 

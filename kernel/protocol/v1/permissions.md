@@ -99,6 +99,18 @@ Typical scope kinds:
 - `document`
 - `workflow`
 
+Scope hierarchy is not authority hierarchy by default.
+
+For example:
+
+- an `organization` may have a parent organization for categorization,
+  reporting, or navigation
+- that relationship alone does not grant edit, admin, or delegation power over
+  the child organization
+
+Hierarchy is structural by default.
+Authority is explicit by default.
+
 ### Capability
 
 A concrete permission, not a vague label.
@@ -256,6 +268,20 @@ A subject should not be able to create downstream grants merely because it has
 some powerful capability.
 Its effective authority should also permit delegation.
 
+This matters especially for organization trees.
+
+For example:
+
+- a club may belong to a district
+- a district may belong to a region
+- those links are useful for grouping, reporting, and browse structure
+- but the district does not automatically gain operational control over the
+  club
+- and the region does not automatically gain operational control over the
+  district or club
+
+Any cross-organization control must come from an explicit accepted grant.
+
 Recommended delegation modes:
 
 - `none`
@@ -309,6 +335,14 @@ Conceptually:
 
 The materializer should not guess seed semantics.
 It should resolve through explicit schema and bundle definitions.
+
+The default evaluator should also stay strict about scope ancestry:
+
+- parent scope references are structural
+- effective access comes from explicit grants
+- downward inheritance only exists when a seed explicitly defines a bundle or
+  rule that allows it
+- ancestry alone must never imply authority
 
 ## Authorization Evaluation
 
