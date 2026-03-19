@@ -1,71 +1,123 @@
 {{define "content"}}
 <div class="login-container login-shell">
   <div class="login-header">
-    <h1>Admin Login</h1>
-    <p class="card-meta">Enter your email first, then sign in with a password or request an emailed sign-in code.</p>
+    <div class="login-step-kicker">Flowershow Admin</div>
+    <h1>Sign In</h1>
+    <p class="card-meta">One active step at a time: email first, then password, login code, or password reset.</p>
   </div>
 
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
   {{if .Info}}<div class="alert alert-info">{{.Info}}</div>{{end}}
 
   {{if .CognitoEnabled}}
-  <section class="login-card">
-    <h2>Start With Your Email</h2>
-    <p class="card-meta">Use your password now, or ask the site to email a sign-in code or password reset code.</p>
-    <form method="POST" action="{{bp}}/auth/login/password" class="form login-form">
-      <div class="form-group">
-        <label for="login_email">Email</label>
-        <input type="email" id="login_email" name="email" class="form-input" autocomplete="email" required autofocus>
+    {{if .PendingEmailOTP}}
+    <section class="login-card">
+      <div class="login-step-row">
+        <div>
+          <div class="login-step-label">Step 2 of 2</div>
+          <h2>Enter Login Code</h2>
+        </div>
+        <span class="login-email-chip">{{.PendingEmail}}</span>
       </div>
-      <div class="form-group">
-        <label for="login_password">Password</label>
-        <input type="password" id="login_password" name="password" class="form-input" autocomplete="current-password">
+      <p class="card-meta">Enter the code from your email to finish signing in.</p>
+      <form method="POST" action="{{bp}}/auth/login/email-code/verify" class="form login-form">
+        <div class="form-group">
+          <label for="otp_code">Login Code</label>
+          <input type="text" id="otp_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+        </div>
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary">Verify Login Code</button>
+        </div>
+      </form>
+      <form method="POST" action="{{bp}}/auth/login/back" class="login-back-form">
+        <input type="hidden" name="email" value="{{.PendingEmail}}">
+        <button type="submit" class="btn btn-outline">Back</button>
+      </form>
+    </section>
+
+    {{else if .PendingReset}}
+    <section class="login-card">
+      <div class="login-step-row">
+        <div>
+          <div class="login-step-label">Step 2 of 2</div>
+          <h2>Reset Password</h2>
+        </div>
+        <span class="login-email-chip">{{.PendingEmail}}</span>
       </div>
-      <div class="login-actions">
-        <button type="submit" class="btn btn-primary">Sign In</button>
-        <div class="login-actions-secondary">
-          <button type="submit" formaction="{{bp}}/auth/login/email-code" formmethod="POST" formnovalidate class="btn btn-secondary">Send Login Code</button>
-          <button type="submit" formaction="{{bp}}/auth/login/forgot-password" formmethod="POST" formnovalidate class="btn btn-outline">Send Password Reset Code</button>
+      <p class="card-meta">Enter the emailed reset code, then choose a new password.</p>
+      <form method="POST" action="{{bp}}/auth/login/forgot-password/confirm" class="form login-form">
+        <div class="form-group">
+          <label for="forgot_code">Reset Code</label>
+          <input type="text" id="forgot_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+        </div>
+        <div class="form-group">
+          <label for="new_password">New Password</label>
+          <input type="password" id="new_password" name="new_password" class="form-input" autocomplete="new-password" required>
+        </div>
+        <div class="form-group">
+          <label for="confirm_password">Confirm New Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" class="form-input" autocomplete="new-password" required>
+        </div>
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary">Update Password</button>
+        </div>
+      </form>
+      <form method="POST" action="{{bp}}/auth/login/back" class="login-back-form">
+        <input type="hidden" name="email" value="{{.PendingEmail}}">
+        <button type="submit" class="btn btn-outline">Back</button>
+      </form>
+    </section>
+
+    {{else if .PasswordStep}}
+    <section class="login-card">
+      <div class="login-step-row">
+        <div>
+          <div class="login-step-label">Step 2 of 2</div>
+          <h2>Enter Password</h2>
+        </div>
+        <span class="login-email-chip">{{.CurrentEmail}}</span>
+      </div>
+      <p class="card-meta">Use your password for {{.CurrentEmail}} or go back and choose a different sign-in method.</p>
+      <form method="POST" action="{{bp}}/auth/login/password" class="form login-form">
+        <input type="hidden" name="email" value="{{.CurrentEmail}}">
+        <div class="form-group">
+          <label for="login_password">Password</label>
+          <input type="password" id="login_password" name="password" class="form-input" autocomplete="current-password" required autofocus>
+        </div>
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary">Sign In</button>
+        </div>
+      </form>
+      <form method="POST" action="{{bp}}/auth/login/back" class="login-back-form">
+        <input type="hidden" name="email" value="{{.CurrentEmail}}">
+        <button type="submit" class="btn btn-outline">Back</button>
+      </form>
+    </section>
+
+    {{else}}
+    <section class="login-card">
+      <div class="login-step-row">
+        <div>
+          <div class="login-step-label">Step 1 of 2</div>
+          <h2>Enter Email</h2>
         </div>
       </div>
-    </form>
-  </section>
-
-  {{if .PendingEmailOTP}}
-  <section class="login-card">
-    <h2>Verify Login Code</h2>
-    <p class="card-meta">Enter the emailed code for {{.PendingEmail}} to finish signing in.</p>
-    <form method="POST" action="{{bp}}/auth/login/email-code/verify" class="form login-form">
-      <div class="form-group">
-        <label for="otp_code">Login Code</label>
-        <input type="text" id="otp_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
-      </div>
-      <button type="submit" class="btn btn-primary">Verify Login Code</button>
-    </form>
-  </section>
-  {{end}}
-
-  {{if .PendingReset}}
-  <section class="login-card">
-    <h2>Reset Password</h2>
-    <p class="card-meta">Enter the emailed reset code for {{.PendingEmail}}, then choose a new password.</p>
-    <form method="POST" action="{{bp}}/auth/login/forgot-password/confirm" class="form login-form">
-      <div class="form-group">
-        <label for="forgot_code">Reset Code</label>
-        <input type="text" id="forgot_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
-      </div>
-      <div class="form-group">
-        <label for="new_password">New Password</label>
-        <input type="password" id="new_password" name="new_password" class="form-input" autocomplete="new-password" required>
-      </div>
-      <div class="form-group">
-        <label for="confirm_password">Confirm New Password</label>
-        <input type="password" id="confirm_password" name="confirm_password" class="form-input" autocomplete="new-password" required>
-      </div>
-      <button type="submit" class="btn btn-primary">Update Password</button>
-    </form>
-  </section>
-  {{end}}
+      <p class="card-meta">Choose how you want to continue after entering your email.</p>
+      <form action="{{bp}}/admin/login" method="GET" class="form login-form">
+        <div class="form-group">
+          <label for="login_email">Email</label>
+          <input type="email" id="login_email" name="email" value="{{.CurrentEmail}}" class="form-input" autocomplete="email" required autofocus>
+        </div>
+        <div class="login-actions">
+          <button type="submit" name="mode" value="password" class="btn btn-primary">Continue With Password</button>
+          <div class="login-actions-secondary">
+            <button type="submit" formaction="{{bp}}/auth/login/email-code" formmethod="POST" class="btn btn-secondary">Send Login Code</button>
+            <button type="submit" formaction="{{bp}}/auth/login/forgot-password" formmethod="POST" class="btn btn-outline">Send Password Reset Code</button>
+          </div>
+        </div>
+      </form>
+    </section>
+    {{end}}
   {{else}}
   <section class="login-card">
     <h2>Sign-In Unavailable</h2>
