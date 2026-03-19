@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
@@ -25,13 +27,50 @@ type adminDashboardData struct {
 	Rubrics     []*JudgingRubric
 }
 
+type clubAdminData struct {
+	Title             string
+	CurrentPath       string
+	OrganizationID    string
+	Organization      *Organization
+	CurrentUser       *UserIdentity
+	Sections          []accountSectionView
+	ActiveSection     string
+	ManagedShows      []*Show
+	Members           []clubMemberView
+	Invites           []organizationInviteView
+	InviteRoleOptions []inviteRoleOptionView
+}
+
+type clubMemberView struct {
+	FullName         string
+	Email            string
+	OrganizationRole string
+	PermissionRoles  []string
+}
+
+type organizationInviteView struct {
+	ID               string
+	FullName         string
+	Email            string
+	OrganizationRole string
+	PermissionLabels []string
+	StatusLabel      string
+	ClaimedLabel     string
+}
+
+type inviteRoleOptionView struct {
+	Role        string
+	Label       string
+	Description string
+}
+
 func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	orgs := a.store.allOrganizations()
 	var awards []*AwardDefinition
 	for _, org := range orgs {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
-	a.render(w, "admin_dashboard.html", adminDashboardData{
+	a.render(w, r, "admin_dashboard.html", adminDashboardData{
 		Title:       "Admin Dashboard",
 		CurrentPath: "/admin",
 		Shows:       a.store.allShows(),
@@ -42,13 +81,183 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func clubAdminSections(organizationID, active string) []accountSectionView {
+	base := "/admin/clubs/" + organizationID
+	return []accountSectionView{
+		{ID: "overview", Label: "Overview", Href: base, Current: active == "overview"},
+		{ID: "invites", Label: "Invites", Href: base + "?section=invites#club-invites", Current: active == "invites"},
+	}
+}
+
+func organizationInviteRoleOptions() []inviteRoleOptionView {
+	roles := []string{"organization_admin", "show_intake_operator", "show_judge_support", "judge", "entrant"}
+	out := make([]inviteRoleOptionView, 0, len(roles))
+	for _, role := range roles {
+		def, ok := flowershowAuthorityBundles[role]
+		if !ok {
+			continue
+		}
+		out = append(out, inviteRoleOptionView{
+			Role:        role,
+			Label:       def.DisplayName,
+			Description: formatPermissionList(def.Capabilities),
+		})
+	}
+	return out
+}
+
+func (a *app) clubAdminData(organizationID, activeSection string, user *UserIdentity) (clubAdminData, error) {
+	org, ok := a.store.organizationByID(organizationID)
+	if !ok {
+		return clubAdminData{}, fmt.Errorf("organization not found")
+	}
+
+	data := clubAdminData{
+		Title:             "Club Admin: " + org.Name,
+		CurrentPath:       "/admin/clubs/" + org.ID,
+		OrganizationID:    org.ID,
+		Organization:      org,
+		CurrentUser:       user,
+		ActiveSection:     activeSection,
+		Sections:          clubAdminSections(org.ID, activeSection),
+		InviteRoleOptions: organizationInviteRoleOptions(),
+	}
+
+	for _, show := range a.store.allShows() {
+		if show != nil && show.OrganizationID == org.ID {
+			data.ManagedShows = append(data.ManagedShows, show)
+		}
+	}
+
+	roleAssignments := map[string][]string{}
+	acceptedInviteRoles := map[string][]string{}
+	if a.authority != nil {
+		if roles, err := a.authority.AllRoleAssignments(context.Background()); err == nil {
+			for _, role := range roles {
+				if role == nil || role.OrganizationID != org.ID {
+					continue
+				}
+				roleAssignments[role.SubjectID] = append(roleAssignments[role.SubjectID], role.Role)
+			}
+		}
+	}
+	for _, invite := range a.store.organizationInvitesByOrganization(org.ID) {
+		if invite == nil || invite.Status != "accepted" {
+			continue
+		}
+		key := normalizeAuthIdentifier(invite.Email)
+		if key == "" {
+			continue
+		}
+		acceptedInviteRoles[key] = append(acceptedInviteRoles[key], invite.PermissionRoles...)
+	}
+
+	for _, person := range a.store.allPersons() {
+		if person == nil {
+			continue
+		}
+		for _, link := range a.store.personOrganizationsByPerson(person.ID) {
+			if link == nil || link.OrganizationID != org.ID {
+				continue
+			}
+			data.Members = append(data.Members, clubMemberView{
+				FullName:         strings.TrimSpace(person.FirstName + " " + person.LastName),
+				Email:            person.Email,
+				OrganizationRole: link.Role,
+				PermissionRoles:  append([]string(nil), func() []string {
+					if roles := roleAssignments[person.ID]; len(roles) > 0 {
+						return roles
+					}
+					return acceptedInviteRoles[normalizeAuthIdentifier(person.Email)]
+				}()...),
+			})
+		}
+	}
+
+	for _, invite := range a.store.organizationInvitesByOrganization(org.ID) {
+		if invite == nil {
+			continue
+		}
+		labels := make([]string, 0, len(invite.PermissionRoles))
+		for _, role := range invite.PermissionRoles {
+			if def, ok := flowershowAuthorityBundles[role]; ok {
+				labels = append(labels, def.DisplayName)
+			} else {
+				labels = append(labels, role)
+			}
+		}
+		claimedLabel := ""
+		if !invite.ClaimedAt.IsZero() {
+			claimedLabel = invite.ClaimedAt.Local().Format("2006-01-02 15:04")
+		}
+		data.Invites = append(data.Invites, organizationInviteView{
+			ID:               invite.ID,
+			FullName:         strings.TrimSpace(invite.FirstName + " " + invite.LastName),
+			Email:            invite.Email,
+			OrganizationRole: invite.OrganizationRole,
+			PermissionLabels: labels,
+			StatusLabel:      invite.Status,
+			ClaimedLabel:     claimedLabel,
+		})
+	}
+
+	return data, nil
+}
+
+func (a *app) handleAdminClubDetail(w http.ResponseWriter, r *http.Request) {
+	user, _ := a.currentUser(r)
+	activeSection := strings.TrimSpace(r.URL.Query().Get("section"))
+	if activeSection != "invites" {
+		activeSection = "overview"
+	}
+	data, err := a.clubAdminData(r.PathValue("organizationID"), activeSection, user)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a.render(w, r, "admin_club.html", data)
+}
+
+func (a *app) handleAdminClubInviteCreate(w http.ResponseWriter, r *http.Request) {
+	user, _ := a.currentUser(r)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	orgID := r.PathValue("organizationID")
+	_, err := a.store.createOrganizationInvite(OrganizationInviteInput{
+		OrganizationID:   orgID,
+		FirstName:        r.FormValue("first_name"),
+		LastName:         r.FormValue("last_name"),
+		Email:            r.FormValue("email"),
+		OrganizationRole: r.FormValue("organization_role"),
+		PermissionRoles:  r.Form["permission_roles"],
+		InvitedBySubject: func() string { if user != nil { return user.SubjectID }; return "" }(),
+		InvitedByName: func() string {
+			if user == nil {
+				return ""
+			}
+			if strings.TrimSpace(user.Name) != "" {
+				return user.Name
+			}
+			return user.Email
+		}(),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/admin/clubs/"+orgID+"?section=invites#club-invites", http.StatusSeeOther)
+}
+
 // --- Show CRUD ---
 
 func (a *app) handleAdminShowNew(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "admin_show_new.html", map[string]any{
+	a.render(w, r, "admin_show_new.html", map[string]any{
 		"Title":       "New Show",
 		"CurrentPath": "/admin/shows/new",
 		"Orgs":        a.store.allOrganizations(),
+		"DefaultSeason": time.Now().Format("2006"),
 	})
 }
 
@@ -71,6 +280,7 @@ func (a *app) handleAdminShowCreate(w http.ResponseWriter, r *http.Request) {
 type adminShowDetailData struct {
 	Title                string
 	CurrentPath          string
+	ShowID               string
 	Show                 *Show
 	Schedule             *ShowSchedule
 	ScheduleEdition      *StandardEdition
@@ -105,7 +315,7 @@ func (a *app) handleAdminShowDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.render(w, "show_admin.html", data)
+	a.render(w, r, "show_admin.html", data)
 }
 
 func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
@@ -172,6 +382,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 	return adminShowDetailData{
 		Title:                "Admin: " + show.Name,
 		CurrentPath:          "/admin/shows/" + show.ID,
+		ShowID:               show.ID,
 		Show:                 show,
 		Schedule:             sched,
 		ScheduleEdition:      scheduleEdition,
@@ -571,7 +782,7 @@ func (a *app) handleAdminShowCreditDelete(w http.ResponseWriter, r *http.Request
 // --- Persons ---
 
 func (a *app) handleAdminPersons(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "admin_persons.html", adminPersonsData{
+	a.render(w, r, "admin_persons.html", adminPersonsData{
 		Title:       "Manage Persons",
 		CurrentPath: "/admin/persons",
 		Persons:     a.store.allPersons(),

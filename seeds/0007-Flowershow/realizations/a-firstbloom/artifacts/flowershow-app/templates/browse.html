@@ -52,10 +52,21 @@
 <section class="section">
   <h2>Results{{if .Results}} ({{len .Results}}){{end}}</h2>
   {{if .Results}}
-  <div class="card-grid">
+  <div class="show-card-stack browse-result-stack">
     {{range .Results}}
-    <article class="card browse-card">
-      <div class="card-body">
+    <article class="card show-card-rich browse-card">
+      <div class="show-card-media browse-card-media">
+        {{if .Media}}
+        <div class="show-visual-frame is-active theme-{{.MockTheme}}" style="background-image:url('{{bp}}/media/{{(index .Media 0).ID}}');">
+          <span>{{.Entry.Name}}</span>
+        </div>
+        {{else}}
+        <div class="show-visual-frame is-active theme-{{.MockTheme}}">
+          <span>{{.MockLabel}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="card-body show-card-body">
         <h3 class="card-title"><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></h3>
         <p class="card-meta">{{.Show.Name}} · {{.Show.Date}}</p>
         {{if .Class}}<p class="card-meta">Class {{.Class.ClassNumber}} · {{.Class.Title}}</p>{{end}}

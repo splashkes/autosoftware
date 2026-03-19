@@ -678,6 +678,53 @@ func (a *app) setUserSession(w http.ResponseWriter, r *http.Request, user UserId
 		SameSite: http.SameSiteLaxMode,
 		Secure:   cookieSecure(r),
 	})
+	resolvedUser := user
+	if fresh, ok, err := a.sessions.ResolveUserSession(r.Context(), sessionID); err == nil && ok && fresh != nil {
+		resolvedUser = *fresh
+	}
+	if err := a.claimOrganizationInvitesForUser(r.Context(), resolvedUser); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *app) claimOrganizationInvitesForUser(ctx context.Context, user UserIdentity) error {
+	if a.store == nil || a.authority == nil {
+		return nil
+	}
+	claimed, err := a.store.claimOrganizationInvites(user.Email, user.SubjectID, user.CognitoSub, func(input UserRoleInput) error {
+		_, err := a.authority.AssignRole(ctx, input, "")
+		return err
+	})
+	if err != nil || len(claimed) == 0 {
+		return err
+	}
+	for _, invite := range claimed {
+		if invite == nil || strings.TrimSpace(invite.Email) == "" {
+			continue
+		}
+		person, ok := a.store.personByEmail(invite.Email)
+		if !ok {
+			var createErr error
+			person, createErr = a.store.createPerson(PersonInput{
+				FirstName:        invite.FirstName,
+				LastName:         invite.LastName,
+				Email:            invite.Email,
+				OrganizationID:   invite.OrganizationID,
+				OrganizationRole: invite.OrganizationRole,
+			})
+			if createErr != nil {
+				continue
+			}
+		}
+		if person != nil && strings.TrimSpace(invite.OrganizationID) != "" {
+			_, _ = a.store.linkPersonOrganization(PersonOrganization{
+				PersonID:       person.ID,
+				OrganizationID: invite.OrganizationID,
+				Role:           normalizeOrganizationRole(invite.OrganizationRole),
+			})
+		}
+	}
 	return nil
 }
 
@@ -817,6 +864,11 @@ func accountNoticeMessage(code string) accountNotice {
 			Message: "You are signed in, but this account does not currently have admin access.",
 			Kind:    "info",
 		}
+	case "access_denied":
+		return accountNotice{
+			Message: "You are signed in, but this account does not currently grant access to that workspace.",
+			Kind:    "error",
+		}
 	case "agent_token_revoked":
 		return accountNotice{
 			Message: "Agent token revoked.",
@@ -844,7 +896,7 @@ func (a *app) postLoginPathForUser(user UserIdentity) string {
 }
 
 func (a *app) renderAdminLogin(w http.ResponseWriter, r *http.Request, errMessage, infoMessage string) {
-	a.render(w, "login.html", a.loginPageData(r, errMessage, infoMessage))
+	a.render(w, r, "login.html", a.loginPageData(r, errMessage, infoMessage))
 }
 
 func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
@@ -856,7 +908,7 @@ func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) renderAdminLoginWithState(w http.ResponseWriter, errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) {
-	a.render(w, "login.html", a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending))
+	a.render(w, nil, "login.html", a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending))
 }
 
 func (a *app) handleAdminLoginBack(w http.ResponseWriter, r *http.Request) {
@@ -1057,7 +1109,7 @@ func (a *app) handleRoleManagement(w http.ResponseWriter, r *http.Request) {
 			roles = items
 		}
 	}
-	a.render(w, "admin_roles.html", roleManagementData{
+	a.render(w, r, "admin_roles.html", roleManagementData{
 		Title:       "Role Management",
 		CurrentPath: "/admin/roles",
 		User:        user,

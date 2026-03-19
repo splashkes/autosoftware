@@ -71,6 +71,15 @@ Covers:
 - full-show thumbnail board expectations
 - scoped judge-support and intake-operator access
 
+### 15-flowershow-public-ui-cleanup-plan.md
+Covers:
+- public-home restructuring into upcoming shows, active clubs, and past shows
+- photo-led show cards and browse cards
+- simpler responsive nav
+- clubs as a first-class public surface
+- browse retention without over-promoting niche nav items
+- stronger public exhibitor-profile navigation
+
 ---
 
 ## Cross-Cutting Principles

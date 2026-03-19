@@ -64,10 +64,16 @@ type flowershowStore interface {
 	createPerson(PersonInput) (*Person, error)
 	updatePerson(id string, input PersonInput) (*Person, error)
 	personByID(id string) (*Person, bool)
+	personByEmail(email string) (*Person, bool)
 	allPersons() []*Person
 	linkPersonOrganization(PersonOrganization) (*PersonOrganization, error)
 	personOrganizationsByPerson(personID string) []*PersonOrganization
 	lookupPersonsForShow(showID, query string) []*PersonOrganization
+
+	// Organization invites
+	createOrganizationInvite(OrganizationInviteInput) (*OrganizationInvite, error)
+	organizationInvitesByOrganization(organizationID string) []*OrganizationInvite
+	claimOrganizationInvites(email, subjectID, cognitoSub string, assignRole func(UserRoleInput) error) ([]*OrganizationInvite, error)
 
 	// Schedule
 	createSchedule(ShowSchedule) (*ShowSchedule, error)
@@ -194,6 +200,7 @@ type memoryStore struct {
 	shows          map[string]*Show
 	persons        map[string]*Person
 	personOrgs     map[string]*PersonOrganization
+	orgInvites     map[string]*OrganizationInvite
 	showJudges     map[string]*ShowJudgeAssignment
 	schedules      map[string]*ShowSchedule
 	divisions      map[string]*Division
@@ -227,6 +234,7 @@ func newMemoryStore() *memoryStore {
 		shows:          make(map[string]*Show),
 		persons:        make(map[string]*Person),
 		personOrgs:     make(map[string]*PersonOrganization),
+		orgInvites:     make(map[string]*OrganizationInvite),
 		showJudges:     make(map[string]*ShowJudgeAssignment),
 		schedules:      make(map[string]*ShowSchedule),
 		divisions:      make(map[string]*Division),
@@ -469,6 +477,21 @@ func (s *memoryStore) personByID(id string) (*Person, bool) {
 	defer s.mu.RUnlock()
 	p, ok := s.persons[id]
 	return p, ok
+}
+
+func (s *memoryStore) personByEmail(email string) (*Person, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	email = normalizeAuthIdentifier(email)
+	if email == "" {
+		return nil, false
+	}
+	for _, person := range s.persons {
+		if normalizeAuthIdentifier(person.Email) == email {
+			return person, true
+		}
+	}
+	return nil, false
 }
 
 func (s *memoryStore) allPersons() []*Person {
@@ -2073,6 +2096,29 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_person_organizations (
   role TEXT NOT NULL DEFAULT 'member',
   PRIMARY KEY (person_id, organization_id, role)
 );
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_organization_invites (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL,
+  organization_role TEXT NOT NULL DEFAULT '',
+  permission_roles TEXT[] NOT NULL DEFAULT '{}'::text[],
+  status TEXT NOT NULL DEFAULT 'pending',
+  invited_by_subject TEXT NOT NULL DEFAULT '',
+  invited_by_name TEXT NOT NULL DEFAULT '',
+  invited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  claimed_subject_id TEXT NOT NULL DEFAULT '',
+  claimed_cognito_sub TEXT NOT NULL DEFAULT '',
+  claimed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_org_invites_org_idx
+  ON as_flowershow_m_organization_invites (organization_id, invited_at DESC);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_org_invites_email_idx
+  ON as_flowershow_m_organization_invites ((lower(email)), status);
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_schedules (
   id TEXT PRIMARY KEY,

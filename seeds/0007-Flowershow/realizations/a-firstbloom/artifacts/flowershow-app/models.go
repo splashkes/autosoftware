@@ -61,6 +61,34 @@ type PersonOrganization struct {
 	Role           string `json:"role"` // member, judge, officer
 }
 
+type OrganizationInvite struct {
+	ID                string    `json:"id"`
+	OrganizationID    string    `json:"organization_id"`
+	FirstName         string    `json:"first_name"`
+	LastName          string    `json:"last_name"`
+	Email             string    `json:"email"`
+	OrganizationRole  string    `json:"organization_role,omitempty"`
+	PermissionRoles   []string  `json:"permission_roles,omitempty"`
+	Status            string    `json:"status"` // pending, accepted, revoked
+	InvitedBySubject  string    `json:"invited_by_subject,omitempty"`
+	InvitedByName     string    `json:"invited_by_name,omitempty"`
+	InvitedAt         time.Time `json:"invited_at"`
+	ClaimedSubjectID  string    `json:"claimed_subject_id,omitempty"`
+	ClaimedCognitoSub string    `json:"claimed_cognito_sub,omitempty"`
+	ClaimedAt         time.Time `json:"claimed_at,omitempty"`
+}
+
+type OrganizationInviteInput struct {
+	OrganizationID   string   `json:"organization_id"`
+	FirstName        string   `json:"first_name"`
+	LastName         string   `json:"last_name"`
+	Email            string   `json:"email"`
+	OrganizationRole string   `json:"organization_role,omitempty"`
+	PermissionRoles  []string `json:"permission_roles,omitempty"`
+	InvitedBySubject string   `json:"invited_by_subject,omitempty"`
+	InvitedByName    string   `json:"invited_by_name,omitempty"`
+}
+
 // --- Schedule Hierarchy ---
 
 type ShowSchedule struct {

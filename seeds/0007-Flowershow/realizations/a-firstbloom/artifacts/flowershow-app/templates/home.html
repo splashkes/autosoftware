@@ -1,26 +1,129 @@
 {{define "content"}}
-<div class="hero">
-  <h1>Flowershow</h1>
-  <p class="hero-sub">Discover flower shows, browse entries, and celebrate horticultural excellence.</p>
+<div class="hero hero-home">
+  <div class="hero-copy">
+    <div class="workflow-kicker">Flower shows, clubs, and public results</div>
+    <h1>Flowershow</h1>
+    <p class="hero-sub">Follow upcoming shows, revisit past blooms, browse classes and entries, and move through the public flower-show surface without getting buried in admin detail.</p>
+    <div class="show-actions">
+      <a href="{{bp}}/browse" class="btn btn-primary">Browse Entries</a>
+      <a href="{{bp}}/clubs" class="btn btn-outline">View Clubs</a>
+    </div>
+  </div>
+  <div class="hero-card-grid">
+    <div class="hero-stat-card">
+      <strong>{{len .UpcomingShows}}</strong>
+      <span>upcoming shows</span>
+    </div>
+    <div class="hero-stat-card">
+      <strong>{{len .Clubs}}</strong>
+      <span>active clubs</span>
+    </div>
+    <div class="hero-stat-card">
+      <strong>{{len .PastShows}}</strong>
+      <span>past shows</span>
+    </div>
+  </div>
 </div>
 
 <section class="section">
-  <h2>Shows</h2>
-  {{if .Shows}}
-  <div class="card-grid">
-    {{range .Shows}}
-    <a href="{{bp}}/shows/{{.Slug}}" class="card show-card">
-      <div class="card-body">
-        <h3 class="card-title">{{.Name}}</h3>
-        <p class="card-meta">{{.Location}} &middot; {{.Date}}</p>
-        <p class="card-meta">Season {{.Season}} {{statusBadge .Status}}</p>
+  <div class="section-header">
+    <div>
+      <h2>Upcoming Shows</h2>
+      <p class="section-desc">Shows that are still ahead, open for planning, or otherwise current.</p>
+    </div>
+  </div>
+  {{if .UpcomingShows}}
+  <div class="show-card-stack">
+    {{range .UpcomingShows}}
+    <a href="{{bp}}/shows/{{.Show.Slug}}" class="card show-card-rich">
+      <div class="show-card-media" data-show-rotator>
+        {{range $index, $frame := .Featured}}
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{bp}}{{$frame.MediaPath}}');"{{end}}>
+          <span>{{$frame.Label}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="card-body show-card-body">
+        <div class="show-card-meta-line">
+          <span class="badge badge-green">{{.RelativeLabel}}</span>
+          <span class="badge badge-muted">{{.SeasonLabel}}</span>
+        </div>
+        <h3 class="card-title">{{.Show.Name}}</h3>
+        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}} · {{.Show.Date}}</p>
+        <p class="card-meta">{{.EntryCount}} public entries · {{.ClassCount}} classes · {{.StatusLabel}}</p>
       </div>
     </a>
     {{end}}
   </div>
   {{else}}
-  <p class="empty-state">No shows yet. <a href="{{bp}}/admin">Create one</a>.</p>
+  <p class="empty-state">No upcoming shows yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Active Clubs</h2>
+      <p class="section-desc">Clubs are the public organization surface. Use them to follow exhibitors, shows, and leaderboard context.</p>
+    </div>
+    <a href="{{bp}}/clubs" class="btn btn-outline">All Clubs</a>
+  </div>
+  {{if .Clubs}}
+  <div class="card-grid club-card-grid">
+    {{range .Clubs}}
+    <a href="{{bp}}/clubs#{{.Org.ID}}" class="card club-card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Org.Name}}</h3>
+        <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent club context{{end}}</p>
+        <p class="card-meta">{{len .UpcomingShows}} upcoming · {{len .PastShows}} past shows</p>
+        {{if .TopPeople}}
+        <div class="club-top-people">
+          {{range .TopPeople}}
+          <span class="badge badge-muted">{{.Person.Initials}}</span>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No active clubs yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Past Shows</h2>
+      <p class="section-desc">Completed or older shows stay available for browsing, classes, entries, and exhibitor history.</p>
+    </div>
+  </div>
+  {{if .PastShows}}
+  <div class="show-card-stack">
+    {{range .PastShows}}
+    <a href="{{bp}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
+      <div class="show-card-media" data-show-rotator>
+        {{range $index, $frame := .Featured}}
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{bp}}{{$frame.MediaPath}}');"{{end}}>
+          <span>{{$frame.Label}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="card-body show-card-body">
+        <div class="show-card-meta-line">
+          <span class="badge badge-muted">{{.RelativeLabel}}</span>
+          <span class="badge badge-muted">{{.SeasonLabel}}</span>
+        </div>
+        <h3 class="card-title">{{.Show.Name}}</h3>
+        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}} · {{.Show.Date}}</p>
+        <p class="card-meta">{{.EntryCount}} public entries · {{.ClassCount}} classes · {{.StatusLabel}}</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No past shows yet.</p>
   {{end}}
 </section>
 {{end}}
-

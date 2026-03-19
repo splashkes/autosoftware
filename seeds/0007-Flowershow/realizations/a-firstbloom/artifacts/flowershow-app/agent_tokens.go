@@ -76,6 +76,16 @@ var agentPermissionCatalog = map[string]agentPermissionDef{
 		Label:       "Read admin dashboard",
 		Description: "Read admin overview counts and operator links.",
 	},
+	"organization.manage": {
+		Key:         "organization.manage",
+		Label:       "Manage clubs",
+		Description: "Read club workspaces and manage organization-scoped administration surfaces.",
+	},
+	"organization.invites.manage": {
+		Key:         "organization.invites.manage",
+		Label:       "Manage club invites",
+		Description: "Create and review club invitation records that can grant organization-scoped access after sign-in.",
+	},
 	"shows.workspace.read": {
 		Key:         "shows.workspace.read",
 		Label:       "Read private show workspaces",
@@ -178,6 +188,8 @@ var agentPermissionProfiles = map[string]agentPermissionProfileDef{
 		Permissions: []string{
 			"account.read",
 			"admin.dashboard.read",
+			"organization.manage",
+			"organization.invites.manage",
 			"shows.workspace.read",
 			"entries.private.read",
 			"shows.manage",
@@ -203,6 +215,8 @@ var agentPermissionProfiles = map[string]agentPermissionProfileDef{
 		Permissions: []string{
 			"account.read",
 			"admin.dashboard.read",
+			"organization.manage",
+			"organization.invites.manage",
 			"shows.workspace.read",
 			"entries.private.read",
 			"ledger.read",
@@ -227,6 +241,7 @@ var agentPermissionProfiles = map[string]agentPermissionProfileDef{
 var commandCapabilityMap = map[string]string{
 	"shows.create":               "shows.manage",
 	"shows.update":               "shows.manage",
+	"clubs.invites.create":       "organization.invites.manage",
 	"schedules.upsert":           "schedule.manage",
 	"divisions.create":           "schedule.manage",
 	"sections.create":            "schedule.manage",

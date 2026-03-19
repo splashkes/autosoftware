@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strconv"
@@ -20,6 +21,8 @@ type accountData struct {
 	CurrentPath        string
 	User               *UserIdentity
 	IsAdmin            bool
+	ActiveSection      string
+	Sections           []accountSectionView
 	Notice             accountNotice
 	Roles              []accountRoleView
 	Shows              []*Show
@@ -29,6 +32,14 @@ type accountData struct {
 	DefaultExpiryDays  int
 	IssuedAgentToken   *issuedAgentTokenView
 	AccountPermissions []accountPermissionView
+	ManagedClubs       []managedClubView
+}
+
+type accountSectionView struct {
+	ID      string
+	Label   string
+	Href    string
+	Current bool
 }
 
 type accountPermissionView struct {
@@ -66,19 +77,28 @@ type issuedAgentTokenView struct {
 	Permissions       []accountPermissionView
 }
 
+type managedClubView struct {
+	ID       string
+	Name     string
+	Level    string
+	AdminHref string
+}
+
 func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.currentUser(r)
 	if !ok {
 		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 		return
 	}
-	a.render(w, "account.html", a.buildAccountData(*user, accountNoticeMessage(r.URL.Query().Get("notice")), nil, "", 14))
+	section := accountSection(r.URL.Query().Get("section"))
+	a.render(w, r, "account.html", a.buildAccountData(*user, section, accountNoticeMessage(r.URL.Query().Get("notice")), nil, "", 14))
 }
 
-func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *IssuedAgentToken, selectedProfile string, defaultExpiryDays int) accountData {
+func (a *app) buildAccountData(user UserIdentity, section string, notice accountNotice, issued *IssuedAgentToken, selectedProfile string, defaultExpiryDays int) accountData {
 	if defaultExpiryDays < agentTokenMinDays || defaultExpiryDays > agentTokenMaxDays {
 		defaultExpiryDays = 14
 	}
+	section = accountSection(section)
 
 	showLabels := make(map[string]string)
 	for _, show := range a.store.allShows() {
@@ -185,6 +205,8 @@ func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *
 		CurrentPath:        "/account",
 		User:               &user,
 		IsAdmin:            a.userIsAdmin(user),
+		ActiveSection:      section,
+		Sections:           accountSections(section),
 		Notice:             notice,
 		Roles:              roles,
 		Shows:              a.store.allShows(),
@@ -194,6 +216,47 @@ func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *
 		DefaultExpiryDays:  defaultExpiryDays,
 		IssuedAgentToken:   issuedView,
 		AccountPermissions: accountPermissions,
+		ManagedClubs:       a.managedClubsForUser(user),
+	}
+}
+
+func (a *app) managedClubsForUser(user UserIdentity) []managedClubView {
+	items := make([]managedClubView, 0)
+	for _, org := range a.store.allOrganizations() {
+		if org == nil {
+			continue
+		}
+		if !a.userHasCapability(context.Background(), user, "organization.manage", authorityScope{Kind: "organization", ID: org.ID}) {
+			continue
+		}
+		items = append(items, managedClubView{
+			ID:        org.ID,
+			Name:      org.Name,
+			Level:     org.Level,
+			AdminHref: "/admin/clubs/" + org.ID,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items
+}
+
+func accountSection(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "shows", "access", "tokens":
+		return strings.TrimSpace(raw)
+	default:
+		return "overview"
+	}
+}
+
+func accountSections(active string) []accountSectionView {
+	return []accountSectionView{
+		{ID: "overview", Label: "Overview", Href: "/account?section=overview", Current: active == "overview"},
+		{ID: "shows", Label: "Shows", Href: "/account?section=shows", Current: active == "shows"},
+		{ID: "access", Label: "Access", Href: "/account?section=access", Current: active == "access"},
+		{ID: "tokens", Label: "Tokens / API", Href: "/account?section=tokens#agent-tokens", Current: active == "tokens"},
 	}
 }
 
@@ -231,18 +294,18 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
 		return
 	}
 	selectedProfile := strings.TrimSpace(r.FormValue("permission_profile"))
 	profile, ok := a.agentTokenProfileForUser(*user, selectedProfile)
 	if !ok {
-		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: "Choose one of the available permission profiles for this account.", Kind: "error"}, nil, selectedProfile, 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: "Choose one of the available permission profiles for this account.", Kind: "error"}, nil, selectedProfile, 14))
 		return
 	}
 	expiryDays, err := strconv.Atoi(strings.TrimSpace(r.FormValue("expires_in_days")))
 	if err != nil {
-		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: "Enter a valid expiry in days between 1 and 60.", Kind: "error"}, nil, selectedProfile, 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: "Enter a valid expiry in days between 1 and 60.", Kind: "error"}, nil, selectedProfile, 14))
 		return
 	}
 	issued, err := a.store.issueAgentToken(AgentTokenIssueInput{
@@ -255,10 +318,10 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		ExpiresInDays:     expiryDays,
 	})
 	if err != nil {
-		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, selectedProfile, expiryDays))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, selectedProfile, expiryDays))
 		return
 	}
-	a.render(w, "account.html", a.buildAccountData(*user, accountNotice{
+	a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{
 		Message: "Agent token issued.",
 		Kind:    "info",
 	}, issued, selectedProfile, expiryDays))
@@ -272,17 +335,10 @@ func (a *app) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenID := r.PathValue("tokenID")
 	if _, err := a.store.revokeAgentToken(tokenID, user.CognitoSub); err != nil {
-		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
 		return
 	}
 	http.Redirect(w, r, "/account?notice=agent_token_revoked#agent-tokens", http.StatusSeeOther)
-}
-
-type homeData struct {
-	Title       string
-	CurrentPath string
-	Shows       []*Show
-	Orgs        []*Organization
 }
 
 func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -290,11 +346,29 @@ func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.render(w, "home.html", homeData{
-		Title:       "Flowershow",
-		CurrentPath: "/",
-		Shows:       a.store.allShows(),
-		Orgs:        a.store.allOrganizations(),
+	upcoming, past := a.homeShowCards(time.Now())
+	a.render(w, r, "home.html", homeData{
+		Title:         "Flowershow",
+		CurrentPath:   "/",
+		UpcomingShows: upcoming,
+		PastShows:     past,
+		Clubs:         a.clubCards(time.Now()),
+	})
+}
+
+func (a *app) handleClubs(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "clubs.html", clubsData{
+		Title:       "Clubs",
+		CurrentPath: "/clubs",
+		Clubs:       a.clubCards(time.Now()),
+	})
+}
+
+func (a *app) handleClassesIndex(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "classes.html", classesIndexData{
+		Title:       "Classes",
+		CurrentPath: "/classes",
+		Domains:     a.classesIndexDomains(),
 	})
 }
 
@@ -303,6 +377,7 @@ func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
 type showDetailData struct {
 	Title       string
 	CurrentPath string
+	ShowID      string
 	Show        *Show
 	Schedule    *ShowSchedule
 	Divisions   []*divisionView
@@ -380,9 +455,10 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 
 	awards := a.store.awardsByOrganization(show.OrganizationID)
 
-	a.render(w, "show_detail.html", showDetailData{
+	a.render(w, r, "show_detail.html", showDetailData{
 		Title:       show.Name,
 		CurrentPath: "/shows/" + slug,
+		ShowID:      show.ID,
 		Show:        show,
 		Schedule:    sched,
 		Divisions:   divisions,
@@ -398,6 +474,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 type classBrowseData struct {
 	Title       string
 	CurrentPath string
+	ShowID      string
 	Show        *Show
 	Divisions   []*divisionView
 }
@@ -426,9 +503,10 @@ func (a *app) handleClassBrowse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.render(w, "class_browse.html", classBrowseData{
+	a.render(w, r, "class_browse.html", classBrowseData{
 		Title:       "Classes — " + show.Name,
 		CurrentPath: "/shows/" + slug + "/classes",
+		ShowID:      show.ID,
 		Show:        show,
 		Divisions:   divisions,
 	})
@@ -439,6 +517,8 @@ func (a *app) handleClassBrowse(w http.ResponseWriter, r *http.Request) {
 type classDetailData struct {
 	Title       string
 	CurrentPath string
+	ShowID      string
+	ClassID     string
 	Show        *Show
 	Class       *ShowClass
 	Section     *Section
@@ -481,9 +561,11 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	a.render(w, "class_detail.html", classDetailData{
+	a.render(w, r, "class_detail.html", classDetailData{
 		Title:       cls.Title + " — " + show.Name,
 		CurrentPath: "/shows/" + slug + "/classes/" + classID,
+		ShowID:      show.ID,
+		ClassID:     cls.ID,
 		Show:        show,
 		Class:       cls,
 		Section:     sec,
@@ -497,6 +579,10 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 type entryDetailData struct {
 	Title       string
 	CurrentPath string
+	EntryID     string
+	ShowID      string
+	ClassID     string
+	PersonID    string
 	Entry       *Entry
 	Person      *Person
 	Class       *ShowClass
@@ -542,9 +628,13 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	a.render(w, "entry_detail.html", entryDetailData{
+	a.render(w, r, "entry_detail.html", entryDetailData{
 		Title:       entry.Name,
 		CurrentPath: "/entries/" + entryID,
+		EntryID:     entry.ID,
+		ShowID:      entry.ShowID,
+		ClassID:     entry.ClassID,
+		PersonID:    entry.PersonID,
 		Entry:       entry,
 		Person:      person,
 		Class:       cls,
@@ -595,7 +685,7 @@ func (a *app) handlePersonDetail(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	a.render(w, "person_detail.html", personDetailData{
+	a.render(w, r, "person_detail.html", personDetailData{
 		Title:       "History — " + person.Initials,
 		CurrentPath: "/people/" + personID,
 		Person:      person,
@@ -615,7 +705,7 @@ type taxonomyData struct {
 }
 
 func (a *app) handleTaxonomyBrowse(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "taxonomy_browse.html", taxonomyData{
+	a.render(w, r, "taxonomy_browse.html", taxonomyData{
 		Title:       "Taxonomy",
 		CurrentPath: "/taxonomy",
 		Taxons:      a.store.allTaxons(),
@@ -669,7 +759,7 @@ func (a *app) handleTaxonDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.render(w, "taxon_detail.html", taxonDetailData{
+	a.render(w, r, "taxon_detail.html", taxonDetailData{
 		Title:       taxon.Name,
 		CurrentPath: "/taxonomy/" + taxonID,
 		Taxon:       taxon,
@@ -715,7 +805,7 @@ func (a *app) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries = a.store.leaderboard(orgID, season)
 	}
 
-	a.render(w, "leaderboard.html", leaderboardData{
+	a.render(w, r, "leaderboard.html", leaderboardData{
 		Title:       "Leaderboard",
 		CurrentPath: "/leaderboard",
 		Entries:     entries,
@@ -736,7 +826,7 @@ func (a *app) handleShowSummary(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.render(w, "show_summary.html", data)
+	a.render(w, r, "show_summary.html", data)
 }
 
 func (a *app) handleShowSummaryStream(w http.ResponseWriter, r *http.Request) {
@@ -793,7 +883,7 @@ func (a *app) handleBrowse(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	a.render(w, "browse.html", browseData{
+	a.render(w, r, "browse.html", browseData{
 		Title:           "Browse",
 		CurrentPath:     "/browse",
 		Query:           query,
@@ -817,7 +907,7 @@ type standardsData struct {
 }
 
 func (a *app) handleStandards(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "standards.html", standardsData{
+	a.render(w, r, "standards.html", standardsData{
 		Title:       "Standards",
 		CurrentPath: "/standards",
 		Standards:   a.standardViews(),
@@ -851,7 +941,7 @@ func (a *app) handleShowRules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.render(w, "show_rules.html", showRulesData{
+	a.render(w, r, "show_rules.html", showRulesData{
 		Title:       "Rules — " + show.Name,
 		CurrentPath: "/shows/" + slug + "/rules",
 		Show:        show,

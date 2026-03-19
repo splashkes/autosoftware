@@ -1,0 +1,64 @@
+{{define "content"}}
+<div class="section-header">
+  <div>
+    <h1>Clubs</h1>
+    <p class="section-desc">The public organization surface for flower shows, exhibitor context, and leaderboard follow-through.</p>
+  </div>
+</div>
+
+{{if .Clubs}}
+<div class="card-grid club-card-grid">
+  {{range .Clubs}}
+  <section class="card club-card" id="{{.Org.ID}}">
+    <div class="card-body">
+      <h2 class="card-title">{{.Org.Name}}</h2>
+      <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent organization context{{end}}</p>
+
+      <div class="club-card-columns">
+        <div>
+          <h3>Upcoming Shows</h3>
+          {{if .UpcomingShows}}
+          <ul class="club-show-list">
+            {{range .UpcomingShows}}
+            <li><a href="{{bp}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
+            {{end}}
+          </ul>
+          {{else}}
+          <p class="card-meta">No upcoming shows.</p>
+          {{end}}
+        </div>
+
+        <div>
+          <h3>Past Shows</h3>
+          {{if .PastShows}}
+          <ul class="club-show-list">
+            {{range .PastShows}}
+            <li><a href="{{bp}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
+            {{end}}
+          </ul>
+          {{else}}
+          <p class="card-meta">No past shows.</p>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="club-topline">
+        <strong>Top exhibitors</strong>
+        {{if .TopPeople}}
+        <div class="club-top-people-links">
+          {{range .TopPeople}}
+          <a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{.Person.Initials}}</a>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="card-meta">No public exhibitor history yet.</p>
+        {{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+</div>
+{{else}}
+<p class="empty-state">No clubs with active show history yet.</p>
+{{end}}
+{{end}}

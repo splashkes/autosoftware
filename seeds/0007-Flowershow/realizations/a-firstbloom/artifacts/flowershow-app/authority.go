@@ -67,6 +67,8 @@ var flowershowAuthorityBundles = map[string]authorityBundleDef{
 		Capabilities: []string{
 			"account.read",
 			"admin.dashboard.read",
+			"organization.manage",
+			"organization.invites.manage",
 			"shows.workspace.read",
 			"entries.private.read",
 			"ledger.read",
@@ -82,6 +84,28 @@ var flowershowAuthorityBundles = map[string]authorityBundleDef{
 			"rubrics.manage",
 			"standards.manage",
 			"sources.manage",
+			"show_credits.manage",
+			"roles.manage",
+		},
+	},
+	"organization_admin": {
+		BundleID:    "flowershow_organization_admin",
+		DisplayName: "Club Admin",
+		Role:        "organization_admin",
+		Capabilities: []string{
+			"account.read",
+			"organization.manage",
+			"organization.invites.manage",
+			"shows.workspace.read",
+			"entries.private.read",
+			"shows.manage",
+			"schedule.manage",
+			"classes.manage",
+			"judges.manage",
+			"entries.manage",
+			"persons.manage",
+			"awards.manage",
+			"media.manage",
 			"show_credits.manage",
 			"roles.manage",
 		},
@@ -822,6 +846,9 @@ func (a *app) authorityScopesForRequest(r *http.Request) []authorityScope {
 	if showID := strings.TrimSpace(r.PathValue("id")); showID != "" && strings.Contains(r.URL.Path, "/shows/") {
 		a.expandShowScopes(&scopes, showID)
 	}
+	if orgID := strings.TrimSpace(r.PathValue("id")); orgID != "" && strings.Contains(r.URL.Path, "/clubs/") {
+		add("organization", orgID)
+	}
 	if classID := strings.TrimSpace(r.PathValue("classID")); classID != "" {
 		a.expandClassScopes(&scopes, classID)
 	}
@@ -835,6 +862,9 @@ func (a *app) authorityScopesForRequest(r *http.Request) []authorityScope {
 		a.expandEntryScopes(&scopes, entryID)
 	}
 	if orgID := strings.TrimSpace(r.URL.Query().Get("org_id")); orgID != "" {
+		add("organization", orgID)
+	}
+	if orgID := strings.TrimSpace(r.PathValue("organizationID")); orgID != "" {
 		add("organization", orgID)
 	}
 	if showID := strings.TrimSpace(r.URL.Query().Get("show_id")); showID != "" {
@@ -901,6 +931,8 @@ func (a *app) commandScopesFromPayload(command string, body []byte) []authorityS
 		} else if orgID := stringValue(payload["organization_id"]); orgID != "" {
 			add("organization", orgID)
 		}
+	case "clubs.invites.create":
+		add("organization", stringValue(payload["organization_id"]))
 	}
 	return scopes
 }

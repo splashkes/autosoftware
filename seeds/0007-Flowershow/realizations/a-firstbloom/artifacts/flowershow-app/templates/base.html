@@ -11,15 +11,22 @@
 <body>
 <nav class="nav">
   <div class="container nav-inner">
-    <a href="{{bp}}/" class="nav-brand">Flowershow</a>
-    <div class="nav-links">
-      <a href="{{bp}}/" class="nav-link">Shows</a>
-      <a href="{{bp}}/browse" class="nav-link">Browse</a>
-      <a href="{{bp}}/taxonomy" class="nav-link">Taxonomy</a>
-      <a href="{{bp}}/leaderboard" class="nav-link">Leaderboard</a>
-      <a href="{{bp}}/standards" class="nav-link">Standards</a>
-      <a href="{{bp}}/account" class="nav-link">Account</a>
-      <a href="{{bp}}/admin" class="nav-link nav-admin">Admin</a>
+    <div class="nav-primary">
+      <a href="{{bp}}/" class="nav-brand">Flowershow</a>
+      <div class="nav-links">
+        <a href="{{bp}}/" class="nav-link">Shows</a>
+        <a href="{{bp}}/clubs" class="nav-link">Clubs</a>
+        <a href="{{bp}}/classes" class="nav-link">Classes</a>
+        <a href="{{bp}}/browse" class="nav-link">Browse</a>
+      </div>
+    </div>
+    <div class="nav-user-links">
+      {{if .NavSignedIn}}
+      <a href="{{bp}}{{.NavUserHref}}" class="nav-link nav-user-link">{{.NavUserLabel}}</a>
+      {{if .NavShowAdmin}}<a href="{{bp}}/admin" class="nav-link nav-admin">Admin</a>{{end}}
+      {{else}}
+      <a href="{{bp}}/admin/login" class="nav-link nav-user-link">Log in</a>
+      {{end}}
     </div>
   </div>
 </nav>

@@ -44,188 +44,275 @@
         {{end}}
       </div>
       <div class="show-actions account-actions issued-token-actions">
-        <a href="{{bp}}/account#agent-tokens" class="btn btn-primary">Done</a>
+        <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-primary">Done</a>
       </div>
     </div>
   </section>
 
   {{else}}
-  <div class="section-header">
+  <div class="section-header account-page-header">
     <div>
       <h1>Your Profile</h1>
-      <p class="section-desc">You are signed in. This page shows the account identity, current flower-show access, and the time-limited agent tokens you can delegate from this account.</p>
+      <p class="section-desc">This is your flowershow profile shell. Keep the default view focused on participation and only move into deeper operational or API tools when needed.</p>
     </div>
+    <form method="POST" action="{{bp}}/admin/logout">
+      <button type="submit" class="btn btn-outline">Sign Out</button>
+    </form>
   </div>
 
   {{if .Notice.Message}}
   <div class="alert {{if eq .Notice.Kind "error"}}alert-error{{else}}alert-info{{end}}">{{.Notice.Message}}</div>
   {{end}}
 
-  <div class="card-grid account-grid">
-    <section class="card">
+  <section class="account-layout">
+    <aside class="card account-sidebar">
       <div class="card-body">
-        <div class="login-step-kicker">Identity</div>
+        <div class="login-step-kicker">Profile Navigation</div>
         <h2 class="card-title">{{if .User.Email}}{{.User.Email}}{{else}}Signed-In User{{end}}</h2>
-        <p class="card-meta">Cognito subject: {{.User.CognitoSub}}</p>
-        {{if .User.Name}}<p class="card-meta">Display name: {{.User.Name}}</p>{{end}}
-        <div class="show-actions account-actions">
-          <a href="{{bp}}/" class="btn btn-secondary">Browse Shows</a>
-          {{if .IsAdmin}}<a href="{{bp}}/admin" class="btn btn-primary">Open Admin</a>{{end}}
-          <form method="POST" action="{{bp}}/admin/logout">
-            <button type="submit" class="btn btn-outline">Sign Out</button>
-          </form>
-        </div>
+        {{if .User.Name}}<p class="card-meta">{{.User.Name}}</p>{{end}}
+        {{if .IsAdmin}}<p class="card-meta"><a href="{{bp}}/admin">Open Admin Workspace</a></p>{{end}}
+        <nav class="account-section-nav">
+          {{range .Sections}}
+          <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          {{end}}
+        </nav>
       </div>
-    </section>
+    </aside>
 
-    <section class="card">
-      <div class="card-body">
-        <div class="login-step-kicker">Access</div>
-        <h2 class="card-title">Roles</h2>
-        {{if .Roles}}
-        <div class="account-role-list">
-          {{range .Roles}}
-          <div class="account-role-item">
-            <span class="badge badge-green">{{.RoleLabel}}</span>
-            <span class="card-meta">{{.ScopeLabel}}</span>
+    <div class="account-main">
+      {{if eq .ActiveSection "overview"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Overview</div>
+          <h2 class="card-title">Profile Summary</h2>
+          <p class="card-meta">Signed in as {{if .User.Email}}{{.User.Email}}{{else}}a flowershow user{{end}}.</p>
+          <p class="card-meta">Cognito subject: {{.User.CognitoSub}}</p>
+          {{if .Roles}}
+          <div class="account-role-list">
+            {{range .Roles}}
+            <div class="account-role-item">
+              <span class="badge badge-green">{{.RoleLabel}}</span>
+              <span class="card-meta">{{.ScopeLabel}}</span>
+            </div>
+            {{end}}
           </div>
+          {{else}}
+          <p class="card-meta">No elevated roles are attached yet. You can still browse public show history from this account.</p>
           {{end}}
         </div>
-        {{else}}
-        <p class="card-meta">No elevated roles are attached yet. You can still browse the public show experience from this signed-in account.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Current Shows</h2>
+            <p class="section-desc">Jump back into the active public show surface from your profile.</p>
+          </div>
+        </div>
+        <div class="card-grid">
+          {{range .Shows}}
+          <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
+            <div class="card-body">
+              <h3 class="card-title">{{.Name}}</h3>
+              <p class="card-meta">{{.Date}} · {{.Location}}</p>
+            </div>
+          </a>
+          {{end}}
+        </div>
+      </section>
+
+      {{if .ManagedClubs}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Club Admin</div>
+          <h2 class="card-title">Club Workspaces</h2>
+          <p class="card-meta">These clubs currently grant this account organization-scoped administration access.</p>
+          <div class="account-role-list">
+            {{range .ManagedClubs}}
+            <div class="account-role-item">
+              <div>
+                <strong>{{.Name}}</strong>
+                <div class="card-meta">{{.Level}}</div>
+              </div>
+              <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+            </div>
+            {{end}}
+          </div>
+        </div>
+      </section>
+      {{end}}
+      {{end}}
+
+      {{if eq .ActiveSection "shows"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Shows</div>
+          <h2 class="card-title">Shows You Can Reach From This Account</h2>
+          <p class="card-meta">This section stays simple and participant-friendly.</p>
+        </div>
+      </section>
+      <div class="card-grid">
+        {{range .Shows}}
+        <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
+          <div class="card-body">
+            <h3 class="card-title">{{.Name}}</h3>
+            <p class="card-meta">{{.Date}} · {{.Location}}</p>
+          </div>
+        </a>
         {{end}}
       </div>
-    </section>
+      {{end}}
 
-    <section class="card">
-      <div class="card-body">
-        <div class="login-step-kicker">Agent Access</div>
-        <h2 class="card-title">Delegable Permissions</h2>
-        <p class="card-meta">Every agent token is time-limited and explicitly scoped. The profiles below are the only capabilities this account can currently delegate.</p>
-        <div class="account-permission-list">
-          {{range .AccountPermissions}}
-          <div class="account-permission-item">
-            <strong>{{.Label}}</strong>
-            <span class="card-meta">{{.Description}}</span>
+      {{if eq .ActiveSection "access"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Access</div>
+          <h2 class="card-title">Roles And Advanced Delegation</h2>
+          <p class="card-meta">Keep day-to-day profile use light. Expand these details only when you need to understand advanced operational access.</p>
+          {{if .Roles}}
+          <div class="account-role-list">
+            {{range .Roles}}
+            <div class="account-role-item">
+              <span class="badge badge-green">{{.RoleLabel}}</span>
+              <span class="card-meta">{{.ScopeLabel}}</span>
+            </div>
+            {{end}}
           </div>
           {{end}}
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <section class="card account-token-manager-card" id="agent-tokens">
-    <div class="card-body">
-      <div class="section-header">
-        <div>
-          <div class="login-step-kicker">Agent Access</div>
-          <h2>Agent / API access tokens</h2>
-          <p class="section-desc">Generate a bearer token for an external agent. Choose a lifespan between 1 and 60 days and review the exact permission set before issuing it.</p>
-        </div>
-      </div>
-
-      <div class="card-grid account-token-grid">
-        <section class="card">
-          <div class="card-body">
-            <div class="login-step-kicker">Generate Token</div>
-            <h3 class="card-title">Issue A New Agent / API Access Token</h3>
-            <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
-            <div class="form-group">
-              <label for="token_label">Token Label</label>
-              <input id="token_label" name="label" class="form-input" maxlength="80" placeholder="Example: March schedule structuring agent" required>
-            </div>
-
-            <div class="form-group">
-              <label for="expires_in_days">Expires In</label>
-              <input id="expires_in_days" name="expires_in_days" type="number" min="1" max="60" value="{{.DefaultExpiryDays}}" class="form-input form-sm" required>
-              <p class="card-meta">Choose between 1 and 60 days.</p>
-            </div>
-
-            <fieldset class="account-token-profile-picker">
-              <legend>Permission Profile</legend>
-              {{range .TokenProfiles}}
-              <label class="account-token-profile {{if .Selected}}selected{{end}}">
-                <input type="radio" name="permission_profile" value="{{.ID}}" {{if .Selected}}checked{{end}}>
-                <div>
-                  <strong>{{.Label}}</strong>
-                  <p class="card-meta">{{.Description}}</p>
-                  <div class="account-permission-list compact">
-                    {{range .Permissions}}
-                    <div class="account-permission-item">
-                      <strong>{{.Label}}</strong>
-                      <span class="card-meta">{{.Description}}</span>
-                    </div>
-                    {{end}}
-                  </div>
-                </div>
-              </label>
-              {{end}}
-            </fieldset>
-
-            <div class="alert alert-warning">
-              Be careful: the token can do exactly what its selected permission profile allows until it expires or you revoke it.
-            </div>
-            <button type="submit" class="btn btn-primary">Generate Agent Token</button>
-            </form>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-body">
-            <div class="login-step-kicker">Active Tokens</div>
-            <h3 class="card-title">Issued Agent / API Access Tokens</h3>
-            {{if .AgentTokens}}
-            <div class="account-token-list">
-              {{range .AgentTokens}}
-              <div class="account-token-item">
-                <div class="account-token-meta">
-                  <div>
-                    <strong>{{.Label}}</strong>
-                    <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
-                  </div>
-                  <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
-                </div>
-                <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
-                <div class="account-permission-list compact">
-                  {{range .Permissions}}
-                  <div class="account-permission-item">
-                    <strong>{{.Label}}</strong>
-                    <span class="card-meta">{{.Description}}</span>
-                  </div>
-                  {{end}}
-                </div>
-                {{if eq .StatusLabel "Active"}}
-                <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
-                  <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
-                </form>
-                {{end}}
+          <details class="account-collapsible">
+            <summary>Delegable permissions</summary>
+            <div class="account-permission-list">
+              {{range .AccountPermissions}}
+              <div class="account-permission-item">
+                <strong>{{.Label}}</strong>
+                <span class="card-meta">{{.Description}}</span>
               </div>
               {{end}}
             </div>
-            {{else}}
-            <p class="card-meta">No agent tokens have been issued from this account yet.</p>
-            {{end}}
-          </div>
-        </section>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <div>
-        <h2>Current Shows</h2>
-        <p class="section-desc">Use these links to move through the public flowershow surface while signed in.</p>
-      </div>
-    </div>
-    <div class="card-grid">
-      {{range .Shows}}
-      <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
-        <div class="card-body">
-          <h3 class="card-title">{{.Name}}</h3>
-          <p class="card-meta">{{.Date}} · {{.Location}}</p>
+          </details>
+          {{if .ManagedClubs}}
+          <details class="account-collapsible">
+            <summary>Club workspaces</summary>
+            <div class="account-role-list">
+              {{range .ManagedClubs}}
+              <div class="account-role-item">
+                <div>
+                  <strong>{{.Name}}</strong>
+                  <div class="card-meta">{{.Level}}</div>
+                </div>
+                <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+              </div>
+              {{end}}
+            </div>
+          </details>
+          {{end}}
         </div>
-      </a>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "tokens"}}
+      <section class="card account-token-manager-card" id="agent-tokens">
+        <div class="card-body">
+          <div class="section-header">
+            <div>
+              <div class="login-step-kicker">Agent Access</div>
+              <h2>Agent / API access tokens</h2>
+              <p class="section-desc">This is advanced tooling. Most users will never need it. Generate a bearer token only when an external agent truly needs bounded access.</p>
+            </div>
+          </div>
+
+          <div class="card-grid account-token-grid">
+            <section class="card">
+              <div class="card-body">
+                <div class="login-step-kicker">Generate Token</div>
+                <h3 class="card-title">Issue A New Agent / API Access Token</h3>
+                <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
+                <div class="form-group">
+                  <label for="token_label">Token Label</label>
+                  <input id="token_label" name="label" class="form-input" maxlength="80" placeholder="Example: March schedule structuring agent" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="expires_in_days">Expires In</label>
+                  <input id="expires_in_days" name="expires_in_days" type="number" min="1" max="60" value="{{.DefaultExpiryDays}}" class="form-input form-sm" required>
+                  <p class="card-meta">Choose between 1 and 60 days.</p>
+                </div>
+
+                <fieldset class="account-token-profile-picker">
+                  <legend>Permission Profile</legend>
+                  {{range .TokenProfiles}}
+                  <label class="account-token-profile {{if .Selected}}selected{{end}}">
+                    <input type="radio" name="permission_profile" value="{{.ID}}" {{if .Selected}}checked{{end}}>
+                    <div>
+                      <strong>{{.Label}}</strong>
+                      <p class="card-meta">{{.Description}}</p>
+                      <details class="account-collapsible compact">
+                        <summary>Included permissions</summary>
+                        <div class="account-permission-list compact">
+                          {{range .Permissions}}
+                          <div class="account-permission-item">
+                            <strong>{{.Label}}</strong>
+                            <span class="card-meta">{{.Description}}</span>
+                          </div>
+                          {{end}}
+                        </div>
+                      </details>
+                    </div>
+                  </label>
+                  {{end}}
+                </fieldset>
+
+                <div class="alert alert-warning">
+                  Be careful: the token can do exactly what its selected permission profile allows until it expires or you revoke it.
+                </div>
+                <button type="submit" class="btn btn-primary">Generate Agent Token</button>
+                </form>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-body">
+                <div class="login-step-kicker">Active Tokens</div>
+                <h3 class="card-title">Issued Agent / API Access Tokens</h3>
+                {{if .AgentTokens}}
+                <div class="account-token-list">
+                  {{range .AgentTokens}}
+                  <div class="account-token-item">
+                    <div class="account-token-meta">
+                      <div>
+                        <strong>{{.Label}}</strong>
+                        <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
+                      </div>
+                      <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
+                    </div>
+                    <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
+                    <details class="account-collapsible compact">
+                      <summary>Granted permissions</summary>
+                      <div class="account-permission-list compact">
+                        {{range .Permissions}}
+                        <div class="account-permission-item">
+                          <strong>{{.Label}}</strong>
+                          <span class="card-meta">{{.Description}}</span>
+                        </div>
+                        {{end}}
+                      </div>
+                    </details>
+                    {{if eq .StatusLabel "Active"}}
+                    <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
+                      <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
+                    </form>
+                    {{end}}
+                  </div>
+                  {{end}}
+                </div>
+                {{else}}
+                <p class="card-meta">No agent tokens have been issued from this account yet.</p>
+                {{end}}
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
       {{end}}
     </div>
   </section>

@@ -2,7 +2,7 @@
 <div class="admin-header">
   <h1>Admin Dashboard</h1>
   <div class="show-actions">
-    <a href="{{bp}}/account#agent-tokens" class="btn btn-outline btn-sm">Agent / API Access Tokens</a>
+    <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-outline btn-sm">Agent / API Access Tokens</a>
     <form method="POST" action="{{bp}}/admin/logout" class="inline">
       <button type="submit" class="btn btn-outline btn-sm">Logout</button>
     </form>
@@ -56,11 +56,27 @@
 
 <section class="section">
   <div class="section-header">
+    <h2>Clubs</h2>
+  </div>
+  <div class="card-grid">
+    {{range .Orgs}}
+    <a href="{{bp}}/admin/clubs/{{.ID}}" class="card show-card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Name}}</h3>
+        <p class="card-meta">{{.Level}}</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-header">
     <div>
       <h2>Agent / API Access Tokens</h2>
       <p class="section-desc">Agent tokens are managed from the signed-in account page so there is only one issuance and revocation surface.</p>
     </div>
-    <a href="{{bp}}/account#agent-tokens" class="btn btn-primary btn-sm">Open Shared Token Manager</a>
+    <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-primary btn-sm">Open Shared Token Manager</a>
   </div>
 </section>
 {{end}}
