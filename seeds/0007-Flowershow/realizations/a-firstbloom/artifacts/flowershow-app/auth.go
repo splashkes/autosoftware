@@ -58,6 +58,7 @@ type pendingAuthState struct {
 
 type adminLoginData struct {
 	Title           string
+	CurrentPath     string
 	Error           string
 	Info            string
 	CognitoEnabled  bool
@@ -767,6 +768,7 @@ func bootstrapAdminMap() map[string]bool {
 func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) adminLoginData {
 	data := adminLoginData{
 		Title:          "Admin Login",
+		CurrentPath:    "/admin/login",
 		Error:          errMessage,
 		Info:           infoMessage,
 		CognitoEnabled: a.authEnabled(),
@@ -1034,21 +1036,23 @@ func (a *app) handleCognitoLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 type roleManagementData struct {
-	Title string
-	User  *UserIdentity
-	Roles []*UserRole
-	Shows []*Show
-	Orgs  []*Organization
+	Title       string
+	CurrentPath string
+	User        *UserIdentity
+	Roles       []*UserRole
+	Shows       []*Show
+	Orgs        []*Organization
 }
 
 func (a *app) handleRoleManagement(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.currentUser(r)
 	a.render(w, "admin_roles.html", roleManagementData{
-		Title: "Role Management",
-		User:  user,
-		Roles: a.store.allUserRoles(),
-		Shows: a.store.allShows(),
-		Orgs:  a.store.allOrganizations(),
+		Title:       "Role Management",
+		CurrentPath: "/admin/roles",
+		User:        user,
+		Roles:       a.store.allUserRoles(),
+		Shows:       a.store.allShows(),
+		Orgs:        a.store.allOrganizations(),
 	})
 }
 

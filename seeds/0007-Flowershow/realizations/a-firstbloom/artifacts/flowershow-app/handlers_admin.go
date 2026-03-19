@@ -16,12 +16,13 @@ func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 // --- Dashboard ---
 
 type adminDashboardData struct {
-	Title   string
-	Shows   []*Show
-	Persons []*Person
-	Orgs    []*Organization
-	Awards  []*AwardDefinition
-	Rubrics []*JudgingRubric
+	Title       string
+	CurrentPath string
+	Shows       []*Show
+	Persons     []*Person
+	Orgs        []*Organization
+	Awards      []*AwardDefinition
+	Rubrics     []*JudgingRubric
 }
 
 func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
@@ -31,12 +32,13 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
 	a.render(w, "admin_dashboard.html", adminDashboardData{
-		Title:   "Admin Dashboard",
-		Shows:   a.store.allShows(),
-		Persons: a.store.allPersons(),
-		Orgs:    orgs,
-		Awards:  awards,
-		Rubrics: a.store.allRubrics(),
+		Title:       "Admin Dashboard",
+		CurrentPath: "/admin",
+		Shows:       a.store.allShows(),
+		Persons:     a.store.allPersons(),
+		Orgs:        orgs,
+		Awards:      awards,
+		Rubrics:     a.store.allRubrics(),
 	})
 }
 
@@ -44,8 +46,9 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAdminShowNew(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "admin_show_new.html", map[string]any{
-		"Title": "New Show",
-		"Orgs":  a.store.allOrganizations(),
+		"Title":       "New Show",
+		"CurrentPath": "/admin/shows/new",
+		"Orgs":        a.store.allOrganizations(),
 	})
 }
 
@@ -67,6 +70,7 @@ func (a *app) handleAdminShowCreate(w http.ResponseWriter, r *http.Request) {
 
 type adminShowDetailData struct {
 	Title            string
+	CurrentPath      string
 	Show             *Show
 	Schedule         *ShowSchedule
 	ScheduleEdition  *StandardEdition
@@ -152,6 +156,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 
 	return adminShowDetailData{
 		Title:            "Admin: " + show.Name,
+		CurrentPath:      "/admin/shows/" + show.ID,
 		Show:             show,
 		Schedule:         sched,
 		ScheduleEdition:  scheduleEdition,
@@ -439,8 +444,9 @@ func (a *app) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAdminPersons(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "admin_persons.html", map[string]any{
-		"Title":   "Manage Persons",
-		"Persons": a.store.allPersons(),
+		"Title":       "Manage Persons",
+		"CurrentPath": "/admin/persons",
+		"Persons":     a.store.allPersons(),
 	})
 }
 
