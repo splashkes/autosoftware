@@ -90,12 +90,62 @@ func TestTrimMountedRequestPrefixPreservesEncodedReference(t *testing.T) {
 	}
 }
 
+func TestRoutePathMatchesMountedRootWithoutTrailingSlash(t *testing.T) {
+	if !routePathMatches("/flowershow", "/flowershow/") {
+		t.Fatalf("expected exact mounted root to match its normalized path prefix")
+	}
+	if routePathMatches("/flowershowcase", "/flowershow/") {
+		t.Fatalf("did not expect sibling path to match mounted flowershow prefix")
+	}
+}
+
 func TestRealizationRoutingMiddlewarePreservesRawPathForStableMount(t *testing.T) {
 	testMountedRoutingPreservesRawPath(t, "/registry/reading-room/")
 }
 
 func TestRealizationRoutingMiddlewarePreservesRawPathForPreviewMount(t *testing.T) {
 	testMountedRoutingPreservesRawPath(t, "/__runs/exec_demo_123/")
+}
+
+func TestRealizationRoutingMiddlewareMatchesMountedRootWithoutTrailingSlash(t *testing.T) {
+	type observedRequest struct {
+		Path            string `json:"path"`
+		ForwardedPrefix string `json:"forwarded_prefix"`
+	}
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(observedRequest{
+			Path:            r.URL.Path,
+			ForwardedPrefix: r.Header.Get("X-Forwarded-Prefix"),
+		})
+	}))
+	defer backend.Close()
+
+	handler := realizationRoutingMiddleware([]realizationRoute{{
+		Reference:  "0007-Flowershow/a-firstbloom",
+		PathPrefix: "/flowershow/",
+		ProxyAddr:  strings.TrimPrefix(backend.URL, "http://"),
+	}}, nil, nil, "", nil, "", "", http.NotFoundHandler())
+
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/flowershow", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("proxy response status = %d, want 200", rec.Code)
+	}
+
+	var got observedRequest
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode proxy response: %v", err)
+	}
+	if got.Path != "/" {
+		t.Fatalf("path = %q, want /", got.Path)
+	}
+	if got.ForwardedPrefix != "/flowershow" {
+		t.Fatalf("X-Forwarded-Prefix = %q, want %q", got.ForwardedPrefix, "/flowershow")
+	}
 }
 
 func TestRealizationRoutingMiddlewareFallsBackToRegistryPathRouteForRegistryHost(t *testing.T) {

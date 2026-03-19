@@ -47,6 +47,9 @@ The system is complete when:
 - HTMX-driven partial updates
 - The same normal operations are reachable through declared semantic API
   commands and projections for authenticated agents
+- Operator-facing pages expose the active contract, stable ids, and related
+  agent-facing command/projection paths so humans can inspect the same surface
+  authenticated agents use
 
 ## Media
 - Multiple photos and/or videos per entry
@@ -55,8 +58,14 @@ The system is complete when:
 - Cross-browser, low-bandwidth, high-performance upload UI
 
 ## Agent Authoring
+- Contract discovery is available through `GET /v1/contracts` and a
+  realization-specific self path
+- The declared contract exposes auth modes, UI-surface mappings, runtime-only
+  command context, and structured error codes
 - Data can be authored through API by remote agents using `service_token`
   authentication
+- Authenticated agents can read private workspace and by-id projections using
+  stable ids rather than only public slugs
 - Runtime-only authoring context can be sent with commands without becoming
   canonical truth
 - Cited source material is preserved as source documents and citations rather

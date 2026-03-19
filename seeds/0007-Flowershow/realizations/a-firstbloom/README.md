@@ -23,3 +23,20 @@ with demo data.
 cd artifacts/flowershow-app
 go test ./...
 ```
+
+```bash
+cd /Users/splash/as-flower-agent/autosoftware/tests
+npm run test:flowershow
+```
+
+Validation planning and acceptance checklists live in
+[`validation/`](./validation/README.md).
+
+For the deployed Cognito/OTP admin flow, run the remote projects headed after
+setting `FLOWERSHOW_REMOTE_E2E=1`, `PLAYWRIGHT_SKIP_WEBSERVER=1`, and
+`FLOWERSHOW_BASE_URL` to the deployed flower-show URL:
+
+```bash
+cd /Users/splash/as-flower-agent/autosoftware/tests
+npm run test:flowershow:remote
+```

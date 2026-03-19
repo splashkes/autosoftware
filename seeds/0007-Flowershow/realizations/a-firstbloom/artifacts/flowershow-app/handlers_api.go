@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -626,7 +627,16 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) decodeAPIJSON(w http.ResponseWriter, r *http.Request, dest any) bool {
-	dec := json.NewDecoder(r.Body)
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON matching the command schema.", "Check the contract schema, property names, and JSON syntax before retrying.", nil)
+		return false
+	}
+	payload, ok := a.unwrapRuntimeContextEnvelope(w, r, raw)
+	if !ok {
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dest); err != nil {
 		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON matching the command schema.", "Check the contract schema, property names, and JSON syntax before retrying.", nil)
@@ -637,6 +647,51 @@ func (a *app) decodeAPIJSON(w http.ResponseWriter, r *http.Request, dest any) bo
 		return false
 	}
 	return true
+}
+
+func (a *app) unwrapRuntimeContextEnvelope(w http.ResponseWriter, r *http.Request, raw []byte) ([]byte, bool) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON matching the command schema.", "Check the contract schema, property names, and JSON syntax before retrying.", nil)
+		return nil, false
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &envelope); err != nil {
+		return trimmed, true
+	}
+
+	inputRaw, wrapped := envelope["input"]
+	if !wrapped {
+		return trimmed, true
+	}
+
+	for key := range envelope {
+		if key != "input" && key != "runtime_context" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Wrapped command payloads may only include input and runtime_context.", "Move command fields into input and keep prompt-like guidance inside runtime_context.", []apiFieldError{{Field: key, Message: "unexpected top-level field"}})
+			return nil, false
+		}
+	}
+
+	if len(bytes.TrimSpace(inputRaw)) == 0 || bytes.Equal(bytes.TrimSpace(inputRaw), []byte("null")) {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Wrapped command payloads require a non-null input object.", "Provide command fields inside the input object and retry.", []apiFieldError{{Field: "input", Message: "required command payload"}})
+		return nil, false
+	}
+
+	if runtimeRaw, ok := envelope["runtime_context"]; ok && !bytes.Equal(bytes.TrimSpace(runtimeRaw), []byte("null")) {
+		var runtimeContext map[string]any
+		dec := json.NewDecoder(bytes.NewReader(runtimeRaw))
+		if err := dec.Decode(&runtimeContext); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "runtime_context must be a JSON object when provided.", "Pass prompt-like authoring guidance as a JSON object or omit runtime_context.", []apiFieldError{{Field: "runtime_context", Message: "must be a JSON object"}})
+			return nil, false
+		}
+		if err := dec.Decode(&struct{}{}); err != io.EOF {
+			a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "runtime_context must contain exactly one JSON object.", "Remove trailing content from runtime_context and retry.", []apiFieldError{{Field: "runtime_context", Message: "must contain exactly one JSON object"}})
+			return nil, false
+		}
+	}
+
+	return inputRaw, true
 }
 
 func commandNameFromPath(path string) string {

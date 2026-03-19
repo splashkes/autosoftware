@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,42 @@ func testApp() *app {
 		media:           &localMediaStore{dir: dir},
 		sessionSecret:   []byte("test-secret"),
 		bootstrapAdmins: map[string]bool{},
+	}
+}
+
+func jsonRequest(method, path, body string) *http.Request {
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req := httptest.NewRequest(method, path, reader)
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+func addServiceToken(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer test-token")
+}
+
+func addAdminSession(t *testing.T, a *app, req *http.Request) {
+	t.Helper()
+	if len(a.store.rolesBySubject("sub_admin_api")) == 0 {
+		if _, err := a.store.assignUserRole(UserRoleInput{
+			CognitoSub: "sub_admin_api",
+			Role:       "admin",
+		}); err != nil {
+			t.Fatalf("assign admin role: %v", err)
+		}
+	}
+	w := httptest.NewRecorder()
+	if err := a.setUserSession(w, UserIdentity{
+		CognitoSub: "sub_admin_api",
+		Email:      "admin@example.com",
+	}); err != nil {
+		t.Fatalf("set user session: %v", err)
+	}
+	for _, cookie := range w.Result().Cookies() {
+		req.AddCookie(cookie)
 	}
 }
 
@@ -600,6 +637,30 @@ func TestContractsEndpointsReturnLocalContract(t *testing.T) {
 	}
 }
 
+func TestInteractionContractPathPrefersWorkingDirectoryFallback(t *testing.T) {
+	root := t.TempDir()
+	workingDir := filepath.Join(root, "artifacts", "flowershow-app")
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		t.Fatalf("mkdir working dir: %v", err)
+	}
+
+	want := filepath.Join(root, "interaction_contract.yaml")
+	if err := os.WriteFile(want, []byte("seed_id: 0007-Flowershow\nrealization_id: a-firstbloom\nsurface_kind: app\nsummary: test\n"), 0o644); err != nil {
+		t.Fatalf("write contract fixture: %v", err)
+	}
+
+	t.Chdir(workingDir)
+	t.Setenv("AS_INTERACTION_CONTRACT_PATH", "")
+
+	got, err := interactionContractPath()
+	if err != nil {
+		t.Fatalf("interactionContractPath returned error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("interactionContractPath = %q, want %q", got, want)
+	}
+}
+
 func TestShowWorkspaceProjectionAcceptsServiceToken(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -647,6 +708,453 @@ func TestScheduleUpsertCommandCreatesSchedule(t *testing.T) {
 	}
 	if schedule.Notes == "" {
 		t.Fatal("expected schedule notes to be stored")
+	}
+}
+
+func TestCommandEndpointsAcceptRuntimeContextEnvelopeWithoutPersistence(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/shows.create", `{
+		"input":{
+			"organization_id":"org_demo1",
+			"name":"Runtime Envelope Show",
+			"season":"2026"
+		},
+		"runtime_context":{
+			"assistant_goal":"author the initial governed show shell",
+			"source_excerpt":"Treat this as prompt-only context."
+		}
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var show Show
+	if err := json.Unmarshal(w.Body.Bytes(), &show); err != nil {
+		t.Fatalf("unmarshal show: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/"+show.ID, nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "assistant_goal") || strings.Contains(body, "runtime_context") {
+		t.Fatal("runtime-only context must not be persisted into show projections")
+	}
+}
+
+func TestPrivateByIDProjectionsRespectAuthModes(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/classes/{id}", a.handleAPIClassDetail)
+
+	req := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/entries/entry_01", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), `"first_name"`) {
+		t.Fatal("anonymous entry projection should not expose private identity fields")
+	}
+	if !strings.Contains(w.Body.String(), `"initials":"MC"`) {
+		t.Fatal("anonymous entry projection should include public initials")
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/classes/class_01", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"effective_rules"`) {
+		t.Fatal("class detail should include effective rules")
+	}
+	if !strings.Contains(w.Body.String(), `"show":{"id":"show_spring2025"`) {
+		t.Fatal("class detail should include parent show context")
+	}
+
+	if err := a.store.setEntrySuppressed("entry_01", true); err != nil {
+		t.Fatal(err)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/entries/entry_01", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for suppressed anonymous entry, got %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/entries/entry_01", nil)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for service-token entry detail, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"first_name":"Margaret"`) {
+		t.Fatal("service-token entry projection should expose private identity fields")
+	}
+}
+
+func TestSessionAuthCanExecuteParityCommandAndWorkspaceProjection(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/shows.create", `{
+		"organization_id":"org_demo1",
+		"name":"Session Auth Show",
+		"season":"2026"
+	}`)
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var show Show
+	if err := json.Unmarshal(w.Body.Bytes(), &show); err != nil {
+		t.Fatalf("unmarshal show: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/"+show.ID+"/workspace", nil)
+	addAdminSession(t, a, req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"Title":"Admin: Session Auth Show"`) {
+		t.Fatal("session-authenticated workspace projection should return admin payload")
+	}
+}
+
+func TestServiceTokenParityCommandChain(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/divisions.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/sections.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/judges.assign", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.attach", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.delete", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/shows.create", `{
+		"organization_id":"org_demo1",
+		"name":"Parity Chain Show",
+		"season":"2026"
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create show: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var show Show
+	if err := json.Unmarshal(w.Body.Bytes(), &show); err != nil {
+		t.Fatalf("unmarshal show: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert", `{
+		"show_id":"`+show.ID+`",
+		"notes":"Parity chain schedule"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("schedule upsert: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var schedule ShowSchedule
+	if err := json.Unmarshal(w.Body.Bytes(), &schedule); err != nil {
+		t.Fatalf("unmarshal schedule: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/divisions.create", `{
+		"show_schedule_id":"`+schedule.ID+`",
+		"code":"I",
+		"title":"Parity Division",
+		"domain":"horticulture",
+		"sort_order":1
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("division create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var division Division
+	if err := json.Unmarshal(w.Body.Bytes(), &division); err != nil {
+		t.Fatalf("unmarshal division: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/sections.create", `{
+		"division_id":"`+division.ID+`",
+		"code":"A",
+		"title":"Parity Section",
+		"sort_order":1
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("section create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var section Section
+	if err := json.Unmarshal(w.Body.Bytes(), &section); err != nil {
+		t.Fatalf("unmarshal section: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/classes.create", `{
+		"section_id":"`+section.ID+`",
+		"class_number":"12",
+		"title":"Parity Bloom",
+		"domain":"horticulture",
+		"specimen_count":1
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("class create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var cls ShowClass
+	if err := json.Unmarshal(w.Body.Bytes(), &cls); err != nil {
+		t.Fatalf("unmarshal class: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/judges.assign", `{
+		"show_id":"`+show.ID+`",
+		"person_id":"person_02"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("judge assign: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/entries.create", `{
+		"show_id":"`+show.ID+`",
+		"class_id":"`+cls.ID+`",
+		"person_id":"person_01",
+		"name":"Parity Entry"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("entry create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var entry Entry
+	if err := json.Unmarshal(w.Body.Bytes(), &entry); err != nil {
+		t.Fatalf("unmarshal entry: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/media.attach", `{
+		"entry_id":"`+entry.ID+`",
+		"media_type":"photo",
+		"url":"https://example.com/entry.jpg",
+		"file_name":"entry.jpg"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("media attach: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var media Media
+	if err := json.Unmarshal(w.Body.Bytes(), &media); err != nil {
+		t.Fatalf("unmarshal media: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/media.delete", `{
+		"media_id":"`+media.ID+`"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("media delete: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/roles.assign", `{
+		"cognito_sub":"sub_remote_agent",
+		"role":"admin",
+		"show_id":"`+show.ID+`"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("role assign: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(a.store.rolesBySubject("sub_remote_agent")) != 1 {
+		t.Fatal("expected assigned role to be stored")
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/entries.set_visibility", `{
+		"id":"`+entry.ID+`",
+		"suppressed":true
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("entry visibility: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/entries/"+entry.ID, nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for suppressed anonymous entry, got %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/entries/"+entry.ID, nil)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for suppressed service-token entry, got %d", w.Code)
+	}
+}
+
+func TestComputePlacementsCommandUpdatesEntryRankings(t *testing.T) {
+	a := testApp()
+
+	show, err := a.store.createShow(ShowInput{
+		OrganizationID: "org_demo1",
+		Name:           "Compute Placements Show",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	schedule, err := a.store.createSchedule(ShowSchedule{ShowID: show.ID})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	division, err := a.store.createDivision(DivisionInput{
+		ShowScheduleID: schedule.ID,
+		Code:           "I",
+		Title:          "Compute Division",
+		Domain:         "horticulture",
+		SortOrder:      1,
+	})
+	if err != nil {
+		t.Fatalf("create division: %v", err)
+	}
+	section, err := a.store.createSection(SectionInput{
+		DivisionID: division.ID,
+		Code:       "A",
+		Title:      "Compute Section",
+		SortOrder:  1,
+	})
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+	cls, err := a.store.createClass(ShowClassInput{
+		SectionID:     section.ID,
+		ClassNumber:   "88",
+		Title:         "Compute Class",
+		Domain:        "horticulture",
+		SpecimenCount: 1,
+	})
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+	if _, err := a.store.assignJudgeToShow(show.ID, "person_02"); err != nil {
+		t.Fatalf("assign judge: %v", err)
+	}
+	rubric, err := a.store.createRubric(JudgingRubric{
+		ShowID: show.ID,
+		Domain: "horticulture",
+		Title:  "Compute Rubric",
+	})
+	if err != nil {
+		t.Fatalf("create rubric: %v", err)
+	}
+	criterion, err := a.store.createCriterion(JudgingCriterion{
+		JudgingRubricID: rubric.ID,
+		Name:            "Condition",
+		MaxPoints:       100,
+		SortOrder:       1,
+	})
+	if err != nil {
+		t.Fatalf("create criterion: %v", err)
+	}
+	entryHigh, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  cls.ID,
+		PersonID: "person_01",
+		Name:     "High Score Entry",
+	})
+	if err != nil {
+		t.Fatalf("create high entry: %v", err)
+	}
+	entryLow, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  cls.ID,
+		PersonID: "person_03",
+		Name:     "Low Score Entry",
+	})
+	if err != nil {
+		t.Fatalf("create low entry: %v", err)
+	}
+	if _, err := a.store.submitScorecard(EntryScorecard{
+		EntryID:  entryHigh.ID,
+		JudgeID:  "person_02",
+		RubricID: rubric.ID,
+	}, []EntryCriterionScore{{CriterionID: criterion.ID, Score: 96}}); err != nil {
+		t.Fatalf("submit high scorecard: %v", err)
+	}
+	if _, err := a.store.submitScorecard(EntryScorecard{
+		EntryID:  entryLow.ID,
+		JudgeID:  "person_02",
+		RubricID: rubric.ID,
+	}, []EntryCriterionScore{{CriterionID: criterion.ID, Score: 81}}); err != nil {
+		t.Fatalf("submit low scorecard: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.compute_placements", a.handleAPICommand)
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/classes.compute_placements", `{
+		"class_id":"`+cls.ID+`"
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	updatedHigh, _ := a.store.entryByID(entryHigh.ID)
+	updatedLow, _ := a.store.entryByID(entryLow.ID)
+	if updatedHigh.Placement != 1 {
+		t.Fatalf("expected high score entry to be 1st, got %d", updatedHigh.Placement)
+	}
+	if updatedLow.Placement != 2 {
+		t.Fatalf("expected low score entry to be 2nd, got %d", updatedLow.Placement)
 	}
 }
 

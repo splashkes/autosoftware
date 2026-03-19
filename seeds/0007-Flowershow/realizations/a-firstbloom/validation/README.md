@@ -1,5 +1,31 @@
 # Validation Evidence
 
+This folder has three distinct validation artifacts:
+
+- [`ACCEPTANCE_CHECKLIST.md`](./ACCEPTANCE_CHECKLIST.md) combines the seed
+  acceptance criteria with the agent/API parity work that just landed.
+- [`API_AND_PLAYWRIGHT_PLAN.md`](./API_AND_PLAYWRIGHT_PLAN.md) lays out the
+  next pass for comprehensive contract, API, and browser coverage.
+- `README.md` maps the current implementation to the tests that already exist.
+
+## Current Coverage Posture
+
+- Deterministic app-level coverage lives in
+  `artifacts/flowershow-app/main_test.go`.
+- Browser coverage lives in
+  `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.public.spec.ts`,
+  `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.admin.local.spec.ts`,
+  `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.api.spec.ts`,
+  and `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.widget.spec.ts`.
+- A headed remote OTP harness now exists in
+  `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-auth.setup.ts`,
+  `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-admin.spec.ts`,
+  and `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-agent-api.spec.ts`.
+- The recent agent/API parity work added contract discovery, structured errors,
+  service-token workspace access, schedule upsert, and the shared agent-access
+  widget. Some of that is covered now, but the full admin parity surface still
+  needs broader API and browser tests.
+
 ## Acceptance Criteria → Test Evidence
 
 ### Core Functionality
@@ -27,7 +53,7 @@
 
 ### Taxonomy
 - **Taxon browsing** → `TestTaxonomyBrowse`, Playwright: "taxonomy browse"
-- **Cross-link navigation** → `TestTaxonDetail` (implicit via handler), Playwright: "taxon detail"
+- **Cross-link navigation** → Playwright: "taxon detail shows related entries"
 
 ### Awards
 - **Award computation** → `TestStoreMemoryBasics` (computeAward returns results)
@@ -40,6 +66,10 @@
 - **Login/auth** → `TestAdminLoginFlow`, `TestAdminRequiresAuth`, Playwright: "admin login"
 - **SSE real-time** → `sse.go` broker with per-show channels, SSE stream endpoint
 - **HTMX partial updates** → Templates use HTMX attributes
+- **Agent access widget** → `TestHomePageLoads`
+- **Contract discovery from the realization** → `TestContractsEndpointsReturnLocalContract`
+- **Authenticated show workspace projection** → `TestShowWorkspaceProjectionAcceptsServiceToken`
+- **Schedule upsert parity command** → `TestScheduleUpsertCommandCreatesSchedule`
 
 ### Privacy
 - **Initials only in public view** → `TestEntryDetail` (checks for "MC"), Playwright: "entry detail shows initials only"
@@ -53,3 +83,4 @@
 - **Projections return JSON** → `TestProjectionsReturnJSON`
 - **Ledger projection (auth required)** → `TestLedgerProjection`
 - **Full CRUD via API** → `TestFullAPIFlow`
+- **Structured authenticated errors** → `TestCommandEndpointsRequireAuth`, `TestCommandEndpointsReturnUsefulStructuredErrorsForAuthenticatedCallers`

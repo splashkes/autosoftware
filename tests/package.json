@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
-    "test:list": "playwright test --list"
+    "test:list": "playwright test --list",
+    "test:flowershow": "playwright test --project flowershow-local",
+    "test:flowershow:remote": "playwright test --project flowershow-remote-auth --project flowershow-remote-admin --project flowershow-remote-agent-api"
   },
   "keywords": [],
   "author": "",
