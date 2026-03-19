@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -267,7 +266,7 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.render(w, "account.html", a.buildAccountData(*user, accountNotice{
-		Message: fmt.Sprintf("Token issued. Copy it now. It will not be shown again and it currently grants %s.", formatPermissionList(profile.Permissions)),
+		Message: "Agent token issued.",
 		Kind:    "info",
 	}, issued, selectedProfile, expiryDays))
 }

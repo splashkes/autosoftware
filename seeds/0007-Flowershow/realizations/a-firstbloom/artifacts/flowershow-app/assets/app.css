@@ -424,6 +424,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .account-shell { margin-top: 1rem; }
 .account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .account-token-grid { grid-template-columns: minmax(320px, 1.1fr) minmax(320px, .9fr); align-items: start; }
+.issued-token-shell,
+.account-token-success-card { max-width: 860px; margin-inline: auto; }
 .account-actions { flex-wrap: wrap; align-items: center; }
 .account-actions form { margin: 0; }
 .account-role-list { display: grid; gap: .75rem; margin-top: .75rem; }
@@ -458,15 +460,47 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   box-shadow: 0 0 0 3px rgba(216, 243, 220, .75);
 }
 .account-token-profile input[type="radio"] { margin-top: .2rem; }
-.issued-token-card label {
+.issued-token-card { display: grid; gap: 1rem; }
+.issued-token-alert { margin-bottom: 0; }
+.issued-token-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.issued-token-toolbar label {
   display: block;
   font-weight: 600;
-  margin: 1rem 0 .35rem;
+  margin: 0;
 }
-.issued-token-field {
-  min-height: 7rem;
+.issued-token-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.issued-token-copy-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+.issued-token-copy-button.is-copied {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+.issued-token-input {
+  display: block;
+  max-width: 100%;
+  padding: .85rem 1rem;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+  color: var(--gray-900);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .95rem;
+  line-height: 1.4;
 }
+.issued-token-input:focus { outline: 2px solid rgba(64, 145, 108, .28); outline-offset: 2px; }
+.issued-token-actions { justify-content: flex-start; }
 .account-token-list { display: grid; gap: 1rem; }
 .account-token-item {
   border: 1px solid var(--gray-200);
@@ -626,6 +660,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .hero h1 { font-size: 1.75rem; }
   .card-grid { grid-template-columns: 1fr; }
   .account-token-grid { grid-template-columns: 1fr; }
+  .issued-token-toolbar { flex-direction: column; align-items: stretch; }
+  .issued-token-copy-button { width: 100%; justify-content: center; }
   .form-row { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
   .winner-row { flex-direction: column; align-items: flex-start; }
