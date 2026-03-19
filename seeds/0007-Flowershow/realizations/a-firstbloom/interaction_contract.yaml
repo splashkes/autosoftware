@@ -931,7 +931,7 @@ projections:
     capabilities:
       - state_transitions
       - sessions
-    freshness: runtime
+    freshness: direct
     data_views:
       - auth_modes:
           - session
@@ -955,7 +955,7 @@ projections:
     capabilities:
       - activity_events
       - sessions
-    freshness: runtime
+    freshness: direct
     data_views:
       - auth_modes:
           - session
