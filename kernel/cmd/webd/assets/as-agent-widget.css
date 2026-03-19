@@ -15,52 +15,10 @@
   font-size: 0.84rem;
 }
 
-.agent-access-summary {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.95rem 1.1rem 0.7rem;
-  color: #20435a;
-}
-
-.agent-access-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #18364d, #28536d);
-  color: #fff;
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
-}
-
-.agent-access-summary-copy {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.agent-access-summary-title {
-  font-size: 0.96rem;
-  font-weight: 700;
-}
-
-.agent-access-summary-subtitle {
-  color: #627284;
-  font-size: 0.76rem;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
 .agent-access-tabs {
   display: flex;
   gap: 0.55rem;
-  padding: 0 1.1rem 0.8rem;
+  padding: 0.95rem 1.1rem 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -96,6 +54,11 @@
 
 .agent-access-panel[hidden] {
   display: none;
+}
+
+.agent-access-panel-summary .agent-access-body {
+  margin: 0;
+  font-size: 0.78rem;
 }
 
 .agent-access-lead {
@@ -153,12 +116,7 @@
 }
 
 @media (max-width: 640px) {
-  .agent-access-summary {
-    align-items: flex-start;
-  }
-
-  .agent-access-icon {
-    width: 2.55rem;
-    height: 2.55rem;
+  .agent-access-tabs {
+    gap: 0.45rem;
   }
 }

@@ -5,12 +5,20 @@ test.describe('Flowershow Agent Widget', () => {
   test('widget exposes contract links on public pages', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('footer + section.agent-access-shell')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'AS' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Agent + access' })).toBeVisible();
     await expect(
-      page.getByText('This software is designed to be accessed by people and agents'),
+      page.getByRole('tab', { name: '(re)design' }),
     ).toBeVisible();
     await expect(
-      page.getByRole('tab', { name: '(re)design this software' }),
+      page.locator('.agent-access-panel-summary'),
+    ).toContainText(
+      'This software is designed to be accessed by people and agents',
+    );
+    await expect(
+      page.locator('.agent-access-panel-summary'),
     ).toBeVisible();
+    await page.getByRole('tab', { name: 'Agent + access' }).click();
     await expect(
       page.getByRole('link', { name: 'GET /v1/contracts', exact: true }),
     ).toBeVisible();
@@ -20,7 +28,7 @@ test.describe('Flowershow Agent Widget', () => {
       }),
     ).toBeVisible();
 
-    await page.getByRole('tab', { name: '(re)design this software' }).click();
+    await page.getByRole('tab', { name: '(re)design' }).click();
     await expect(page.getByRole('link', { name: 'Seed README' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Kernel Bootloader' })).toBeVisible();
   });
@@ -48,7 +56,7 @@ test.describe('Flowershow Agent Widget', () => {
       'account-issued agent token with the required permissions',
     );
     await expect(page.getByRole('link', { name: 'Show workspace projection' })).toBeVisible();
-    await page.getByRole('tab', { name: '(re)design this software' }).click();
+    await page.getByRole('tab', { name: '(re)design' }).click();
     await expect(page.locator('.agent-access-content')).toContainText(
       'start from the seed documents, the realization contract, and the shared sprout references',
     );

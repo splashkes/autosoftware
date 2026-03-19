@@ -89,6 +89,7 @@ export async function openAgentAccess(page: Page) {
 
 export async function expectAgentPath(page: Page, currentPath: string) {
   await openAgentAccess(page);
+  await page.getByRole('tab', { name: 'Agent + access' }).click();
   await expect(page.locator('[data-agent-current-path]')).toHaveText(currentPath);
 }
 

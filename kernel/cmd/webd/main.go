@@ -59,21 +59,18 @@ type mountedAgentWidgetView struct {
 var mountedAgentWidgetTemplate = template.Must(template.New("mounted-agent-widget").Parse(`
 <section class="agent-access-shell">
   <section class="agent-access-widget" data-agent-widget data-agent-widget-source="kernel">
-    <div class="agent-access-summary">
-      <span class="agent-access-icon" aria-hidden="true">AS</span>
-      <div class="agent-access-summary-copy">
-        <span class="agent-access-summary-title">Agent + access</span>
-        <span class="agent-access-summary-subtitle">This software is designed to be accessed by people and agents for contribution, sharing, administration, transparency, and migration.</span>
-      </div>
-    </div>
-
     <div class="agent-access-tabs" role="tablist" aria-label="Agent access and redesign">
-      <button type="button" class="agent-access-tab is-active" role="tab" aria-selected="true" data-agent-tab-trigger="access">Agent + access</button>
-      <button type="button" class="agent-access-tab" role="tab" aria-selected="false" data-agent-tab-trigger="redesign">(re)design this software</button>
+      <button type="button" class="agent-access-tab is-active" role="tab" aria-selected="true" data-agent-tab-trigger="summary">AS</button>
+      <button type="button" class="agent-access-tab" role="tab" aria-selected="false" data-agent-tab-trigger="access">Agent + access</button>
+      <button type="button" class="agent-access-tab" role="tab" aria-selected="false" data-agent-tab-trigger="redesign">(re)design</button>
     </div>
 
     <div class="agent-access-content">
-      <section class="agent-access-panel is-active" role="tabpanel" data-agent-tab-panel="access">
+      <section class="agent-access-panel agent-access-panel-summary is-active" role="tabpanel" data-agent-tab-panel="summary">
+        <p class="agent-access-body">This software is designed to be accessed by people and agents for contribution, sharing, administration, transparency, and migration.</p>
+      </section>
+
+      <section class="agent-access-panel" role="tabpanel" data-agent-tab-panel="access" hidden>
         <p class="agent-access-lead">On this page, API access via the mounted realization contract and its projections gives agents a durable surface that mirrors or exceeds the UI.</p>
         <p class="agent-access-body">Use the local contract links first, then move outward into the seed and realization documents that define the scope behind this page.</p>
         <div class="agent-access-grid">
