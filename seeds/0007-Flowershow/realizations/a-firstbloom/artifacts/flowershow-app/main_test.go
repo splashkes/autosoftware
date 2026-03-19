@@ -395,8 +395,11 @@ func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Sign In") {
-		t.Fatal("login page missing direct password sign-in")
+	if !strings.Contains(body, "Enter Email") {
+		t.Fatal("login page missing initial email step")
+	}
+	if !strings.Contains(body, "Continue With Password") {
+		t.Fatal("login page missing password continuation action")
 	}
 	if !strings.Contains(body, "Send Login Code") {
 		t.Fatal("login page missing email-code sign-in")
@@ -420,8 +423,22 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 		},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	stepReq := httptest.NewRequest("GET", "/admin/login?mode=password&email=simon%40example.com", nil)
+	stepW := httptest.NewRecorder()
+	mux.ServeHTTP(stepW, stepReq)
+	if stepW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", stepW.Code)
+	}
+	if !strings.Contains(stepW.Body.String(), "Enter Password") {
+		t.Fatal("password step should render before credential submission")
+	}
+	if strings.Contains(stepW.Body.String(), "Send Login Code") {
+		t.Fatal("password step should hide alternate sign-in actions")
+	}
 
 	req := httptest.NewRequest("POST", "/auth/login/password", strings.NewReader("email=simon%40example.com&password=secret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -474,6 +491,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("POST /auth/login/back", a.handleAdminLoginBack)
 	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
 	mux.HandleFunc("POST /auth/login/email-code/verify", a.handleAdminEmailCodeVerify)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
@@ -497,6 +515,23 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	mux.ServeHTTP(loginW, loginReq)
 	if !strings.Contains(loginW.Body.String(), "Verify Login Code") {
 		t.Fatal("login page missing otp verification form")
+	}
+	if strings.Contains(loginW.Body.String(), "Continue With Password") {
+		t.Fatal("otp verification step should hide the start-step actions")
+	}
+
+	backReq := httptest.NewRequest("POST", "/auth/login/back", strings.NewReader("email=simon%40example.com"))
+	backReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range w.Result().Cookies() {
+		backReq.AddCookie(cookie)
+	}
+	backW := httptest.NewRecorder()
+	mux.ServeHTTP(backW, backReq)
+	if backW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", backW.Code)
+	}
+	if got := backW.Result().Header.Get("Location"); got != "/admin/login?email=simon%40example.com" {
+		t.Fatalf("unexpected back location %q", got)
 	}
 
 	verifyReq := httptest.NewRequest("POST", "/auth/login/email-code/verify", strings.NewReader("code=123456"))
@@ -538,6 +573,7 @@ func TestAdminForgotPasswordFlow(t *testing.T) {
 		},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/login/back", a.handleAdminLoginBack)
 	mux.HandleFunc("POST /auth/login/forgot-password", a.handleAdminForgotPasswordStart)
 	mux.HandleFunc("POST /auth/login/forgot-password/confirm", a.handleAdminForgotPasswordConfirm)
 
@@ -550,6 +586,19 @@ func TestAdminForgotPasswordFlow(t *testing.T) {
 	}
 	if got := w.Result().Header.Get("Location"); got != "/admin/login?notice=password-reset-code-sent" {
 		t.Fatalf("unexpected location %q", got)
+	}
+
+	loginReq := httptest.NewRequest("GET", "/admin/login?notice=password-reset-code-sent", nil)
+	for _, cookie := range w.Result().Cookies() {
+		loginReq.AddCookie(cookie)
+	}
+	loginW := httptest.NewRecorder()
+	a.handleAdminLogin(loginW, loginReq)
+	if !strings.Contains(loginW.Body.String(), "Reset Password") {
+		t.Fatal("reset step should render after reset start")
+	}
+	if strings.Contains(loginW.Body.String(), "Continue With Password") {
+		t.Fatal("reset step should hide the start-step actions")
 	}
 
 	confirmReq := httptest.NewRequest("POST", "/auth/login/forgot-password/confirm", strings.NewReader("code=654321&new_password=new-secret&confirm_password=new-secret"))

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -65,9 +66,12 @@ type adminLoginData struct {
 	Error           string
 	Info            string
 	CognitoEnabled  bool
+	CurrentEmail    string
+	PasswordStep    bool
 	PendingEmail    string
 	PendingEmailOTP bool
 	PendingReset    bool
+	BackHref        string
 }
 
 type authStartResult struct {
@@ -732,19 +736,38 @@ func bootstrapAdminMap() map[string]bool {
 	return out
 }
 
-func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adminLoginData {
+func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) adminLoginData {
 	data := adminLoginData{
 		Title:          "Admin Login",
 		Error:          errMessage,
 		Info:           infoMessage,
 		CognitoEnabled: a.authEnabled(),
+		CurrentEmail:   currentEmail,
+		PasswordStep:   passwordStep && strings.TrimSpace(currentEmail) != "",
 	}
-	if pending, ok := a.currentPendingAuth(r); ok {
+	if pending != nil {
 		data.PendingEmail = pending.Email
 		data.PendingEmailOTP = pending.Flow == pendingAuthFlowEmailOTP
 		data.PendingReset = pending.Flow == pendingAuthFlowForgotPassword
+		data.CurrentEmail = pending.Email
+		data.PasswordStep = false
+	}
+	if strings.TrimSpace(data.CurrentEmail) != "" {
+		data.BackHref = "/admin/login?email=" + url.QueryEscape(data.CurrentEmail)
+	} else {
+		data.BackHref = "/admin/login"
 	}
 	return data
+}
+
+func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adminLoginData {
+	currentEmail := strings.TrimSpace(r.URL.Query().Get("email"))
+	passwordStep := strings.TrimSpace(r.URL.Query().Get("mode")) == "password"
+	var pending *pendingAuthState
+	if state, ok := a.currentPendingAuth(r); ok {
+		pending = state
+	}
+	return a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending)
 }
 
 func loginNoticeMessage(code string) string {
@@ -770,6 +793,24 @@ func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	a.renderAdminLogin(w, r, "", loginNoticeMessage(r.URL.Query().Get("notice")))
 }
 
+func (a *app) renderAdminLoginWithState(w http.ResponseWriter, errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) {
+	a.render(w, "login.html", a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending))
+}
+
+func (a *app) handleAdminLoginBack(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+	email := strings.TrimSpace(r.FormValue("email"))
+	a.clearPendingAuth(w)
+	location := "/admin/login"
+	if email != "" {
+		location += "?email=" + url.QueryEscape(email)
+	}
+	http.Redirect(w, r, location, http.StatusSeeOther)
+}
+
 func (a *app) handleAdminPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.authEnabled() {
 		a.renderAdminLogin(w, r, "Cognito password sign-in is not configured for this deployment.", "")
@@ -779,9 +820,10 @@ func (a *app) handleAdminPasswordLogin(w http.ResponseWriter, r *http.Request) {
 		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
-	user, err := a.auth.PasswordLogin(r.Context(), r.FormValue("email"), r.FormValue("password"))
+	email := strings.TrimSpace(r.FormValue("email"))
+	user, err := a.auth.PasswordLogin(r.Context(), email, r.FormValue("password"))
 	if err != nil {
-		a.renderAdminLogin(w, r, err.Error(), "")
+		a.renderAdminLoginWithState(w, err.Error(), "", email, true, nil)
 		return
 	}
 	if err := a.setUserSession(w, *user); err != nil {
@@ -801,9 +843,10 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
-	result, err := a.auth.StartEmailOTP(r.Context(), r.FormValue("email"))
+	email := strings.TrimSpace(r.FormValue("email"))
+	result, err := a.auth.StartEmailOTP(r.Context(), email)
 	if err != nil {
-		a.renderAdminLogin(w, r, err.Error(), "")
+		a.renderAdminLoginWithState(w, err.Error(), "", email, false, nil)
 		return
 	}
 	if result != nil && result.User != nil {
@@ -864,7 +907,7 @@ func (a *app) handleAdminForgotPasswordStart(w http.ResponseWriter, r *http.Requ
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
 	if err := a.auth.StartForgotPassword(r.Context(), email); err != nil {
-		a.renderAdminLogin(w, r, err.Error(), "")
+		a.renderAdminLoginWithState(w, err.Error(), "", email, false, nil)
 		return
 	}
 	if err := a.setPendingAuth(w, pendingAuthState{

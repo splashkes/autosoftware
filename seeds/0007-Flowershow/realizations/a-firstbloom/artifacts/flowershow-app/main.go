@@ -92,6 +92,7 @@ func main() {
 	// Admin auth
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
 	mux.HandleFunc("POST /admin/logout", a.handleAdminLogout)
+	mux.HandleFunc("POST /auth/login/back", a.handleAdminLoginBack)
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
 	mux.HandleFunc("POST /auth/login/email-code/verify", a.handleAdminEmailCodeVerify)
