@@ -1,5 +1,53 @@
 {{define "content"}}
 <section class="section account-shell">
+  {{if .IssuedAgentToken}}
+  <div class="section-header issued-token-shell">
+    <div>
+      <div class="login-step-kicker">Agent Token Issued</div>
+      <h1>Copy This Token Now</h1>
+      <p class="section-desc">This is the only time this bearer token will be shown. Copy it, store it safely, and then return to the token manager when you are done.</p>
+    </div>
+  </div>
+
+  {{if .Notice.Message}}
+  <div class="alert {{if eq .Notice.Kind "error"}}alert-error{{else}}alert-info{{end}}">{{.Notice.Message}}</div>
+  {{end}}
+
+  <section class="card account-token-success-card" id="agent-tokens">
+    <div class="card-body issued-token-card">
+      <div>
+        <h2 class="card-title">{{.IssuedAgentToken.Label}}</h2>
+        <p class="card-meta">It expires {{.IssuedAgentToken.ExpiresLabel}} and currently grants {{.IssuedAgentToken.PermissionProfile}}.</p>
+      </div>
+      <div class="alert alert-warning issued-token-alert">
+        Be careful: anyone with this token can use the permissions below until it expires or you revoke it.
+      </div>
+      <div class="issued-token-toolbar">
+        <label for="issued_agent_token">Bearer Token</label>
+        <button type="button" class="btn btn-secondary btn-sm issued-token-copy-button" data-copy-target="#issued_agent_token" data-copy-feedback="Copied">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 9h10v12H9z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M5 3h10v12H5z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+          <span data-copy-label>Copy Token</span>
+        </button>
+      </div>
+      <input id="issued_agent_token" class="issued-token-input" type="text" readonly value="{{.IssuedAgentToken.Secret}}" size="{{len .IssuedAgentToken.Secret}}" style="width:min(100%, {{len .IssuedAgentToken.Secret}}ch);" data-issued-agent-token spellcheck="false" autocomplete="off">
+      <div class="account-permission-list compact">
+        {{range .IssuedAgentToken.Permissions}}
+        <div class="account-permission-item">
+          <strong>{{.Label}}</strong>
+          <span class="card-meta">{{.Description}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="show-actions account-actions issued-token-actions">
+        <a href="{{bp}}/account#agent-tokens" class="btn btn-primary">Done</a>
+      </div>
+    </div>
+  </section>
+
+  {{else}}
   <div class="section-header">
     <div>
       <h1>Your Profile</h1>
@@ -71,26 +119,6 @@
         <p class="section-desc">Generate a bearer token for an external agent. Choose a lifespan between 1 and 60 days and review the exact permission set before issuing it.</p>
       </div>
     </div>
-
-    {{if .IssuedAgentToken}}
-    <section class="card">
-      <div class="card-body issued-token-card">
-        <div class="login-step-kicker">Copy Now</div>
-        <h3 class="card-title">{{.IssuedAgentToken.Label}}</h3>
-        <p class="card-meta">This token will not be shown again. It expires {{.IssuedAgentToken.ExpiresLabel}} and currently grants {{.IssuedAgentToken.PermissionProfile}}.</p>
-        <label for="issued_agent_token">Bearer Token</label>
-        <textarea id="issued_agent_token" class="form-input issued-token-field" readonly data-issued-agent-token>{{.IssuedAgentToken.Secret}}</textarea>
-        <div class="account-permission-list compact">
-          {{range .IssuedAgentToken.Permissions}}
-          <div class="account-permission-item">
-            <strong>{{.Label}}</strong>
-            <span class="card-meta">{{.Description}}</span>
-          </div>
-          {{end}}
-        </div>
-      </div>
-    </section>
-    {{end}}
 
     <div class="card-grid account-token-grid">
       <section class="card">
@@ -196,5 +224,6 @@
       {{end}}
     </div>
   </section>
+  {{end}}
 </section>
 {{end}}

@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -116,17 +117,19 @@ func addAdminSession(t *testing.T, a *app, req *http.Request) {
 
 func extractIssuedAgentToken(t *testing.T, body string) string {
 	t.Helper()
-	const marker = `data-issued-agent-token>`
-	start := strings.Index(body, marker)
-	if start < 0 {
-		t.Fatal("issued agent token textarea not found")
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?s)<input[^>]*id="issued_agent_token"[^>]*value="([^"]+)"`),
+		regexp.MustCompile(`(?s)<input[^>]*data-issued-agent-token[^>]*value="([^"]+)"`),
+		regexp.MustCompile(`(?s)data-issued-agent-token>([^<]+)</textarea>`),
 	}
-	start += len(marker)
-	end := strings.Index(body[start:], "</textarea>")
-	if end < 0 {
-		t.Fatal("issued agent token textarea terminator not found")
+	token := ""
+	for _, pattern := range patterns {
+		matches := pattern.FindStringSubmatch(body)
+		if len(matches) == 2 {
+			token = strings.TrimSpace(matches[1])
+			break
+		}
 	}
-	token := strings.TrimSpace(body[start : start+end])
 	if token == "" {
 		t.Fatal("issued agent token value empty")
 	}
@@ -731,6 +734,12 @@ func TestViewerAccountTokenCanReadAccountButNotAdminAPI(t *testing.T) {
 	mux.ServeHTTP(createW, createReq)
 	if createW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", createW.Code, createW.Body.String())
+	}
+	if !strings.Contains(createW.Body.String(), "Copy This Token Now") {
+		t.Fatal("issued token flow should focus on the one-time token state")
+	}
+	if strings.Contains(createW.Body.String(), "Issue A New Agent Token") {
+		t.Fatal("issued token flow should hide the token generator while the token is visible")
 	}
 	token := extractIssuedAgentToken(t, createW.Body.String())
 

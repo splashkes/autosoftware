@@ -136,8 +136,57 @@ function flowershowBindPhotoForm(form) {
   });
 }
 
+async function flowershowCopyTarget(button) {
+  const targetSelector = button.dataset.copyTarget;
+  if (!targetSelector) return;
+  const target = document.querySelector(targetSelector);
+  if (!target) return;
+  const text = typeof target.value === 'string' ? target.value : (target.textContent || '').trim();
+  if (!text) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+  } else if (target.select) {
+    target.select();
+    document.execCommand('copy');
+  }
+
+  const label = button.querySelector('[data-copy-label]');
+  const original = button.dataset.copyOriginal || (label ? label.textContent : button.textContent);
+  if (!button.dataset.copyOriginal) {
+    button.dataset.copyOriginal = original || 'Copy';
+  }
+  if (label) {
+    label.textContent = button.dataset.copyFeedback || 'Copied';
+  } else {
+    button.textContent = button.dataset.copyFeedback || 'Copied';
+  }
+  button.classList.add('is-copied');
+  window.setTimeout(function() {
+    if (label) {
+      label.textContent = button.dataset.copyOriginal || 'Copy';
+    } else {
+      button.textContent = button.dataset.copyOriginal || 'Copy';
+    }
+    button.classList.remove('is-copied');
+  }, 1800);
+}
+
+function flowershowBindCopyButton(button) {
+  if (button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  button.addEventListener('click', async function() {
+    try {
+      await flowershowCopyTarget(button);
+    } catch (error) {
+      flowershowToast('Could not copy the token. Copy it manually from the field.', true);
+    }
+  });
+}
+
 function flowershowInit(root) {
   (root || document).querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
+  (root || document).querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

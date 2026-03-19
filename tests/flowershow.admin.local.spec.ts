@@ -33,6 +33,10 @@ test.describe('Flowershow Admin Local', () => {
       .check();
     await page.getByRole('button', { name: 'Generate Agent Token' }).click();
 
+    await expect(page.getByRole('heading', { name: 'Copy This Token Now' })).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('Issue A New Agent Token');
+    await expect(page.locator('body')).not.toContainText('Issued Tokens');
+    await expect(page.getByRole('button', { name: 'Copy Token' })).toBeVisible();
     const tokenField = page.locator('[data-issued-agent-token]');
     await expect(tokenField).toBeVisible();
     const token = await tokenField.inputValue();
