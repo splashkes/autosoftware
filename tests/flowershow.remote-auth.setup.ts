@@ -9,20 +9,22 @@ import {
 test.describe('Flowershow Remote Admin OTP Setup', () => {
   test.skip(!FLOWERSHOW_REMOTE_E2E, 'Set FLOWERSHOW_REMOTE_E2E=1 to run remote OTP setup.');
 
-  test('capture authenticated admin storage state after OTP login', async ({ page }) => {
+  test('capture authenticated admin storage state after on-site email-code login', async ({
+    page,
+  }) => {
     test.setTimeout(0);
 
     await page.goto('/admin');
-    if (page.url().includes('/admin/login')) {
-      await expect(page.getByText(/Cognito is enabled/i)).toBeVisible();
-      await page.getByRole('link', { name: /Continue With Cognito/i }).click();
-    }
+    await expect(page).toHaveURL(/\/admin\/login(?:$|\?)/);
+    await expect(page.getByRole('heading', { name: 'Admin Login' })).toBeVisible();
 
-    // Complete the hosted UI and OTP flow manually for FLOWERSHOW_ADMIN_EMAIL,
-    // then resume the test once the browser has returned to /admin.
-    console.log(
-      `Complete the OTP login for ${FLOWERSHOW_ADMIN_EMAIL}, then resume the paused Playwright session.`,
-    );
+    await page.fill('#otp_email', FLOWERSHOW_ADMIN_EMAIL);
+    await page.getByRole('button', { name: 'Send Email Code' }).click();
+
+    await expect(page.getByText(/check your email for the sign-in code/i)).toBeVisible();
+    await expect(page.getByLabel(new RegExp(`Enter Code For ${FLOWERSHOW_ADMIN_EMAIL}`, 'i'))).toBeVisible();
+
+    console.log(`Enter the OTP for ${FLOWERSHOW_ADMIN_EMAIL}, then resume the paused Playwright session.`);
     await page.pause();
 
     await expect(page).toHaveURL(/\/admin(?:$|\?)/);

@@ -15,8 +15,9 @@ export const FLOWERSHOW_AUTH_STATE_PATH = path.resolve(
 
 export async function loginLocalAdmin(page: Page) {
   await page.goto('/admin/login');
-  await page.fill('#password', 'admin');
-  await page.click('button[type="submit"]');
+  await page.getByText('Bootstrap Override').click();
+  await page.fill('#bootstrap_password', 'admin');
+  await page.getByRole('button', { name: 'Use Bootstrap Password' }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('h1')).toContainText('Admin Dashboard');
 }

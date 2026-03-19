@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -12,7 +13,53 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+type mockAuthProvider struct {
+	passwordLogin       func(context.Context, string, string) (*UserIdentity, error)
+	startEmailOTP       func(context.Context, string) (*authStartResult, error)
+	verifyEmailOTP      func(context.Context, string, string, string) (*UserIdentity, error)
+	startForgotPassword func(context.Context, string) error
+	confirmForgot       func(context.Context, string, string, string) error
+}
+
+func (m *mockAuthProvider) Enabled() bool { return true }
+
+func (m *mockAuthProvider) PasswordLogin(ctx context.Context, email, password string) (*UserIdentity, error) {
+	if m.passwordLogin == nil {
+		return nil, nil
+	}
+	return m.passwordLogin(ctx, email, password)
+}
+
+func (m *mockAuthProvider) StartEmailOTP(ctx context.Context, email string) (*authStartResult, error) {
+	if m.startEmailOTP == nil {
+		return nil, nil
+	}
+	return m.startEmailOTP(ctx, email)
+}
+
+func (m *mockAuthProvider) VerifyEmailOTP(ctx context.Context, email, session, code string) (*UserIdentity, error) {
+	if m.verifyEmailOTP == nil {
+		return nil, nil
+	}
+	return m.verifyEmailOTP(ctx, email, session, code)
+}
+
+func (m *mockAuthProvider) StartForgotPassword(ctx context.Context, email string) error {
+	if m.startForgotPassword == nil {
+		return nil
+	}
+	return m.startForgotPassword(ctx, email)
+}
+
+func (m *mockAuthProvider) ConfirmForgotPassword(ctx context.Context, email, code, newPassword string) error {
+	if m.confirmForgot == nil {
+		return nil
+	}
+	return m.confirmForgot(ctx, email, code, newPassword)
+}
 
 func testApp() *app {
 	dir, err := os.MkdirTemp("", "flowershow-media-test-*")
@@ -323,6 +370,9 @@ func TestAdminLoginFlow(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	if !strings.Contains(w.Body.String(), "Bootstrap Override") {
+		t.Fatal("login page missing bootstrap override section")
+	}
 
 	// POST wrong password
 	req = httptest.NewRequest("POST", "/admin/login", strings.NewReader("password=wrong"))
@@ -331,6 +381,9 @@ func TestAdminLoginFlow(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 (re-render with error), got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Invalid bootstrap password") {
+		t.Fatal("expected bootstrap error message")
 	}
 
 	// POST correct password
@@ -349,6 +402,189 @@ func TestAdminLoginFlow(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T) {
+	a := testApp()
+	a.auth = &mockAuthProvider{}
+
+	req := httptest.NewRequest("GET", "/admin/login", nil)
+	w := httptest.NewRecorder()
+	a.handleAdminLogin(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Sign In With Password") {
+		t.Fatal("login page missing direct password sign-in")
+	}
+	if !strings.Contains(body, "Send Email Code") {
+		t.Fatal("login page missing email-code sign-in")
+	}
+	if !strings.Contains(body, "Forgot Password") {
+		t.Fatal("login page missing forgot-password flow")
+	}
+	if strings.Contains(body, "Continue With Cognito") {
+		t.Fatal("login page should not send users to hosted cognito ui")
+	}
+}
+
+func TestAdminDirectPasswordLogin(t *testing.T) {
+	a := testApp()
+	a.auth = &mockAuthProvider{
+		passwordLogin: func(_ context.Context, email, password string) (*UserIdentity, error) {
+			if email != "simon@example.com" || password != "secret" {
+				t.Fatalf("unexpected credentials %q / %q", email, password)
+			}
+			return &UserIdentity{CognitoSub: "sub_direct", Email: email}, nil
+		},
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	req := httptest.NewRequest("POST", "/auth/login/password", strings.NewReader("email=simon%40example.com&password=secret"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin" {
+		t.Fatalf("expected redirect to /admin, got %q", got)
+	}
+
+	adminReq := httptest.NewRequest("GET", "/admin", nil)
+	for _, cookie := range w.Result().Cookies() {
+		adminReq.AddCookie(cookie)
+	}
+	adminW := httptest.NewRecorder()
+	mux.ServeHTTP(adminW, adminReq)
+	if adminW.Code != http.StatusSeeOther {
+		t.Fatalf("expected non-admin user to redirect for missing role, got %d", adminW.Code)
+	}
+}
+
+func TestAdminEmailOTPLoginFlow(t *testing.T) {
+	a := testApp()
+	a.auth = &mockAuthProvider{
+		startEmailOTP: func(_ context.Context, email string) (*authStartResult, error) {
+			if email != "simon@example.com" {
+				t.Fatalf("unexpected email %q", email)
+			}
+			return &authStartResult{
+				Pending: &pendingAuthState{
+					Flow:      pendingAuthFlowEmailOTP,
+					Email:     email,
+					Session:   "pending-session",
+					ExpiresAt: time.Now().UTC().Add(10 * time.Minute).Unix(),
+				},
+			}, nil
+		},
+		verifyEmailOTP: func(_ context.Context, email, session, code string) (*UserIdentity, error) {
+			if email != "simon@example.com" || session != "pending-session" || code != "123456" {
+				t.Fatalf("unexpected verify payload %q %q %q", email, session, code)
+			}
+			return &UserIdentity{CognitoSub: "sub_admin", Email: email}, nil
+		},
+	}
+	if _, err := a.store.assignUserRole(UserRoleInput{CognitoSub: "sub_admin", Role: "admin"}); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
+	mux.HandleFunc("POST /auth/login/email-code/verify", a.handleAdminEmailCodeVerify)
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	req := httptest.NewRequest("POST", "/auth/login/email-code", strings.NewReader("email=simon%40example.com"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login?notice=email-code-sent" {
+		t.Fatalf("unexpected location %q", got)
+	}
+
+	loginReq := httptest.NewRequest("GET", "/admin/login?notice=email-code-sent", nil)
+	for _, cookie := range w.Result().Cookies() {
+		loginReq.AddCookie(cookie)
+	}
+	loginW := httptest.NewRecorder()
+	mux.ServeHTTP(loginW, loginReq)
+	if !strings.Contains(loginW.Body.String(), "Verify Email Code") {
+		t.Fatal("login page missing otp verification form")
+	}
+
+	verifyReq := httptest.NewRequest("POST", "/auth/login/email-code/verify", strings.NewReader("code=123456"))
+	verifyReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range w.Result().Cookies() {
+		verifyReq.AddCookie(cookie)
+	}
+	verifyW := httptest.NewRecorder()
+	mux.ServeHTTP(verifyW, verifyReq)
+	if verifyW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", verifyW.Code)
+	}
+
+	adminReq := httptest.NewRequest("GET", "/admin", nil)
+	for _, cookie := range verifyW.Result().Cookies() {
+		adminReq.AddCookie(cookie)
+	}
+	adminW := httptest.NewRecorder()
+	mux.ServeHTTP(adminW, adminReq)
+	if adminW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", adminW.Code)
+	}
+}
+
+func TestAdminForgotPasswordFlow(t *testing.T) {
+	a := testApp()
+	a.auth = &mockAuthProvider{
+		startForgotPassword: func(_ context.Context, email string) error {
+			if email != "simon@example.com" {
+				t.Fatalf("unexpected email %q", email)
+			}
+			return nil
+		},
+		confirmForgot: func(_ context.Context, email, code, newPassword string) error {
+			if email != "simon@example.com" || code != "654321" || newPassword != "new-secret" {
+				t.Fatalf("unexpected reset payload %q %q %q", email, code, newPassword)
+			}
+			return nil
+		},
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/login/forgot-password", a.handleAdminForgotPasswordStart)
+	mux.HandleFunc("POST /auth/login/forgot-password/confirm", a.handleAdminForgotPasswordConfirm)
+
+	req := httptest.NewRequest("POST", "/auth/login/forgot-password", strings.NewReader("email=simon%40example.com"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login?notice=password-reset-code-sent" {
+		t.Fatalf("unexpected location %q", got)
+	}
+
+	confirmReq := httptest.NewRequest("POST", "/auth/login/forgot-password/confirm", strings.NewReader("code=654321&new_password=new-secret&confirm_password=new-secret"))
+	confirmReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range w.Result().Cookies() {
+		confirmReq.AddCookie(cookie)
+	}
+	confirmW := httptest.NewRecorder()
+	mux.ServeHTTP(confirmW, confirmReq)
+	if confirmW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", confirmW.Code)
+	}
+	if got := confirmW.Result().Header.Get("Location"); got != "/admin/login?notice=password-reset-complete" {
+		t.Fatalf("unexpected location %q", got)
 	}
 }
 
