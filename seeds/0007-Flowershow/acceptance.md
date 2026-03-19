@@ -100,6 +100,8 @@ The system is complete when:
 - Roles (admin, judge, entrant, public) managed in-app per organization/show
 - Long-term authority is modeled as system-native accepted history rather than
   as auth-provider role truth
+- Parent-child organization relationships are available for categorization and
+  reporting but do not automatically confer authority across organizations
 - Grant, revoke, and delegated-control behavior is inspectable through ledger
   or effective-access projections once the kernel-native authority model lands
 

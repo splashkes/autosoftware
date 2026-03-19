@@ -14,6 +14,9 @@ For `0007-Flowershow`:
 - flower-show control should evolve toward system-native authority over
   organizations and shows, with delegated grants and revocations visible in the
   ledger, rather than relying permanently on auth-provider role claims
+- organization hierarchy is structural and descriptive, not a hidden
+  permission escalator; parent organizations do not automatically gain control
+  over child organizations or their shows
 - cited source content and runtime prompt context must stay separate: citations
   become canonical flower-show truth, while assistant instructions remain
   runtime-only
