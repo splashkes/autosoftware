@@ -10,7 +10,7 @@
   </div>
 
   {{if .Notice.Message}}
-  <div class="alert {{if eq .Notice.Kind "error"}}alert-error{{else}}alert-info{{end}}">{{.Notice.Message}}</div>
+  <div class="alert issued-token-notice {{if eq .Notice.Kind "error"}}alert-error{{else}}alert-info{{end}}">{{.Notice.Message}}</div>
   {{end}}
 
   <section class="card account-token-success-card" id="agent-tokens">
@@ -22,8 +22,10 @@
       <div class="alert alert-warning issued-token-alert">
         Be careful: anyone with this token can use the permissions below until it expires or you revoke it.
       </div>
-      <div class="issued-token-toolbar">
-        <label for="issued_agent_token">Bearer Token</label>
+      <div class="issued-token-token-group">
+        <label for="issued_agent_token">Token</label>
+        <div class="issued-token-field-row">
+          <input id="issued_agent_token" class="issued-token-input" type="text" readonly value="{{.IssuedAgentToken.Secret}}" size="{{len .IssuedAgentToken.Secret}}" style="width:min(100%, {{len .IssuedAgentToken.Secret}}ch);" data-issued-agent-token spellcheck="false" autocomplete="off">
         <button type="button" class="btn btn-secondary btn-sm issued-token-copy-button" data-copy-target="#issued_agent_token" data-copy-feedback="Copied">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M9 9h10v12H9z" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -31,8 +33,8 @@
           </svg>
           <span data-copy-label>Copy Token</span>
         </button>
+        </div>
       </div>
-      <input id="issued_agent_token" class="issued-token-input" type="text" readonly value="{{.IssuedAgentToken.Secret}}" size="{{len .IssuedAgentToken.Secret}}" style="width:min(100%, {{len .IssuedAgentToken.Secret}}ch);" data-issued-agent-token spellcheck="false" autocomplete="off">
       <div class="account-permission-list compact">
         {{range .IssuedAgentToken.Permissions}}
         <div class="account-permission-item">
@@ -112,20 +114,22 @@
     </section>
   </div>
 
-  <section class="section" id="agent-tokens">
-    <div class="section-header">
-      <div>
-        <h2>Agent Tokens</h2>
-        <p class="section-desc">Generate a bearer token for an external agent. Choose a lifespan between 1 and 60 days and review the exact permission set before issuing it.</p>
+  <section class="card account-token-manager-card" id="agent-tokens">
+    <div class="card-body">
+      <div class="section-header">
+        <div>
+          <div class="login-step-kicker">Agent Access</div>
+          <h2>Agent / API access tokens</h2>
+          <p class="section-desc">Generate a bearer token for an external agent. Choose a lifespan between 1 and 60 days and review the exact permission set before issuing it.</p>
+        </div>
       </div>
-    </div>
 
-    <div class="card-grid account-token-grid">
-      <section class="card">
-        <div class="card-body">
-          <div class="login-step-kicker">Generate Token</div>
-          <h3 class="card-title">Issue A New Agent Token</h3>
-          <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
+      <div class="card-grid account-token-grid">
+        <section class="card">
+          <div class="card-body">
+            <div class="login-step-kicker">Generate Token</div>
+            <h3 class="card-title">Issue A New Agent / API Access Token</h3>
+            <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
             <div class="form-group">
               <label for="token_label">Token Label</label>
               <input id="token_label" name="label" class="form-input" maxlength="80" placeholder="Example: March schedule structuring agent" required>
@@ -162,47 +166,48 @@
               Be careful: the token can do exactly what its selected permission profile allows until it expires or you revoke it.
             </div>
             <button type="submit" class="btn btn-primary">Generate Agent Token</button>
-          </form>
-        </div>
-      </section>
+            </form>
+          </div>
+        </section>
 
-      <section class="card">
-        <div class="card-body">
-          <div class="login-step-kicker">Active Tokens</div>
-          <h3 class="card-title">Issued Tokens</h3>
-          {{if .AgentTokens}}
-          <div class="account-token-list">
-            {{range .AgentTokens}}
-            <div class="account-token-item">
-              <div class="account-token-meta">
-                <div>
-                  <strong>{{.Label}}</strong>
-                  <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
+        <section class="card">
+          <div class="card-body">
+            <div class="login-step-kicker">Active Tokens</div>
+            <h3 class="card-title">Issued Agent / API Access Tokens</h3>
+            {{if .AgentTokens}}
+            <div class="account-token-list">
+              {{range .AgentTokens}}
+              <div class="account-token-item">
+                <div class="account-token-meta">
+                  <div>
+                    <strong>{{.Label}}</strong>
+                    <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
+                  </div>
+                  <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
                 </div>
-                <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
-              </div>
-              <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
-              <div class="account-permission-list compact">
-                {{range .Permissions}}
-                <div class="account-permission-item">
-                  <strong>{{.Label}}</strong>
-                  <span class="card-meta">{{.Description}}</span>
+                <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
+                <div class="account-permission-list compact">
+                  {{range .Permissions}}
+                  <div class="account-permission-item">
+                    <strong>{{.Label}}</strong>
+                    <span class="card-meta">{{.Description}}</span>
+                  </div>
+                  {{end}}
                 </div>
+                {{if eq .StatusLabel "Active"}}
+                <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
+                  <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
+                </form>
                 {{end}}
               </div>
-              {{if eq .StatusLabel "Active"}}
-              <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
-                <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
-              </form>
               {{end}}
             </div>
+            {{else}}
+            <p class="card-meta">No agent tokens have been issued from this account yet.</p>
             {{end}}
           </div>
-          {{else}}
-          <p class="card-meta">No agent tokens have been issued from this account yet.</p>
-          {{end}}
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   </section>
 

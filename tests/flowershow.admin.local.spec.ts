@@ -21,10 +21,10 @@ test.describe('Flowershow Admin Local', () => {
   }) => {
     await loginLocalAdmin(page);
     await page.goto('/admin');
-    await page.getByRole('link', { name: 'Agent Tokens' }).click();
+    await page.getByRole('link', { name: 'Agent / API Access Tokens' }).click();
 
     await expect(page).toHaveURL(/\/account#agent-tokens$/);
-    await expect(page.locator('body')).toContainText('Agent Tokens');
+    await expect(page.locator('body')).toContainText('Agent / API access tokens');
 
     await page.fill('#token_label', uniqueName('Playwright Operator Token'));
     await page.fill('#expires_in_days', '7');
@@ -34,8 +34,8 @@ test.describe('Flowershow Admin Local', () => {
     await page.getByRole('button', { name: 'Generate Agent Token' }).click();
 
     await expect(page.getByRole('heading', { name: 'Copy This Token Now' })).toBeVisible();
-    await expect(page.locator('body')).not.toContainText('Issue A New Agent Token');
-    await expect(page.locator('body')).not.toContainText('Issued Tokens');
+    await expect(page.locator('body')).not.toContainText('Issue A New Agent / API Access Token');
+    await expect(page.locator('body')).not.toContainText('Issued Agent / API Access Tokens');
     await expect(page.getByRole('button', { name: 'Copy Token' })).toBeVisible();
     const tokenField = page.locator('[data-issued-agent-token]');
     await expect(tokenField).toBeVisible();

@@ -424,8 +424,10 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .account-shell { margin-top: 1rem; }
 .account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .account-token-grid { grid-template-columns: minmax(320px, 1.1fr) minmax(320px, .9fr); align-items: start; }
+.account-token-manager-card > .card-body { display: grid; gap: 1.25rem; }
 .issued-token-shell,
-.account-token-success-card { max-width: 860px; margin-inline: auto; }
+.issued-token-notice,
+.account-token-success-card { max-width: 760px; margin-inline: auto; }
 .account-actions { flex-wrap: wrap; align-items: center; }
 .account-actions form { margin: 0; }
 .account-role-list { display: grid; gap: .75rem; margin-top: .75rem; }
@@ -461,22 +463,24 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 }
 .account-token-profile input[type="radio"] { margin-top: .2rem; }
 .issued-token-card { display: grid; gap: 1rem; }
+.issued-token-notice { margin-bottom: 1rem; }
 .issued-token-alert { margin-bottom: 0; }
-.issued-token-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.issued-token-toolbar label {
+.issued-token-token-group { display: grid; gap: .5rem; }
+.issued-token-token-group label {
   display: block;
   font-weight: 600;
   margin: 0;
+}
+.issued-token-field-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
 }
 .issued-token-copy-button {
   display: inline-flex;
   align-items: center;
   gap: .5rem;
+  white-space: nowrap;
 }
 .issued-token-copy-button svg {
   width: 1rem;
@@ -489,6 +493,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 }
 .issued-token-input {
   display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   padding: .85rem 1rem;
   border: 1px solid var(--gray-300);
@@ -660,7 +666,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .hero h1 { font-size: 1.75rem; }
   .card-grid { grid-template-columns: 1fr; }
   .account-token-grid { grid-template-columns: 1fr; }
-  .issued-token-toolbar { flex-direction: column; align-items: stretch; }
+  .issued-token-field-row { flex-direction: column; align-items: stretch; }
+  .issued-token-copy-button { justify-content: center; }
   .issued-token-copy-button { width: 100%; justify-content: center; }
   .form-row { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
