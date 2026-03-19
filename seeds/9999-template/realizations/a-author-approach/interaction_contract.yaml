@@ -8,6 +8,8 @@ links:
   seed_brief: ../../brief.md
   seed_acceptance: ../../acceptance.md
   realization_readme: README.md
+  kernel_agent_principles: ../../../../kernel/protocol/v1/AUTOSOFTWARE_AGENT_PRINCIPLES.md
+  seed_agent_principles: ../../AUTOSOFTWARE_AGENT_PRINCIPLES.md
 auth_modes:
   - anonymous
   - session
@@ -162,6 +164,22 @@ commands:
       - activity_events
     projection: example_items.detail
     consistency: read_your_writes
+    runtime_context:
+      summary: Optional runtime-only context that can help an agent author the request without becoming canonical object truth.
+      fields:
+        - name: assistant_goal
+          type: string
+          summary: Brief instruction about what the caller is trying to achieve with this write.
+        - name: source_excerpt
+          type: string
+          summary: Operator-supplied excerpt or citation text used only to guide the request composition.
+    error_codes:
+      - code: invalid_json
+        summary: Request body did not match the declared JSON schema.
+      - code: validation_failed
+        summary: One or more required fields were missing or invalid.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
   - name: example_items.publish
     summary: Publish an example item for public reads after validating its lifecycle state.
     path: /v1/commands/9999-template/example_items.publish
@@ -179,6 +197,11 @@ commands:
       - activity_events
     projection: example_items.detail
     consistency: read_your_writes
+    error_codes:
+      - code: invalid_state
+        summary: The item cannot be published from its current lifecycle state.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
 projections:
   - name: example_items.detail
     summary: Canonical detail view consumed by both the first-party UI and third-party clients.
@@ -234,6 +257,26 @@ projections:
           - shared_metadata
           - public_payload
         summary: Search results expose the reusable public slice only.
+ui_surfaces:
+  - name: example_item_public_page
+    summary: Public page showing the accepted example item state.
+    path: /example-items/{item_id}
+    auth_modes:
+      - anonymous
+    uses_projections:
+      - example_items.detail
+  - name: example_item_author_workspace
+    summary: Private authoring screen for creating and publishing example items.
+    path: /author/example-items/{item_id}
+    auth_modes:
+      - session
+      - service_token
+    uses_projections:
+      - example_items.detail
+      - example_items.search
+    mutates_commands:
+      - example_items.create
+      - example_items.publish
 consistency:
   write_visibility: read_your_writes
   projection_freshness: materialized

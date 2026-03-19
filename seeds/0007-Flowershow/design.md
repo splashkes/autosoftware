@@ -218,6 +218,36 @@ Describes physical specimens:
 - presentation rules
 
 #### Design
+
+---
+
+## 11. Interface And Agent Access
+
+The operational surface for this seed should be equally usable by:
+
+- the HTMX admin UI
+- session-authenticated human operators
+- remote service-token agents
+
+Normal flower-show authoring should happen through semantic commands and
+projections, not through hidden admin-only store mutations and not through raw
+database access.
+
+Required interface expectations:
+
+- all normal admin mutations have matching semantic commands
+- important admin workspaces have matching projections, including private
+  workspace views where needed
+- stable by-id projections exist for primary objects even when a public route
+  also exposes a slug
+- authenticated agents receive structured validation and permission errors
+  useful enough to recover without guessing
+
+Runtime-only assistant instructions may accompany authoring requests, for
+example guidance about how to interpret a cited schedule or which standard
+should be treated as authoritative. That runtime context must not be stored as
+canonical show truth unless it is converted into explicit structured records or
+citations.
 Describes compositions:
 - type (crescent design, etc)
 - title

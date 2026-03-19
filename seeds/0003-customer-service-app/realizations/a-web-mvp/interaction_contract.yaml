@@ -8,6 +8,8 @@ links:
   seed_brief: ../../brief.md
   seed_acceptance: ../../acceptance.md
   realization_readme: README.md
+  kernel_agent_principles: ../../../../kernel/protocol/v1/AUTOSOFTWARE_AGENT_PRINCIPLES.md
+  seed_agent_principles: ../../AUTOSOFTWARE_AGENT_PRINCIPLES.md
 auth_modes:
   - anonymous
   - access_link

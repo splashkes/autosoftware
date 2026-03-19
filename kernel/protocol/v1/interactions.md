@@ -26,6 +26,8 @@ Do not make the UI the only complete interface.
 Do not expose projection-table CRUD as the public operational contract.
 Do not require normal clients to append raw claims directly.
 Do not treat first-party private screens as an exception to this rule.
+Authenticated agents should usually have equal or better operational
+observability than the first-party UI.
 
 The public operational API should normalize the interaction contract, not erase
 the domain vocabulary.
@@ -52,11 +54,20 @@ read models.
 Every runnable realization must include `interaction_contract.yaml` beside
 `realization.yaml`.
 
+Every interactive seed should also carry a thin
+`AUTOSOFTWARE_AGENT_PRINCIPLES.md` overlay that points back to
+`AUTOSOFTWARE_AGENT_PRINCIPLES.md` in this directory and records only the
+seed-local agent constraints.
+
 That file is the authoritative bridge between:
 
 - the seed-local docs
 - the realized API surface
 - the shared kernel capabilities
+
+Read the shared doctrine in
+[`AUTOSOFTWARE_AGENT_PRINCIPLES.md`](AUTOSOFTWARE_AGENT_PRINCIPLES.md) when
+clarifying the agent-facing expectations for a realization.
 
 The kernel validates this contract in `go test`, and `apid` exposes it through
 contract-discovery endpoints.
@@ -305,6 +316,11 @@ Rules:
 - if a public route is keyed by a mutable-friendly handle or slug, also expose
   a stable object-id projection so alternate clients are not forced to treat
   the handle as the primary identity
+- if a realization accepts runtime-only authoring context for AI or operator
+  guidance, declare that context explicitly and keep it separate from the
+  canonical shared graph
+- if authenticated callers receive richer recovery detail on errors, make that
+  error contract explicit rather than leaving it as implementation trivia
 
 This is the minimum shape needed for another UI, agent, or integration to
 reuse the same contracts and data boundary decisions as the first-party app.
@@ -340,7 +356,8 @@ process is:
    metadata-only variants when visibility differs by audience.
 6. Implement the realization so the UI consumes those same commands and
    projections.
-7. Verify the contract through `go test ./...`.
+7. Verify the contract through schema-load tests and conformance tests against
+   the running app.
 8. Inspect the materialized contract via `GET /v1/contracts`.
 
 The critical rule is that a realized seed is not complete until this linkage is

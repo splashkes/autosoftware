@@ -19,6 +19,8 @@ Document boundaries:
 - `brief.md` captures the incoming request in user language.
 - `design.md` explains the design response, including the early user-validation
   checkpoint before implementation.
+- `AUTOSOFTWARE_AGENT_PRINCIPLES.md` records the seed-local agent-access rules
+  that specialize the stable kernel doctrine.
 - `PUBLIC_PRIVATE_DATA.md` defines the seed-local shared/public/private/runtime
   data boundary when the seed needs one, ideally in graph-first terms.
 - `approaches/` defines the named YAML approaches that realizations may
@@ -36,6 +38,8 @@ the seed documents.
 Every runnable realization must also define `interaction_contract.yaml` so the
 same commands and projections can serve the UI and machine clients, and so the
 seed's objects plus relations are machine-readable.
+That contract should also make the seed's agent-access doctrine concrete enough
+to test.
 
 The normal collaboration path is:
 
@@ -46,5 +50,7 @@ The normal collaboration path is:
 5. record durable choices in `decision_log.md`
 6. record end-state success criteria in `acceptance.md`
 7. keep iteration detail in `notes.md`
-8. define the realization interaction contract under `realizations/<id>/`
-9. place concrete outputs under `realizations/`
+8. write or update `AUTOSOFTWARE_AGENT_PRINCIPLES.md` for seed-local agent
+   expectations
+9. define the realization interaction contract under `realizations/<id>/`
+10. place concrete outputs under `realizations/`

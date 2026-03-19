@@ -27,6 +27,8 @@ This document should also make clear:
 - which objects have immutable versions and actor provenance
 - which few small things are intentionally excluded from the shared registry
 - the concrete auth-split examples that matter for this seed
+- which agent-facing runtime context exists only for authoring help and must
+  stay outside canonical shared truth
 
 Suggested section order:
 

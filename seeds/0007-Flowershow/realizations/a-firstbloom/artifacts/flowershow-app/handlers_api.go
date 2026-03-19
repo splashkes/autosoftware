@@ -2,28 +2,37 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
-// --- Projections (Public) ---
+// --- Projections ---
 
 func (a *app) handleAPIShowsDirectory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.store.allShows())
 }
 
 func (a *app) handleAPIShowDetail(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	show, ok := a.store.showByID(id)
+	show, ok := a.apiShowByIdentifier(r.PathValue("id"))
 	if !ok {
-		show, ok = a.store.showBySlug(id)
-	}
-	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "show not found"})
+		a.writeAPIError(w, r, http.StatusNotFound, "show_not_found", "Show not found.", "Use a stable show id or a known slug from the shows directory projection.", nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, show)
+	writeJSON(w, http.StatusOK, a.showDetailProjection(show, false))
+}
+
+func (a *app) handleAPIShowWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !a.isAdmin(r) && !a.isServiceToken(r) {
+		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect the private show workspace.", nil)
+		return
+	}
+	data, err := a.adminShowDetailData(r.PathValue("id"))
+	if err != nil {
+		a.writeAPIError(w, r, http.StatusNotFound, "show_not_found", "Show workspace not found.", "Use a stable show id from the shows directory projection.", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
 }
 
 func (a *app) handleAPIEntries(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +55,36 @@ func (a *app) handleAPIEntries(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, filterVisible(a.store.entriesByShow(showID)))
 		return
 	}
-	writeJSON(w, http.StatusBadRequest, map[string]string{"error": "show_id or class_id required"})
+	a.writeAPIError(w, r, http.StatusBadRequest, "missing_query_parameter", "A show_id or class_id query parameter is required.", "Pass show_id to list all public entries for a show, or class_id to list entries for one class.", []apiFieldError{
+		{Field: "show_id", Message: "required when class_id is absent"},
+		{Field: "class_id", Message: "required when show_id is absent"},
+	})
+}
+
+func (a *app) handleAPIEntryDetail(w http.ResponseWriter, r *http.Request) {
+	entry, ok := a.store.entryByID(r.PathValue("id"))
+	if !ok || (!isPublicEntry(entry) && !a.isAdmin(r) && !a.isServiceToken(r)) {
+		a.writeAPIError(w, r, http.StatusNotFound, "entry_not_found", "Entry not found.", "Use a stable entry id from an entry list or workspace projection.", nil)
+		return
+	}
+
+	payload := map[string]any{
+		"entry": entry,
+		"media": a.store.mediaByEntry(entry.ID),
+	}
+	if cls, ok := a.store.classByID(entry.ClassID); ok {
+		payload["class"] = cls
+	}
+	if show, ok := a.store.showByID(entry.ShowID); ok {
+		payload["show"] = show
+	}
+	if person, ok := a.store.personByID(entry.PersonID); ok {
+		payload["person"] = a.personProjection(person, a.isAdmin(r) || a.isServiceToken(r))
+	}
+	if a.isAdmin(r) || a.isServiceToken(r) {
+		payload["scorecards"] = a.store.scorecardsByEntry(entry.ID)
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (a *app) handleAPIClasses(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +98,56 @@ func (a *app) handleAPIClasses(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, a.store.classesByShowID(showID))
 		return
 	}
-	writeJSON(w, http.StatusBadRequest, map[string]string{"error": "show_id or section_id required"})
+	a.writeAPIError(w, r, http.StatusBadRequest, "missing_query_parameter", "A show_id or section_id query parameter is required.", "Pass show_id to list classes for a show, or section_id to list classes for one section.", []apiFieldError{
+		{Field: "show_id", Message: "required when section_id is absent"},
+		{Field: "section_id", Message: "required when show_id is absent"},
+	})
+}
+
+func (a *app) handleAPIClassDetail(w http.ResponseWriter, r *http.Request) {
+	cls, ok := a.store.classByID(r.PathValue("id"))
+	if !ok {
+		a.writeAPIError(w, r, http.StatusNotFound, "class_not_found", "Class not found.", "Use a stable class id from the class list or show workspace projection.", nil)
+		return
+	}
+
+	var section *Section
+	var division *Division
+	var schedule *ShowSchedule
+	var show *Show
+
+	if current, ok := a.store.sectionByID(cls.SectionID); ok {
+		section = current
+	}
+	if section != nil {
+		if current, ok := a.store.divisionByID(section.DivisionID); ok {
+			division = current
+		}
+	}
+	if division != nil {
+		show, schedule = a.showByScheduleID(division.ShowScheduleID)
+	}
+
+	var entries []*Entry
+	for _, entry := range a.store.entriesByClass(cls.ID) {
+		if isPublicEntry(entry) || a.isAdmin(r) || a.isServiceToken(r) {
+			entries = append(entries, entry)
+		}
+	}
+
+	payload := map[string]any{
+		"class":     cls,
+		"section":   section,
+		"division":  division,
+		"schedule":  schedule,
+		"show":      show,
+		"entries":   entries,
+		"citations": a.store.citationsByTarget("show_class", cls.ID),
+	}
+	if schedule != nil {
+		payload["effective_rules"] = a.store.effectiveRulesForClass(cls.ID, schedule.EffectiveStandardEditionID)
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (a *app) handleAPITaxonomy(w http.ResponseWriter, r *http.Request) {
@@ -89,13 +176,13 @@ func (a *app) handleAPILeaderboard(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAPILedger(w http.ResponseWriter, r *http.Request) {
 	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect ledger history.", nil)
 		return
 	}
 	objectID := r.PathValue("objectID")
 	claims, err := a.store.ledgerByObjectID(objectID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		a.writeAPIError(w, r, http.StatusInternalServerError, "ledger_lookup_failed", "Ledger lookup failed.", "Retry with a stable object id from a projection or workspace response.", nil)
 		return
 	}
 	writeJSON(w, http.StatusOK, claims)
@@ -103,13 +190,14 @@ func (a *app) handleAPILedger(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect the admin dashboard projection.", nil)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"shows":   len(a.store.allShows()),
 		"persons": len(a.store.allPersons()),
 		"taxons":  len(a.store.allTaxons()),
+		"roles":   len(a.store.allUserRoles()),
 	})
 }
 
@@ -117,25 +205,21 @@ func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to execute commands.", nil)
 		return
 	}
 
-	// Extract command name from path
-	path := r.URL.Path
-	parts := strings.Split(path, "/")
-	command := parts[len(parts)-1]
+	command := commandNameFromPath(r.URL.Path)
 
 	switch command {
 	case "shows.create":
 		var input ShowInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		show, err := a.store.createShow(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_create_failed", err.Error(), "Provide organization_id, name, and season using the shows.create schema from the contract.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, show)
@@ -145,26 +229,99 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			ID string `json:"id"`
 			ShowInput
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
 		show, err := a.store.updateShow(req.ID, req.ShowInput)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_update_failed", err.Error(), "Pass id plus the fields to update using the shows.update schema from the contract.", []apiFieldError{{Field: "id", Message: "required stable show id"}})
 			return
 		}
 		writeJSON(w, http.StatusOK, show)
 
+	case "schedules.upsert":
+		var req ShowSchedule
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ShowID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "schedule_show_required", "show_id is required.", "Pass the stable show id and any schedule governance fields to upsert schedule state.", []apiFieldError{{Field: "show_id", Message: "required stable show id"}})
+			return
+		}
+		var (
+			schedule *ShowSchedule
+			err      error
+		)
+		if _, ok := a.store.scheduleByShowID(req.ShowID); ok {
+			schedule, err = a.store.updateSchedule(req.ShowID, ShowSchedule{
+				SourceDocumentID:           req.SourceDocumentID,
+				EffectiveStandardEditionID: req.EffectiveStandardEditionID,
+				Notes:                      req.Notes,
+			})
+		} else {
+			schedule, err = a.store.createSchedule(ShowSchedule{
+				ShowID:                     req.ShowID,
+				SourceDocumentID:           req.SourceDocumentID,
+				EffectiveStandardEditionID: req.EffectiveStandardEditionID,
+				Notes:                      req.Notes,
+			})
+		}
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "schedule_upsert_failed", err.Error(), "Ensure the referenced show exists and the standard/source ids are valid for this schedule.", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, schedule)
+
+	case "judges.assign":
+		var req struct {
+			ShowID   string `json:"show_id"`
+			PersonID string `json:"person_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		assignment, err := a.store.assignJudgeToShow(req.ShowID, req.PersonID)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "judge_assign_failed", err.Error(), "Pass stable show_id and person_id values from projections or workspace responses.", []apiFieldError{
+				{Field: "show_id", Message: "required stable show id"},
+				{Field: "person_id", Message: "required stable person id"},
+			})
+			return
+		}
+		writeJSON(w, http.StatusCreated, assignment)
+
+	case "divisions.create":
+		var input DivisionInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		division, err := a.store.createDivision(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "division_create_failed", err.Error(), "Pass a valid show_schedule_id plus title, domain, and sort_order.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, division)
+
+	case "sections.create":
+		var input SectionInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		section, err := a.store.createSection(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "section_create_failed", err.Error(), "Pass a valid division_id plus title and sort_order.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, section)
+
 	case "entries.create":
 		var input EntryInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		entry, err := a.store.createEntry(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_create_failed", err.Error(), "Pass stable show_id, class_id, and person_id values when creating an entry.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, entry)
@@ -174,13 +331,12 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			ID string `json:"id"`
 			EntryInput
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
 		entry, err := a.store.updateEntry(req.ID, req.EntryInput)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_update_failed", err.Error(), "Pass id plus any updated entry fields using stable object ids.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
 			return
 		}
 		writeJSON(w, http.StatusOK, entry)
@@ -191,51 +347,74 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			Placement int     `json:"placement"`
 			Points    float64 `json:"points"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
 		if err := a.store.setPlacement(req.ID, req.Placement, req.Points); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_placement_failed", err.Error(), "Pass a stable entry id plus placement and optional points.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
+	case "entries.set_visibility":
+		var req struct {
+			ID         string `json:"id"`
+			Suppressed bool   `json:"suppressed"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.setEntrySuppressed(req.ID, req.Suppressed); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_visibility_failed", err.Error(), "Pass a stable entry id and the desired suppressed boolean.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "suppressed": req.Suppressed})
+
 	case "classes.create":
 		var input ShowClassInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		cls, err := a.store.createClass(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "class_create_failed", err.Error(), "Pass a valid section_id plus class_number, title, and domain.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, cls)
 
+	case "classes.compute_placements":
+		var req struct {
+			ClassID string `json:"class_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.computePlacementsFromScores(req.ClassID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "placement_compute_failed", err.Error(), "Pass a stable class id with submitted scorecards before recomputing placements.", []apiFieldError{{Field: "class_id", Message: "required stable class id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
 	case "persons.create":
 		var input PersonInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		person, err := a.store.createPerson(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "person_create_failed", err.Error(), "Pass first_name and last_name to register a person record.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, person)
 
 	case "awards.create":
 		var input AwardInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		award, err := a.store.createAward(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "award_create_failed", err.Error(), "Pass organization_id, name, season, and scoring_rule to define an award.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, award)
@@ -244,52 +423,77 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			AwardID string `json:"award_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
 		results, err := a.store.computeAward(req.AwardID)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "award_compute_failed", err.Error(), "Pass a stable award_id and ensure there are matching entries to score.", []apiFieldError{{Field: "award_id", Message: "required stable award id"}})
 			return
 		}
 		writeJSON(w, http.StatusOK, results)
 
 	case "taxons.create":
 		var input TaxonInput
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		taxon, err := a.store.createTaxon(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "taxon_create_failed", err.Error(), "Pass taxon_type and name to add a taxonomy node.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, taxon)
 
+	case "media.attach":
+		var input Media
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		if _, ok := a.store.entryByID(input.EntryID); !ok {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_entry_missing", "entry_id must reference an existing entry.", "Use a stable entry id from an entry list or workspace projection before attaching media metadata.", []apiFieldError{{Field: "entry_id", Message: "must reference an existing entry"}})
+			return
+		}
+		media, err := a.store.attachMedia(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_attach_failed", err.Error(), "Pass entry_id, media_type, url, and file_name when attaching media metadata.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, media)
+
+	case "media.delete":
+		var req struct {
+			MediaID string `json:"media_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.deleteMedia(req.MediaID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_delete_failed", err.Error(), "Pass a stable media_id from an entry detail or workspace projection.", []apiFieldError{{Field: "media_id", Message: "required stable media id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
 	case "rubrics.create":
 		var input JudgingRubric
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		rubric, err := a.store.createRubric(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "rubric_create_failed", err.Error(), "Pass domain and title, plus optional show or standard linkage.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, rubric)
 
 	case "criteria.create":
 		var input JudgingCriterion
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		criterion, err := a.store.createCriterion(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "criterion_create_failed", err.Error(), "Pass judging_rubric_id, name, max_points, and sort_order.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, criterion)
@@ -302,8 +506,7 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			Notes    string                `json:"notes"`
 			Scores   []EntryCriterionScore `json:"scores"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
 		sc, err := a.store.submitScorecard(EntryScorecard{
@@ -313,72 +516,67 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			Notes:    req.Notes,
 		}, req.Scores)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "scorecard_submit_failed", err.Error(), "Pass stable entry_id, judge_id, rubric_id, and per-criterion scores.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, sc)
 
 	case "standards.create":
 		var input StandardDocument
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		doc, err := a.store.createStandardDocument(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "standard_create_failed", err.Error(), "Pass name, issuing_org_id, and domain_scope for a standard document.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, doc)
 
 	case "editions.create":
 		var input StandardEdition
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		ed, err := a.store.createStandardEdition(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "edition_create_failed", err.Error(), "Pass standard_document_id and edition metadata when creating an edition.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, ed)
 
 	case "sources.create":
 		var input SourceDocument
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		doc, err := a.store.createSourceDocument(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "source_create_failed", err.Error(), "Pass title, document_type, and any linked organization_id or show_id for a source document.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, doc)
 
 	case "citations.create":
 		var input SourceCitation
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		cite, err := a.store.createSourceCitation(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "citation_create_failed", err.Error(), "Pass source_document_id plus target_type and target_id when creating a citation.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, cite)
 
 	case "ingestions.import":
 		var input ingestionImportRequest
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		doc, citations, err := a.importIngestion(input, input.SourceDocument.ShowID)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "ingestion_import_failed", err.Error(), "This command imports pre-structured cited data, not raw PDF bytes.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{
@@ -388,34 +586,160 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 
 	case "rules.create":
 		var input StandardRule
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		rule, err := a.store.createStandardRule(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "rule_create_failed", err.Error(), "Pass standard_edition_id, domain, rule_type, subject_label, and body for a rule.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, rule)
 
 	case "overrides.create":
 		var input ClassRuleOverride
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
 		override, err := a.store.createClassRuleOverride(input)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			a.writeAPIError(w, r, http.StatusBadRequest, "override_create_failed", err.Error(), "Pass show_class_id, override_type, and body when creating a local rule override.", nil)
 			return
 		}
 		writeJSON(w, http.StatusCreated, override)
 
+	case "roles.assign":
+		var input UserRoleInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		role, err := a.store.assignUserRole(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "role_assign_failed", err.Error(), "Pass cognito_sub and role, plus optional organization_id or show_id scope.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, role)
+
 	default:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown command: " + command})
+		a.writeAPIError(w, r, http.StatusNotFound, "unknown_command", "Unknown command.", "Inspect the contract detail endpoint for supported command names in this realization.", []apiFieldError{{Field: "command", Message: command}})
 	}
 }
 
-// Suppress unused import
-var _ = strconv.Atoi
+func (a *app) decodeAPIJSON(w http.ResponseWriter, r *http.Request, dest any) bool {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dest); err != nil {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON matching the command schema.", "Check the contract schema, property names, and JSON syntax before retrying.", nil)
+		return false
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must contain exactly one JSON value.", "Remove trailing content after the JSON object and retry.", nil)
+		return false
+	}
+	return true
+}
+
+func commandNameFromPath(path string) string {
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
+}
+
+func (a *app) apiShowByIdentifier(id string) (*Show, bool) {
+	show, ok := a.store.showByID(id)
+	if ok {
+		return show, true
+	}
+	return a.store.showBySlug(id)
+}
+
+func (a *app) showDetailProjection(show *Show, includePrivate bool) map[string]any {
+	org, _ := a.store.organizationByID(show.OrganizationID)
+	schedule, divisions := a.divisionViewsForShow(show.ID)
+	payload := map[string]any{
+		"show":         show,
+		"organization": org,
+		"schedule":     schedule,
+		"divisions":    divisions,
+		"entries":      a.entryViewsForShow(show.ID, includePrivate),
+		"awards":       a.store.awardsByOrganization(show.OrganizationID),
+	}
+	if includePrivate {
+		payload["judges"] = a.judgeViewsForShow(show.ID)
+		payload["sources"] = a.store.allSourceDocuments()
+		payload["rubric_views"] = a.rubricViewsForShow(show.ID)
+		payload["class_rule_views"] = a.classRuleViews(show.ID, func() string {
+			if schedule == nil {
+				return ""
+			}
+			return schedule.EffectiveStandardEditionID
+		}())
+	}
+	return payload
+}
+
+func (a *app) divisionViewsForShow(showID string) (*ShowSchedule, []*divisionView) {
+	schedule, _ := a.store.scheduleByShowID(showID)
+	if schedule == nil {
+		return nil, nil
+	}
+	var divisions []*divisionView
+	for _, div := range a.store.divisionsBySchedule(schedule.ID) {
+		dv := &divisionView{Division: div}
+		for _, sec := range a.store.sectionsByDivision(div.ID) {
+			dv.Sections = append(dv.Sections, &sectionView{
+				Section: sec,
+				Classes: a.store.classesBySection(sec.ID),
+			})
+		}
+		divisions = append(divisions, dv)
+	}
+	return schedule, divisions
+}
+
+func (a *app) entryViewsForShow(showID string, includePrivate bool) []*entryView {
+	var out []*entryView
+	for _, entry := range a.store.entriesByShow(showID) {
+		if !includePrivate && !isPublicEntry(entry) {
+			continue
+		}
+		person, _ := a.store.personByID(entry.PersonID)
+		if person != nil && !includePrivate {
+			masked := *person
+			masked.FirstName = ""
+			masked.LastName = ""
+			masked.Email = ""
+			person = &masked
+		}
+		class, _ := a.store.classByID(entry.ClassID)
+		out = append(out, &entryView{
+			Entry:  entry,
+			Person: person,
+			Class:  class,
+			Media:  a.store.mediaByEntry(entry.ID),
+		})
+	}
+	return out
+}
+
+func (a *app) showByScheduleID(scheduleID string) (*Show, *ShowSchedule) {
+	for _, show := range a.store.allShows() {
+		schedule, ok := a.store.scheduleByShowID(show.ID)
+		if ok && schedule.ID == scheduleID {
+			return show, schedule
+		}
+	}
+	return nil, nil
+}
+
+func (a *app) personProjection(person *Person, includePrivate bool) map[string]any {
+	payload := map[string]any{
+		"id":       person.ID,
+		"initials": person.Initials,
+	}
+	if includePrivate {
+		payload["first_name"] = person.FirstName
+		payload["last_name"] = person.LastName
+		payload["email"] = person.Email
+	}
+	return payload
+}

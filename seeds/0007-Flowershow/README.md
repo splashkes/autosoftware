@@ -19,11 +19,13 @@ Federated, append-only registry for horticulture and design competitions.
 
 ## Design Principles
 
-- API-first ingestion from PDFs and external agents
+- API-first authoring and review from humans and remote agents carrying cited
+  source material
 - Standards and provenance as first-class structural layers
 - Graph-like taxonomy over rigid schemas
 - Append-only with suppression (no deletion)
 - Organization-scoped computation
+- Agent-equal or agent-better access for normal authenticated workflows
 
 ## Domains
 
@@ -41,6 +43,7 @@ Federated, append-only registry for horticulture and design competitions.
 - [Brief](brief.md)
 - [Acceptance Criteria](acceptance.md)
 - [Design](design.md)
+- [Autosoftware Agent Principles](AUTOSOFTWARE_AGENT_PRINCIPLES.md)
 - [Taxonomy Model](flower_show_taxonomy.md)
 - [Decision Log](decision_log.md)
 - [Approach](approaches/default.yaml)

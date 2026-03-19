@@ -1,0 +1,35 @@
+{{define "agent_access_widget"}}
+<section class="agent-access-shell">
+  <div class="container">
+    <details class="agent-access-widget">
+      <summary class="agent-access-summary">
+        <span class="agent-access-icon" aria-hidden="true">Spout</span>
+        <span>Agent access</span>
+      </summary>
+      <div class="agent-access-content">
+        <p class="agent-access-lead">This realization exposes a live contract and shared semantic API for both the UI and authenticated remote agents.</p>
+        <div class="agent-access-grid">
+          <div>
+            <h3>Discovery</h3>
+            <p>Current page: <code data-agent-current-path>...</code></p>
+            <p><a href="{{bp}}/v1/contracts">GET /v1/contracts</a></p>
+            <p><a href="{{bp}}/v1/contracts/0007-Flowershow/a-firstbloom">GET /v1/contracts/0007-Flowershow/a-firstbloom</a></p>
+          </div>
+          <div>
+            <h3>Auth</h3>
+            <p>Public projections are anonymous.</p>
+            <p>Private workspaces and mutating commands require an admin session or <code>Authorization: Bearer &lt;service token&gt;</code>.</p>
+          </div>
+          <div>
+            <h3>Examples</h3>
+            <p><code>GET /v1/projections/0007-Flowershow/shows/{id}/workspace</code></p>
+            <p><code>GET /v1/projections/0007-Flowershow/classes/{id}</code></p>
+            <p><code>POST /v1/commands/0007-Flowershow/schedules.upsert</code></p>
+          </div>
+        </div>
+        <p class="agent-access-note">Runtime assistant guidance belongs in command context. Cited schedule facts, rules, and provenance belong in the canonical flower-show graph.</p>
+      </div>
+    </details>
+  </div>
+</section>
+{{end}}

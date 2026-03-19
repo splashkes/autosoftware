@@ -22,6 +22,7 @@ Boundary:
   projections
 - make the intended command and projection surface clear enough to encode in
   `realizations/<id>/interaction_contract.yaml`
+- explain what "agent equal or better than human access" means for this seed
 - define the canonical graph before describing flattened convenience payloads
 - identify which projections are public, which are private, and whether any
   public surface is metadata-only or digest-only
@@ -32,6 +33,10 @@ Boundary:
   UX also exposes a public handle or slug
 - explain version and provenance rules for content-bearing objects
 - explain snapshot-versus-reference rules when related objects can change later
+- explain whether commands accept any runtime-only authoring context for agent
+  guidance, and make clear that it is not canonical shared truth
+- explain the expected authenticated error shape when alternate clients need to
+  recover from validation or permission failures
 - make the early design checkpoint explicit so time is not wasted on the wrong
   implementation path
 - identify the named approaches that deserve realization
@@ -44,6 +49,7 @@ Suggested section order:
 - canonical graph
 - versions and provenance
 - public/private boundary
+- agent access and runtime-only context
 - early design check
 - approach candidates
 - scope
