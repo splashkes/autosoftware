@@ -234,6 +234,7 @@ type AwardResult struct {
 
 type UserRole struct {
 	ID             string    `json:"id"`
+	SubjectID      string    `json:"subject_id,omitempty"`
 	CognitoSub     string    `json:"cognito_sub"`
 	OrganizationID string    `json:"organization_id,omitempty"`
 	ShowID         string    `json:"show_id,omitempty"`
@@ -242,6 +243,7 @@ type UserRole struct {
 }
 
 type UserRoleInput struct {
+	SubjectID      string `json:"subject_id,omitempty"`
 	CognitoSub     string `json:"cognito_sub"`
 	OrganizationID string `json:"organization_id,omitempty"`
 	ShowID         string `json:"show_id,omitempty"`

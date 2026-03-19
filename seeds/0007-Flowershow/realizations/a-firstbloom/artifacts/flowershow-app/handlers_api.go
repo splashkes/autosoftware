@@ -842,7 +842,7 @@ func (a *app) personProjection(person *Person, includePrivate bool) map[string]a
 
 func (a *app) accountProjection(user UserIdentity, token *AgentToken) map[string]any {
 	roles := make([]map[string]any, 0)
-	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+	for _, role := range a.roleAssignmentsForUser(user) {
 		roles = append(roles, map[string]any{
 			"id":              role.ID,
 			"role":            role.Role,

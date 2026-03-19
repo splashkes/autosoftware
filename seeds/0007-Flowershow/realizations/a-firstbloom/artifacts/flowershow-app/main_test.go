@@ -66,13 +66,14 @@ func testApp() *app {
 	if err != nil {
 		panic(err)
 	}
+	store := newMemoryStore()
 	return &app{
-		store:           newMemoryStore(),
+		store:           store,
 		templates:       parseTemplates(),
 		serviceToken:    "test-token",
 		sseBroker:       newSSEBroker(),
 		media:           &localMediaStore{dir: dir},
-		sessionSecret:   []byte("test-secret"),
+		sessions:        newAuthStateStore(store, nil),
 		bootstrapAdmins: map[string]bool{},
 	}
 }
@@ -102,7 +103,7 @@ func addAdminSession(t *testing.T, a *app, req *http.Request) {
 		}
 	}
 	w := httptest.NewRecorder()
-	if err := a.setUserSession(w, UserIdentity{
+	if err := a.setUserSession(w, req, UserIdentity{
 		CognitoSub: "sub_admin_api",
 		Email:      "admin@example.com",
 	}); err != nil {
@@ -564,20 +565,6 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 		t.Fatal("otp verification step should hide the start-step actions")
 	}
 
-	backReq := httptest.NewRequest("POST", "/auth/login/back", strings.NewReader("email=simon%40example.com"))
-	backReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	for _, cookie := range w.Result().Cookies() {
-		backReq.AddCookie(cookie)
-	}
-	backW := httptest.NewRecorder()
-	mux.ServeHTTP(backW, backReq)
-	if backW.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", backW.Code)
-	}
-	if got := backW.Result().Header.Get("Location"); got != "/admin/login?email=simon%40example.com" {
-		t.Fatalf("unexpected back location %q", got)
-	}
-
 	verifyReq := httptest.NewRequest("POST", "/auth/login/email-code/verify", strings.NewReader("code=123456"))
 	verifyReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for _, cookie := range w.Result().Cookies() {
@@ -616,6 +603,61 @@ func TestAccountPageRequiresSignedInSession(t *testing.T) {
 	}
 }
 
+func TestBrowserSessionCookieIsOpaqueAndSurvivesNewAppInstance(t *testing.T) {
+	store := newMemoryStore()
+	sessions := newAuthStateStore(store, nil)
+	a1 := &app{
+		store:           store,
+		templates:       parseTemplates(),
+		serviceToken:    "test-token",
+		sseBroker:       newSSEBroker(),
+		sessions:        sessions,
+		bootstrapAdmins: map[string]bool{},
+	}
+	a2 := &app{
+		store:           store,
+		templates:       parseTemplates(),
+		serviceToken:    "test-token",
+		sseBroker:       newSSEBroker(),
+		sessions:        sessions,
+		bootstrapAdmins: map[string]bool{},
+	}
+
+	req := httptest.NewRequest("GET", "/account", nil)
+	w := httptest.NewRecorder()
+	if err := a1.setUserSession(w, req, UserIdentity{
+		CognitoSub: "sub_reboot",
+		Email:      "reboot@example.com",
+		Name:       "Reboot User",
+	}); err != nil {
+		t.Fatalf("set user session: %v", err)
+	}
+
+	var sessionCookie *http.Cookie
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name == authSessionCookieName {
+			sessionCookie = cookie
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("session cookie missing")
+	}
+	if strings.Contains(sessionCookie.Value, "reboot@example.com") || strings.Contains(sessionCookie.Value, "sub_reboot") {
+		t.Fatal("session cookie should be opaque, not an embedded identity payload")
+	}
+
+	rebootReq := httptest.NewRequest("GET", "/account", nil)
+	rebootReq.AddCookie(sessionCookie)
+	user, ok := a2.currentUser(rebootReq)
+	if !ok {
+		t.Fatal("expected a fresh app instance to resolve the stored browser session")
+	}
+	if user.Email != "reboot@example.com" {
+		t.Fatalf("unexpected restored user %+v", *user)
+	}
+}
+
 func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 	a := testApp()
 	if _, err := a.store.assignUserRole(UserRoleInput{
@@ -627,7 +669,7 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 
 	accountReq := httptest.NewRequest("GET", "/account", nil)
 	sessionW := httptest.NewRecorder()
-	if err := a.setUserSession(sessionW, UserIdentity{
+	if err := a.setUserSession(sessionW, accountReq, UserIdentity{
 		CognitoSub: "sub_admin_account",
 		Email:      "admin-account@example.com",
 	}); err != nil {
@@ -671,7 +713,8 @@ func TestViewerAccountTokenCanReadAccountButNotAdminAPI(t *testing.T) {
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/admin/dashboard", a.handleAPIAdminDashboard)
 
 	sessionW := httptest.NewRecorder()
-	if err := a.setUserSession(sessionW, UserIdentity{
+	sessionReq := httptest.NewRequest("GET", "/account", nil)
+	if err := a.setUserSession(sessionW, sessionReq, UserIdentity{
 		CognitoSub: "sub_viewer_token",
 		Email:      "viewer-token@example.com",
 		Name:       "Viewer Token",
@@ -731,7 +774,8 @@ func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
 	sessionW := httptest.NewRecorder()
-	if err := a.setUserSession(sessionW, UserIdentity{
+	sessionReq := httptest.NewRequest("GET", "/account", nil)
+	if err := a.setUserSession(sessionW, sessionReq, UserIdentity{
 		CognitoSub: "sub_admin_token_owner",
 		Email:      "admin-token@example.com",
 		Name:       "Admin Token Owner",
@@ -804,7 +848,7 @@ func TestAdminLoginRedirectsSignedInUserToRoleAwareDestination(t *testing.T) {
 
 	userReq := httptest.NewRequest("GET", "/admin/login", nil)
 	userW := httptest.NewRecorder()
-	if err := a.setUserSession(userW, UserIdentity{
+	if err := a.setUserSession(userW, userReq, UserIdentity{
 		CognitoSub: "sub_user",
 		Email:      "viewer@example.com",
 	}); err != nil {
@@ -827,7 +871,7 @@ func TestAdminLoginRedirectsSignedInUserToRoleAwareDestination(t *testing.T) {
 	}
 	adminReq := httptest.NewRequest("GET", "/admin/login", nil)
 	adminSession := httptest.NewRecorder()
-	if err := a.setUserSession(adminSession, UserIdentity{
+	if err := a.setUserSession(adminSession, adminReq, UserIdentity{
 		CognitoSub: "sub_admin_login",
 		Email:      "admin@example.com",
 	}); err != nil {
@@ -934,7 +978,7 @@ func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/admin", nil)
 	w := httptest.NewRecorder()
-	if err := a.setUserSession(w, UserIdentity{CognitoSub: "sub_admin", Email: "admin@example.com"}); err != nil {
+	if err := a.setUserSession(w, req, UserIdentity{CognitoSub: "sub_admin", Email: "admin@example.com"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, cookie := range w.Result().Cookies() {

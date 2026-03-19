@@ -33,7 +33,8 @@ type app struct {
 	sseBroker       *sseBroker
 	auth            authProvider
 	media           mediaStore
-	sessionSecret   []byte
+	sessions        authStateStore
+	allowTestAuth   bool
 	bootstrapAdmins map[string]bool
 }
 
@@ -60,7 +61,8 @@ func main() {
 		sseBroker:       newSSEBroker(),
 		auth:            auth,
 		media:           media,
-		sessionSecret:   newSessionSecret(),
+		sessions:        newAuthStateStore(store, auth),
+		allowTestAuth:   strings.TrimSpace(os.Getenv("AS_ALLOW_TEST_AUTH")) == "1",
 		bootstrapAdmins: bootstrapAdminMap(),
 	}
 
@@ -71,6 +73,9 @@ func main() {
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("GET /v1/contracts", a.handleContractsList)
 	mux.HandleFunc("GET /v1/contracts/{seed_id}/{realization_id}", a.handleContractDetail)
+	if a.allowTestAuth {
+		mux.HandleFunc("POST /__test/session", a.handleTestSessionCreate)
+	}
 
 	// Public pages
 	mux.HandleFunc("GET /", a.handleHome)

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -44,14 +43,10 @@ type authProvider interface {
 }
 
 type UserIdentity struct {
+	SubjectID  string `json:"subject_id,omitempty"`
 	CognitoSub string `json:"cognito_sub"`
 	Email      string `json:"email,omitempty"`
 	Name       string `json:"name,omitempty"`
-}
-
-type authSession struct {
-	User      UserIdentity `json:"user"`
-	ExpiresAt int64        `json:"expires_at"`
 }
 
 type pendingAuthState struct {
@@ -171,6 +166,26 @@ func newAuthProviderFromEnv() (authProvider, error) {
 }
 
 func (a *cognitoAuth) Enabled() bool { return a != nil }
+
+func (a *cognitoAuth) RuntimeProvider() runtimeAuthProviderDescriptor {
+	if a == nil {
+		return runtimeAuthProviderDescriptor{}
+	}
+	issuer := ""
+	if a.region != "" && a.userPoolID != "" {
+		issuer = fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", a.region, a.userPoolID)
+	}
+	id := strings.TrimSpace(os.Getenv("AS_RUNTIME_AUTH_PROVIDER_ID"))
+	if id == "" && issuer != "" && a.clientID != "" {
+		id = "cognito:" + issuer + ":" + a.clientID
+	}
+	return runtimeAuthProviderDescriptor{
+		ID:       id,
+		Kind:     "cognito",
+		Issuer:   issuer,
+		ClientID: a.clientID,
+	}
+}
 
 func (a *cognitoAuth) PasswordLogin(ctx context.Context, email, password string) (*UserIdentity, error) {
 	email = strings.TrimSpace(email)
@@ -548,18 +563,6 @@ func rsaPublicKeyFromJWK(jwk cognitoJWK) (*rsa.PublicKey, error) {
 	return &rsa.PublicKey{N: n, E: int(e.Int64())}, nil
 }
 
-func newSessionSecret() []byte {
-	secret := strings.TrimSpace(os.Getenv("AS_SESSION_SECRET"))
-	if secret != "" {
-		return []byte(secret)
-	}
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err == nil {
-		return buf
-	}
-	return []byte("flowershow-dev-secret")
-}
-
 func (a *app) authEnabled() bool {
 	return a.auth != nil && a.auth.Enabled()
 }
@@ -569,11 +572,14 @@ func (a *app) currentUser(r *http.Request) (*UserIdentity, bool) {
 	if err != nil {
 		return nil, false
 	}
-	session, ok := a.parseSessionCookie(cookie.Value)
-	if !ok || time.Now().UTC().Unix() >= session.ExpiresAt {
+	if a.sessions == nil {
 		return nil, false
 	}
-	return &session.User, true
+	user, ok, err := a.sessions.ResolveUserSession(r.Context(), cookie.Value)
+	if err != nil || !ok {
+		return nil, false
+	}
+	return user, true
 }
 
 func (a *app) currentRoles(r *http.Request) []string {
@@ -584,9 +590,31 @@ func (a *app) currentRoles(r *http.Request) []string {
 	return a.rolesForUser(*user)
 }
 
+func (a *app) roleAssignmentsForUser(user UserIdentity) []*UserRole {
+	keys := []string{}
+	if key := strings.TrimSpace(user.SubjectID); key != "" {
+		keys = append(keys, key)
+	}
+	if key := strings.TrimSpace(user.CognitoSub); key != "" && key != strings.TrimSpace(user.SubjectID) {
+		keys = append(keys, key)
+	}
+	seen := make(map[string]struct{})
+	out := make([]*UserRole, 0)
+	for _, key := range keys {
+		for _, role := range a.store.rolesBySubject(key) {
+			if _, ok := seen[role.ID]; ok {
+				continue
+			}
+			seen[role.ID] = struct{}{}
+			out = append(out, role)
+		}
+	}
+	return out
+}
+
 func (a *app) rolesForUser(user UserIdentity) []string {
 	roles := make(map[string]struct{})
-	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+	for _, role := range a.roleAssignmentsForUser(user) {
 		roles[role.Role] = struct{}{}
 	}
 	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
@@ -612,72 +640,51 @@ func (a *app) isAdmin(r *http.Request) bool {
 	return a.hasRole(r, "admin")
 }
 
-func (a *app) encodeSignedCookie(value any) (string, error) {
-	payload, err := json.Marshal(value)
-	if err != nil {
-		return "", err
+func (u UserIdentity) subjectLookupKey() string {
+	if strings.TrimSpace(u.SubjectID) != "" {
+		return strings.TrimSpace(u.SubjectID)
 	}
-	mac := hmac.New(sha256.New, a.sessionSecret)
-	mac.Write(payload)
-	sig := mac.Sum(nil)
-	return base64.RawURLEncoding.EncodeToString(payload) + "." +
-		base64.RawURLEncoding.EncodeToString(sig), nil
+	return strings.TrimSpace(u.CognitoSub)
 }
 
-func (a *app) parseSignedCookie(raw string, out any) bool {
-	parts := strings.Split(raw, ".")
-	if len(parts) != 2 {
+func cookieSecure(r *http.Request) bool {
+	if r == nil {
 		return false
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return false
+	if r.TLS != nil {
+		return true
 	}
-	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return false
-	}
-	mac := hmac.New(sha256.New, a.sessionSecret)
-	mac.Write(payload)
-	if !hmac.Equal(sig, mac.Sum(nil)) {
-		return false
-	}
-	if err := json.Unmarshal(payload, out); err != nil {
-		return false
-	}
-	return true
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
 }
 
-func (a *app) parseSessionCookie(raw string) (*authSession, bool) {
-	var session authSession
-	if !a.parseSignedCookie(raw, &session) {
-		return nil, false
+func (a *app) setUserSession(w http.ResponseWriter, r *http.Request, user UserIdentity) error {
+	if a.sessions == nil {
+		return errors.New("session store unavailable")
 	}
-	return &session, true
-}
-
-func (a *app) setUserSession(w http.ResponseWriter, user UserIdentity) error {
-	expiresAt := time.Now().UTC().Add(authSessionDuration)
-	value, err := a.encodeSignedCookie(authSession{
-		User:      user,
-		ExpiresAt: expiresAt.Unix(),
-	})
+	sessionID, err := a.sessions.CreateUserSession(r.Context(), user, r)
 	if err != nil {
 		return err
 	}
+	expiresAt := time.Now().UTC().Add(authSessionDuration)
 	http.SetCookie(w, &http.Cookie{
 		Name:     authSessionCookieName,
-		Value:    value,
+		Value:    sessionID,
 		Path:     "/",
 		Expires:  expiresAt,
 		MaxAge:   int(authSessionDuration / time.Second),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(r),
 	})
 	return nil
 }
 
-func (a *app) clearUserSession(w http.ResponseWriter) {
+func (a *app) clearUserSession(w http.ResponseWriter, r *http.Request) {
+	if a.sessions != nil {
+		if cookie, err := r.Cookie(authSessionCookieName); err == nil {
+			_ = a.sessions.EndUserSession(r.Context(), cookie.Value)
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     authSessionCookieName,
 		Value:    "",
@@ -685,6 +692,7 @@ func (a *app) clearUserSession(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(r),
 	})
 }
 
@@ -693,33 +701,42 @@ func (a *app) currentPendingAuth(r *http.Request) (*pendingAuthState, bool) {
 	if err != nil {
 		return nil, false
 	}
-	var pending pendingAuthState
-	if !a.parseSignedCookie(cookie.Value, &pending) {
+	if a.sessions == nil {
 		return nil, false
 	}
-	if time.Now().UTC().Unix() >= pending.ExpiresAt {
+	pending, ok, err := a.sessions.GetPendingAuth(r.Context(), cookie.Value)
+	if err != nil || !ok {
 		return nil, false
 	}
-	return &pending, true
+	return pending, true
 }
 
-func (a *app) setPendingAuth(w http.ResponseWriter, pending pendingAuthState) error {
-	value, err := a.encodeSignedCookie(pending)
+func (a *app) setPendingAuth(w http.ResponseWriter, r *http.Request, pending pendingAuthState) error {
+	if a.sessions == nil {
+		return errors.New("session store unavailable")
+	}
+	pendingID, err := a.sessions.CreatePendingAuth(r.Context(), pending)
 	if err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     authPendingCookieName,
-		Value:    value,
+		Value:    pendingID,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(time.Until(time.Unix(pending.ExpiresAt, 0)).Seconds()),
+		Secure:   cookieSecure(r),
 	})
 	return nil
 }
 
-func (a *app) clearPendingAuth(w http.ResponseWriter) {
+func (a *app) clearPendingAuth(w http.ResponseWriter, r *http.Request) {
+	if a.sessions != nil {
+		if cookie, err := r.Cookie(authPendingCookieName); err == nil {
+			_ = a.sessions.DeletePendingAuth(r.Context(), cookie.Value)
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     authPendingCookieName,
 		Value:    "",
@@ -727,6 +744,7 @@ func (a *app) clearPendingAuth(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(r),
 	})
 }
 
@@ -849,7 +867,7 @@ func (a *app) handleAdminLoginBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
-	a.clearPendingAuth(w)
+	a.clearPendingAuth(w, r)
 	location := "/admin/login"
 	if email != "" {
 		location += "?email=" + url.QueryEscape(email)
@@ -872,11 +890,11 @@ func (a *app) handleAdminPasswordLogin(w http.ResponseWriter, r *http.Request) {
 		a.renderAdminLoginWithState(w, err.Error(), "", email, true, nil)
 		return
 	}
-	if err := a.setUserSession(w, *user); err != nil {
+	if err := a.setUserSession(w, r, *user); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.clearPendingAuth(w)
+	a.clearPendingAuth(w, r)
 	http.Redirect(w, r, a.postLoginPathForUser(*user), http.StatusSeeOther)
 }
 
@@ -896,11 +914,11 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if result != nil && result.User != nil {
-		if err := a.setUserSession(w, *result.User); err != nil {
+		if err := a.setUserSession(w, r, *result.User); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		a.clearPendingAuth(w)
+		a.clearPendingAuth(w, r)
 		http.Redirect(w, r, a.postLoginPathForUser(*result.User), http.StatusSeeOther)
 		return
 	}
@@ -908,7 +926,7 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 		a.renderAdminLogin(w, r, "Cognito did not return an email-code challenge.", "")
 		return
 	}
-	if err := a.setPendingAuth(w, *result.Pending); err != nil {
+	if err := a.setPendingAuth(w, r, *result.Pending); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -934,11 +952,11 @@ func (a *app) handleAdminEmailCodeVerify(w http.ResponseWriter, r *http.Request)
 		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
-	if err := a.setUserSession(w, *user); err != nil {
+	if err := a.setUserSession(w, r, *user); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.clearPendingAuth(w)
+	a.clearPendingAuth(w, r)
 	http.Redirect(w, r, a.postLoginPathForUser(*user), http.StatusSeeOther)
 }
 
@@ -956,7 +974,7 @@ func (a *app) handleAdminForgotPasswordStart(w http.ResponseWriter, r *http.Requ
 		a.renderAdminLoginWithState(w, err.Error(), "", email, false, nil)
 		return
 	}
-	if err := a.setPendingAuth(w, pendingAuthState{
+	if err := a.setPendingAuth(w, r, pendingAuthState{
 		Flow:      pendingAuthFlowForgotPassword,
 		Email:     email,
 		ExpiresAt: time.Now().UTC().Add(20 * time.Minute).Unix(),
@@ -991,7 +1009,7 @@ func (a *app) handleAdminForgotPasswordConfirm(w http.ResponseWriter, r *http.Re
 		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
-	a.clearPendingAuth(w)
+	a.clearPendingAuth(w, r)
 	http.Redirect(w, r, "/admin/login?notice=password-reset-complete", http.StatusSeeOther)
 }
 
@@ -1004,8 +1022,8 @@ func (a *app) handleCognitoCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleCognitoLogout(w http.ResponseWriter, r *http.Request) {
-	a.clearPendingAuth(w)
-	a.clearUserSession(w)
+	a.clearPendingAuth(w, r)
+	a.clearUserSession(w, r)
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 

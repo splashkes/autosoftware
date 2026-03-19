@@ -435,6 +435,99 @@ Typical flow:
 This keeps the platform free to change auth providers without losing authority
 history.
 
+## Durable Browser Sessions
+
+Browser login persistence is a runtime concern, not a registry concern.
+
+The durable browser-session model should be:
+
+- the browser stores only an opaque session handle cookie
+- kernel runtime storage holds the session row
+- the session row points at the stable internal subject
+- authority is resolved from durable internal state, not from cookie contents
+
+Recommended runtime records:
+
+- `runtime_principals`
+- `runtime_principal_identifiers`
+- `runtime_auth_identities`
+- `runtime_sessions`
+
+Recommended browser behavior:
+
+- cookie value is a random opaque `session_id`
+- cookie does not embed full identity or permission payload
+- session expiry is enforced from runtime state
+- logout revokes or ends the runtime session row
+- reboot or redeploy does not invalidate valid sessions merely because a
+  process-local secret changed
+
+This means a normal reboot path should be:
+
+1. browser sends the same session cookie
+2. app or kernel resolves `session_id` from runtime storage
+3. session resolves to `subject_id`
+4. effective access resolves from durable authority data
+5. the user remains signed in with the same current permissions
+
+If any one of those layers is volatile, reboot persistence is incomplete.
+
+## Runtime Secrets Versus Registry Truth
+
+Do not store session master secrets, auth-provider client secrets, or other
+live secret material in the public registry.
+
+The registry is for accepted truth and replayable history.
+Secrets are runtime control material.
+
+The recommended split is:
+
+- registry or contract config for non-secret declarative auth/provider shape
+- runtime secret storage for sensitive provider credentials and cookie-sealing
+  or envelope-encryption material
+- runtime Postgres for live sessions, auth bindings, and short-lived auth
+  workflow state
+
+Encrypted blobs in the registry do not remove the need for a runtime root of
+trust.
+They usually just move the secret-management problem elsewhere.
+
+## Multi-App Auth Provider Shape
+
+Autosoftware should assume that many apps may use different auth providers or
+different Cognito pools and clients.
+
+The stable cross-app rule is:
+
+- provider config identifies where identity came from
+- `runtime_auth_identities` binds provider identity to internal subject
+- `runtime_sessions` records the authenticated browser or agent session
+- authority remains system-native and provider-neutral
+
+That allows:
+
+- one subject to authenticate through multiple providers over time
+- many apps to share kernel runtime session and identity machinery
+- seeds to keep provider-specific login UX without making the provider the
+  authority model
+
+## Flower-Show Adoption Note
+
+`0007-Flowershow` is the first live seed adopting the durable-session side of
+this model.
+
+Its current bridge shape is:
+
+- Cognito still proves identity
+- flower-show browser sessions are stored as opaque runtime-backed sessions
+- flower-show role state is persisted in Postgres instead of memory
+- current role evaluation still includes a seed-local bridge while the full
+  kernel-native authority ledger materialization continues
+
+That is an acceptable transition step because it improves durability and
+separates provider identity from browser-session persistence without claiming
+that the full authority migration is complete.
+
 ## Seed Guidance
 
 If a seed models membership, office, or operational control, it should make
