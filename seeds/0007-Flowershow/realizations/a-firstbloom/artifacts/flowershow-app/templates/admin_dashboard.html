@@ -1,9 +1,12 @@
 {{define "content"}}
 <div class="admin-header">
   <h1>Admin Dashboard</h1>
-  <form method="POST" action="{{bp}}/admin/logout" class="inline">
-    <button type="submit" class="btn btn-outline btn-sm">Logout</button>
-  </form>
+  <div class="show-actions">
+    <a href="{{bp}}/account#agent-tokens" class="btn btn-outline btn-sm">Agent Tokens</a>
+    <form method="POST" action="{{bp}}/admin/logout" class="inline">
+      <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+    </form>
+  </div>
 </div>
 
 <div class="stats-grid">
@@ -49,5 +52,15 @@
   </div>
   <a href="{{bp}}/admin/persons" class="btn btn-outline btn-sm">Manage Persons</a>
   <a href="{{bp}}/admin/roles" class="btn btn-outline btn-sm">Manage Roles</a>
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Agent Delegation</h2>
+      <p class="section-desc">Agent tokens are managed from the signed-in account page so there is only one issuance and revocation surface.</p>
+    </div>
+    <a href="{{bp}}/account#agent-tokens" class="btn btn-primary btn-sm">Open Token Manager</a>
+  </div>
 </section>
 {{end}}

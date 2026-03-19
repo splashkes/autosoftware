@@ -33,7 +33,15 @@ func (a *app) requestAuthMode(r *http.Request) string {
 	switch {
 	case a.isServiceToken(r):
 		return "service_token"
-	case a.isAdmin(r):
+	case func() bool {
+		_, ok := a.currentAgentToken(r)
+		return ok
+	}():
+		return "agent_token"
+	case func() bool {
+		_, ok := a.currentUser(r)
+		return ok
+	}():
 		return "session"
 	default:
 		return "anonymous"

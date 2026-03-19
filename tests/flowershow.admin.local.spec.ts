@@ -15,6 +15,59 @@ test.describe('Flowershow Admin Local', () => {
     await loginLocalAdmin(page);
   });
 
+  test('admin reaches the shared account token manager and can issue a scoped agent token', async ({
+    page,
+    request,
+  }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin');
+    await page.getByRole('link', { name: 'Agent Tokens' }).click();
+
+    await expect(page).toHaveURL(/\/account#agent-tokens$/);
+    await expect(page.locator('body')).toContainText('Agent Tokens');
+
+    await page.fill('#token_label', uniqueName('Playwright Operator Token'));
+    await page.fill('#expires_in_days', '7');
+    await page
+      .locator('label.account-token-profile:has-text("Show Operator") input[type="radio"]')
+      .check();
+    await page.getByRole('button', { name: 'Generate Agent Token' }).click();
+
+    const tokenField = page.locator('[data-issued-agent-token]');
+    await expect(tokenField).toBeVisible();
+    const token = await tokenField.inputValue();
+    expect(token).toMatch(/^fsa_/);
+
+    const account = await request.get(
+      '/v1/projections/0007-Flowershow/account',
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    expect(account.ok()).toBeTruthy();
+
+    const rolesAssign = await request.post(
+      '/v1/commands/0007-Flowershow/roles.assign',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          cognito_sub: 'sub_playwright_forbidden',
+          role: 'admin',
+        },
+      },
+    );
+    expect(rolesAssign.status()).toBe(403);
+    expect(await rolesAssign.json()).toMatchObject({
+      error: {
+        code: 'permission_denied',
+        auth_mode: 'agent_token',
+      },
+    });
+  });
+
   test('signed-in non-admin lands on account instead of looping through admin', async ({
     page,
   }) => {

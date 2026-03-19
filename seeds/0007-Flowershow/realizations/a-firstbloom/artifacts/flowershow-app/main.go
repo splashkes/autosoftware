@@ -76,6 +76,8 @@ func main() {
 	mux.HandleFunc("GET /", a.handleHome)
 	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /profile", a.requireSignedInPage(a.handleAccount))
+	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
+	mux.HandleFunc("POST /account/agent-tokens/{tokenID}/revoke", a.requireSignedInPage(a.handleAccountTokenRevoke))
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
@@ -155,6 +157,7 @@ func main() {
 	mux.HandleFunc("POST /admin/classes/{classID}/compute-placements", a.requireAdmin(a.handleAdminComputePlacements))
 
 	// JSON API
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/account", a.handleAPIAccount)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
@@ -384,8 +387,7 @@ func (a *app) isServiceToken(r *http.Request) bool {
 	if a.serviceToken == "" {
 		return false
 	}
-	auth := r.Header.Get("Authorization")
-	return strings.TrimPrefix(auth, "Bearer ") == a.serviceToken
+	return bearerTokenFromRequest(r) == a.serviceToken
 }
 
 func (a *app) requireAuth(next http.HandlerFunc) http.HandlerFunc {

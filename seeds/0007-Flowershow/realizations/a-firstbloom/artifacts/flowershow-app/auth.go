@@ -801,6 +801,11 @@ func accountNoticeMessage(code string) accountNotice {
 			Message: "You are signed in, but this account does not currently have admin access.",
 			Kind:    "info",
 		}
+	case "agent_token_revoked":
+		return accountNotice{
+			Message: "Agent token revoked.",
+			Kind:    "info",
+		}
 	default:
 		return accountNotice{}
 	}
