@@ -91,7 +91,12 @@ func (a *app) handleAPIEntryDetail(w http.ResponseWriter, r *http.Request) {
 		a.writeAPIError(w, r, http.StatusNotFound, "entry_not_found", "Entry not found.", "Use a stable entry id from an entry list or workspace projection.", nil)
 		return
 	}
-	includePrivate := a.isAdmin(r) || a.isServiceToken(r)
+	includePrivate := a.isServiceToken(r)
+	if !includePrivate {
+		if user, ok := a.currentUser(r); ok && a.userHasCapability(r.Context(), *user, "entries.private.read", a.authorityScopesForRequest(r)...) {
+			includePrivate = true
+		}
+	}
 	if !includePrivate {
 		if token, ok := a.currentAgentToken(r); ok && agentTokenHasPermission(token, "entries.private.read") {
 			includePrivate = true
@@ -237,11 +242,17 @@ func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	if !a.authorizeAPICapability(w, r, "admin.dashboard.read", "Use an admin session, a Bearer service token, or an account-issued agent token with dashboard access.") {
 		return
 	}
+	roleCount := 0
+	if a.authority != nil {
+		if roles, err := a.authority.AllRoleAssignments(r.Context()); err == nil {
+			roleCount = len(roles)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"shows":   len(a.store.allShows()),
 		"persons": len(a.store.allPersons()),
 		"taxons":  len(a.store.allTaxons()),
-		"roles":   len(a.store.allUserRoles()),
+		"roles":   roleCount,
 	})
 }
 
@@ -249,7 +260,7 @@ func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 	command := commandNameFromPath(r.URL.Path)
-	if !a.authorizeAPICapability(w, r, requiredCapabilityForCommand(command), "Use an admin session, a Bearer service token, or an account-issued agent token with the required command permissions.") {
+	if _, ok := a.authorizeCommandRequest(w, r, command); !ok {
 		return
 	}
 
@@ -655,7 +666,24 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
-		role, err := a.store.assignUserRole(input)
+		if a.authority == nil {
+			a.writeAPIError(w, r, http.StatusServiceUnavailable, "authority_unavailable", "Runtime authority is unavailable.", "Retry after the runtime authority layer is initialized.", nil)
+			return
+		}
+		grantorPrincipalID := ""
+		if !a.isServiceToken(r) {
+			user, ok := a.currentUser(r)
+			if !ok {
+				a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "A signed-in runtime-authorized account is required for role assignment.", "Sign in with an account that currently has role delegation authority, then retry this command.", nil)
+				return
+			}
+			grantorPrincipalID = user.SubjectID
+		}
+		if !a.isServiceToken(r) && grantorPrincipalID == "" {
+			a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "A signed-in runtime-authorized account is required for role assignment.", "Sign in with an account that currently has role delegation authority, then retry this command.", nil)
+			return
+		}
+		role, err := a.authority.AssignRole(r.Context(), input, grantorPrincipalID)
 		if err != nil {
 			a.writeAPIError(w, r, http.StatusBadRequest, "role_assign_failed", err.Error(), "Pass cognito_sub and role, plus optional organization_id or show_id scope.", nil)
 			return
@@ -849,12 +877,6 @@ func (a *app) accountProjection(user UserIdentity, token *AgentToken) map[string
 			"organization_id": role.OrganizationID,
 			"show_id":         role.ShowID,
 			"created_at":      role.CreatedAt,
-		})
-	}
-	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
-		roles = append(roles, map[string]any{
-			"role":       "admin",
-			"scope_type": "deployment_allowlist",
 		})
 	}
 	profiles := make([]map[string]any, 0)

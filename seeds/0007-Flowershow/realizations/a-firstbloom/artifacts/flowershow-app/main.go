@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -28,15 +29,15 @@ var templates embed.FS
 var assets embed.FS
 
 type app struct {
-	store           flowershowStore
-	templates       map[string]*template.Template
-	serviceToken    string
-	sseBroker       *sseBroker
-	auth            authProvider
-	media           mediaStore
-	sessions        authStateStore
-	allowTestAuth   bool
-	bootstrapAdmins map[string]bool
+	store         flowershowStore
+	authority     runtimeAuthorityResolver
+	templates     map[string]*template.Template
+	serviceToken  string
+	sseBroker     *sseBroker
+	auth          authProvider
+	media         mediaStore
+	sessions      authStateStore
+	allowTestAuth bool
 }
 
 func main() {
@@ -56,15 +57,22 @@ func main() {
 	}
 
 	a := &app{
-		store:           store,
-		templates:       parseTemplates(),
-		serviceToken:    strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
-		sseBroker:       newSSEBroker(),
-		auth:            auth,
-		media:           media,
-		sessions:        newAuthStateStore(store, auth),
-		allowTestAuth:   strings.TrimSpace(os.Getenv("AS_ALLOW_TEST_AUTH")) == "1",
-		bootstrapAdmins: bootstrapAdminMap(),
+		store:         store,
+		authority:     newRuntimeAuthorityResolver(store),
+		templates:     parseTemplates(),
+		serviceToken:  strings.TrimSpace(os.Getenv("AS_SERVICE_TOKEN")),
+		sseBroker:     newSSEBroker(),
+		auth:          auth,
+		media:         media,
+		sessions:      newAuthStateStore(store, auth),
+		allowTestAuth: strings.TrimSpace(os.Getenv("AS_ALLOW_TEST_AUTH")) == "1",
+	}
+	if a.authority != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := a.authority.Init(ctx, store); err != nil {
+			log.Printf("flowershow runtime authority init failed: %v", err)
+		}
+		cancel()
 	}
 
 	mux := http.NewServeMux()
