@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +32,7 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	for _, org := range orgs {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
-	a.render(w, "admin_dashboard.html", adminDashboardData{
+	a.render(w, r, "admin_dashboard.html", adminDashboardData{
 		Title:       "Admin Dashboard",
 		CurrentPath: "/admin",
 		Shows:       a.store.allShows(),
@@ -45,10 +46,11 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 // --- Show CRUD ---
 
 func (a *app) handleAdminShowNew(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "admin_show_new.html", map[string]any{
+	a.render(w, r, "admin_show_new.html", map[string]any{
 		"Title":       "New Show",
 		"CurrentPath": "/admin/shows/new",
 		"Orgs":        a.store.allOrganizations(),
+		"DefaultSeason": time.Now().Format("2006"),
 	})
 }
 
@@ -71,6 +73,7 @@ func (a *app) handleAdminShowCreate(w http.ResponseWriter, r *http.Request) {
 type adminShowDetailData struct {
 	Title                string
 	CurrentPath          string
+	ShowID               string
 	Show                 *Show
 	Schedule             *ShowSchedule
 	ScheduleEdition      *StandardEdition
@@ -105,7 +108,7 @@ func (a *app) handleAdminShowDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.render(w, "show_admin.html", data)
+	a.render(w, r, "show_admin.html", data)
 }
 
 func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
@@ -172,6 +175,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 	return adminShowDetailData{
 		Title:                "Admin: " + show.Name,
 		CurrentPath:          "/admin/shows/" + show.ID,
+		ShowID:               show.ID,
 		Show:                 show,
 		Schedule:             sched,
 		ScheduleEdition:      scheduleEdition,
@@ -571,7 +575,7 @@ func (a *app) handleAdminShowCreditDelete(w http.ResponseWriter, r *http.Request
 // --- Persons ---
 
 func (a *app) handleAdminPersons(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "admin_persons.html", adminPersonsData{
+	a.render(w, r, "admin_persons.html", adminPersonsData{
 		Title:       "Manage Persons",
 		CurrentPath: "/admin/persons",
 		Persons:     a.store.allPersons(),

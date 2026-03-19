@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="section-header">
+  <div>
+    <h1>Classes</h1>
+    <p class="section-desc">Browse public classes across shows by domain, then jump into the show-specific class detail and entries.</p>
+  </div>
+</div>
+
+{{if .Domains}}
+{{range .Domains}}
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>{{.Label}}</h2>
+    </div>
+  </div>
+  <div class="class-grid">
+    {{range .Items}}
+    <a href="{{bp}}/shows/{{.Show.Slug}}/classes/{{.Class.ID}}" class="card class-card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Class.ClassNumber}} · {{.Class.Title}}</h3>
+        <p class="card-meta">{{.Show.Name}}</p>
+        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Date}}</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+</section>
+{{end}}
+{{else}}
+<p class="empty-state">No classes are publicly visible yet.</p>
+{{end}}
+{{end}}

@@ -742,11 +742,11 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 		t.Fatalf("expected 200, got %d", accountW.Code)
 	}
 	body := accountW.Body.String()
-	if !strings.Contains(body, "Generate Agent Token") {
-		t.Fatal("account page missing agent token generator")
+	if !strings.Contains(body, "Tokens / API") {
+		t.Fatal("account page missing token navigation")
 	}
-	if !strings.Contains(body, "Account Assistant") || !strings.Contains(body, "Full Admin Delegate") {
-		t.Fatal("account page missing expected permission profiles")
+	if strings.Contains(body, "Generate Agent Token") {
+		t.Fatal("account overview should not expand the token generator by default")
 	}
 
 	adminReq := httptest.NewRequest("GET", "/admin", nil)
@@ -758,7 +758,7 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 	if adminW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", adminW.Code)
 	}
-	if !strings.Contains(adminW.Body.String(), "/account#agent-tokens") {
+	if !strings.Contains(adminW.Body.String(), "/account?section=tokens#agent-tokens") {
 		t.Fatal("admin dashboard should link to the shared account token manager")
 	}
 }

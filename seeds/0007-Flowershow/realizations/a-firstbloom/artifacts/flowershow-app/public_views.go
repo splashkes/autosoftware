@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 type winnerHeroCard struct {
@@ -37,6 +38,8 @@ type browseResult struct {
 	Media         []*Media
 	Judges        []*Person
 	MatchedTaxons []*Taxon
+	MockTheme     string
+	MockLabel     string
 }
 
 type browseData struct {
@@ -51,6 +54,69 @@ type browseData struct {
 	Taxons          []*Taxon
 	Judges          []*Person
 	Results         []*browseResult
+}
+
+type showVisualFrame struct {
+	Label     string
+	MediaPath string
+	Theme     string
+}
+
+type homeShowCard struct {
+	Show          *Show
+	Org           *Organization
+	EntryCount    int
+	ClassCount    int
+	Featured      []showVisualFrame
+	SeasonLabel   string
+	StatusLabel   string
+	RelativeLabel string
+}
+
+type clubTopPerson struct {
+	Person      *Person
+	EntryCount  int
+	TotalPoints float64
+}
+
+type clubCardView struct {
+	Org           *Organization
+	Parent        *Organization
+	UpcomingShows []*Show
+	PastShows     []*Show
+	TopPeople     []*clubTopPerson
+}
+
+type homeData struct {
+	Title         string
+	CurrentPath   string
+	UpcomingShows []*homeShowCard
+	PastShows     []*homeShowCard
+	Clubs         []*clubCardView
+}
+
+type clubsData struct {
+	Title       string
+	CurrentPath string
+	Clubs       []*clubCardView
+}
+
+type publicClassCard struct {
+	Show  *Show
+	Org   *Organization
+	Class *ShowClass
+}
+
+type classesDomainView struct {
+	Domain string
+	Label  string
+	Items  []*publicClassCard
+}
+
+type classesIndexData struct {
+	Title       string
+	CurrentPath string
+	Domains     []*classesDomainView
 }
 
 type leaderboardBoard struct {
@@ -220,6 +286,8 @@ func (a *app) browseResults(query, orgID, taxonID, judgeID, domain string) []*br
 				Media:         a.store.mediaByEntry(entry.ID),
 				Judges:        judges,
 				MatchedTaxons: matchedTaxons,
+				MockTheme:     []string{"rose", "fern", "gold"}[len(results)%3],
+				MockLabel:     entry.Name,
 			})
 		}
 	}
@@ -242,4 +310,203 @@ func (a *app) leaderboardBoards(season string) []*leaderboardBoard {
 		})
 	}
 	return boards
+}
+
+func (a *app) homeShowCards(now time.Time) ([]*homeShowCard, []*homeShowCard) {
+	var upcoming []*homeShowCard
+	var past []*homeShowCard
+	today := dateOnly(now)
+	for _, show := range a.store.allShows() {
+		card := a.homeShowCard(show, today)
+		showDate, ok := parseShowDate(show.Date)
+		if ok && showDate.Before(today) {
+			past = append(past, card)
+			continue
+		}
+		upcoming = append(upcoming, card)
+	}
+	sort.Slice(upcoming, func(i, j int) bool { return upcoming[i].Show.Date < upcoming[j].Show.Date })
+	sort.Slice(past, func(i, j int) bool { return past[i].Show.Date > past[j].Show.Date })
+	return upcoming, past
+}
+
+func (a *app) homeShowCard(show *Show, today time.Time) *homeShowCard {
+	org, _ := a.store.organizationByID(show.OrganizationID)
+	entryCount := len(a.publicEntriesByShow(show.ID))
+	classCount := len(a.store.classesByShowID(show.ID))
+	showDate, _ := parseShowDate(show.Date)
+	relative := "Upcoming"
+	if !showDate.IsZero() && showDate.Before(today) {
+		relative = "Past show"
+	}
+	return &homeShowCard{
+		Show:          show,
+		Org:           org,
+		EntryCount:    entryCount,
+		ClassCount:    classCount,
+		Featured:      a.showVisualFrames(show),
+		SeasonLabel:   "Season " + show.Season,
+		StatusLabel:   show.Status,
+		RelativeLabel: relative,
+	}
+}
+
+func (a *app) showVisualFrames(show *Show) []showVisualFrame {
+	entries := a.publicEntriesByShow(show.ID)
+	var frames []showVisualFrame
+	themes := []string{"rose", "fern", "gold"}
+	for _, entry := range entries {
+		media := a.store.mediaByEntry(entry.ID)
+		frame := showVisualFrame{
+			Label: entry.Name,
+			Theme: themes[len(frames)%len(themes)],
+		}
+		if len(media) > 0 {
+			frame.MediaPath = "/media/" + media[0].ID
+		}
+		frames = append(frames, frame)
+		if len(frames) == 3 {
+			break
+		}
+	}
+	if len(frames) == 0 {
+		labels := []string{"Featured blooms", "Show highlights", "Class favorites"}
+		for i, label := range labels {
+			frames = append(frames, showVisualFrame{
+				Label: label,
+				Theme: themes[i%len(themes)],
+			})
+		}
+	}
+	return frames
+}
+
+func (a *app) clubCards(now time.Time) []*clubCardView {
+	today := dateOnly(now)
+	var cards []*clubCardView
+	for _, org := range a.store.allOrganizations() {
+		card := &clubCardView{Org: org}
+		if org.ParentID != "" {
+			card.Parent, _ = a.store.organizationByID(org.ParentID)
+		}
+		for _, show := range a.store.allShows() {
+			if show.OrganizationID != org.ID {
+				continue
+			}
+			showDate, _ := parseShowDate(show.Date)
+			if !showDate.IsZero() && showDate.Before(today) {
+				card.PastShows = append(card.PastShows, show)
+			} else {
+				card.UpcomingShows = append(card.UpcomingShows, show)
+			}
+		}
+		if len(card.UpcomingShows) == 0 && len(card.PastShows) == 0 {
+			continue
+		}
+		sort.Slice(card.UpcomingShows, func(i, j int) bool { return card.UpcomingShows[i].Date < card.UpcomingShows[j].Date })
+		sort.Slice(card.PastShows, func(i, j int) bool { return card.PastShows[i].Date > card.PastShows[j].Date })
+		card.TopPeople = a.topPeopleForOrganization(org.ID, 3)
+		cards = append(cards, card)
+	}
+	sort.Slice(cards, func(i, j int) bool { return cards[i].Org.Name < cards[j].Org.Name })
+	return cards
+}
+
+func (a *app) topPeopleForOrganization(orgID string, limit int) []*clubTopPerson {
+	type personStats struct {
+		entryCount  int
+		totalPoints float64
+	}
+	byPerson := map[string]*personStats{}
+	for _, show := range a.store.allShows() {
+		if show.OrganizationID != orgID {
+			continue
+		}
+		for _, entry := range a.publicEntriesByShow(show.ID) {
+			item := byPerson[entry.PersonID]
+			if item == nil {
+				item = &personStats{}
+				byPerson[entry.PersonID] = item
+			}
+			item.entryCount++
+			item.totalPoints += entry.Points
+		}
+	}
+	var out []*clubTopPerson
+	for personID, item := range byPerson {
+		person, ok := a.store.personByID(personID)
+		if !ok {
+			continue
+		}
+		out = append(out, &clubTopPerson{
+			Person:      person,
+			EntryCount:  item.entryCount,
+			TotalPoints: item.totalPoints,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TotalPoints == out[j].TotalPoints {
+			return out[i].Person.Initials < out[j].Person.Initials
+		}
+		return out[i].TotalPoints > out[j].TotalPoints
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+func (a *app) classesIndexDomains() []*classesDomainView {
+	domains := map[string]*classesDomainView{}
+	for _, show := range a.store.allShows() {
+		org, _ := a.store.organizationByID(show.OrganizationID)
+		for _, class := range a.store.classesByShowID(show.ID) {
+			key := class.Domain
+			if key == "" {
+				key = "other"
+			}
+			view := domains[key]
+			if view == nil {
+				view = &classesDomainView{
+					Domain: key,
+					Label:  strings.Title(key),
+				}
+				domains[key] = view
+			}
+			view.Items = append(view.Items, &publicClassCard{
+				Show:  show,
+				Org:   org,
+				Class: class,
+			})
+		}
+	}
+	var out []*classesDomainView
+	for _, key := range []string{"horticulture", "design", "special", "other"} {
+		if view := domains[key]; view != nil {
+			sort.Slice(view.Items, func(i, j int) bool {
+				if view.Items[i].Show.Name == view.Items[j].Show.Name {
+					return view.Items[i].Class.ClassNumber < view.Items[j].Class.ClassNumber
+				}
+				return view.Items[i].Show.Name < view.Items[j].Show.Name
+			})
+			out = append(out, view)
+			delete(domains, key)
+		}
+	}
+	return out
+}
+
+func parseShowDate(raw string) (time.Time, bool) {
+	if strings.TrimSpace(raw) == "" {
+		return time.Time{}, false
+	}
+	value, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return dateOnly(value), true
+}
+
+func dateOnly(value time.Time) time.Time {
+	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, value.Location())
 }

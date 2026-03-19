@@ -272,6 +272,22 @@ function flowershowBindAgentWidget(widget) {
   });
 }
 
+function flowershowBindShowRotator(container) {
+  if (!container || container.dataset.bound === 'true') return;
+  const frames = Array.from(container.querySelectorAll('.show-visual-frame'));
+  if (frames.length < 2) return;
+  container.dataset.bound = 'true';
+  let index = frames.findIndex(function(frame) {
+    return frame.classList.contains('is-active');
+  });
+  if (index < 0) index = 0;
+  window.setInterval(function() {
+    frames[index].classList.remove('is-active');
+    index = (index + 1) % frames.length;
+    frames[index].classList.add('is-active');
+  }, 5000);
+}
+
 function flowershowInit(root) {
   const scope = root || document;
   scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
@@ -279,6 +295,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
+  scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

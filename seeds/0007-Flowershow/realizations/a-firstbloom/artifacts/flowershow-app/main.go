@@ -88,6 +88,8 @@ func main() {
 
 	// Public pages
 	mux.HandleFunc("GET /", a.handleHome)
+	mux.HandleFunc("GET /clubs", a.handleClubs)
+	mux.HandleFunc("GET /classes", a.handleClassesIndex)
 	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /profile", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
@@ -417,11 +419,26 @@ var templateFuncMap = template.FuncMap{
 
 func agentRegistryLinks(data any) []agentAccessLink {
 	currentPath := templateCurrentPath(data)
-	showID := templateNestedObjectID(data, "Show")
-	classID := templateNestedObjectID(data, "Class")
-	entryID := templateNestedObjectID(data, "Entry")
-	taxonID := templateNestedObjectID(data, "Taxon")
-	personID := templateNestedObjectID(data, "Person")
+	showID := templateStringField(data, "ShowID")
+	if showID == "" {
+		showID = templateNestedObjectID(data, "Show")
+	}
+	classID := templateStringField(data, "ClassID")
+	if classID == "" {
+		classID = templateNestedObjectID(data, "Class")
+	}
+	entryID := templateStringField(data, "EntryID")
+	if entryID == "" {
+		entryID = templateNestedObjectID(data, "Entry")
+	}
+	taxonID := templateStringField(data, "TaxonID")
+	if taxonID == "" {
+		taxonID = templateNestedObjectID(data, "Taxon")
+	}
+	personID := templateStringField(data, "PersonID")
+	if personID == "" {
+		personID = templateNestedObjectID(data, "Person")
+	}
 
 	links := make([]agentAccessLink, 0, 8)
 	seen := make(map[string]struct{})
@@ -542,6 +559,12 @@ func templateValueStringField(value reflect.Value, fieldName string) (string, bo
 		}
 		value = value.Elem()
 	}
+	for value.IsValid() && value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return "", false
+		}
+		value = value.Elem()
+	}
 	if !value.IsValid() || value.Kind() != reflect.Struct {
 		return "", false
 	}
@@ -574,6 +597,8 @@ func templateValueAsString(value reflect.Value) (string, bool) {
 func parseTemplates() map[string]*template.Template {
 	pages := []string{
 		"templates/home.html",
+		"templates/clubs.html",
+		"templates/classes.html",
 		"templates/show_detail.html",
 		"templates/show_summary.html",
 		"templates/class_browse.html",
@@ -608,7 +633,7 @@ func parseTemplates() map[string]*template.Template {
 	return ts
 }
 
-func (a *app) render(w http.ResponseWriter, name string, data any) {
+func (a *app) render(w http.ResponseWriter, r *http.Request, name string, data any) {
 	t, ok := a.templates[name]
 	if !ok {
 		log.Printf("render: template %q not found", name)
@@ -616,9 +641,64 @@ func (a *app) render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, "base", data); err != nil {
+	if err := t.ExecuteTemplate(w, "base", a.withChrome(r, data)); err != nil {
 		log.Printf("render %s: %v", name, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func (a *app) withChrome(r *http.Request, data any) map[string]any {
+	out := map[string]any{}
+	appendFields(out, reflect.ValueOf(data))
+	var (
+		user *UserIdentity
+		ok   bool
+	)
+	if r != nil {
+		user, ok = a.currentUser(r)
+	}
+	out["NavSignedIn"] = ok
+	out["NavUserLabel"] = ""
+	out["NavUserHref"] = "/account"
+	out["NavShowAdmin"] = false
+	if ok && user != nil {
+		label := strings.TrimSpace(user.Name)
+		if label == "" {
+			label = strings.TrimSpace(user.Email)
+		}
+		out["NavUserLabel"] = label
+		out["NavShowAdmin"] = a.userIsAdmin(*user)
+	}
+	return out
+}
+
+func appendFields(dst map[string]any, value reflect.Value) {
+	for value.IsValid() && value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() {
+		return
+	}
+	switch value.Kind() {
+	case reflect.Map:
+		for _, key := range value.MapKeys() {
+			if key.Kind() != reflect.String {
+				continue
+			}
+			dst[key.String()] = value.MapIndex(key).Interface()
+		}
+	case reflect.Struct:
+		valueType := value.Type()
+		for i := 0; i < value.NumField(); i++ {
+			field := valueType.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			dst[field.Name] = value.Field(i).Interface()
+		}
 	}
 }
 

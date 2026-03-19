@@ -36,6 +36,7 @@ test.describe('Flowershow Agent Widget', () => {
   test('widget shows current page path and contract detail', async ({ page }) => {
     await page.goto('/shows/spring-rose-show-2025');
     await expectAgentPath(page, '/shows/spring-rose-show-2025');
+    await page.getByRole('tab', { name: 'Agent + access' }).click();
     await expect(page.getByRole('link', { name: 'Show projection' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Show workspace projection' })).toBeVisible();
 
@@ -52,6 +53,7 @@ test.describe('Flowershow Agent Widget', () => {
     await loginLocalAdmin(page);
     await page.goto('/admin/shows/show_spring2025');
     await expectAgentPath(page, '/admin/shows/show_spring2025');
+    await page.getByRole('tab', { name: 'Agent + access' }).click();
     await expect(page.locator('.agent-access-content')).toContainText(
       'account-issued agent token with the required permissions',
     );

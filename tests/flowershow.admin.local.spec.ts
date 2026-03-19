@@ -24,7 +24,7 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin');
     await page.getByRole('link', { name: 'Agent / API Access Tokens' }).click();
 
-    await expect(page).toHaveURL(/\/account#agent-tokens$/);
+    await expect(page).toHaveURL(/\/account\?section=tokens#agent-tokens$/);
     await expect(page.locator('body')).toContainText('Agent / API access tokens');
 
     await page.fill('#token_label', uniqueName('Playwright Operator Token'));

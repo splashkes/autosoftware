@@ -844,7 +844,7 @@ func (a *app) postLoginPathForUser(user UserIdentity) string {
 }
 
 func (a *app) renderAdminLogin(w http.ResponseWriter, r *http.Request, errMessage, infoMessage string) {
-	a.render(w, "login.html", a.loginPageData(r, errMessage, infoMessage))
+	a.render(w, r, "login.html", a.loginPageData(r, errMessage, infoMessage))
 }
 
 func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
@@ -856,7 +856,7 @@ func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) renderAdminLoginWithState(w http.ResponseWriter, errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) {
-	a.render(w, "login.html", a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending))
+	a.render(w, nil, "login.html", a.loginPageDataForState(errMessage, infoMessage, currentEmail, passwordStep, pending))
 }
 
 func (a *app) handleAdminLoginBack(w http.ResponseWriter, r *http.Request) {
@@ -1057,7 +1057,7 @@ func (a *app) handleRoleManagement(w http.ResponseWriter, r *http.Request) {
 			roles = items
 		}
 	}
-	a.render(w, "admin_roles.html", roleManagementData{
+	a.render(w, r, "admin_roles.html", roleManagementData{
 		Title:       "Role Management",
 		CurrentPath: "/admin/roles",
 		User:        user,
