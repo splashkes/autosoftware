@@ -223,7 +223,7 @@ func TestPreferredOpenPathForBindingPrefersStablePath(t *testing.T) {
 
 func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
 	body := []byte(`<link rel="stylesheet" href="/assets/app.css"><a href="/calendar">Calendar</a><a href="/v1/contracts/0004-event-listings/a-web-mvp">Contract</a><form action="/admin/login"></form><div hx-post="/chat/123"></div><script src="/__sprout-assets/sprout-logo.js"></script>`)
-	got := string(rewriteMountedHTML(body, "/event-listings/"))
+	got := string(rewriteMountedHTML(body, "/event-listings/", "0004-event-listings/a-web-mvp"))
 
 	wantContains := []string{
 		`href="/event-listings/assets/app.css"`,
@@ -242,7 +242,7 @@ func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
 
 func TestRewriteMountedHTMLDoesNotDoublePrefixMountedPaths(t *testing.T) {
 	body := []byte(`<link rel="stylesheet" href="/flowershow/assets/app.css"><a href="/flowershow/shows/spring-rose-show-2025">Show</a><script src="/flowershow/assets/app.js"></script>`)
-	got := string(rewriteMountedHTML(body, "/flowershow/"))
+	got := string(rewriteMountedHTML(body, "/flowershow/", "0007-Flowershow/a-firstbloom"))
 
 	wantContains := []string{
 		`href="/flowershow/assets/app.css"`,
@@ -264,6 +264,33 @@ func TestRewriteMountedHTMLDoesNotDoublePrefixMountedPaths(t *testing.T) {
 		if strings.Contains(got, absent) {
 			t.Fatalf("expected rewritten HTML not to contain %q, got %q", absent, got)
 		}
+	}
+}
+
+func TestRewriteMountedHTMLInjectsSharedAgentWidgetByDefault(t *testing.T) {
+	body := []byte(`<!doctype html><html><head><title>Mounted</title></head><body><footer>Seed footer</footer></body></html>`)
+	got := string(rewriteMountedHTML(body, "/flowershow/", "0007-Flowershow/a-firstbloom"))
+
+	wantContains := []string{
+		`/__sprout-assets/as-agent-widget.css`,
+		`/__sprout-assets/as-agent-widget.js`,
+		`data-agent-widget-source="kernel"`,
+		`GET /flowershow/v1/contracts`,
+		`GET /flowershow/v1/contracts/0007-Flowershow/a-firstbloom`,
+		`https://github.com/splashkes/autosoftware/blob/main/seeds/0007-Flowershow/design.md`,
+	}
+	for _, want := range wantContains {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected injected mounted HTML to contain %q, got %q", want, got)
+		}
+	}
+}
+
+func TestRewriteMountedHTMLCanSuppressSharedAgentWidget(t *testing.T) {
+	body := []byte(`<!doctype html><html><head><meta name="as-agent-widget" content="off"></head><body><footer>Seed footer</footer></body></html>`)
+	got := string(rewriteMountedHTML(body, "/flowershow/", "0007-Flowershow/a-firstbloom"))
+	if strings.Contains(got, `data-agent-widget-source="kernel"`) {
+		t.Fatalf("expected suppression marker to skip widget injection, got %q", got)
 	}
 }
 

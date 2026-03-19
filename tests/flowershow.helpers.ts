@@ -80,10 +80,8 @@ export async function expectSignedInLanding(page: Page) {
 }
 
 export async function openAgentAccess(page: Page) {
-  const widget = page.locator('details.agent-access-widget');
+  const widget = page.locator('.agent-access-widget[data-agent-widget]');
   await expect(widget).toBeVisible();
-  const summary = widget.locator('summary.agent-access-summary');
-  await summary.click();
   await expect(widget.locator('.agent-access-content')).toBeVisible();
 }
 

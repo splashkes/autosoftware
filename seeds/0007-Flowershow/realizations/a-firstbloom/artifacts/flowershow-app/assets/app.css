@@ -61,29 +61,71 @@ body {
   display: flex;
   align-items: center;
   gap: .75rem;
-  padding: .85rem 1.1rem;
-  cursor: pointer;
+  padding: .95rem 1.1rem .7rem;
   font-size: .86rem;
   font-weight: 700;
   letter-spacing: .01em;
   color: var(--green);
-  list-style: none;
 }
-.agent-access-summary::-webkit-details-marker { display: none; }
 .agent-access-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3rem;
-  padding: .28rem .55rem;
-  border-radius: 999px;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
   background: var(--green);
   color: white;
-  font-size: .68rem;
+  font-size: .88rem;
+  font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.16);
+}
+.agent-access-summary-copy {
+  display: grid;
+  gap: .12rem;
+}
+.agent-access-summary-title {
+  font-size: .96rem;
+  font-weight: 700;
+}
+.agent-access-summary-subtitle {
+  color: var(--gray-500);
+  font-size: .78rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.agent-access-tabs {
+  display: flex;
+  gap: .55rem;
+  padding: 0 1.1rem .8rem;
+  flex-wrap: wrap;
+}
+.agent-access-tab {
+  appearance: none;
+  border: 1px solid rgba(45, 106, 79, .18);
+  background: rgba(255,255,255,.8);
+  color: var(--green);
+  border-radius: 999px;
+  padding: .45rem .85rem;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
+}
+.agent-access-tab:hover {
+  border-color: rgba(45, 106, 79, .35);
+}
+.agent-access-tab.is-active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+  box-shadow: 0 4px 14px rgba(45, 106, 79, .18);
 }
 .agent-access-content { padding: 0 1.1rem 1rem; color: var(--gray-700); }
+.agent-access-panel[hidden] { display: none; }
 .agent-access-lead { margin-bottom: .45rem; font-size: .86rem; }
 .agent-access-body { margin-bottom: .8rem; font-size: .82rem; color: var(--gray-500); }
 .agent-access-grid {

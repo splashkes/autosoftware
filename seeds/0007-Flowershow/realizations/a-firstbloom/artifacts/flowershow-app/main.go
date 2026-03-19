@@ -256,6 +256,8 @@ func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 var globalBasePath = strings.TrimSuffix(strings.TrimSpace(os.Getenv("AS_PATH_PREFIX")), "/")
 var assetVersion = time.Now().UTC().Format("20060102150405")
 
+const githubRepoBlobBase = "https://github.com/splashkes/autosoftware/blob/main/"
+
 type agentAccessLink struct {
 	Label string
 	Href  string
@@ -264,6 +266,11 @@ type agentAccessLink struct {
 var templateFuncMap = template.FuncMap{
 	"bp":           func() string { return globalBasePath },
 	"assetVersion": func() string { return assetVersion },
+	"githubSourceURL": func(path string) string {
+		path = strings.TrimSpace(path)
+		path = strings.TrimPrefix(path, "/")
+		return githubRepoBlobBase + path
+	},
 	"agentRegistryLinks": func(data any) []agentAccessLink {
 		return agentRegistryLinks(data)
 	},

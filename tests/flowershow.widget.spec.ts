@@ -1,13 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { expectAgentPath, loginLocalAdmin, openAgentAccess } from './flowershow.helpers';
+import { expectAgentPath, loginLocalAdmin } from './flowershow.helpers';
 
 test.describe('Flowershow Agent Widget', () => {
   test('widget exposes contract links on public pages', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('footer + section.agent-access-shell')).toBeVisible();
-    await openAgentAccess(page);
     await expect(
       page.getByText('This software is designed to be accessed by people and agents'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('tab', { name: '(re)design this software' }),
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'GET /v1/contracts', exact: true }),
@@ -17,6 +19,10 @@ test.describe('Flowershow Agent Widget', () => {
         name: 'GET /v1/contracts/0007-Flowershow/a-firstbloom',
       }),
     ).toBeVisible();
+
+    await page.getByRole('tab', { name: '(re)design this software' }).click();
+    await expect(page.getByRole('link', { name: 'Seed README' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Kernel Bootloader' })).toBeVisible();
   });
 
   test('widget shows current page path and contract detail', async ({ page }) => {
@@ -42,5 +48,9 @@ test.describe('Flowershow Agent Widget', () => {
       'account-issued agent token with the required permissions',
     );
     await expect(page.getByRole('link', { name: 'Show workspace projection' })).toBeVisible();
+    await page.getByRole('tab', { name: '(re)design this software' }).click();
+    await expect(page.locator('.agent-access-content')).toContainText(
+      'start from the seed documents, the realization contract, and the shared sprout references',
+    );
   });
 });
