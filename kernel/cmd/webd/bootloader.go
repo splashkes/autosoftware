@@ -14,7 +14,7 @@ import (
 	registrycatalog "as/kernel/internal/registry"
 )
 
-//go:embed assets/sprout-logo.css assets/sprout-logo.js assets/launch-state.js
+//go:embed assets/sprout-logo.css assets/sprout-logo.js assets/launch-state.js assets/as-agent-widget.css assets/as-agent-widget.js
 var bootloaderAssets embed.FS
 
 var bootPageTemplate = template.Must(template.New("boot-page").Parse(`<!doctype html>

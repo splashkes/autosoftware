@@ -184,9 +184,75 @@ function flowershowBindCopyButton(button) {
   });
 }
 
+function flowershowBindCountdownButton(button) {
+  if (button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  var remaining = parseInt(button.dataset.countdownSeconds || '0', 10);
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    button.disabled = false;
+    return;
+  }
+
+  var readyLabel = button.dataset.countdownReadyLabel || 'Request another code';
+  button.disabled = true;
+
+  function renderCountdown(seconds) {
+    if (seconds <= 0) {
+      button.disabled = false;
+      button.textContent = readyLabel;
+      delete button.dataset.countdownSeconds;
+      return;
+    }
+    button.textContent = 'You can request another code in ' + seconds + 's';
+  }
+
+  renderCountdown(remaining);
+  var timer = window.setInterval(function() {
+    remaining -= 1;
+    renderCountdown(remaining);
+    if (remaining <= 0) {
+      window.clearInterval(timer);
+    }
+  }, 1000);
+}
+
+function flowershowActivateAgentTab(widget, tabName) {
+  if (!widget || !tabName) return;
+  widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
+    const active = button.dataset.agentTabTrigger === tabName;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  widget.querySelectorAll('[data-agent-tab-panel]').forEach(function(panel) {
+    const active = panel.dataset.agentTabPanel === tabName;
+    panel.classList.toggle('is-active', active);
+    panel.hidden = !active;
+  });
+}
+
+function flowershowBindAgentWidget(widget) {
+  if (!widget || widget.dataset.bound === 'true') return;
+  widget.dataset.bound = 'true';
+
+  const activeTrigger = widget.querySelector('[data-agent-tab-trigger].is-active');
+  const defaultTab = activeTrigger && activeTrigger.dataset
+    ? activeTrigger.dataset.agentTabTrigger
+    : 'access';
+  flowershowActivateAgentTab(widget, defaultTab);
+
+  widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      flowershowActivateAgentTab(widget, button.dataset.agentTabTrigger);
+    });
+  });
+}
+
 function flowershowInit(root) {
-  (root || document).querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
-  (root || document).querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
+  const scope = root || document;
+  scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
+  scope.querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
+  scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
+  scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

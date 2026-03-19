@@ -28,6 +28,7 @@ const (
 	authSessionCookieName = "as_flowershow_session"
 	authPendingCookieName = "as_flowershow_auth_pending"
 	authSessionDuration   = 33 * 24 * time.Hour
+	emailOTPResendDelay   = 20 * time.Second
 
 	pendingAuthFlowEmailOTP       = "email_otp"
 	pendingAuthFlowForgotPassword = "forgot_password"
@@ -50,10 +51,11 @@ type UserIdentity struct {
 }
 
 type pendingAuthState struct {
-	Flow      string `json:"flow"`
-	Email     string `json:"email"`
-	Session   string `json:"session,omitempty"`
-	ExpiresAt int64  `json:"expires_at"`
+	Flow              string `json:"flow"`
+	Email             string `json:"email"`
+	Session           string `json:"session,omitempty"`
+	ExpiresAt         int64  `json:"expires_at"`
+	ResendAvailableAt int64  `json:"resend_available_at,omitempty"`
 }
 
 type adminLoginData struct {
@@ -63,11 +65,11 @@ type adminLoginData struct {
 	Info            string
 	CognitoEnabled  bool
 	CurrentEmail    string
-	ChoiceStep      bool
 	PasswordStep    bool
 	PendingEmail    string
 	PendingEmailOTP bool
 	PendingReset    bool
+	PendingResendIn int
 	BackHref        string
 }
 
@@ -773,15 +775,20 @@ func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string
 		Info:           infoMessage,
 		CognitoEnabled: a.authEnabled(),
 		CurrentEmail:   currentEmail,
-		ChoiceStep:     strings.TrimSpace(currentEmail) != "",
 		PasswordStep:   passwordStep && strings.TrimSpace(currentEmail) != "",
 	}
 	if pending != nil {
 		data.PendingEmail = pending.Email
 		data.PendingEmailOTP = pending.Flow == pendingAuthFlowEmailOTP
 		data.PendingReset = pending.Flow == pendingAuthFlowForgotPassword
+		if pending.Flow == pendingAuthFlowEmailOTP && pending.ResendAvailableAt > 0 {
+			remaining := int(time.Until(time.Unix(pending.ResendAvailableAt, 0).UTC()).Round(time.Second).Seconds())
+			if remaining < 0 {
+				remaining = 0
+			}
+			data.PendingResendIn = remaining
+		}
 		data.CurrentEmail = pending.Email
-		data.ChoiceStep = false
 		data.PasswordStep = false
 	}
 	if strings.TrimSpace(data.CurrentEmail) != "" {
@@ -808,7 +815,7 @@ func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adm
 func loginNoticeMessage(code string) string {
 	switch strings.TrimSpace(code) {
 	case "email-code-sent":
-		return "Check your email for the sign-in code, then enter it below."
+		return "Check your email for the secure code, then enter it below."
 	case "password-reset-code-sent":
 		return "Check your email for the password reset code, then set a new password below."
 	case "password-reset-complete":
@@ -916,6 +923,13 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
+	if pending, ok := a.currentPendingAuth(r); ok && pending.Flow == pendingAuthFlowEmailOTP && strings.EqualFold(strings.TrimSpace(pending.Email), email) {
+		remaining := int(time.Until(time.Unix(pending.ResendAvailableAt, 0).UTC()).Round(time.Second).Seconds())
+		if remaining > 0 {
+			a.renderAdminLoginWithState(w, "", fmt.Sprintf("You can request another code in %ds.", remaining), email, false, pending)
+			return
+		}
+	}
 	result, err := a.auth.StartEmailOTP(r.Context(), email)
 	if err != nil {
 		a.renderAdminLoginWithState(w, err.Error(), "", email, false, nil)
@@ -934,6 +948,7 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 		a.renderAdminLogin(w, r, "Cognito did not return an email-code challenge.", "")
 		return
 	}
+	result.Pending.ResendAvailableAt = time.Now().UTC().Add(emailOTPResendDelay).Unix()
 	if err := a.setPendingAuth(w, r, *result.Pending); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

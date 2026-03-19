@@ -21,11 +21,9 @@ test.describe('Flowershow Remote Admin OTP Setup', () => {
 
     await page.fill('#login_email', FLOWERSHOW_ADMIN_EMAIL);
     await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page.getByText(/choose sign-in method/i)).toBeVisible();
-    await page.getByRole('button', { name: 'Email Me A Login Code' }).click();
-
-    await expect(page.getByText(/check your email for the sign-in code/i)).toBeVisible();
-    await expect(page.getByLabel(/Login Code/i)).toBeVisible();
+    await expect(page.getByText(/let's confirm your email/i)).toBeVisible();
+    await expect(page.getByText(/check junk mail if it's not in your inbox/i)).toBeVisible();
+    await expect(page.getByLabel(/Secure code/i)).toBeVisible();
 
     console.log(`Enter the OTP for ${FLOWERSHOW_ADMIN_EMAIL}, then resume the paused Playwright session.`);
     await page.pause();

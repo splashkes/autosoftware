@@ -1,38 +1,80 @@
 {{define "agent_access_widget"}}
 <section class="agent-access-shell">
   <div class="container">
-    <details class="agent-access-widget">
-      <summary class="agent-access-summary">
-        <span class="agent-access-icon" aria-hidden="true">Spout</span>
-        <span>Agent + API access</span>
-      </summary>
-      <div class="agent-access-content">
-        <p class="agent-access-lead">This software is designed to be accessed by people and agents for ease of contribution, sharing, administration, transparency, and even transition to another system.</p>
-        <p class="agent-access-body">On this page, API access via projections mirrors the records the UI reads, while API access via semantic commands lets an authenticated person or delegated agent contribute changes through the same contract surface.</p>
-        <div class="agent-access-grid">
-          <div>
-            <h3>This Page</h3>
-            <p>Current page: <code data-agent-current-path>...</code></p>
-            <p><a href="{{bp}}/v1/contracts">GET /v1/contracts</a></p>
-            <p><a href="{{bp}}/v1/contracts/0007-Flowershow/a-firstbloom">GET /v1/contracts/0007-Flowershow/a-firstbloom</a></p>
-          </div>
-          <div>
-            <h3>Registry Objects</h3>
-            {{range agentRegistryLinks .}}
-            <p><a href="{{bp}}{{.Href}}">{{.Label}}</a></p>
-            {{end}}
-          </div>
-          <div>
-            <h3>Contribution</h3>
-            <p>Public projections are anonymous.</p>
-            <p>Private workspaces and mutating commands accept an admin session, the deployment service token, or an account-issued agent token with the required permissions.</p>
-            <p>Generate scoped agent tokens from <a href="{{bp}}/account#agent-tokens">/account</a>.</p>
-            <p>Runtime assistant guidance belongs in command context; cited schedule facts, rules, and provenance belong in the canonical flower-show graph.</p>
-          </div>
+    <section class="agent-access-widget" data-agent-widget>
+      <div class="agent-access-summary">
+        <span class="agent-access-icon" aria-hidden="true">AS</span>
+        <div class="agent-access-summary-copy">
+          <span class="agent-access-summary-title">Agent + API access</span>
+          <span class="agent-access-summary-subtitle">People and agents share a common contribution surface, and this footer is the starting point for inspecting or redesigning it.</span>
         </div>
-        <p class="agent-access-note">Use the contract detail and the page-specific registry links above as the durable references that define what this page reads and what an authorized agent can change.</p>
       </div>
-    </details>
+
+      <div class="agent-access-tabs" role="tablist" aria-label="Agent access and redesign">
+        <button type="button" class="agent-access-tab is-active" role="tab" aria-selected="true" data-agent-tab-trigger="access">Agent + access</button>
+        <button type="button" class="agent-access-tab" role="tab" aria-selected="false" data-agent-tab-trigger="redesign">(re)design this software</button>
+      </div>
+
+      <div class="agent-access-content">
+        <section class="agent-access-panel is-active" role="tabpanel" data-agent-tab-panel="access">
+          <p class="agent-access-lead">This software is designed to be accessed by people and agents for ease of contribution, sharing, administration, transparency, and even transition to another system.</p>
+          <p class="agent-access-body">On this page, API access via projections mirrors the records the UI reads, while API access via semantic commands lets an authenticated person or delegated agent contribute changes through the same contract surface.</p>
+          <div class="agent-access-grid">
+            <div>
+              <h3>This Page</h3>
+              <p>Current page: <code data-agent-current-path>...</code></p>
+              <p><a href="{{bp}}/v1/contracts">GET /v1/contracts</a></p>
+              <p><a href="{{bp}}/v1/contracts/0007-Flowershow/a-firstbloom">GET /v1/contracts/0007-Flowershow/a-firstbloom</a></p>
+            </div>
+            <div>
+              <h3>Registry Objects</h3>
+              {{range agentRegistryLinks .}}
+              <p><a href="{{bp}}{{.Href}}">{{.Label}}</a></p>
+              {{end}}
+            </div>
+            <div>
+              <h3>Contribution</h3>
+              <p>Public projections are anonymous.</p>
+              <p>Private workspaces and mutating commands accept an admin session, the deployment service token, or an account-issued agent token with the required permissions.</p>
+              <p>Generate scoped agent tokens from <a href="{{bp}}/account#agent-tokens">/account</a>.</p>
+              <p>Runtime assistant guidance belongs in command context; cited schedule facts, rules, and provenance belong in the canonical flower-show graph.</p>
+            </div>
+          </div>
+          <p class="agent-access-note">Use the contract detail and the page-specific registry links above as the durable references that define what this page reads and what an authorized agent can change.</p>
+        </section>
+
+        <section class="agent-access-panel" role="tabpanel" data-agent-tab-panel="redesign" hidden>
+          <p class="agent-access-lead">Use this tab as the preamble to a redesign wizard: start from the seed documents, the realization contract, and the shared sprout references before changing behavior or presentation.</p>
+          <p class="agent-access-body">For now, these are the canonical source documents for Flowershow seed 0007 and the shared platform sprout assets that should inform future cross-realization treatment of this footer box.</p>
+          <div class="agent-access-grid">
+            <div>
+              <h3>Seed Specs</h3>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/README.md"}}" target="_blank" rel="noreferrer">Seed README</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/brief.md"}}" target="_blank" rel="noreferrer">Brief</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/design.md"}}" target="_blank" rel="noreferrer">Design</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/acceptance.md"}}" target="_blank" rel="noreferrer">Acceptance</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/decision_log.md"}}" target="_blank" rel="noreferrer">Decision Log</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/flower_show_taxonomy.md"}}" target="_blank" rel="noreferrer">Flower Show Taxonomy</a></p>
+            </div>
+            <div>
+              <h3>Realization Specs</h3>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/realizations/a-firstbloom/interaction_contract.yaml"}}" target="_blank" rel="noreferrer">Interaction Contract</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/AUTOSOFTWARE_AGENT_PRINCIPLES.md"}}" target="_blank" rel="noreferrer">Seed Agent Principles</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/realizations/a-firstbloom/validation/ACCEPTANCE_CHECKLIST.md"}}" target="_blank" rel="noreferrer">Acceptance Checklist</a></p>
+              <p><a href="{{githubSourceURL "seeds/0007-Flowershow/realizations/a-firstbloom/validation/API_AND_PLAYWRIGHT_PLAN.md"}}" target="_blank" rel="noreferrer">API + Playwright Plan</a></p>
+            </div>
+            <div>
+              <h3>Shared Sprout References</h3>
+              <p><a href="{{githubSourceURL "kernel/cmd/webd/bootloader.go"}}" target="_blank" rel="noreferrer">Kernel Bootloader</a></p>
+              <p><a href="{{githubSourceURL "kernel/cmd/webd/assets/sprout-logo.js"}}" target="_blank" rel="noreferrer">Sprout Logo JS</a></p>
+              <p><a href="{{githubSourceURL "kernel/cmd/webd/assets/sprout-logo.css"}}" target="_blank" rel="noreferrer">Sprout Logo CSS</a></p>
+              <p><a href="{{githubSourceURL "kernel/protocol/v1/AUTOSOFTWARE_AGENT_PRINCIPLES.md"}}" target="_blank" rel="noreferrer">Platform Agent Principles</a></p>
+            </div>
+          </div>
+          <p class="agent-access-note">The next step after this preamble can become a proper redesign wizard that walks a person through the seed docs, contract, page registry objects, and implementation references in sequence.</p>
+        </section>
+      </div>
+    </section>
   </div>
 </section>
 {{end}}

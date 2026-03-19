@@ -33,6 +33,104 @@ import (
 	"as/kernel/internal/telemetry"
 )
 
+const githubRepoBlobBase = "https://github.com/splashkes/autosoftware/blob/main/"
+
+type mountedAgentWidgetView struct {
+	SeedID             string
+	RealizationID      string
+	Reference          string
+	MountPrefix        string
+	ContractIndexPath  string
+	ContractDetailPath string
+	AccountPath        string
+	SeedReadmeURL      string
+	SeedBriefURL       string
+	SeedDesignURL      string
+	SeedAcceptanceURL  string
+	SeedDecisionLogURL string
+	RealizationDocURL  string
+	SeedPrinciplesURL  string
+	KernelBootURL      string
+	KernelLogoJSURL    string
+	KernelLogoCSSURL   string
+	PlatformPrinciples string
+}
+
+var mountedAgentWidgetTemplate = template.Must(template.New("mounted-agent-widget").Parse(`
+<section class="agent-access-shell">
+  <section class="agent-access-widget" data-agent-widget data-agent-widget-source="kernel">
+    <div class="agent-access-summary">
+      <span class="agent-access-icon" aria-hidden="true">AS</span>
+      <div class="agent-access-summary-copy">
+        <span class="agent-access-summary-title">Agent + access</span>
+        <span class="agent-access-summary-subtitle">This software is designed to be accessed by people and agents for contribution, sharing, administration, transparency, and migration.</span>
+      </div>
+    </div>
+
+    <div class="agent-access-tabs" role="tablist" aria-label="Agent access and redesign">
+      <button type="button" class="agent-access-tab is-active" role="tab" aria-selected="true" data-agent-tab-trigger="access">Agent + access</button>
+      <button type="button" class="agent-access-tab" role="tab" aria-selected="false" data-agent-tab-trigger="redesign">(re)design this software</button>
+    </div>
+
+    <div class="agent-access-content">
+      <section class="agent-access-panel is-active" role="tabpanel" data-agent-tab-panel="access">
+        <p class="agent-access-lead">On this page, API access via the mounted realization contract and its projections gives agents a durable surface that mirrors or exceeds the UI.</p>
+        <p class="agent-access-body">Use the local contract links first, then move outward into the seed and realization documents that define the scope behind this page.</p>
+        <div class="agent-access-grid">
+          <div>
+            <h3>This Page</h3>
+            <p>Current page: <code data-agent-current-path>...</code></p>
+            <p>Mounted at: <code>{{.MountPrefix}}</code></p>
+            <p>Realization: <code>{{.Reference}}</code></p>
+          </div>
+          <div>
+            <h3>API Surface</h3>
+            <p><a href="{{.ContractIndexPath}}">GET {{.ContractIndexPath}}</a></p>
+            <p><a href="{{.ContractDetailPath}}">GET {{.ContractDetailPath}}</a></p>
+            <p><a href="{{.AccountPath}}">Account / agent token manager</a></p>
+          </div>
+          <div>
+            <h3>Registry Docs</h3>
+            <p><a href="{{.SeedReadmeURL}}" target="_blank" rel="noreferrer">Seed README</a></p>
+            <p><a href="{{.SeedDesignURL}}" target="_blank" rel="noreferrer">Design</a></p>
+            <p><a href="{{.SeedAcceptanceURL}}" target="_blank" rel="noreferrer">Acceptance</a></p>
+            <p><a href="{{.RealizationDocURL}}" target="_blank" rel="noreferrer">Interaction contract</a></p>
+          </div>
+        </div>
+        <p class="agent-access-note">If this page should not expose the shared footer, add <code>&lt;meta name="as-agent-widget" content="off"&gt;</code> or <code>data-as-agent-widget="off"</code> to the page markup.</p>
+      </section>
+
+      <section class="agent-access-panel" role="tabpanel" data-agent-tab-panel="redesign" hidden>
+        <p class="agent-access-lead">Start redesign work from the seed packet and realization contract, then follow the kernel references that define how mounted pages are composed.</p>
+        <p class="agent-access-body">This is the entry point for a future guided redesign wizard. For now it links directly to the spec documents and shared bootloader references behind this realization.</p>
+        <div class="agent-access-grid">
+          <div>
+            <h3>Seed Specs</h3>
+            <p><a href="{{.SeedReadmeURL}}" target="_blank" rel="noreferrer">Seed README</a></p>
+            <p><a href="{{.SeedBriefURL}}" target="_blank" rel="noreferrer">Brief</a></p>
+            <p><a href="{{.SeedDesignURL}}" target="_blank" rel="noreferrer">Design</a></p>
+            <p><a href="{{.SeedAcceptanceURL}}" target="_blank" rel="noreferrer">Acceptance</a></p>
+            <p><a href="{{.SeedDecisionLogURL}}" target="_blank" rel="noreferrer">Decision log</a></p>
+          </div>
+          <div>
+            <h3>Realization Specs</h3>
+            <p><a href="{{.RealizationDocURL}}" target="_blank" rel="noreferrer">Interaction contract</a></p>
+            <p><a href="{{.SeedPrinciplesURL}}" target="_blank" rel="noreferrer">Seed agent principles</a></p>
+            <p><a href="{{.PlatformPrinciples}}" target="_blank" rel="noreferrer">Platform agent principles</a></p>
+          </div>
+          <div>
+            <h3>Kernel References</h3>
+            <p><a href="{{.KernelBootURL}}" target="_blank" rel="noreferrer">Kernel bootloader</a></p>
+            <p><a href="{{.KernelLogoJSURL}}" target="_blank" rel="noreferrer">Sprout logo JS</a></p>
+            <p><a href="{{.KernelLogoCSSURL}}" target="_blank" rel="noreferrer">Sprout logo CSS</a></p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+</section>
+`))
+
 func registryPermalinkRedirectPath(record registrycatalog.HashLookupRecord) string {
 	return registrycatalog.PermalinkResolvePath(record.CanonicalURL, record.ContentHash)
 }
@@ -2200,7 +2298,7 @@ func proxyToMountedRealization(route realizationRoute, mountPrefix string, w htt
 				}
 			},
 			ModifyResponse: func(res *http.Response) error {
-				return rewriteMountedResponse(res, mountPrefix)
+				return rewriteMountedResponse(res, mountPrefix, route.Reference)
 			},
 			Transport: &http.Transport{
 				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
@@ -2232,7 +2330,7 @@ func proxyToMountedRealization(route realizationRoute, mountPrefix string, w htt
 			}
 		},
 		ModifyResponse: func(res *http.Response) error {
-			return rewriteMountedResponse(res, mountPrefix)
+			return rewriteMountedResponse(res, mountPrefix, route.Reference)
 		},
 	}
 	proxy.ServeHTTP(w, r)
@@ -2265,7 +2363,7 @@ func externalRequestScheme(r *http.Request) string {
 	return "http"
 }
 
-func rewriteMountedResponse(res *http.Response, mountPrefix string) error {
+func rewriteMountedResponse(res *http.Response, mountPrefix, reference string) error {
 	contentType := strings.ToLower(res.Header.Get("Content-Type"))
 	if strings.Contains(contentType, "text/html") {
 		res.Header.Set("Content-Security-Policy", mountedRealizationContentSecurityPolicy())
@@ -2299,7 +2397,7 @@ func rewriteMountedResponse(res *http.Response, mountPrefix string) error {
 		return err
 	}
 
-	rewritten := rewriteMountedHTML(body, mountPrefix)
+	rewritten := rewriteMountedHTML(body, mountPrefix, reference)
 	res.Body = io.NopCloser(bytes.NewReader(rewritten))
 	res.ContentLength = int64(len(rewritten))
 	res.Header.Set("Content-Length", strconv.Itoa(len(rewritten)))
@@ -2336,7 +2434,7 @@ func rewriteMountedCookiePath(raw, mountPrefix string) string {
 	return raw[:idx] + "Path=" + mountPrefix + raw[after:]
 }
 
-func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
+func rewriteMountedHTML(body []byte, mountPrefix, reference string) []byte {
 	mountPrefix = normalizeRoutePrefix(mountPrefix)
 	if mountPrefix == "" {
 		return body
@@ -2446,7 +2544,79 @@ func rewriteMountedHTML(body []byte, mountPrefix string) []byte {
 		`data-copy='`+apiRoot, `data-copy='/v1/`,
 	).Replace(rewritten)
 
-	return []byte(rewritten)
+	return []byte(injectMountedAgentWidget(rewritten, mountPrefix, reference))
+}
+
+func injectMountedAgentWidget(htmlBody, mountPrefix, reference string) string {
+	lower := strings.ToLower(htmlBody)
+	if !strings.Contains(lower, "<body") || !strings.Contains(lower, "</body>") {
+		return htmlBody
+	}
+	if strings.Contains(lower, `name="as-agent-widget" content="off"`) ||
+		strings.Contains(lower, `name='as-agent-widget' content='off'`) ||
+		strings.Contains(lower, `data-as-agent-widget="off"`) ||
+		strings.Contains(lower, `data-as-agent-widget='off'`) {
+		return htmlBody
+	}
+
+	widget, err := renderMountedAgentWidget(mountPrefix, reference)
+	if err != nil {
+		return htmlBody
+	}
+
+	cssTag := `<link rel="stylesheet" href="/__sprout-assets/as-agent-widget.css"><style>[data-agent-widget]:not([data-agent-widget-source="kernel"]){display:none !important;}</style>`
+	scriptTag := `<script src="/__sprout-assets/as-agent-widget.js"></script>`
+	withHead := insertBeforeInsensitive(htmlBody, "</head>", cssTag)
+	if withHead == htmlBody {
+		withHead = cssTag + withHead
+	}
+	return insertBeforeInsensitive(withHead, "</body>", widget+scriptTag)
+}
+
+func renderMountedAgentWidget(mountPrefix, reference string) (string, error) {
+	view := newMountedAgentWidgetView(mountPrefix, reference)
+	var buf strings.Builder
+	if err := mountedAgentWidgetTemplate.Execute(&buf, view); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func newMountedAgentWidgetView(mountPrefix, reference string) mountedAgentWidgetView {
+	mountPrefix = normalizeRoutePrefix(mountPrefix)
+	seedID, realizationID := realizations.SplitReference(reference)
+	seedPath := "seeds/" + seedID + "/"
+	realizationPath := seedPath + "realizations/" + realizationID + "/"
+	return mountedAgentWidgetView{
+		SeedID:             seedID,
+		RealizationID:      realizationID,
+		Reference:          reference,
+		MountPrefix:        mountPrefix,
+		ContractIndexPath:  strings.TrimSuffix(mountPrefix, "/") + "/v1/contracts",
+		ContractDetailPath: strings.TrimSuffix(mountPrefix, "/") + "/v1/contracts/" + seedID + "/" + realizationID,
+		AccountPath:        strings.TrimSuffix(mountPrefix, "/") + "/account#agent-tokens",
+		SeedReadmeURL:      githubRepoBlobBase + seedPath + "README.md",
+		SeedBriefURL:       githubRepoBlobBase + seedPath + "brief.md",
+		SeedDesignURL:      githubRepoBlobBase + seedPath + "design.md",
+		SeedAcceptanceURL:  githubRepoBlobBase + seedPath + "acceptance.md",
+		SeedDecisionLogURL: githubRepoBlobBase + seedPath + "decision_log.md",
+		RealizationDocURL:  githubRepoBlobBase + realizationPath + "interaction_contract.yaml",
+		SeedPrinciplesURL:  githubRepoBlobBase + seedPath + "AUTOSOFTWARE_AGENT_PRINCIPLES.md",
+		KernelBootURL:      githubRepoBlobBase + "kernel/cmd/webd/bootloader.go",
+		KernelLogoJSURL:    githubRepoBlobBase + "kernel/cmd/webd/assets/sprout-logo.js",
+		KernelLogoCSSURL:   githubRepoBlobBase + "kernel/cmd/webd/assets/sprout-logo.css",
+		PlatformPrinciples: githubRepoBlobBase + "kernel/protocol/v1/AUTOSOFTWARE_AGENT_PRINCIPLES.md",
+	}
+}
+
+func insertBeforeInsensitive(source, closingTag, insertion string) string {
+	lowerSource := strings.ToLower(source)
+	lowerTag := strings.ToLower(closingTag)
+	idx := strings.LastIndex(lowerSource, lowerTag)
+	if idx < 0 {
+		return source
+	}
+	return source[:idx] + insertion + source[idx:]
 }
 
 func mountedRealizationContentSecurityPolicy() string {
