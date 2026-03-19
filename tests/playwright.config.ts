@@ -100,7 +100,7 @@ export default defineConfig({
           env: {
             ...process.env,
             AS_ADDR: new URL(fsBaseURL).host,
-            AS_ADMIN_PASSWORD: 'admin',
+            AS_SESSION_SECRET: 'playwright-flowershow-session-secret',
             AS_SERVICE_TOKEN: 'test-token',
           },
         },

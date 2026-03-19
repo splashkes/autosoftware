@@ -5,11 +5,7 @@ test.describe('Flowershow Admin Local', () => {
   test('admin login and dashboard work locally', async ({ page }) => {
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/admin\/login/);
-
-    await page.getByText('Bootstrap Override').click();
-    await page.fill('#bootstrap_password', 'wrong');
-    await page.getByRole('button', { name: 'Use Bootstrap Password' }).click();
-    await expect(page.locator('text=Invalid bootstrap password')).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('Bootstrap Override');
 
     await loginLocalAdmin(page);
   });
