@@ -308,6 +308,7 @@ type showDetailData struct {
 	Divisions   []*divisionView
 	Entries     []*entryView
 	Awards      []*AwardDefinition
+	ShowCredits []*showCreditView
 	Org         *Organization
 }
 
@@ -368,6 +369,14 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 			Media:  a.store.mediaByEntry(e.ID),
 		})
 	}
+	var showCredits []*showCreditView
+	for _, credit := range a.store.showCreditsByShow(show.ID) {
+		person, _ := a.store.personByID(credit.PersonID)
+		showCredits = append(showCredits, &showCreditView{
+			Credit: credit,
+			Person: person,
+		})
+	}
 
 	awards := a.store.awardsByOrganization(show.OrganizationID)
 
@@ -379,6 +388,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		Divisions:   divisions,
 		Entries:     entries,
 		Awards:      awards,
+		ShowCredits: showCredits,
 		Org:         org,
 	})
 }

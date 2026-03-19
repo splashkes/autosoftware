@@ -62,6 +62,15 @@ Covers:
 - registry rows vs derived streams
 - multi-registry federation
 
+### 14-onsite-event-admin-and-entry-reclassification-plan.md
+Covers:
+- the live onsite flower-show operator workflow
+- class correction during judging
+- intake without photos
+- show credits versus permissions
+- full-show thumbnail board expectations
+- scoped judge-support and intake-operator access
+
 ---
 
 ## Cross-Cutting Principles

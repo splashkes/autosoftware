@@ -128,6 +128,9 @@ domain_objects:
           - name: class_number
             type: string
             summary: Human schedule number for the class.
+          - name: sort_order
+            type: integer
+            summary: Explicit operator-managed ordering within the section.
           - name: domain
             type: string
             summary: Domain such as horticulture or design.
@@ -173,6 +176,54 @@ domain_objects:
           - name: email
             type: string
             summary: Private email address when present.
+  - kind: organization
+    summary: A hosting club or society associated with shows and people.
+    schema_ref: ../../design.md#1-organizations
+    capabilities:
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable organization identity safe to traverse.
+        fields:
+          - name: id
+            type: string
+            summary: Stable organization id.
+      public_payload:
+        summary: Public organization naming fields.
+        fields:
+          - name: name
+            type: string
+            summary: Public organization name.
+          - name: level
+            type: string
+            summary: Organization level such as club, district, or society.
+  - kind: show_credit
+    summary: A free-form show page credit, separate from permissions.
+    schema_ref: ../../design.md#7-people
+    capabilities:
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable credit identity and show linkage.
+        fields:
+          - name: id
+            type: string
+            summary: Stable show credit id.
+          - name: show_id
+            type: string
+            summary: Stable parent show id.
+      public_payload:
+        summary: Publicly visible show credit wording.
+        fields:
+          - name: credit_label
+            type: string
+            summary: Display label such as host, scribe, or designer.
+          - name: display_name
+            type: string
+            summary: Free-text display name when the credit is not linked to a stored person.
+          - name: sort_order
+            type: integer
+            summary: Ordering of credits on the show page.
   - kind: taxon
     summary: A concept in the taxonomy graph (botanical, design, etc).
     schema_ref: ../../design.md#10-domains
@@ -335,6 +386,55 @@ commands:
       - activity_events
     projection: entries.detail
     consistency: read_your_writes
+  - name: entries.move
+    summary: Move an entry to a different class during live operations.
+    path: /v1/commands/0007-Flowershow/entries.move
+    object_kinds:
+      - entry
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+      - state_transitions
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: entries.delete
+    summary: Delete a mistaken entry before it is part of scoring history.
+    path: /v1/commands/0007-Flowershow/entries.delete
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+      - state_transitions
+    projection: shows.workspace
+    consistency: read_your_writes
+  - name: entries.reassign_entrant
+    summary: Correct the entrant assigned to an entry.
+    path: /v1/commands/0007-Flowershow/entries.reassign_entrant
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
   - name: entries.set_placement
     summary: Set placement and points for an entry.
     path: /v1/commands/0007-Flowershow/entries.set_placement
@@ -376,6 +476,36 @@ commands:
       - session
       - service_token
     idempotency: recommended
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: classes.detail
+    consistency: read_your_writes
+  - name: classes.update
+    summary: Update class wording, ordering, and operator-maintained details.
+    path: /v1/commands/0007-Flowershow/classes.update
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: classes.detail
+    consistency: read_your_writes
+  - name: classes.reorder
+    summary: Reorder a class within its section.
+    path: /v1/commands/0007-Flowershow/classes.reorder
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
     input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
     result_schema_ref: README.md#realization
     capabilities:
@@ -665,6 +795,37 @@ commands:
         - name: override_interpretation
           type: string
           summary: Temporary reasoning note used while composing the override command.
+  - name: show_credits.create
+    summary: Create a free-form show page credit.
+    path: /v1/commands/0007-Flowershow/show_credits.create
+    object_kinds:
+      - show
+      - show_credit
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: show_credits.delete
+    summary: Delete a free-form show page credit.
+    path: /v1/commands/0007-Flowershow/show_credits.delete
+    object_kinds:
+      - show_credit
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
   - name: roles.assign
     summary: Assign an application role to a subject for organization or show scope.
     path: /v1/commands/0007-Flowershow/roles.assign
@@ -758,6 +919,52 @@ projections:
           - private_payload
           - runtime_only
         summary: Authenticated callers get the full admin workspace including private detail and runtime helpers.
+  - name: shows.people_lookup
+    summary: Private show-scoped member and guest lookup used for entrant assignment and intake.
+    path: /v1/projections/0007-Flowershow/shows/{id}/people.lookup
+    object_kinds:
+      - person
+      - organization
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - state_transitions
+      - sessions
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Authenticated operators and agents can search host-organization members and guests for fast entrant assignment.
+  - name: shows.board
+    summary: Private full-show board projection with class-grouped entries and workflow status cues.
+    path: /v1/projections/0007-Flowershow/shows/{id}/board
+    object_kinds:
+      - show
+      - show_class
+      - entry
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - sessions
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Authenticated operators and agents can inspect the full show board, including class-grouped entries, photo gaps, and live floor workflow status.
   - name: entries.list
     summary: Entries for a show or class.
     path: /v1/projections/0007-Flowershow/entries

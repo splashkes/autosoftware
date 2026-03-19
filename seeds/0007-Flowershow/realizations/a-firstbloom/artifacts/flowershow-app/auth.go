@@ -1042,6 +1042,13 @@ type roleManagementData struct {
 	Orgs        []*Organization
 }
 
+type adminPersonsData struct {
+	Title       string
+	CurrentPath string
+	Persons     []*Person
+	Orgs        []*Organization
+}
+
 func (a *app) handleRoleManagement(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.currentUser(r)
 	roles := []*UserRole{}

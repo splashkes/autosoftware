@@ -104,7 +104,7 @@ var agentPermissionCatalog = map[string]agentPermissionDef{
 	"classes.manage": {
 		Key:         "classes.manage",
 		Label:       "Manage classes",
-		Description: "Create classes and recompute placements from scoring.",
+		Description: "Create, update, reorder classes, and recompute placements from scoring.",
 	},
 	"judges.manage": {
 		Key:         "judges.manage",
@@ -114,7 +114,7 @@ var agentPermissionCatalog = map[string]agentPermissionDef{
 	"entries.manage": {
 		Key:         "entries.manage",
 		Label:       "Manage entries",
-		Description: "Create and update entries, placements, and public visibility.",
+		Description: "Create, update, move, delete, reassign, place, and adjust public visibility for entries.",
 	},
 	"persons.manage": {
 		Key:         "persons.manage",
@@ -150,6 +150,11 @@ var agentPermissionCatalog = map[string]agentPermissionDef{
 		Key:         "sources.manage",
 		Label:       "Manage sources and citations",
 		Description: "Create source documents, citations, and pre-structured cited imports.",
+	},
+	"show_credits.manage": {
+		Key:         "show_credits.manage",
+		Label:       "Manage show credits",
+		Description: "Create and delete free-form show credits such as host, scribe, or designer.",
 	},
 	"roles.manage": {
 		Key:         "roles.manage",
@@ -187,6 +192,7 @@ var agentPermissionProfiles = map[string]agentPermissionProfileDef{
 			"rubrics.manage",
 			"standards.manage",
 			"sources.manage",
+			"show_credits.manage",
 		},
 	},
 	"admin_delegate": {
@@ -212,6 +218,7 @@ var agentPermissionProfiles = map[string]agentPermissionProfileDef{
 			"rubrics.manage",
 			"standards.manage",
 			"sources.manage",
+			"show_credits.manage",
 			"roles.manage",
 		},
 	},
@@ -224,10 +231,15 @@ var commandCapabilityMap = map[string]string{
 	"divisions.create":           "schedule.manage",
 	"sections.create":            "schedule.manage",
 	"classes.create":             "classes.manage",
+	"classes.update":             "classes.manage",
+	"classes.reorder":            "classes.manage",
 	"classes.compute_placements": "classes.manage",
 	"judges.assign":              "judges.manage",
 	"entries.create":             "entries.manage",
 	"entries.update":             "entries.manage",
+	"entries.move":               "entries.manage",
+	"entries.delete":             "entries.manage",
+	"entries.reassign_entrant":   "entries.manage",
 	"entries.set_placement":      "entries.manage",
 	"entries.set_visibility":     "entries.manage",
 	"persons.create":             "persons.manage",
@@ -246,6 +258,8 @@ var commandCapabilityMap = map[string]string{
 	"sources.create":             "sources.manage",
 	"citations.create":           "sources.manage",
 	"ingestions.import":          "sources.manage",
+	"show_credits.create":        "show_credits.manage",
+	"show_credits.delete":        "show_credits.manage",
 	"roles.assign":               "roles.manage",
 }
 

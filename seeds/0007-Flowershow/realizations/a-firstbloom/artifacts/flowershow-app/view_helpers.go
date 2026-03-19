@@ -11,6 +11,45 @@ type showJudgeView struct {
 	Person     *Person
 }
 
+type showCreditView struct {
+	Credit *ShowCredit
+	Person *Person
+}
+
+type personLookupView struct {
+	Person           *Person
+	OrganizationID   string
+	OrganizationName string
+	AffiliationRole  string
+	Label            string
+}
+
+type boardStats struct {
+	TotalEntries       int `json:"total_entries"`
+	ClassesWithEntries int `json:"classes_with_entries"`
+	MissingPhotos      int `json:"missing_photos"`
+	SuppressedEntries  int `json:"suppressed_entries"`
+	PlacedEntries      int `json:"placed_entries"`
+}
+
+type boardDivisionView struct {
+	Division *Division           `json:"division"`
+	Sections []*boardSectionView `json:"sections"`
+}
+
+type boardSectionView struct {
+	Section *Section          `json:"section"`
+	Classes []*boardClassView `json:"classes"`
+}
+
+type boardClassView struct {
+	Class             *ShowClass   `json:"class"`
+	Entries           []*entryView `json:"entries"`
+	EntryCount        int          `json:"entry_count"`
+	MissingPhotoCount int          `json:"missing_photo_count"`
+	PlacedCount       int          `json:"placed_count"`
+}
+
 type standardView struct {
 	Standard *StandardDocument
 	Editions []*StandardEdition
@@ -84,6 +123,123 @@ func (a *app) availableJudgesForShow(showID string) []*Person {
 		return out[i].LastName+out[i].FirstName < out[j].LastName+out[j].FirstName
 	})
 	return out
+}
+
+func (a *app) personLookupViewsForShow(showID, query string) []*personLookupView {
+	items := a.store.lookupPersonsForShow(showID, query)
+	out := make([]*personLookupView, 0, len(items))
+	for _, item := range items {
+		person, ok := a.store.personByID(item.PersonID)
+		if !ok {
+			continue
+		}
+		org, _ := a.store.organizationByID(item.OrganizationID)
+		orgName := item.OrganizationID
+		if org != nil {
+			orgName = org.Name
+		}
+		label := fmt.Sprintf("%s %s · %s · %s", person.FirstName, person.LastName, item.Role, orgName)
+		out = append(out, &personLookupView{
+			Person:           person,
+			OrganizationID:   item.OrganizationID,
+			OrganizationName: orgName,
+			AffiliationRole:  item.Role,
+			Label:            label,
+		})
+	}
+	return out
+}
+
+func (a *app) recentEntryViews(entries []*entryView, limit int) []*entryView {
+	if limit <= 0 {
+		return nil
+	}
+	out := append([]*entryView(nil), entries...)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Entry.CreatedAt.After(out[j].Entry.CreatedAt)
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+func (a *app) entriesNeedingPhotos(entries []*entryView) []*entryView {
+	out := make([]*entryView, 0)
+	for _, item := range entries {
+		if len(item.Media) == 0 {
+			out = append(out, item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Entry.CreatedAt.After(out[j].Entry.CreatedAt)
+	})
+	return out
+}
+
+func (a *app) boardDataForShow(showID string, entries []*entryView) ([]*boardDivisionView, boardStats) {
+	byClass := make(map[string][]*entryView)
+	stats := boardStats{TotalEntries: len(entries)}
+	classesWithEntries := make(map[string]struct{})
+	for _, entry := range entries {
+		byClass[entry.Entry.ClassID] = append(byClass[entry.Entry.ClassID], entry)
+		if len(entry.Media) == 0 {
+			stats.MissingPhotos++
+		}
+		if entry.Entry.Suppressed {
+			stats.SuppressedEntries++
+		}
+		if entry.Entry.Placement > 0 {
+			stats.PlacedEntries++
+		}
+	}
+
+	show, ok := a.store.showByID(showID)
+	if !ok {
+		return nil, stats
+	}
+	schedule, ok := a.store.scheduleByShowID(show.ID)
+	if !ok {
+		return nil, stats
+	}
+
+	var divisions []*boardDivisionView
+	for _, div := range a.store.divisionsBySchedule(schedule.ID) {
+		divView := &boardDivisionView{Division: div}
+		for _, sec := range a.store.sectionsByDivision(div.ID) {
+			secView := &boardSectionView{Section: sec}
+			for _, cls := range a.store.classesBySection(sec.ID) {
+				classEntries := append([]*entryView(nil), byClass[cls.ID]...)
+				sort.Slice(classEntries, func(i, j int) bool {
+					if classEntries[i].Entry.Placement != classEntries[j].Entry.Placement {
+						return classEntries[i].Entry.Placement < classEntries[j].Entry.Placement
+					}
+					return classEntries[i].Entry.CreatedAt.Before(classEntries[j].Entry.CreatedAt)
+				})
+				classView := &boardClassView{
+					Class:      cls,
+					Entries:    classEntries,
+					EntryCount: len(classEntries),
+				}
+				for _, entry := range classEntries {
+					if len(entry.Media) == 0 {
+						classView.MissingPhotoCount++
+					}
+					if entry.Entry.Placement > 0 {
+						classView.PlacedCount++
+					}
+				}
+				if classView.EntryCount > 0 {
+					classesWithEntries[cls.ID] = struct{}{}
+				}
+				secView.Classes = append(secView.Classes, classView)
+			}
+			divView.Sections = append(divView.Sections, secView)
+		}
+		divisions = append(divisions, divView)
+	}
+	stats.ClassesWithEntries = len(classesWithEntries)
+	return divisions, stats
 }
 
 func (a *app) rubricViewsForShow(showID string) []*rubricView {

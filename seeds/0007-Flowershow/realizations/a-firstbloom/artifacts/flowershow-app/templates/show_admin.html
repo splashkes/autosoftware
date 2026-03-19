@@ -11,42 +11,50 @@
 <div hx-ext="sse" sse-connect="{{bp}}/admin/shows/{{.Show.ID}}/stream">
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('info')">Info</button>
-    <button class="tab" onclick="showTab('schedule')">Schedule</button>
-    <button class="tab" onclick="showTab('entries')">Entries</button>
-    <button class="tab" onclick="showTab('winners')">Winners</button>
+  <div class="event-workspace-intro card">
+    <div class="card-body">
+      <div class="workflow-kicker">Onsite workspace</div>
+      <h2 class="card-title">One surface for setup, intake, floor corrections, scoring, and the live board.</h2>
+      <p class="card-meta">Operators can prepare the show before doors open, then stay in the same workflow while entries arrive, judges correct classes, and photos or placements are added later.</p>
+    </div>
+  </div>
+
+  <div class="tabs workflow-tabs">
+    <button class="tab active" onclick="showTab('setup')">Setup</button>
+    <button class="tab" onclick="showTab('intake')">Intake</button>
+    <button class="tab" onclick="showTab('floor')">Floor</button>
     <button class="tab" onclick="showTab('scoring')">Scoring</button>
+    <button class="tab" onclick="showTab('board')">Board</button>
     <button class="tab" onclick="showTab('governance')">Governance</button>
   </div>
 
-  <div id="tab-info" class="tab-content active">
-    <div id="admin-info-panel" sse-swap="info-refresh" hx-swap="innerHTML">
-      {{template "admin_info_panel" .}}
+  <div id="tab-setup" class="tab-content active">
+    <div id="admin-setup-panel" sse-swap="setup-refresh,info-refresh,schedule-refresh" hx-swap="innerHTML">
+      {{template "admin_setup_panel" .}}
     </div>
   </div>
 
-  <div id="tab-schedule" class="tab-content">
-    <div id="admin-schedule-panel" sse-swap="schedule-refresh" hx-swap="innerHTML">
-      {{template "admin_schedule_panel" .}}
+  <div id="tab-intake" class="tab-content">
+    <div id="admin-intake-panel" sse-swap="intake-refresh" hx-swap="innerHTML">
+      {{template "admin_intake_panel" .}}
     </div>
   </div>
 
-  <div id="tab-entries" class="tab-content">
-    <div id="admin-entries-panel" sse-swap="entries-refresh" hx-swap="innerHTML">
-      {{template "admin_entries_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-winners" class="tab-content">
-    <div id="admin-winners-panel" sse-swap="winners-refresh" hx-swap="innerHTML">
-      {{template "admin_winners_panel" .}}
+  <div id="tab-floor" class="tab-content">
+    <div id="admin-floor-panel" sse-swap="floor-refresh,entries-refresh" hx-swap="innerHTML">
+      {{template "admin_floor_panel" .}}
     </div>
   </div>
 
   <div id="tab-scoring" class="tab-content">
     <div id="admin-scoring-panel" sse-swap="scoring-refresh" hx-swap="innerHTML">
       {{template "admin_scoring_panel" .}}
+    </div>
+  </div>
+
+  <div id="tab-board" class="tab-content">
+    <div id="admin-board-panel" sse-swap="board-refresh,winners-refresh" hx-swap="innerHTML">
+      {{template "admin_board_panel" .}}
     </div>
   </div>
 
