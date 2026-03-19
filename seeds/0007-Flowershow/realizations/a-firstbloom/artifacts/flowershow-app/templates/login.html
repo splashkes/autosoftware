@@ -1,18 +1,99 @@
 {{define "content"}}
-<div class="login-container">
-  <h1>Admin Login</h1>
+<div class="login-container login-shell">
+  <div class="login-header">
+    <h1>Admin Login</h1>
+    <p class="card-meta">Use the site-native sign-in flows for password, email code, or password reset.</p>
+  </div>
+
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+  {{if .Info}}<div class="alert alert-info">{{.Info}}</div>{{end}}
+
   {{if .CognitoEnabled}}
-  <p class="card-meta">Cognito is enabled for this deployment.</p>
-  <a href="{{bp}}/auth/login" class="btn btn-primary">Continue With Cognito</a>
-  <p class="card-meta" style="margin-top:1rem;">Local password login remains available for bootstrap and CI.</p>
+  <section class="login-card">
+    <h2>Password</h2>
+    <form method="POST" action="{{bp}}/auth/login/password" class="form login-form">
+      <div class="form-group">
+        <label for="cognito_email">Email</label>
+        <input type="email" id="cognito_email" name="email" class="form-input" autocomplete="email" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="cognito_password">Password</label>
+        <input type="password" id="cognito_password" name="password" class="form-input" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Sign In With Password</button>
+    </form>
+  </section>
+
+  <section class="login-card">
+    <h2>Email Code</h2>
+    <p class="card-meta">Send a one-time code to your email and finish sign-in here.</p>
+    <form method="POST" action="{{bp}}/auth/login/email-code" class="form login-form">
+      <div class="form-group">
+        <label for="otp_email">Email</label>
+        <input type="email" id="otp_email" name="email" class="form-input" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Send Email Code</button>
+    </form>
+
+    {{if .PendingEmailOTP}}
+    <form method="POST" action="{{bp}}/auth/login/email-code/verify" class="form login-form">
+      <div class="form-group">
+        <label for="otp_code">Enter Code For {{.PendingEmail}}</label>
+        <input type="text" id="otp_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Verify Email Code</button>
+    </form>
+    {{end}}
+  </section>
+
+  <section class="login-card">
+    <h2>Forgot Password</h2>
+    <p class="card-meta">Request a reset code, then set a new password without leaving this site.</p>
+    <form method="POST" action="{{bp}}/auth/login/forgot-password" class="form login-form">
+      <div class="form-group">
+        <label for="forgot_email">Email</label>
+        <input type="email" id="forgot_email" name="email" class="form-input" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn btn-secondary">Send Reset Code</button>
+    </form>
+
+    {{if .PendingReset}}
+    <form method="POST" action="{{bp}}/auth/login/forgot-password/confirm" class="form login-form">
+      <div class="form-group">
+        <label for="forgot_code">Reset Code For {{.PendingEmail}}</label>
+        <input type="text" id="forgot_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
+      </div>
+      <div class="form-group">
+        <label for="new_password">New Password</label>
+        <input type="password" id="new_password" name="new_password" class="form-input" autocomplete="new-password" required>
+      </div>
+      <div class="form-group">
+        <label for="confirm_password">Confirm New Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" class="form-input" autocomplete="new-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Update Password</button>
+    </form>
+    {{end}}
+  </section>
+  {{else}}
+  <section class="login-card">
+    <h2>Local Only</h2>
+    <p class="card-meta">Cognito is not configured for this deployment. Use the bootstrap password.</p>
+  </section>
   {{end}}
-  <form method="POST" action="{{bp}}/admin/login" class="form login-form">
-    <div class="form-group">
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" class="form-input" required autofocus>
-    </div>
-    <button type="submit" class="btn btn-primary">Login</button>
-  </form>
+
+  {{if .BootstrapPassword}}
+  <details class="login-card login-bootstrap">
+    <summary>Bootstrap Override</summary>
+    <p class="card-meta">Local password login remains available for bootstrap, CI, and break-glass access.</p>
+    <form method="POST" action="{{bp}}/admin/login" class="form login-form">
+      <div class="form-group">
+        <label for="bootstrap_password">Bootstrap Password</label>
+        <input type="password" id="bootstrap_password" name="password" class="form-input" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-secondary">Use Bootstrap Password</button>
+    </form>
+  </details>
+  {{end}}
 </div>
 {{end}}

@@ -12,25 +12,34 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	cognitoidentityprovider "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/aws/smithy-go"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
 	authSessionCookieName = "as_flowershow_session"
-	authStateCookieName   = "as_flowershow_auth_state"
+	authPendingCookieName = "as_flowershow_auth_pending"
+	authSessionDuration   = 33 * 24 * time.Hour
+
+	pendingAuthFlowEmailOTP       = "email_otp"
+	pendingAuthFlowForgotPassword = "forgot_password"
 )
 
 type authProvider interface {
 	Enabled() bool
-	LoginURL(state string) string
-	LogoutURL() string
-	ExchangeCode(ctx context.Context, code string) (*UserIdentity, error)
+	PasswordLogin(ctx context.Context, email, password string) (*UserIdentity, error)
+	StartEmailOTP(ctx context.Context, email string) (*authStartResult, error)
+	VerifyEmailOTP(ctx context.Context, email, session, code string) (*UserIdentity, error)
+	StartForgotPassword(ctx context.Context, email string) error
+	ConfirmForgotPassword(ctx context.Context, email, code, newPassword string) error
 }
 
 type UserIdentity struct {
@@ -44,15 +53,62 @@ type authSession struct {
 	ExpiresAt int64        `json:"expires_at"`
 }
 
+type pendingAuthState struct {
+	Flow      string `json:"flow"`
+	Email     string `json:"email"`
+	Session   string `json:"session,omitempty"`
+	ExpiresAt int64  `json:"expires_at"`
+}
+
+type adminLoginData struct {
+	Title             string
+	Error             string
+	Info              string
+	CognitoEnabled    bool
+	PendingEmail      string
+	PendingEmailOTP   bool
+	PendingReset      bool
+	BootstrapPassword bool
+}
+
+type authStartResult struct {
+	User    *UserIdentity
+	Pending *pendingAuthState
+}
+
+type authChallengeResult struct {
+	AuthenticationResult *cognitotypes.AuthenticationResultType
+	AvailableChallenges  []cognitotypes.ChallengeNameType
+	ChallengeName        cognitotypes.ChallengeNameType
+	Session              *string
+}
+
+type authDisplayError struct {
+	Message string
+}
+
+func (e *authDisplayError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Message
+}
+
+type cognitoIdentityAPI interface {
+	AdminInitiateAuth(context.Context, *cognitoidentityprovider.AdminInitiateAuthInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminInitiateAuthOutput, error)
+	AdminRespondToAuthChallenge(context.Context, *cognitoidentityprovider.AdminRespondToAuthChallengeInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminRespondToAuthChallengeOutput, error)
+	ForgotPassword(context.Context, *cognitoidentityprovider.ForgotPasswordInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ForgotPasswordOutput, error)
+	ConfirmForgotPassword(context.Context, *cognitoidentityprovider.ConfirmForgotPasswordInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
+}
+
 type cognitoAuth struct {
-	userPoolID string
-	clientID   string
-	domain     string
-	region     string
-	redirect   string
-	logout     string
-	httpClient *http.Client
-	jwks       *jwksCache
+	userPoolID   string
+	clientID     string
+	clientSecret string
+	region       string
+	httpClient   *http.Client
+	jwks         *jwksCache
+	client       cognitoIdentityAPI
 }
 
 type jwksCache struct {
@@ -66,11 +122,6 @@ type cognitoClaims struct {
 	Name  string `json:"name"`
 	Sub   string `json:"sub"`
 	jwt.RegisteredClaims
-}
-
-type cognitoTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	IDToken     string `json:"id_token"`
 }
 
 type cognitoJWKS struct {
@@ -88,82 +139,254 @@ type cognitoJWK struct {
 func newAuthProviderFromEnv() (authProvider, error) {
 	userPoolID := strings.TrimSpace(os.Getenv("AS_COGNITO_USER_POOL_ID"))
 	clientID := strings.TrimSpace(os.Getenv("AS_COGNITO_CLIENT_ID"))
-	domain := strings.TrimSpace(os.Getenv("AS_COGNITO_DOMAIN"))
 	region := strings.TrimSpace(os.Getenv("AWS_REGION"))
-	redirectURL := strings.TrimSpace(os.Getenv("AS_COGNITO_REDIRECT_URL"))
-	if userPoolID == "" || clientID == "" || domain == "" || region == "" || redirectURL == "" {
+	if userPoolID == "" || clientID == "" || region == "" {
 		return nil, nil
 	}
-	if !strings.HasPrefix(domain, "https://") {
-		domain = "https://" + strings.TrimPrefix(domain, "http://")
+
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
+	if err != nil {
+		return nil, fmt.Errorf("load aws config for cognito: %w", err)
 	}
+
 	return &cognitoAuth{
-		userPoolID: userPoolID,
-		clientID:   clientID,
-		domain:     strings.TrimRight(domain, "/"),
-		region:     region,
-		redirect:   redirectURL,
-		logout:     strings.TrimSpace(os.Getenv("AS_COGNITO_LOGOUT_URL")),
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		userPoolID:   userPoolID,
+		clientID:     clientID,
+		clientSecret: strings.TrimSpace(os.Getenv("AS_COGNITO_CLIENT_SECRET")),
+		region:       region,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
 		jwks: &jwksCache{
 			keys: make(map[string]*rsa.PublicKey),
 		},
+		client: cognitoidentityprovider.NewFromConfig(cfg),
 	}, nil
 }
 
 func (a *cognitoAuth) Enabled() bool { return a != nil }
 
-func (a *cognitoAuth) LoginURL(state string) string {
-	q := url.Values{}
-	q.Set("client_id", a.clientID)
-	q.Set("response_type", "code")
-	q.Set("scope", "openid email profile")
-	q.Set("redirect_uri", a.redirect)
-	q.Set("state", state)
-	return a.domain + "/login?" + q.Encode()
+func (a *cognitoAuth) PasswordLogin(ctx context.Context, email, password string) (*UserIdentity, error) {
+	email = strings.TrimSpace(email)
+	password = strings.TrimSpace(password)
+	if email == "" || password == "" {
+		return nil, &authDisplayError{Message: "Enter both email and password."}
+	}
+
+	resp, err := a.startUserAuth(ctx, email, cognitotypes.ChallengeNameTypePassword)
+	if err != nil {
+		return nil, a.translateAuthError(err, "The email or password was not accepted.")
+	}
+
+	for range 3 {
+		if resp.AuthenticationResult != nil {
+			return a.userFromAuthenticationResult(ctx, resp.AuthenticationResult)
+		}
+		switch resp.ChallengeName {
+		case cognitotypes.ChallengeNameTypeSelectChallenge:
+			resp, err = a.respondToAuthChallenge(ctx, email, valueOrEmpty(resp.Session), cognitotypes.ChallengeNameTypeSelectChallenge, map[string]string{
+				"ANSWER":   string(cognitotypes.ChallengeNameTypePassword),
+				"PASSWORD": password,
+			})
+		case cognitotypes.ChallengeNameTypePassword:
+			resp, err = a.respondToAuthChallenge(ctx, email, valueOrEmpty(resp.Session), cognitotypes.ChallengeNameTypePassword, map[string]string{
+				"PASSWORD": password,
+			})
+		case cognitotypes.ChallengeNameTypeNewPasswordRequired:
+			return nil, &authDisplayError{Message: "This account requires a new password. Use the password reset flow below."}
+		default:
+			return nil, a.unsupportedChallengeError(resp.ChallengeName, resp.AvailableChallenges)
+		}
+		if err != nil {
+			return nil, a.translateAuthError(err, "The email or password was not accepted.")
+		}
+	}
+
+	return nil, &authDisplayError{Message: "The sign-in flow did not complete. Try again."}
 }
 
-func (a *cognitoAuth) LogoutURL() string {
-	if a.logout == "" {
+func (a *cognitoAuth) StartEmailOTP(ctx context.Context, email string) (*authStartResult, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, &authDisplayError{Message: "Enter your email address to receive a code."}
+	}
+
+	resp, err := a.startUserAuth(ctx, email, cognitotypes.ChallengeNameTypeEmailOtp)
+	if err != nil {
+		return nil, a.translateAuthError(err, "Unable to start email-code sign-in.")
+	}
+
+	for range 3 {
+		if resp.AuthenticationResult != nil {
+			user, err := a.userFromAuthenticationResult(ctx, resp.AuthenticationResult)
+			if err != nil {
+				return nil, err
+			}
+			return &authStartResult{User: user}, nil
+		}
+		switch resp.ChallengeName {
+		case cognitotypes.ChallengeNameTypeSelectChallenge:
+			resp, err = a.respondToAuthChallenge(ctx, email, valueOrEmpty(resp.Session), cognitotypes.ChallengeNameTypeSelectChallenge, map[string]string{
+				"ANSWER": string(cognitotypes.ChallengeNameTypeEmailOtp),
+			})
+			if err != nil {
+				return nil, a.translateAuthError(err, "Unable to send an email sign-in code.")
+			}
+		case cognitotypes.ChallengeNameTypeEmailOtp:
+			session := valueOrEmpty(resp.Session)
+			if session == "" {
+				return nil, &authDisplayError{Message: "Cognito did not return a sign-in session for the email code."}
+			}
+			return &authStartResult{
+				Pending: &pendingAuthState{
+					Flow:      pendingAuthFlowEmailOTP,
+					Email:     email,
+					Session:   session,
+					ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
+				},
+			}, nil
+		default:
+			return nil, a.unsupportedChallengeError(resp.ChallengeName, resp.AvailableChallenges)
+		}
+	}
+
+	return nil, &authDisplayError{Message: "The email sign-in flow did not complete. Try again."}
+}
+
+func (a *cognitoAuth) VerifyEmailOTP(ctx context.Context, email, session, code string) (*UserIdentity, error) {
+	email = strings.TrimSpace(email)
+	code = strings.TrimSpace(code)
+	if email == "" || session == "" {
+		return nil, &authDisplayError{Message: "Request a fresh email code before verifying."}
+	}
+	if code == "" {
+		return nil, &authDisplayError{Message: "Enter the email code to continue."}
+	}
+
+	resp, err := a.respondToAuthChallenge(ctx, email, session, cognitotypes.ChallengeNameTypeEmailOtp, map[string]string{
+		"EMAIL_OTP_CODE": code,
+	})
+	if err != nil {
+		return nil, a.translateAuthError(err, "The email code was not accepted.")
+	}
+	if resp.AuthenticationResult == nil {
+		return nil, &authDisplayError{Message: "The email code did not complete sign-in. Request a new code and try again."}
+	}
+	return a.userFromAuthenticationResult(ctx, resp.AuthenticationResult)
+}
+
+func (a *cognitoAuth) StartForgotPassword(ctx context.Context, email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return &authDisplayError{Message: "Enter your email address to reset the password."}
+	}
+
+	input := &cognitoidentityprovider.ForgotPasswordInput{
+		ClientId: stringPtr(a.clientID),
+		Username: stringPtr(email),
+	}
+	if secretHash := a.secretHash(email); secretHash != "" {
+		input.SecretHash = stringPtr(secretHash)
+	}
+	if _, err := a.client.ForgotPassword(ctx, input); err != nil {
+		return a.translateAuthError(err, "Unable to start password reset for that account.")
+	}
+	return nil
+}
+
+func (a *cognitoAuth) ConfirmForgotPassword(ctx context.Context, email, code, newPassword string) error {
+	email = strings.TrimSpace(email)
+	code = strings.TrimSpace(code)
+	newPassword = strings.TrimSpace(newPassword)
+	if email == "" {
+		return &authDisplayError{Message: "Enter the email address for the password reset."}
+	}
+	if code == "" || newPassword == "" {
+		return &authDisplayError{Message: "Enter the reset code and a new password."}
+	}
+
+	input := &cognitoidentityprovider.ConfirmForgotPasswordInput{
+		ClientId:         stringPtr(a.clientID),
+		Username:         stringPtr(email),
+		ConfirmationCode: stringPtr(code),
+		Password:         stringPtr(newPassword),
+	}
+	if secretHash := a.secretHash(email); secretHash != "" {
+		input.SecretHash = stringPtr(secretHash)
+	}
+	if _, err := a.client.ConfirmForgotPassword(ctx, input); err != nil {
+		return a.translateAuthError(err, "The reset code or password was not accepted.")
+	}
+	return nil
+}
+
+func (a *cognitoAuth) startUserAuth(ctx context.Context, email string, preferredChallenge cognitotypes.ChallengeNameType) (*authChallengeResult, error) {
+	authParameters := map[string]string{
+		"USERNAME":            email,
+		"PREFERRED_CHALLENGE": string(preferredChallenge),
+	}
+	if secretHash := a.secretHash(email); secretHash != "" {
+		authParameters["SECRET_HASH"] = secretHash
+	}
+	resp, err := a.client.AdminInitiateAuth(ctx, &cognitoidentityprovider.AdminInitiateAuthInput{
+		AuthFlow:       cognitotypes.AuthFlowTypeUserAuth,
+		ClientId:       stringPtr(a.clientID),
+		UserPoolId:     stringPtr(a.userPoolID),
+		AuthParameters: authParameters,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &authChallengeResult{
+		AuthenticationResult: resp.AuthenticationResult,
+		ChallengeName:        resp.ChallengeName,
+		Session:              resp.Session,
+	}, nil
+}
+
+func (a *cognitoAuth) respondToAuthChallenge(ctx context.Context, email, session string, challengeName cognitotypes.ChallengeNameType, extra map[string]string) (*authChallengeResult, error) {
+	challengeResponses := map[string]string{
+		"USERNAME": email,
+	}
+	if secretHash := a.secretHash(email); secretHash != "" {
+		challengeResponses["SECRET_HASH"] = secretHash
+	}
+	for key, value := range extra {
+		challengeResponses[key] = value
+	}
+
+	input := &cognitoidentityprovider.AdminRespondToAuthChallengeInput{
+		ChallengeName:      challengeName,
+		ClientId:           stringPtr(a.clientID),
+		UserPoolId:         stringPtr(a.userPoolID),
+		ChallengeResponses: challengeResponses,
+	}
+	if session != "" {
+		input.Session = stringPtr(session)
+	}
+	resp, err := a.client.AdminRespondToAuthChallenge(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return &authChallengeResult{
+		AuthenticationResult: resp.AuthenticationResult,
+		ChallengeName:        resp.ChallengeName,
+		Session:              resp.Session,
+	}, nil
+}
+
+func (a *cognitoAuth) secretHash(username string) string {
+	if a.clientSecret == "" {
 		return ""
 	}
-	q := url.Values{}
-	q.Set("client_id", a.clientID)
-	q.Set("logout_uri", a.logout)
-	return a.domain + "/logout?" + q.Encode()
+	mac := hmac.New(sha256.New, []byte(a.clientSecret))
+	mac.Write([]byte(username + a.clientID))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func (a *cognitoAuth) ExchangeCode(ctx context.Context, code string) (*UserIdentity, error) {
-	form := url.Values{}
-	form.Set("grant_type", "authorization_code")
-	form.Set("client_id", a.clientID)
-	form.Set("code", code)
-	form.Set("redirect_uri", a.redirect)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.domain+"/oauth2/token", strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
+func (a *cognitoAuth) userFromAuthenticationResult(ctx context.Context, result *cognitotypes.AuthenticationResultType) (*UserIdentity, error) {
+	if result == nil || result.IdToken == nil || strings.TrimSpace(*result.IdToken) == "" {
+		return nil, &authDisplayError{Message: "Cognito returned no identity token for this sign-in."}
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("cognito token exchange failed: %s", resp.Status)
-	}
-
-	var tokens cognitoTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		return nil, err
-	}
-	if tokens.IDToken == "" {
-		return nil, errors.New("cognito token exchange returned no id_token")
-	}
-
-	claims, err := a.validateIDToken(ctx, tokens.IDToken)
+	claims, err := a.validateIDToken(ctx, strings.TrimSpace(*result.IdToken))
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +395,49 @@ func (a *cognitoAuth) ExchangeCode(ctx context.Context, code string) (*UserIdent
 		Email:      claims.Email,
 		Name:       claims.Name,
 	}, nil
+}
+
+func (a *cognitoAuth) unsupportedChallengeError(challenge cognitotypes.ChallengeNameType, available []cognitotypes.ChallengeNameType) error {
+	if len(available) == 0 {
+		return &authDisplayError{Message: fmt.Sprintf("Cognito returned an unsupported challenge: %s.", challenge)}
+	}
+	options := make([]string, 0, len(available))
+	for _, candidate := range available {
+		options = append(options, string(candidate))
+	}
+	return &authDisplayError{Message: fmt.Sprintf("This sign-in method is not currently available. Cognito offered: %s.", strings.Join(options, ", "))}
+}
+
+func (a *cognitoAuth) translateAuthError(err error, fallback string) error {
+	if err == nil {
+		return nil
+	}
+	var display *authDisplayError
+	if errors.As(err, &display) {
+		return display
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotAuthorizedException":
+			return &authDisplayError{Message: fallback}
+		case "UserNotFoundException":
+			return &authDisplayError{Message: "No Cognito account matched that email address."}
+		case "CodeMismatchException":
+			return &authDisplayError{Message: "The emailed code was not valid. Request a new code or try again."}
+		case "ExpiredCodeException":
+			return &authDisplayError{Message: "That code has expired. Request a new one and try again."}
+		case "LimitExceededException", "TooManyRequestsException":
+			return &authDisplayError{Message: "Too many attempts were made just now. Wait a moment and try again."}
+		case "PasswordResetRequiredException":
+			return &authDisplayError{Message: "This account needs a password reset before it can sign in."}
+		case "InvalidParameterException":
+			return &authDisplayError{Message: "The current Cognito client is not configured for that sign-in method yet."}
+		case "UserNotConfirmedException":
+			return &authDisplayError{Message: "This Cognito account is not confirmed yet."}
+		}
+	}
+	return &authDisplayError{Message: fallback}
 }
 
 func (a *cognitoAuth) validateIDToken(ctx context.Context, raw string) (*cognitoClaims, error) {
@@ -288,14 +554,6 @@ func newSessionSecret() []byte {
 	return []byte("flowershow-dev-secret")
 }
 
-func randomToken() string {
-	buf := make([]byte, 24)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	}
-	return base64.RawURLEncoding.EncodeToString(buf)
-}
-
 func (a *app) authEnabled() bool {
 	return a.auth != nil && a.auth.Enabled()
 }
@@ -348,8 +606,8 @@ func (a *app) isAdmin(r *http.Request) bool {
 	return a.hasRole(r, "admin")
 }
 
-func (a *app) encodeSessionCookie(session authSession) (string, error) {
-	payload, err := json.Marshal(session)
+func (a *app) encodeSignedCookie(value any) (string, error) {
+	payload, err := json.Marshal(value)
 	if err != nil {
 		return "", err
 	}
@@ -360,35 +618,43 @@ func (a *app) encodeSessionCookie(session authSession) (string, error) {
 		base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-func (a *app) parseSessionCookie(raw string) (*authSession, bool) {
+func (a *app) parseSignedCookie(raw string, out any) bool {
 	parts := strings.Split(raw, ".")
 	if len(parts) != 2 {
-		return nil, false
+		return false
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return nil, false
+		return false
 	}
 	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return nil, false
+		return false
 	}
 	mac := hmac.New(sha256.New, a.sessionSecret)
 	mac.Write(payload)
 	if !hmac.Equal(sig, mac.Sum(nil)) {
-		return nil, false
+		return false
 	}
+	if err := json.Unmarshal(payload, out); err != nil {
+		return false
+	}
+	return true
+}
+
+func (a *app) parseSessionCookie(raw string) (*authSession, bool) {
 	var session authSession
-	if err := json.Unmarshal(payload, &session); err != nil {
+	if !a.parseSignedCookie(raw, &session) {
 		return nil, false
 	}
 	return &session, true
 }
 
 func (a *app) setUserSession(w http.ResponseWriter, user UserIdentity) error {
-	value, err := a.encodeSessionCookie(authSession{
+	expiresAt := time.Now().UTC().Add(authSessionDuration)
+	value, err := a.encodeSignedCookie(authSession{
 		User:      user,
-		ExpiresAt: time.Now().UTC().Add(8 * time.Hour).Unix(),
+		ExpiresAt: expiresAt.Unix(),
 	})
 	if err != nil {
 		return err
@@ -397,6 +663,8 @@ func (a *app) setUserSession(w http.ResponseWriter, user UserIdentity) error {
 		Name:     authSessionCookieName,
 		Value:    value,
 		Path:     "/",
+		Expires:  expiresAt,
+		MaxAge:   int(authSessionDuration / time.Second),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -406,6 +674,48 @@ func (a *app) setUserSession(w http.ResponseWriter, user UserIdentity) error {
 func (a *app) clearUserSession(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     authSessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (a *app) currentPendingAuth(r *http.Request) (*pendingAuthState, bool) {
+	cookie, err := r.Cookie(authPendingCookieName)
+	if err != nil {
+		return nil, false
+	}
+	var pending pendingAuthState
+	if !a.parseSignedCookie(cookie.Value, &pending) {
+		return nil, false
+	}
+	if time.Now().UTC().Unix() >= pending.ExpiresAt {
+		return nil, false
+	}
+	return &pending, true
+}
+
+func (a *app) setPendingAuth(w http.ResponseWriter, pending pendingAuthState) error {
+	value, err := a.encodeSignedCookie(pending)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     authPendingCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(time.Until(time.Unix(pending.ExpiresAt, 0)).Seconds()),
+	})
+	return nil
+}
+
+func (a *app) clearPendingAuth(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     authPendingCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -429,61 +739,199 @@ func bootstrapAdminMap() map[string]bool {
 	return out
 }
 
-func (a *app) handleCognitoLogin(w http.ResponseWriter, r *http.Request) {
-	if !a.authEnabled() {
-		http.NotFound(w, r)
-		return
+func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adminLoginData {
+	data := adminLoginData{
+		Title:             "Admin Login",
+		Error:             errMessage,
+		Info:              infoMessage,
+		CognitoEnabled:    a.authEnabled(),
+		BootstrapPassword: strings.TrimSpace(a.adminPassword) != "",
 	}
-	state := randomToken()
-	http.SetCookie(w, &http.Cookie{
-		Name:     authStateCookieName,
-		Value:    state,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   300,
-	})
-	http.Redirect(w, r, a.auth.LoginURL(state), http.StatusSeeOther)
+	if pending, ok := a.currentPendingAuth(r); ok {
+		data.PendingEmail = pending.Email
+		data.PendingEmailOTP = pending.Flow == pendingAuthFlowEmailOTP
+		data.PendingReset = pending.Flow == pendingAuthFlowForgotPassword
+	}
+	return data
 }
 
-func (a *app) handleCognitoCallback(w http.ResponseWriter, r *http.Request) {
+func loginNoticeMessage(code string) string {
+	switch strings.TrimSpace(code) {
+	case "email-code-sent":
+		return "Check your email for the sign-in code, then enter it below."
+	case "password-reset-code-sent":
+		return "Check your email for the password reset code, then set a new password below."
+	case "password-reset-complete":
+		return "Password updated. Sign in with the new password or request an email code."
+	case "site-login-only":
+		return "Sign in directly on this page. Hosted Cognito redirects are no longer used here."
+	default:
+		return ""
+	}
+}
+
+func (a *app) renderAdminLogin(w http.ResponseWriter, r *http.Request, errMessage, infoMessage string) {
+	a.render(w, "login.html", a.loginPageData(r, errMessage, infoMessage))
+}
+
+func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	a.renderAdminLogin(w, r, "", loginNoticeMessage(r.URL.Query().Get("notice")))
+}
+
+func (a *app) handleAdminPasswordLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.authEnabled() {
-		http.NotFound(w, r)
+		a.renderAdminLogin(w, r, "Cognito password sign-in is not configured for this deployment.", "")
 		return
 	}
-	stateCookie, err := r.Cookie(authStateCookieName)
-	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
-		http.Error(w, "invalid auth state", http.StatusBadRequest)
+	if err := r.ParseForm(); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
-	user, err := a.auth.ExchangeCode(r.Context(), r.URL.Query().Get("code"))
+	user, err := a.auth.PasswordLogin(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		a.renderAdminLogin(w, r, err.Error(), "")
 		return
 	}
 	if err := a.setUserSession(w, *user); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.clearPendingAuth(w)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) {
+	if !a.authEnabled() {
+		a.renderAdminLogin(w, r, "Cognito email-code sign-in is not configured for this deployment.", "")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	result, err := a.auth.StartEmailOTP(r.Context(), r.FormValue("email"))
+	if err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	if result != nil && result.User != nil {
+		if err := a.setUserSession(w, *result.User); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		a.clearPendingAuth(w)
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	if result == nil || result.Pending == nil {
+		a.renderAdminLogin(w, r, "Cognito did not return an email-code challenge.", "")
+		return
+	}
+	if err := a.setPendingAuth(w, *result.Pending); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/login?notice=email-code-sent", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminEmailCodeVerify(w http.ResponseWriter, r *http.Request) {
+	if !a.authEnabled() {
+		a.renderAdminLogin(w, r, "Cognito email-code sign-in is not configured for this deployment.", "")
+		return
+	}
+	pending, ok := a.currentPendingAuth(r)
+	if !ok || pending.Flow != pendingAuthFlowEmailOTP {
+		a.renderAdminLogin(w, r, "Request a fresh email code before trying to verify it.", "")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	user, err := a.auth.VerifyEmailOTP(r.Context(), pending.Email, pending.Session, r.FormValue("code"))
+	if err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	if err := a.setUserSession(w, *user); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	a.clearPendingAuth(w)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminForgotPasswordStart(w http.ResponseWriter, r *http.Request) {
+	if !a.authEnabled() {
+		a.renderAdminLogin(w, r, "Cognito password reset is not configured for this deployment.", "")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	email := strings.TrimSpace(r.FormValue("email"))
+	if err := a.auth.StartForgotPassword(r.Context(), email); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	if err := a.setPendingAuth(w, pendingAuthState{
+		Flow:      pendingAuthFlowForgotPassword,
+		Email:     email,
+		ExpiresAt: time.Now().UTC().Add(20 * time.Minute).Unix(),
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/login?notice=password-reset-code-sent", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminForgotPasswordConfirm(w http.ResponseWriter, r *http.Request) {
+	if !a.authEnabled() {
+		a.renderAdminLogin(w, r, "Cognito password reset is not configured for this deployment.", "")
+		return
+	}
+	pending, ok := a.currentPendingAuth(r)
+	if !ok || pending.Flow != pendingAuthFlowForgotPassword {
+		a.renderAdminLogin(w, r, "Start a password reset before submitting a reset code.", "")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+	if newPassword != confirmPassword {
+		a.renderAdminLogin(w, r, "The new passwords did not match.", "")
+		return
+	}
+	if err := a.auth.ConfirmForgotPassword(r.Context(), pending.Email, r.FormValue("code"), newPassword); err != nil {
+		a.renderAdminLogin(w, r, err.Error(), "")
+		return
+	}
+	a.clearPendingAuth(w)
+	http.Redirect(w, r, "/admin/login?notice=password-reset-complete", http.StatusSeeOther)
+}
+
+func (a *app) handleCognitoLogin(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/admin/login?notice=site-login-only", http.StatusSeeOther)
+}
+
+func (a *app) handleCognitoCallback(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/admin/login?notice=site-login-only", http.StatusSeeOther)
+}
+
+func (a *app) handleCognitoLogout(w http.ResponseWriter, r *http.Request) {
+	a.clearPendingAuth(w)
+	a.clearUserSession(w)
 	http.SetCookie(w, &http.Cookie{
-		Name:     authStateCookieName,
+		Name:     adminCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
-}
-
-func (a *app) handleCognitoLogout(w http.ResponseWriter, r *http.Request) {
-	a.clearUserSession(w)
-	if a.authEnabled() {
-		if url := a.auth.LogoutURL(); url != "" {
-			http.Redirect(w, r, url, http.StatusSeeOther)
-			return
-		}
-	}
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 
@@ -522,4 +970,15 @@ func (a *app) handleRoleAssign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/roles", http.StatusSeeOther)
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func valueOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

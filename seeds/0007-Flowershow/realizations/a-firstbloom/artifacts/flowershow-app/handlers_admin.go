@@ -5,39 +5,33 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // --- Login ---
-
-func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "login.html", map[string]any{
-		"Title":          "Admin Login",
-		"CognitoEnabled": a.authEnabled(),
-	})
-}
 
 func (a *app) handleAdminLoginPost(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	password := r.FormValue("password")
 	if password != a.adminPassword {
-		a.render(w, "login.html", map[string]any{
-			"Title":          "Admin Login",
-			"Error":          "Invalid password",
-			"CognitoEnabled": a.authEnabled(),
-		})
+		a.renderAdminLogin(w, r, "Invalid bootstrap password", "")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminCookieName,
 		Value:    "ok",
 		Path:     "/",
+		Expires:  time.Now().UTC().Add(authSessionDuration),
+		MaxAge:   int(authSessionDuration / time.Second),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+	a.clearPendingAuth(w)
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	a.clearPendingAuth(w)
 	a.clearUserSession(w)
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminCookieName,

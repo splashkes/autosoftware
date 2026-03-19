@@ -6,9 +6,10 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/admin\/login/);
 
-    await page.fill('#password', 'wrong');
-    await page.click('button[type="submit"]');
-    await expect(page.locator('text=Invalid password')).toBeVisible();
+    await page.getByText('Bootstrap Override').click();
+    await page.fill('#bootstrap_password', 'wrong');
+    await page.getByRole('button', { name: 'Use Bootstrap Password' }).click();
+    await expect(page.locator('text=Invalid bootstrap password')).toBeVisible();
 
     await loginLocalAdmin(page);
   });
