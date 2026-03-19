@@ -65,6 +65,9 @@ type flowershowStore interface {
 	updatePerson(id string, input PersonInput) (*Person, error)
 	personByID(id string) (*Person, bool)
 	allPersons() []*Person
+	linkPersonOrganization(PersonOrganization) (*PersonOrganization, error)
+	personOrganizationsByPerson(personID string) []*PersonOrganization
+	lookupPersonsForShow(showID, query string) []*PersonOrganization
 
 	// Schedule
 	createSchedule(ShowSchedule) (*ShowSchedule, error)
@@ -84,6 +87,7 @@ type flowershowStore interface {
 	// Classes
 	createClass(ShowClassInput) (*ShowClass, error)
 	updateClass(id string, input ShowClassInput) (*ShowClass, error)
+	reorderClass(id string, sortOrder int) (*ShowClass, error)
 	classesBySection(sectionID string) []*ShowClass
 	classByID(id string) (*ShowClass, bool)
 	classesByShowID(showID string) []*ShowClass
@@ -91,12 +95,21 @@ type flowershowStore interface {
 	// Entries
 	createEntry(EntryInput) (*Entry, error)
 	updateEntry(id string, input EntryInput) (*Entry, error)
+	moveEntry(entryID, classID, reason string) (*Entry, error)
+	reassignEntry(entryID, personID string) (*Entry, error)
+	deleteEntry(entryID string) error
 	setEntrySuppressed(entryID string, suppressed bool) error
 	setPlacement(entryID string, placement int, points float64) error
 	entryByID(id string) (*Entry, bool)
 	entriesByShow(showID string) []*Entry
 	entriesByClass(classID string) []*Entry
 	entriesByPerson(personID string) []*Entry
+
+	// Show credits
+	createShowCredit(ShowCreditInput) (*ShowCredit, error)
+	showCreditByID(id string) (*ShowCredit, bool)
+	deleteShowCredit(id string) error
+	showCreditsByShow(showID string) []*ShowCredit
 
 	// Media
 	attachMedia(Media) (*Media, error)
@@ -180,12 +193,14 @@ type memoryStore struct {
 	organizations  map[string]*Organization
 	shows          map[string]*Show
 	persons        map[string]*Person
+	personOrgs     map[string]*PersonOrganization
 	showJudges     map[string]*ShowJudgeAssignment
 	schedules      map[string]*ShowSchedule
 	divisions      map[string]*Division
 	sections       map[string]*Section
 	classes        map[string]*ShowClass
 	entries        map[string]*Entry
+	showCredits    map[string]*ShowCredit
 	media          map[string]*Media
 	taxons         map[string]*Taxon
 	awards         map[string]*AwardDefinition
@@ -211,12 +226,14 @@ func newMemoryStore() *memoryStore {
 		organizations:  make(map[string]*Organization),
 		shows:          make(map[string]*Show),
 		persons:        make(map[string]*Person),
+		personOrgs:     make(map[string]*PersonOrganization),
 		showJudges:     make(map[string]*ShowJudgeAssignment),
 		schedules:      make(map[string]*ShowSchedule),
 		divisions:      make(map[string]*Division),
 		sections:       make(map[string]*Section),
 		classes:        make(map[string]*ShowClass),
 		entries:        make(map[string]*Entry),
+		showCredits:    make(map[string]*ShowCredit),
 		media:          make(map[string]*Media),
 		taxons:         make(map[string]*Taxon),
 		awards:         make(map[string]*AwardDefinition),
@@ -414,6 +431,19 @@ func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
 	}
 	s.persons[p.ID] = p
 	s.appendClaim(p.ID, "person", "person.created", p)
+	if strings.TrimSpace(input.OrganizationID) != "" {
+		role := strings.TrimSpace(input.OrganizationRole)
+		if role == "" {
+			role = "member"
+		}
+		link := &PersonOrganization{
+			PersonID:       p.ID,
+			OrganizationID: strings.TrimSpace(input.OrganizationID),
+			Role:           role,
+		}
+		s.personOrgs[p.ID+"|"+link.OrganizationID+"|"+link.Role] = link
+		s.appendClaim(p.ID, "person", "person.organization_linked", link)
+	}
 	return p, nil
 }
 
@@ -448,6 +478,78 @@ func (s *memoryStore) allPersons() []*Person {
 	for _, p := range s.persons {
 		out = append(out, p)
 	}
+	return out
+}
+
+func (s *memoryStore) linkPersonOrganization(link PersonOrganization) (*PersonOrganization, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.persons[link.PersonID]; !ok {
+		return nil, errors.New("person not found")
+	}
+	if _, ok := s.organizations[link.OrganizationID]; !ok {
+		return nil, errors.New("organization not found")
+	}
+	if strings.TrimSpace(link.Role) == "" {
+		link.Role = "member"
+	}
+	copy := link
+	s.personOrgs[copy.PersonID+"|"+copy.OrganizationID+"|"+copy.Role] = &copy
+	s.appendClaim(copy.PersonID, "person", "person.organization_linked", copy)
+	return &copy, nil
+}
+
+func (s *memoryStore) personOrganizationsByPerson(personID string) []*PersonOrganization {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*PersonOrganization
+	for _, item := range s.personOrgs {
+		if item.PersonID == personID {
+			copy := *item
+			out = append(out, &copy)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].OrganizationID == out[j].OrganizationID {
+			return out[i].Role < out[j].Role
+		}
+		return out[i].OrganizationID < out[j].OrganizationID
+	})
+	return out
+}
+
+func (s *memoryStore) lookupPersonsForShow(showID, query string) []*PersonOrganization {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	show, ok := s.shows[showID]
+	if !ok {
+		return nil
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	var out []*PersonOrganization
+	for _, link := range s.personOrgs {
+		if link.OrganizationID != show.OrganizationID {
+			continue
+		}
+		person, ok := s.persons[link.PersonID]
+		if !ok {
+			continue
+		}
+		haystack := strings.ToLower(strings.TrimSpace(person.FirstName + " " + person.LastName + " " + person.Email + " " + person.Initials + " " + link.Role))
+		if query != "" && !strings.Contains(haystack, query) {
+			continue
+		}
+		copy := *link
+		out = append(out, &copy)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		pi := s.persons[out[i].PersonID]
+		pj := s.persons[out[j].PersonID]
+		if pi == nil || pj == nil {
+			return out[i].PersonID < out[j].PersonID
+		}
+		return pi.LastName+pi.FirstName < pj.LastName+pj.FirstName
+	})
 	return out
 }
 
@@ -573,6 +675,7 @@ func (s *memoryStore) createClass(input ShowClassInput) (*ShowClass, error) {
 		ID:                newID("class"),
 		SectionID:         input.SectionID,
 		ClassNumber:       input.ClassNumber,
+		SortOrder:         input.SortOrder,
 		Title:             input.Title,
 		Domain:            input.Domain,
 		Description:       input.Description,
@@ -598,12 +701,33 @@ func (s *memoryStore) updateClass(id string, input ShowClassInput) (*ShowClass, 
 		return nil, errors.New("class not found")
 	}
 	c.ClassNumber = input.ClassNumber
+	c.SortOrder = input.SortOrder
 	c.Title = input.Title
 	c.Domain = input.Domain
 	c.Description = input.Description
 	c.SpecimenCount = input.SpecimenCount
+	c.Unit = input.Unit
+	c.MeasurementRule = input.MeasurementRule
+	c.NamingRequirement = input.NamingRequirement
+	c.ContainerRule = input.ContainerRule
+	c.EligibilityRule = input.EligibilityRule
+	c.ScheduleNotes = input.ScheduleNotes
 	c.TaxonRefs = input.TaxonRefs
 	s.appendClaim(c.ID, "class", "class.updated", c)
+	return c, nil
+}
+
+func (s *memoryStore) reorderClass(id string, sortOrder int) (*ShowClass, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.classes[id]
+	if !ok {
+		return nil, errors.New("class not found")
+	}
+	c.SortOrder = sortOrder
+	s.appendClaim(c.ID, "class", "class.reordered", map[string]any{
+		"sort_order": sortOrder,
+	})
 	return c, nil
 }
 
@@ -616,7 +740,12 @@ func (s *memoryStore) classesBySection(sectionID string) []*ShowClass {
 			out = append(out, c)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ClassNumber < out[j].ClassNumber })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder == out[j].SortOrder {
+			return out[i].ClassNumber < out[j].ClassNumber
+		}
+		return out[i].SortOrder < out[j].SortOrder
+	})
 	return out
 }
 
@@ -650,7 +779,12 @@ func (s *memoryStore) classesByShowID(showID string) []*ShowClass {
 			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ClassNumber < out[j].ClassNumber })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder == out[j].SortOrder {
+			return out[i].ClassNumber < out[j].ClassNumber
+		}
+		return out[i].SortOrder < out[j].SortOrder
+	})
 	return out
 }
 
@@ -693,9 +827,74 @@ func (s *memoryStore) updateEntry(id string, input EntryInput) (*Entry, error) {
 	e.Name = input.Name
 	e.Notes = input.Notes
 	e.ClassID = input.ClassID
+	e.PersonID = input.PersonID
 	e.TaxonRefs = input.TaxonRefs
 	s.appendClaim(e.ID, "entry", "entry.updated", e)
 	return e, nil
+}
+
+func (s *memoryStore) moveEntry(entryID, classID, reason string) (*Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return nil, errors.New("entry not found")
+	}
+	if _, ok := s.classes[classID]; !ok {
+		return nil, errors.New("class not found")
+	}
+	previousClassID := e.ClassID
+	e.ClassID = classID
+	s.appendClaim(e.ID, "entry", "entry.moved", map[string]any{
+		"previous_class_id": previousClassID,
+		"class_id":          classID,
+		"reason":            strings.TrimSpace(reason),
+	})
+	return e, nil
+}
+
+func (s *memoryStore) reassignEntry(entryID, personID string) (*Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return nil, errors.New("entry not found")
+	}
+	if _, ok := s.persons[personID]; !ok {
+		return nil, errors.New("person not found")
+	}
+	previousPersonID := e.PersonID
+	e.PersonID = personID
+	s.appendClaim(e.ID, "entry", "entry.reassigned", map[string]any{
+		"previous_person_id": previousPersonID,
+		"person_id":          personID,
+	})
+	return e, nil
+}
+
+func (s *memoryStore) deleteEntry(entryID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	for _, scorecard := range s.scorecards {
+		if scorecard.EntryID == entryID {
+			return errors.New("cannot delete entry with scorecards")
+		}
+	}
+	for id, media := range s.media {
+		if media.EntryID == entryID {
+			delete(s.media, id)
+		}
+	}
+	delete(s.entries, entryID)
+	s.appendClaim(entryID, "entry", "entry.deleted", map[string]any{
+		"show_id":  e.ShowID,
+		"class_id": e.ClassID,
+	})
+	return nil
 }
 
 func (s *memoryStore) setEntrySuppressed(entryID string, suppressed bool) error {
@@ -767,6 +966,77 @@ func (s *memoryStore) entriesByPerson(personID string) []*Entry {
 			out = append(out, e)
 		}
 	}
+	return out
+}
+
+func (s *memoryStore) createShowCredit(input ShowCreditInput) (*ShowCredit, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(input.ShowID) == "" {
+		return nil, errors.New("show id required")
+	}
+	if strings.TrimSpace(input.CreditLabel) == "" {
+		return nil, errors.New("credit label required")
+	}
+	if strings.TrimSpace(input.PersonID) == "" && strings.TrimSpace(input.DisplayName) == "" {
+		return nil, errors.New("person or display name required")
+	}
+	if input.PersonID != "" {
+		if _, ok := s.persons[input.PersonID]; !ok {
+			return nil, errors.New("person not found")
+		}
+	}
+	credit := &ShowCredit{
+		ID:          newID("credit"),
+		ShowID:      input.ShowID,
+		PersonID:    strings.TrimSpace(input.PersonID),
+		DisplayName: strings.TrimSpace(input.DisplayName),
+		CreditLabel: strings.TrimSpace(input.CreditLabel),
+		Notes:       strings.TrimSpace(input.Notes),
+		SortOrder:   input.SortOrder,
+		CreatedAt:   time.Now().UTC(),
+	}
+	s.showCredits[credit.ID] = credit
+	s.appendClaim(credit.ID, "show_credit", "show_credit.created", credit)
+	return credit, nil
+}
+
+func (s *memoryStore) deleteShowCredit(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.showCredits[id]; !ok {
+		return errors.New("show credit not found")
+	}
+	delete(s.showCredits, id)
+	s.appendClaim(id, "show_credit", "show_credit.deleted", map[string]any{"id": id})
+	return nil
+}
+
+func (s *memoryStore) showCreditByID(id string) (*ShowCredit, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	credit, ok := s.showCredits[id]
+	return credit, ok
+}
+
+func (s *memoryStore) showCreditsByShow(showID string) []*ShowCredit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*ShowCredit
+	for _, credit := range s.showCredits {
+		if credit.ShowID == showID {
+			out = append(out, credit)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder == out[j].SortOrder {
+			if out[i].CreditLabel == out[j].CreditLabel {
+				return out[i].CreatedAt.Before(out[j].CreatedAt)
+			}
+			return out[i].CreditLabel < out[j].CreditLabel
+		}
+		return out[i].SortOrder < out[j].SortOrder
+	})
 	return out
 }
 
@@ -1437,6 +1707,15 @@ func (s *memoryStore) seedDemoData() {
 	for i := range persons {
 		s.persons[persons[i].ID] = &persons[i]
 	}
+	personOrgs := []PersonOrganization{
+		{PersonID: "person_01", OrganizationID: org.ID, Role: "member"},
+		{PersonID: "person_02", OrganizationID: org.ID, Role: "member"},
+		{PersonID: "person_03", OrganizationID: org.ID, Role: "guest"},
+	}
+	for i := range personOrgs {
+		item := personOrgs[i]
+		s.personOrgs[item.PersonID+"|"+item.OrganizationID+"|"+item.Role] = &item
+	}
 
 	// Shows
 	show1 := &Show{
@@ -1788,6 +2067,13 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
   email TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS as_flowershow_m_person_organizations (
+  person_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  PRIMARY KEY (person_id, organization_id, role)
+);
+
 CREATE TABLE IF NOT EXISTS as_flowershow_m_schedules (
   id TEXT PRIMARY KEY,
   show_id TEXT NOT NULL,
@@ -1817,6 +2103,7 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_classes (
   id TEXT PRIMARY KEY,
   section_id TEXT NOT NULL,
   class_number TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
   title TEXT NOT NULL,
   domain TEXT NOT NULL DEFAULT 'horticulture',
   description TEXT NOT NULL DEFAULT '',
@@ -1841,6 +2128,17 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
   placement INTEGER NOT NULL DEFAULT 0,
   points DOUBLE PRECISION NOT NULL DEFAULT 0,
   taxon_refs TEXT[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_show_credits (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  person_id TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  credit_label TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -1987,6 +2285,10 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
 			p.ID, p.FirstName, p.LastName, p.Initials, p.Email)
 	}
+	for _, po := range mem.personOrgs {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+			po.PersonID, po.OrganizationID, po.Role)
+	}
 	for _, assignment := range mem.showJudges {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_judges (id, show_id, person_id, assigned_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
 			assignment.ID, assignment.ShowID, assignment.PersonID, assignment.AssignedAt)
@@ -2004,12 +2306,16 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			sec.ID, sec.DivisionID, sec.Code, sec.Title, sec.SortOrder)
 	}
 	for _, c := range mem.classes {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, title, domain, description, specimen_count, taxon_refs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
-			c.ID, c.SectionID, c.ClassNumber, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, sort_order, title, domain, description, specimen_count, taxon_refs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+			c.ID, c.SectionID, c.ClassNumber, c.SortOrder, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
 	}
 	for _, e := range mem.entries {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
 			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.TaxonRefs, e.CreatedAt)
+	}
+	for _, credit := range mem.showCredits {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
+			credit.ID, credit.ShowID, credit.PersonID, credit.DisplayName, credit.CreditLabel, credit.Notes, credit.SortOrder, credit.CreatedAt)
 	}
 	for _, t := range mem.taxons {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
@@ -2091,6 +2397,15 @@ func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*P
 }
 func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.mem.personByID(id) }
 func (s *postgresFlowershowStore) allPersons() []*Person                { return s.mem.allPersons() }
+func (s *postgresFlowershowStore) linkPersonOrganization(link PersonOrganization) (*PersonOrganization, error) {
+	return s.mem.linkPersonOrganization(link)
+}
+func (s *postgresFlowershowStore) personOrganizationsByPerson(personID string) []*PersonOrganization {
+	return s.mem.personOrganizationsByPerson(personID)
+}
+func (s *postgresFlowershowStore) lookupPersonsForShow(showID, query string) []*PersonOrganization {
+	return s.mem.lookupPersonsForShow(showID, query)
+}
 func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) {
 	return s.mem.createSchedule(sched)
 }
@@ -2124,6 +2439,9 @@ func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass,
 func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) {
 	return s.mem.updateClass(id, input)
 }
+func (s *postgresFlowershowStore) reorderClass(id string, sortOrder int) (*ShowClass, error) {
+	return s.mem.reorderClass(id, sortOrder)
+}
 func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass {
 	return s.mem.classesBySection(sectionID)
 }
@@ -2137,6 +2455,13 @@ func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) 
 func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) {
 	return s.mem.updateEntry(id, input)
 }
+func (s *postgresFlowershowStore) moveEntry(entryID, classID, reason string) (*Entry, error) {
+	return s.mem.moveEntry(entryID, classID, reason)
+}
+func (s *postgresFlowershowStore) reassignEntry(entryID, personID string) (*Entry, error) {
+	return s.mem.reassignEntry(entryID, personID)
+}
+func (s *postgresFlowershowStore) deleteEntry(entryID string) error { return s.mem.deleteEntry(entryID) }
 func (s *postgresFlowershowStore) setEntrySuppressed(entryID string, suppressed bool) error {
 	return s.mem.setEntrySuppressed(entryID, suppressed)
 }
@@ -2152,6 +2477,16 @@ func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry {
 }
 func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry {
 	return s.mem.entriesByPerson(personID)
+}
+func (s *postgresFlowershowStore) createShowCredit(input ShowCreditInput) (*ShowCredit, error) {
+	return s.mem.createShowCredit(input)
+}
+func (s *postgresFlowershowStore) showCreditByID(id string) (*ShowCredit, bool) {
+	return s.mem.showCreditByID(id)
+}
+func (s *postgresFlowershowStore) deleteShowCredit(id string) error { return s.mem.deleteShowCredit(id) }
+func (s *postgresFlowershowStore) showCreditsByShow(showID string) []*ShowCredit {
+	return s.mem.showCreditsByShow(showID)
 }
 func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) { return s.mem.attachMedia(m) }
 func (s *postgresFlowershowStore) mediaByEntry(entryID string) []*Media {

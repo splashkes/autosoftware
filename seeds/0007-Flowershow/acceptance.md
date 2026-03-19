@@ -12,6 +12,7 @@ The system is complete when:
 - A show has a schedule with divisions, sections, and classes
 - Classes can be browsed within schedule structure
 - Entry `category_id` is replaced by `show_class_id`
+- Classes can be explicitly reordered within sections
 
 ## Governance & Provenance
 - A show can cite a standard edition (e.g. OJES 2019)
@@ -43,6 +44,20 @@ The system is complete when:
 ## Show Admin
 - Control panel for live show operations
 - Manage judges, classes, entries, media, and winners per class
+- The same operator workspace is used for show setup and live event admin
+- Operators can move an entry to a different class when judging corrects it
+- Operators can change the assigned entrant on an entry
+- Operators can delete a mistaken entry when it has not progressed into scoring
+- Entries can be added before photos and completed later by another operator
+- Entry intake can quickly look up club members and guests by name from the
+  show workspace without leaving the event page
+- Free-form show credits (host, scribe, designer, etc) are managed separately
+  from permissions
+- A scoped onsite support role can perform live floor corrections without broad
+  organization authority
+- A show-scoped judge support role can assign judges and make live floor
+  corrections without receiving global admin access
+- A full-show thumbnail or board view can show all classes and entries at once
 - Multiple operators see live updates via SSE (no reload)
 - HTMX-driven partial updates
 - The same normal operations are reachable through declared semantic API

@@ -15,8 +15,16 @@ export const FLOWERSHOW_AUTH_STATE_PATH = path.resolve(
 
 const FLOWERSHOW_LOCAL_ADMIN_SUB = 'sub_playwright_admin';
 const FLOWERSHOW_LOCAL_VIEWER_SUB = 'sub_playwright_viewer';
+const FLOWERSHOW_LOCAL_INTAKE_SUB = 'sub_playwright_intake';
 
 async function ensureLocalAdminRole(page: Page) {
+  return ensureLocalRole(page, {
+    cognito_sub: FLOWERSHOW_LOCAL_ADMIN_SUB,
+    role: 'admin',
+  });
+}
+
+async function ensureLocalRole(page: Page, data: Record<string, unknown>) {
   const response = await page.request.post(
     '/v1/commands/0007-Flowershow/roles.assign',
     {
@@ -24,10 +32,7 @@ async function ensureLocalAdminRole(page: Page) {
         Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      data: {
-        cognito_sub: FLOWERSHOW_LOCAL_ADMIN_SUB,
-        role: 'admin',
-      },
+      data,
     },
   );
   expect(response.ok()).toBeTruthy();
@@ -67,6 +72,29 @@ export async function loginLocalViewer(page: Page) {
         cognito_sub: FLOWERSHOW_LOCAL_VIEWER_SUB,
         email: 'playwright-viewer@example.com',
         name: 'Playwright Viewer',
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+export async function loginLocalIntakeOperator(page: Page, showID = 'show_spring2025') {
+  await ensureLocalRole(page, {
+    cognito_sub: FLOWERSHOW_LOCAL_INTAKE_SUB,
+    show_id: showID,
+    role: 'show_intake_operator',
+  });
+  const response = await page.request.post('/__test/session', {
+    headers: {
+      Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      user: {
+        subject_id: FLOWERSHOW_LOCAL_INTAKE_SUB,
+        cognito_sub: FLOWERSHOW_LOCAL_INTAKE_SUB,
+        email: 'playwright-intake@example.com',
+        name: 'Playwright Intake',
       },
     },
   });

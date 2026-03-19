@@ -115,6 +115,18 @@ func addAdminSession(t *testing.T, a *app, req *http.Request) {
 	}
 }
 
+func addRoleSession(t *testing.T, a *app, req *http.Request, input UserRoleInput, user UserIdentity) {
+	t.Helper()
+	assignRuntimeRole(t, a, input)
+	w := httptest.NewRecorder()
+	if err := a.setUserSession(w, req, user); err != nil {
+		t.Fatalf("set user session: %v", err)
+	}
+	for _, cookie := range w.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+}
+
 func assignRuntimeRole(t *testing.T, a *app, input UserRoleInput) *UserRole {
 	t.Helper()
 	if a.authority == nil {
@@ -1037,6 +1049,182 @@ func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
 	}
 }
 
+func TestShowIntakeOperatorCanAccessScopedWorkspaceAndEntryMoveButNotGlobalAdmin(t *testing.T) {
+	a := testApp()
+
+	showReq := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
+	addRoleSession(t, a, showReq, UserRoleInput{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		ShowID:     "show_spring2025",
+		Role:       "show_intake_operator",
+	}, UserIdentity{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		Email:      "support@example.com",
+	})
+
+	showMux := http.NewServeMux()
+	showMux.HandleFunc("GET /admin/shows/{showID}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowDetail))
+	showW := httptest.NewRecorder()
+	showMux.ServeHTTP(showW, showReq)
+	if showW.Code != http.StatusOK {
+		t.Fatalf("expected scoped workspace access, got %d", showW.Code)
+	}
+
+	moveReq := httptest.NewRequest("POST", "/admin/entries/entry_01/move", strings.NewReader("class_id=class_02&reason=Judge+correction"))
+	moveReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addRoleSession(t, a, moveReq, UserRoleInput{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		ShowID:     "show_spring2025",
+		Role:       "show_intake_operator",
+	}, UserIdentity{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		Email:      "support@example.com",
+	})
+
+	moveMux := http.NewServeMux()
+	moveMux.HandleFunc("POST /admin/entries/{entryID}/move", a.requireCapabilityPage("entries.manage", a.handleAdminEntryMove))
+	moveW := httptest.NewRecorder()
+	moveMux.ServeHTTP(moveW, moveReq)
+	if moveW.Code != http.StatusSeeOther {
+		t.Fatalf("expected move redirect, got %d", moveW.Code)
+	}
+	if got := moveW.Result().Header.Get("Location"); got != "/admin/shows/show_spring2025" {
+		t.Fatalf("unexpected move redirect %q", got)
+	}
+	movedEntry, ok := a.store.entryByID("entry_01")
+	if !ok || movedEntry.ClassID != "class_02" {
+		t.Fatal("entry should move within scoped show for intake operator")
+	}
+
+	globalReq := httptest.NewRequest("GET", "/admin/roles", nil)
+	addRoleSession(t, a, globalReq, UserRoleInput{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		ShowID:     "show_spring2025",
+		Role:       "show_intake_operator",
+	}, UserIdentity{
+		SubjectID:  "sub_show_support",
+		CognitoSub: "sub_show_support",
+		Email:      "support@example.com",
+	})
+	globalMux := http.NewServeMux()
+	globalMux.HandleFunc("GET /admin/roles", a.requireAdmin(a.handleRoleManagement))
+	globalW := httptest.NewRecorder()
+	globalMux.ServeHTTP(globalW, globalReq)
+	if globalW.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect from global admin page, got %d", globalW.Code)
+	}
+	if got := globalW.Result().Header.Get("Location"); got != "/account?notice=admin_required" {
+		t.Fatalf("unexpected global admin redirect %q", got)
+	}
+}
+
+func TestShowJudgeSupportCanAssignJudgesWithinScopedShow(t *testing.T) {
+	a := testApp()
+	req := httptest.NewRequest("POST", "/admin/shows/show_spring2025/judges", strings.NewReader("person_id=person_02"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addRoleSession(t, a, req, UserRoleInput{
+		SubjectID:  "sub_judge_support",
+		CognitoSub: "sub_judge_support",
+		ShowID:     "show_spring2025",
+		Role:       "show_judge_support",
+	}, UserIdentity{
+		SubjectID:  "sub_judge_support",
+		CognitoSub: "sub_judge_support",
+		Email:      "judge-support@example.com",
+	})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireCapabilityPage("judges.manage", a.handleAdminJudgeAssign))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected judge assign redirect, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/shows/show_spring2025" {
+		t.Fatalf("unexpected redirect %q", got)
+	}
+	judges := a.store.judgesByShow("show_spring2025")
+	found := false
+	for _, judge := range judges {
+		if judge.PersonID == "person_02" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("show judge support should be able to assign judges within scoped show")
+	}
+}
+
+func TestShowPeopleLookupProjectionReturnsScopedMembersAndGuests(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/people.lookup", a.handleAPIShowPeopleLookup)
+
+	req := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/people.lookup?q=guest", nil)
+	addRoleSession(t, a, req, UserRoleInput{
+		SubjectID:  "sub_lookup",
+		CognitoSub: "sub_lookup",
+		ShowID:     "show_spring2025",
+		Role:       "show_intake_operator",
+	}, UserIdentity{
+		SubjectID:  "sub_lookup",
+		CognitoSub: "sub_lookup",
+		Email:      "lookup@example.com",
+	})
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var payload []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal lookup payload: %v", err)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("expected one guest result, got %d", len(payload))
+	}
+	if got := payload[0]["AffiliationRole"]; got != "guest" {
+		t.Fatalf("expected guest affiliation, got %#v", got)
+	}
+	if got := payload[0]["OrganizationID"]; got != "org_demo1" {
+		t.Fatalf("expected host organization org_demo1, got %#v", got)
+	}
+	if got := payload[0]["Label"]; got != "Susan Park · guest · Metro Rose Society" {
+		t.Fatalf("unexpected lookup label %#v", got)
+	}
+}
+
+func TestCreatePersonWithOrganizationLinkAppearsInShowLookup(t *testing.T) {
+	a := testApp()
+	created, err := a.store.createPerson(PersonInput{
+		FirstName:        "Nina",
+		LastName:         "North",
+		Email:            "nina@example.com",
+		OrganizationID:   "org_demo1",
+		OrganizationRole: "member",
+	})
+	if err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	items := a.personLookupViewsForShow("show_spring2025", "nina")
+	if len(items) != 1 {
+		t.Fatalf("expected 1 lookup result, got %d", len(items))
+	}
+	if items[0].Person.ID != created.ID {
+		t.Fatalf("expected created person %q, got %q", created.ID, items[0].Person.ID)
+	}
+	if items[0].AffiliationRole != "member" {
+		t.Fatalf("expected member affiliation, got %q", items[0].AffiliationRole)
+	}
+}
+
 func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -1683,6 +1871,206 @@ func TestServiceTokenParityCommandChain(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for suppressed service-token entry, got %d", w.Code)
+	}
+}
+
+func TestOnsiteWorkflowCommandsSupportReclassificationAndCredits(t *testing.T) {
+	a := testApp()
+
+	show, err := a.store.createShow(ShowInput{
+		OrganizationID: "org_demo1",
+		Name:           "Onsite Ops Show",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	schedule, err := a.store.createSchedule(ShowSchedule{ShowID: show.ID})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	division, err := a.store.createDivision(DivisionInput{
+		ShowScheduleID: schedule.ID,
+		Code:           "I",
+		Title:          "Ops Division",
+		Domain:         "horticulture",
+		SortOrder:      1,
+	})
+	if err != nil {
+		t.Fatalf("create division: %v", err)
+	}
+	section, err := a.store.createSection(SectionInput{
+		DivisionID: division.ID,
+		Code:       "A",
+		Title:      "Ops Section",
+		SortOrder:  1,
+	})
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+	classOne, err := a.store.createClass(ShowClassInput{
+		SectionID:     section.ID,
+		ClassNumber:   "1",
+		SortOrder:     1,
+		Title:         "Class One",
+		Domain:        "horticulture",
+		SpecimenCount: 1,
+	})
+	if err != nil {
+		t.Fatalf("create class one: %v", err)
+	}
+	classTwo, err := a.store.createClass(ShowClassInput{
+		SectionID:     section.ID,
+		ClassNumber:   "2",
+		SortOrder:     2,
+		Title:         "Class Two",
+		Domain:        "horticulture",
+		SpecimenCount: 1,
+	})
+	if err != nil {
+		t.Fatalf("create class two: %v", err)
+	}
+	entry, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  classOne.ID,
+		PersonID: "person_01",
+		Name:     "Movable Entry",
+	})
+	if err != nil {
+		t.Fatalf("create entry: %v", err)
+	}
+	deleteMe, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  classOne.ID,
+		PersonID: "person_02",
+		Name:     "Delete Me",
+	})
+	if err != nil {
+		t.Fatalf("create delete entry: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.reorder", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.move", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.reassign_entrant", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.delete", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/classes.update", `{
+		"id":"`+classOne.ID+`",
+		"section_id":"`+section.ID+`",
+		"class_number":"1A",
+		"sort_order":3,
+		"title":"Class One Updated",
+		"domain":"horticulture",
+		"description":"Updated wording",
+		"specimen_count":2
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("class update: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/classes.reorder", `{
+		"class_id":"`+classTwo.ID+`",
+		"sort_order":1
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("class reorder: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/entries.reassign_entrant", `{
+		"id":"`+entry.ID+`",
+		"person_id":"person_03"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("entry reassign: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/entries.move", `{
+		"id":"`+entry.ID+`",
+		"class_id":"`+classTwo.ID+`",
+		"reason":"Judge corrected the class"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("entry move: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/show_credits.create", `{
+		"show_id":"`+show.ID+`",
+		"credit_label":"Scribe",
+		"person_id":"person_02",
+		"sort_order":1
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("show credit create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var credit ShowCredit
+	if err := json.Unmarshal(w.Body.Bytes(), &credit); err != nil {
+		t.Fatalf("unmarshal credit: %v", err)
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/show_credits.delete", `{
+		"id":"`+credit.ID+`"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("show credit delete: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/entries.delete", `{
+		"id":"`+deleteMe.ID+`"
+	}`)
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("entry delete: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	updatedEntry, ok := a.store.entryByID(entry.ID)
+	if !ok {
+		t.Fatal("moved entry should still exist")
+	}
+	if updatedEntry.ClassID != classTwo.ID {
+		t.Fatalf("expected entry class to be %s, got %s", classTwo.ID, updatedEntry.ClassID)
+	}
+	if updatedEntry.PersonID != "person_03" {
+		t.Fatalf("expected entry person to be person_03, got %s", updatedEntry.PersonID)
+	}
+	if _, ok := a.store.entryByID(deleteMe.ID); ok {
+		t.Fatal("deleted entry should no longer exist")
+	}
+	if credits := a.store.showCreditsByShow(show.ID); len(credits) != 0 {
+		t.Fatalf("expected deleted show credit to be removed, got %d remaining", len(credits))
+	}
+	classes := a.store.classesBySection(section.ID)
+	if len(classes) != 2 {
+		t.Fatalf("expected 2 classes, got %d", len(classes))
+	}
+	if classes[0].ID != classTwo.ID {
+		t.Fatalf("expected reordered class %s first, got %s", classTwo.ID, classes[0].ID)
+	}
+	if classes[1].ID != classOne.ID {
+		t.Fatalf("expected updated class %s second, got %s", classOne.ID, classes[1].ID)
 	}
 }
 

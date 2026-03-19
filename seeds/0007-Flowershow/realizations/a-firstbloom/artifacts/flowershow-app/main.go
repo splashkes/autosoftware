@@ -128,24 +128,30 @@ func main() {
 	// Admin shows
 	mux.HandleFunc("GET /admin/shows/new", a.requireAdmin(a.handleAdminShowNew))
 	mux.HandleFunc("POST /admin/shows", a.requireAdmin(a.handleAdminShowCreate))
-	mux.HandleFunc("GET /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowDetail))
-	mux.HandleFunc("GET /admin/shows/{showID}/fragments/{section}", a.requireAdmin(a.handleAdminShowFragment))
-	mux.HandleFunc("POST /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowUpdate))
-	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireAdmin(a.handleAdminJudgeAssign))
-	mux.HandleFunc("GET /admin/shows/{showID}/stream", a.requireAdmin(a.handleAdminShowStream))
+	mux.HandleFunc("GET /admin/shows/{showID}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowDetail))
+	mux.HandleFunc("GET /admin/shows/{showID}/fragments/{section}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowFragment))
+	mux.HandleFunc("POST /admin/shows/{showID}", a.requireCapabilityPage("shows.manage", a.handleAdminShowUpdate))
+	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireCapabilityPage("judges.manage", a.handleAdminJudgeAssign))
+	mux.HandleFunc("GET /admin/shows/{showID}/stream", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowStream))
 
 	// Admin schedule management
-	mux.HandleFunc("POST /admin/shows/{showID}/schedule", a.requireAdmin(a.handleAdminScheduleCreate))
-	mux.HandleFunc("POST /admin/shows/{showID}/divisions", a.requireAdmin(a.handleAdminDivisionCreate))
-	mux.HandleFunc("POST /admin/shows/{showID}/sections", a.requireAdmin(a.handleAdminSectionCreate))
-	mux.HandleFunc("POST /admin/shows/{showID}/classes", a.requireAdmin(a.handleAdminClassCreate))
+	mux.HandleFunc("POST /admin/shows/{showID}/schedule", a.requireCapabilityPage("schedule.manage", a.handleAdminScheduleCreate))
+	mux.HandleFunc("POST /admin/shows/{showID}/divisions", a.requireCapabilityPage("schedule.manage", a.handleAdminDivisionCreate))
+	mux.HandleFunc("POST /admin/shows/{showID}/sections", a.requireCapabilityPage("schedule.manage", a.handleAdminSectionCreate))
+	mux.HandleFunc("POST /admin/shows/{showID}/classes", a.requireCapabilityPage("classes.manage", a.handleAdminClassCreate))
+	mux.HandleFunc("POST /admin/classes/{classID}", a.requireCapabilityPage("classes.manage", a.handleAdminClassUpdate))
 
 	// Admin entries
-	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireAdmin(a.handleAdminEntryCreate))
-	mux.HandleFunc("POST /admin/entries/{entryID}/placement", a.requireAdmin(a.handleAdminEntryPlacement))
-	mux.HandleFunc("POST /admin/entries/{entryID}/visibility", a.requireAdmin(a.handleAdminEntryVisibility))
-	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
-	mux.HandleFunc("POST /admin/media/{mediaID}/delete", a.requireAdmin(a.handleMediaDelete))
+	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireCapabilityPage("entries.manage", a.handleAdminEntryCreate))
+	mux.HandleFunc("POST /admin/entries/{entryID}/move", a.requireCapabilityPage("entries.manage", a.handleAdminEntryMove))
+	mux.HandleFunc("POST /admin/entries/{entryID}/entrant", a.requireCapabilityPage("entries.manage", a.handleAdminEntryReassign))
+	mux.HandleFunc("POST /admin/entries/{entryID}/delete", a.requireCapabilityPage("entries.manage", a.handleAdminEntryDelete))
+	mux.HandleFunc("POST /admin/entries/{entryID}/placement", a.requireCapabilityPage("entries.manage", a.handleAdminEntryPlacement))
+	mux.HandleFunc("POST /admin/entries/{entryID}/visibility", a.requireCapabilityPage("entries.manage", a.handleAdminEntryVisibility))
+	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireCapabilityPage("media.manage", a.handleMediaUpload))
+	mux.HandleFunc("POST /admin/media/{mediaID}/delete", a.requireCapabilityPage("media.manage", a.handleMediaDelete))
+	mux.HandleFunc("POST /admin/shows/{showID}/credits", a.requireCapabilityPage("show_credits.manage", a.handleAdminShowCreditCreate))
+	mux.HandleFunc("POST /admin/credits/{creditID}/delete", a.requireCapabilityPage("show_credits.manage", a.handleAdminShowCreditDelete))
 
 	// Admin persons
 	mux.HandleFunc("GET /admin/persons", a.requireAdmin(a.handleAdminPersons))
@@ -175,6 +181,7 @@ func main() {
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/people.lookup", a.handleAPIShowPeopleLookup)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries", a.handleAPIEntries)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/classes", a.handleAPIClasses)
@@ -192,9 +199,14 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/sections.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.move", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.delete", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.reassign_entrant", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_placement", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.reorder", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.compute_placements", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/persons.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/awards.create", a.handleAPICommand)
@@ -212,6 +224,8 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/ingestions.import", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/rules.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/overrides.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
@@ -564,6 +578,21 @@ func (a *app) requireSignedInPage(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
+	}
+}
+
+func (a *app) requireCapabilityPage(capability string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := a.currentUser(r)
+		if !ok {
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			return
+		}
+		if capability == "" || a.userHasCapability(r.Context(), *user, capability, a.authorityScopesForRequest(r)...) {
+			next(w, r)
+			return
+		}
+		http.Redirect(w, r, "/account?notice=access_denied", http.StatusSeeOther)
 	}
 }
 

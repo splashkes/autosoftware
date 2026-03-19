@@ -31,6 +31,30 @@ function flowershowToggleRubricCriteria(select) {
   });
 }
 
+function flowershowFilterPersonSelect(input) {
+  const targetSelector = input.dataset.filterTarget;
+  if (!targetSelector) return;
+  const select = document.querySelector(targetSelector);
+  if (!select) return;
+  const query = (input.value || '').trim().toLowerCase();
+  Array.from(select.options).forEach(function(option, index) {
+    if (index === 0) {
+      option.hidden = false;
+      return;
+    }
+    const matches = query === '' || option.textContent.toLowerCase().includes(query);
+    option.hidden = !matches;
+  });
+}
+
+function flowershowBindPersonFilter(input) {
+  if (input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+  input.addEventListener('input', function() {
+    flowershowFilterPersonSelect(input);
+  });
+}
+
 async function flowershowNormalizeImage(file) {
   const maxEdge = 2048;
   const url = URL.createObjectURL(file);
@@ -254,6 +278,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
   scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
+  scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

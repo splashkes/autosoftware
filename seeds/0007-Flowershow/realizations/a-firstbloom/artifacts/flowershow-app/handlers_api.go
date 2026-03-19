@@ -59,6 +59,19 @@ func (a *app) handleAPIShowWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, data)
 }
 
+func (a *app) handleAPIShowPeopleLookup(w http.ResponseWriter, r *http.Request) {
+	if !a.authorizeAPICapability(w, r, "shows.workspace.read", "Use a signed-in operator session, a Bearer service token, or an account-issued agent token with private workspace access.") {
+		return
+	}
+	show, ok := a.apiShowByIdentifier(r.PathValue("id"))
+	if !ok {
+		a.writeAPIError(w, r, http.StatusNotFound, "show_not_found", "Show not found.", "Use a stable show id from the shows directory projection.", nil)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	writeJSON(w, http.StatusOK, a.personLookupViewsForShow(show.ID, query))
+}
+
 func (a *app) handleAPIEntries(w http.ResponseWriter, r *http.Request) {
 	showID := r.URL.Query().Get("show_id")
 	classID := r.URL.Query().Get("class_id")
@@ -394,6 +407,50 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, entry)
 
+	case "entries.move":
+		var req struct {
+			ID      string `json:"id"`
+			ClassID string `json:"class_id"`
+			Reason  string `json:"reason"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		entry, err := a.store.moveEntry(req.ID, req.ClassID, req.Reason)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_move_failed", err.Error(), "Pass a stable entry id, destination class_id, and optional reason.", []apiFieldError{{Field: "id", Message: "required stable entry id"}, {Field: "class_id", Message: "required stable class id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, entry)
+
+	case "entries.delete":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.deleteEntry(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_delete_failed", err.Error(), "Pass a stable entry id. Entries with scorecards must be corrected instead of deleted.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	case "entries.reassign_entrant":
+		var req struct {
+			ID       string `json:"id"`
+			PersonID string `json:"person_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		entry, err := a.store.reassignEntry(req.ID, req.PersonID)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_reassign_failed", err.Error(), "Pass a stable entry id and replacement person_id.", []apiFieldError{{Field: "id", Message: "required stable entry id"}, {Field: "person_id", Message: "required stable person id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, entry)
+
 	case "entries.set_placement":
 		var req struct {
 			ID        string  `json:"id"`
@@ -434,6 +491,36 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, cls)
+
+	case "classes.update":
+		var req struct {
+			ID string `json:"id"`
+			ShowClassInput
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		cls, err := a.store.updateClass(req.ID, req.ShowClassInput)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "class_update_failed", err.Error(), "Pass a stable class id with updated wording, domain, and sort_order.", []apiFieldError{{Field: "id", Message: "required stable class id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, cls)
+
+	case "classes.reorder":
+		var req struct {
+			ClassID   string `json:"class_id"`
+			SortOrder int    `json:"sort_order"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		cls, err := a.store.reorderClass(req.ClassID, req.SortOrder)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "class_reorder_failed", err.Error(), "Pass a stable class_id and the desired sort_order.", []apiFieldError{{Field: "class_id", Message: "required stable class id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, cls)
 
 	case "classes.compute_placements":
 		var req struct {
@@ -661,6 +748,31 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusCreated, override)
 
+	case "show_credits.create":
+		var input ShowCreditInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		credit, err := a.store.createShowCredit(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_credit_create_failed", err.Error(), "Pass show_id, credit_label, and either person_id or display_name.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, credit)
+
+	case "show_credits.delete":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.deleteShowCredit(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_credit_delete_failed", err.Error(), "Pass a stable show credit id from a show projection or workspace response.", []apiFieldError{{Field: "id", Message: "required stable show credit id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
 	case "roles.assign":
 		var input UserRoleInput
 		if !a.decodeAPIJSON(w, r, &input) {
@@ -786,6 +898,7 @@ func (a *app) showDetailProjection(show *Show, includePrivate bool) map[string]a
 		"divisions":    divisions,
 		"entries":      a.entryViewsForShow(show.ID, includePrivate),
 		"awards":       a.store.awardsByOrganization(show.OrganizationID),
+		"show_credits": a.store.showCreditsByShow(show.ID),
 	}
 	if includePrivate {
 		payload["judges"] = a.judgeViewsForShow(show.ID)

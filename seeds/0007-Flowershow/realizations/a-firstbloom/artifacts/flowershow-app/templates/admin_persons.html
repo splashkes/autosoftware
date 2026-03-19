@@ -11,6 +11,15 @@
     <input type="text" name="first_name" placeholder="First name" class="form-input" required>
     <input type="text" name="last_name" placeholder="Last name" class="form-input" required>
     <input type="email" name="email" placeholder="Email (optional)" class="form-input">
+    <select name="organization_id" class="form-input">
+      <option value="">No club link</option>
+      {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <select name="organization_role" class="form-input">
+      <option value="member">member</option>
+      <option value="guest">guest</option>
+      <option value="officer">officer</option>
+    </select>
     <button type="submit" class="btn btn-primary btn-sm">Add</button>
   </form>
 </section>
@@ -36,4 +45,3 @@
   {{end}}
 </section>
 {{end}}
-

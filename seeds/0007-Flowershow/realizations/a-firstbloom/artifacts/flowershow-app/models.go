@@ -48,9 +48,11 @@ type Person struct {
 }
 
 type PersonInput struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email,omitempty"`
+	FirstName        string `json:"first_name"`
+	LastName         string `json:"last_name"`
+	Email            string `json:"email,omitempty"`
+	OrganizationID   string `json:"organization_id,omitempty"`
+	OrganizationRole string `json:"organization_role,omitempty"`
 }
 
 type PersonOrganization struct {
@@ -105,6 +107,7 @@ type ShowClass struct {
 	ID                string   `json:"id"`
 	SectionID         string   `json:"section_id"`
 	ClassNumber       string   `json:"class_number"`
+	SortOrder         int      `json:"sort_order"`
 	Title             string   `json:"title"`
 	Domain            string   `json:"domain"`
 	Description       string   `json:"description,omitempty"`
@@ -121,6 +124,7 @@ type ShowClass struct {
 type ShowClassInput struct {
 	SectionID         string   `json:"section_id"`
 	ClassNumber       string   `json:"class_number"`
+	SortOrder         int      `json:"sort_order"`
 	Title             string   `json:"title"`
 	Domain            string   `json:"domain"`
 	Description       string   `json:"description,omitempty"`
@@ -157,6 +161,26 @@ type EntryInput struct {
 	Name      string   `json:"name"`
 	Notes     string   `json:"notes,omitempty"`
 	TaxonRefs []string `json:"taxon_refs,omitempty"`
+}
+
+type ShowCredit struct {
+	ID          string    `json:"id"`
+	ShowID      string    `json:"show_id"`
+	PersonID    string    `json:"person_id,omitempty"`
+	DisplayName string    `json:"display_name,omitempty"`
+	CreditLabel string    `json:"credit_label"`
+	Notes       string    `json:"notes,omitempty"`
+	SortOrder   int       `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ShowCreditInput struct {
+	ShowID      string `json:"show_id"`
+	PersonID    string `json:"person_id,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	CreditLabel string `json:"credit_label"`
+	Notes       string `json:"notes,omitempty"`
+	SortOrder   int    `json:"sort_order"`
 }
 
 // --- Media ---

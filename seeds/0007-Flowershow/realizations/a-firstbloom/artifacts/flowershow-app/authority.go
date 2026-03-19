@@ -82,6 +82,7 @@ var flowershowAuthorityBundles = map[string]authorityBundleDef{
 			"rubrics.manage",
 			"standards.manage",
 			"sources.manage",
+			"show_credits.manage",
 			"roles.manage",
 		},
 	},
@@ -93,6 +94,35 @@ var flowershowAuthorityBundles = map[string]authorityBundleDef{
 			"shows.workspace.read",
 			"entries.private.read",
 			"rubrics.manage",
+		},
+	},
+	"show_intake_operator": {
+		BundleID:    "flowershow_show_intake_operator",
+		DisplayName: "Show Intake Operator",
+		Role:        "show_intake_operator",
+		Capabilities: []string{
+			"account.read",
+			"shows.workspace.read",
+			"entries.private.read",
+			"entries.manage",
+			"media.manage",
+			"persons.manage",
+			"show_credits.manage",
+		},
+	},
+	"show_judge_support": {
+		BundleID:    "flowershow_show_judge_support",
+		DisplayName: "Show Judge Support",
+		Role:        "show_judge_support",
+		Capabilities: []string{
+			"account.read",
+			"shows.workspace.read",
+			"entries.private.read",
+			"entries.manage",
+			"media.manage",
+			"persons.manage",
+			"show_credits.manage",
+			"judges.manage",
 		},
 	},
 	"entrant": {
@@ -841,7 +871,7 @@ func (a *app) commandScopesFromPayload(command string, body []byte) []authorityS
 	switch command {
 	case "shows.create", "awards.create":
 		add("organization", stringValue(payload["organization_id"]))
-	case "schedules.upsert", "judges.assign", "entries.create":
+	case "schedules.upsert", "judges.assign", "entries.create", "show_credits.create":
 		a.expandShowScopes(&scopes, stringValue(payload["show_id"]))
 	case "divisions.create":
 		a.expandScheduleScopes(&scopes, stringValue(payload["show_schedule_id"]))
@@ -849,8 +879,22 @@ func (a *app) commandScopesFromPayload(command string, body []byte) []authorityS
 		a.expandDivisionScopes(&scopes, stringValue(payload["division_id"]))
 	case "classes.create":
 		a.expandSectionScopes(&scopes, stringValue(payload["section_id"]))
+	case "classes.update":
+		a.expandClassScopes(&scopes, stringValue(payload["id"]))
+	case "classes.reorder":
+		a.expandClassScopes(&scopes, stringValue(payload["class_id"]))
+	case "entries.update", "entries.delete", "entries.reassign_entrant":
+		a.expandEntryScopes(&scopes, stringValue(payload["id"]))
+	case "entries.move":
+		a.expandEntryScopes(&scopes, stringValue(payload["id"]))
+		a.expandClassScopes(&scopes, stringValue(payload["class_id"]))
 	case "awards.compute":
 		add("award", stringValue(payload["award_id"]))
+	case "show_credits.delete":
+		if credit, ok := a.store.showCreditByID(stringValue(payload["id"])); ok {
+			a.expandShowScopes(&scopes, credit.ShowID)
+			add("show_credit", credit.ID)
+		}
 	case "roles.assign":
 		if showID := stringValue(payload["show_id"]); showID != "" {
 			a.expandShowScopes(&scopes, showID)

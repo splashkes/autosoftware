@@ -11,6 +11,19 @@ type showJudgeView struct {
 	Person     *Person
 }
 
+type showCreditView struct {
+	Credit *ShowCredit
+	Person *Person
+}
+
+type personLookupView struct {
+	Person           *Person
+	OrganizationID   string
+	OrganizationName string
+	AffiliationRole  string
+	Label            string
+}
+
 type standardView struct {
 	Standard *StandardDocument
 	Editions []*StandardEdition
@@ -83,6 +96,31 @@ func (a *app) availableJudgesForShow(showID string) []*Person {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].LastName+out[i].FirstName < out[j].LastName+out[j].FirstName
 	})
+	return out
+}
+
+func (a *app) personLookupViewsForShow(showID, query string) []*personLookupView {
+	items := a.store.lookupPersonsForShow(showID, query)
+	out := make([]*personLookupView, 0, len(items))
+	for _, item := range items {
+		person, ok := a.store.personByID(item.PersonID)
+		if !ok {
+			continue
+		}
+		org, _ := a.store.organizationByID(item.OrganizationID)
+		orgName := item.OrganizationID
+		if org != nil {
+			orgName = org.Name
+		}
+		label := fmt.Sprintf("%s %s · %s · %s", person.FirstName, person.LastName, item.Role, orgName)
+		out = append(out, &personLookupView{
+			Person:           person,
+			OrganizationID:   item.OrganizationID,
+			OrganizationName: orgName,
+			AffiliationRole:  item.Role,
+			Label:            label,
+		})
+	}
 	return out
 }
 

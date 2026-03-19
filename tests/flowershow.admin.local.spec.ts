@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   expectAgentPath,
   loginLocalAdmin,
+  loginLocalIntakeOperator,
   loginLocalViewer,
   uniqueName,
 } from './flowershow.helpers';
@@ -185,5 +186,29 @@ test.describe('Flowershow Admin Local', () => {
 
     await page.goto(publicPath!);
     await expect(page.locator('body')).not.toContainText('Playwright Peace');
+  });
+
+  test('show intake operator can work inside one show without global admin access', async ({
+    page,
+  }) => {
+    await loginLocalIntakeOperator(page);
+
+    await page.goto('/admin/shows/show_spring2025');
+    await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
+
+    await page.getByRole('button', { name: 'Entries' }).click();
+    const filter = page.locator('[data-person-filter-input]').first();
+    await expect(filter).toBeVisible();
+    await filter.fill('susan');
+
+    const visibleOptions = await page
+      .locator('#entry-create-person-select option:not([hidden])')
+      .allTextContents();
+    expect(visibleOptions.join(' | ')).toContain('Susan Park');
+    expect(visibleOptions.join(' | ')).not.toContain('Margaret Chen');
+
+    await page.goto('/admin/roles');
+    await expect(page).toHaveURL(/\/account\?notice=admin_required$/);
+    await expect(page.locator('h1')).toContainText('Your Profile');
   });
 });

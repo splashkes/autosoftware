@@ -77,6 +77,7 @@ type adminShowDetailData struct {
 	Divisions        []*divisionView
 	Entries          []*entryView
 	Persons          []*Person
+	EntrantCandidates []*personLookupView
 	Classes          []*ShowClass
 	Awards           []*AwardDefinition
 	Rubrics          []*JudgingRubric
@@ -88,6 +89,7 @@ type adminShowDetailData struct {
 	Sources          []*SourceDocument
 	Judges           []*showJudgeView
 	AvailableJudges  []*Person
+	ShowCredits      []*showCreditView
 	ClassRuleViews   []*classRuleView
 	CitationTargets  []citationTargetOption
 }
@@ -135,6 +137,14 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 			Media:  a.store.mediaByEntry(e.ID),
 		})
 	}
+	var showCredits []*showCreditView
+	for _, credit := range a.store.showCreditsByShow(show.ID) {
+		person, _ := a.store.personByID(credit.PersonID)
+		showCredits = append(showCredits, &showCreditView{
+			Credit: credit,
+			Person: person,
+		})
+	}
 
 	orgs := a.store.allOrganizations()
 	var awards []*AwardDefinition
@@ -163,6 +173,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 		Divisions:        divisions,
 		Entries:          entries,
 		Persons:          a.store.allPersons(),
+		EntrantCandidates: a.personLookupViewsForShow(show.ID, ""),
 		Classes:          a.store.classesByShowID(show.ID),
 		Awards:           awards,
 		Rubrics:          a.store.allRubrics(),
@@ -174,6 +185,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 		Sources:          a.store.allSourceDocuments(),
 		Judges:           a.judgeViewsForShow(show.ID),
 		AvailableJudges:  a.availableJudgesForShow(show.ID),
+		ShowCredits:      showCredits,
 		ClassRuleViews:   classRuleViews,
 		CitationTargets:  a.citationTargetsForShow(show.ID, classRuleViews),
 	}, nil
@@ -289,9 +301,11 @@ func (a *app) handleAdminClassCreate(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("showID")
 	r.ParseForm()
 	specimenCount, _ := strconv.Atoi(r.FormValue("specimen_count"))
+	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
 	_, err := a.store.createClass(ShowClassInput{
 		SectionID:     r.FormValue("section_id"),
 		ClassNumber:   r.FormValue("class_number"),
+		SortOrder:     sortOrder,
 		Title:         r.FormValue("title"),
 		Domain:        r.FormValue("domain"),
 		Description:   r.FormValue("description"),
@@ -302,6 +316,32 @@ func (a *app) handleAdminClassCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sseBroker.publish(showID, "class-created", `<div class="toast">Class added</div>`)
+	a.publishAdminSections(showID, "schedule", "entries", "scoring", "governance")
+	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
+}
+
+func (a *app) handleAdminClassUpdate(w http.ResponseWriter, r *http.Request) {
+	classID := r.PathValue("classID")
+	r.ParseForm()
+	specimenCount, _ := strconv.Atoi(r.FormValue("specimen_count"))
+	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
+	_, err := a.store.updateClass(classID, ShowClassInput{
+		SectionID:       r.FormValue("section_id"),
+		ClassNumber:     r.FormValue("class_number"),
+		SortOrder:       sortOrder,
+		Title:           r.FormValue("title"),
+		Domain:          r.FormValue("domain"),
+		Description:     r.FormValue("description"),
+		SpecimenCount:   specimenCount,
+		ScheduleNotes:   r.FormValue("schedule_notes"),
+		MeasurementRule: r.FormValue("measurement_rule"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	showID := r.FormValue("show_id")
+	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Class updated</div>`)
 	a.publishAdminSections(showID, "schedule", "entries", "scoring", "governance")
 	a.respondAdminSectionOrRedirect(w, r, showID, "schedule")
 }
@@ -326,6 +366,50 @@ func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 	a.publishAdminSections(showID, "entries", "winners", "scoring", "governance")
 	a.publishShowSummary(showID)
 	a.respondAdminSectionOrRedirect(w, r, showID, "entries")
+}
+
+func (a *app) handleAdminEntryMove(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	r.ParseForm()
+	entry, err := a.store.moveEntry(entryID, r.FormValue("class_id"), r.FormValue("reason"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry moved to a different class</div>`)
+	a.publishAdminSections(entry.ShowID, "entries", "schedule", "winners", "scoring", "governance")
+	a.publishShowSummary(entry.ShowID)
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
+}
+
+func (a *app) handleAdminEntryReassign(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	r.ParseForm()
+	entry, err := a.store.reassignEntry(entryID, r.FormValue("person_id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entrant assignment updated</div>`)
+	a.publishAdminSections(entry.ShowID, "entries", "winners", "scoring")
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
+}
+
+func (a *app) handleAdminEntryDelete(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	entry, ok := a.store.entryByID(entryID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := a.store.deleteEntry(entryID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry deleted</div>`)
+	a.publishAdminSections(entry.ShowID, "entries", "winners", "scoring", "governance")
+	a.publishShowSummary(entry.ShowID)
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "entries")
 }
 
 func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) {
@@ -440,22 +524,60 @@ func (a *app) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r)
 }
 
+func (a *app) handleAdminShowCreditCreate(w http.ResponseWriter, r *http.Request) {
+	showID := r.PathValue("showID")
+	r.ParseForm()
+	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
+	_, err := a.store.createShowCredit(ShowCreditInput{
+		ShowID:      showID,
+		PersonID:    r.FormValue("person_id"),
+		DisplayName: r.FormValue("display_name"),
+		CreditLabel: r.FormValue("credit_label"),
+		Notes:       r.FormValue("notes"),
+		SortOrder:   sortOrder,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Show credit added</div>`)
+	a.publishAdminSections(showID, "info")
+	a.publishShowSummary(showID)
+	a.respondAdminSectionOrRedirect(w, r, showID, "info")
+}
+
+func (a *app) handleAdminShowCreditDelete(w http.ResponseWriter, r *http.Request) {
+	creditID := r.PathValue("creditID")
+	r.ParseForm()
+	showID := r.FormValue("show_id")
+	if err := a.store.deleteShowCredit(creditID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Show credit removed</div>`)
+	a.publishAdminSections(showID, "info")
+	a.respondAdminSectionOrRedirect(w, r, showID, "info")
+}
+
 // --- Persons ---
 
 func (a *app) handleAdminPersons(w http.ResponseWriter, r *http.Request) {
-	a.render(w, "admin_persons.html", map[string]any{
-		"Title":       "Manage Persons",
-		"CurrentPath": "/admin/persons",
-		"Persons":     a.store.allPersons(),
+	a.render(w, "admin_persons.html", adminPersonsData{
+		Title:       "Manage Persons",
+		CurrentPath: "/admin/persons",
+		Persons:     a.store.allPersons(),
+		Orgs:        a.store.allOrganizations(),
 	})
 }
 
 func (a *app) handleAdminPersonCreate(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	_, err := a.store.createPerson(PersonInput{
-		FirstName: r.FormValue("first_name"),
-		LastName:  r.FormValue("last_name"),
-		Email:     r.FormValue("email"),
+		FirstName:        r.FormValue("first_name"),
+		LastName:         r.FormValue("last_name"),
+		Email:            r.FormValue("email"),
+		OrganizationID:   r.FormValue("organization_id"),
+		OrganizationRole: r.FormValue("organization_role"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

@@ -65,6 +65,64 @@
       {{end}}
     </div>
   </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h3 class="card-title">Show Credits</h3>
+      <p class="card-meta">Credits are display labels on the show page, not permission roles.</p>
+      {{if .ShowCredits}}
+      <div class="governance-list">
+        {{range .ShowCredits}}
+        <div class="rule-group">
+          <div class="rule-header">
+            <strong>{{.Credit.CreditLabel}}</strong>
+            <span class="badge badge-muted">{{.Credit.SortOrder}}</span>
+          </div>
+          <p>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Credit.DisplayName}}{{end}}</p>
+          {{if .Credit.Notes}}<p class="card-meta">{{.Credit.Notes}}</p>{{end}}
+          <form method="POST" action="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-post="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-target="#admin-info-panel" hx-swap="innerHTML" class="inline">
+            <input type="hidden" name="show_id" value="{{$.Show.ID}}">
+            <button type="submit" class="btn btn-outline btn-sm">Remove</button>
+          </form>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="empty-state">No show credits yet.</p>
+      {{end}}
+
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Credit Label</label>
+            <input type="text" name="credit_label" class="form-input" placeholder="Host" required>
+          </div>
+          <div class="form-group">
+            <label>Sort Order</label>
+            <input type="number" name="sort_order" class="form-input" value="1" min="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Person</label>
+            <select name="person_id" class="form-input">
+              <option value="">Use free text instead</option>
+              {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Free Text Name</label>
+            <input type="text" name="display_name" class="form-input" placeholder="Guest speaker">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" name="notes" class="form-input" placeholder="Optional display note">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Add Credit</button>
+      </form>
+    </div>
+  </div>
 </div>
 {{end}}
 
@@ -116,8 +174,30 @@
     <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
     {{range .Classes}}
     <div class="class-item admin-class-item">
-      <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
-      {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+      <div>
+        <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
+        <span class="badge badge-muted">sort {{.SortOrder}}</span>
+        {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+      </div>
+      <details class="add-form" style="margin-top:.5rem;">
+        <summary class="btn btn-outline btn-sm">Edit Class</summary>
+        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}" hx-post="{{bp}}/admin/classes/{{.ID}}" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+          <input type="hidden" name="show_id" value="{{$.Show.ID}}">
+          <input type="hidden" name="section_id" value="{{.SectionID}}">
+          <input type="text" name="class_number" value="{{.ClassNumber}}" class="form-input form-sm" required>
+          <input type="number" name="sort_order" value="{{.SortOrder}}" class="form-input form-sm" min="1">
+          <input type="text" name="title" value="{{.Title}}" class="form-input" required>
+          <select name="domain" class="form-input form-sm">
+            <option value="horticulture" {{if eq .Domain "horticulture"}}selected{{end}}>Horticulture</option>
+            <option value="design" {{if eq .Domain "design"}}selected{{end}}>Design</option>
+            <option value="special" {{if eq .Domain "special"}}selected{{end}}>Special</option>
+            <option value="other" {{if eq .Domain "other"}}selected{{end}}>Other</option>
+          </select>
+          <input type="number" name="specimen_count" value="{{.SpecimenCount}}" class="form-input form-sm" min="0">
+          <input type="text" name="description" value="{{.Description}}" class="form-input" placeholder="Description">
+          <button type="submit" class="btn btn-primary btn-sm">Save Class</button>
+        </form>
+      </details>
     </div>
     {{end}}
     <details class="add-form">
@@ -125,6 +205,7 @@
       <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
         <input type="hidden" name="section_id" value="{{.Section.ID}}">
         <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
+        <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1" min="1">
         <input type="text" name="title" placeholder="Title" class="form-input" required>
         <select name="domain" class="form-input form-sm">
           <option value="horticulture">Horticulture</option>
@@ -185,10 +266,11 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Person</label>
-          <select name="person_id" class="form-input" required>
-            <option value="">Select person...</option>
-            {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+          <label>Entrant</label>
+          <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entry-create-person-select">
+          <select id="entry-create-person-select" name="person_id" class="form-input" required>
+            <option value="">Select entrant...</option>
+            {{range .EntrantCandidates}}<option value="{{.Person.ID}}">{{.Label}}</option>{{end}}
           </select>
         </div>
       </div>
@@ -210,9 +292,10 @@
 <h3>All Entries ({{len .Entries}})</h3>
 {{if .Entries}}
 <table class="table">
-  <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Public</th><th>Placement</th><th>Points</th><th>Media</th></tr></thead>
+  <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Public</th><th>Placement</th><th>Points</th><th>Media</th><th>Actions</th></tr></thead>
   <tbody>
     {{range .Entries}}
+    {{$currentEntry := .Entry}}
     <tr class="{{placementClass .Entry.Placement}}">
       <td>
         {{.Entry.Name}}
@@ -263,6 +346,31 @@
             <strong>Add Photo</strong>
             <span class="card-meta">Phone capture normalizes to JPEG, max 2048px. HEIC is rejected.</span>
           </div>
+        </form>
+      </td>
+      <td>
+        <details class="add-form">
+          <summary class="btn btn-outline btn-sm">Move</summary>
+          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+            <select name="class_id" class="form-input" required>
+              {{range $.Classes}}<option value="{{.ID}}" {{if eq .ID $currentEntry.ClassID}}selected{{end}}>{{.ClassNumber}}: {{.Title}}</option>{{end}}
+            </select>
+            <input type="text" name="reason" class="form-input" placeholder="Reason (optional)">
+            <button type="submit" class="btn btn-primary btn-sm">Move Entry</button>
+          </form>
+        </details>
+        <details class="add-form" style="margin-top:.5rem;">
+          <summary class="btn btn-outline btn-sm">Entrant</summary>
+          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+            <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
+            <select id="entrant-select-{{$currentEntry.ID}}" name="person_id" class="form-input" required>
+              {{range $.EntrantCandidates}}<option value="{{.Person.ID}}" {{if eq .Person.ID $currentEntry.PersonID}}selected{{end}}>{{.Label}}</option>{{end}}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">Change Entrant</button>
+          </form>
+        </details>
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
+          <button type="submit" class="btn btn-outline btn-sm">Delete</button>
         </form>
       </td>
     </tr>
