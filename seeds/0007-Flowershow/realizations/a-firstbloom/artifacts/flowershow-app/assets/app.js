@@ -184,6 +184,38 @@ function flowershowBindCopyButton(button) {
   });
 }
 
+function flowershowBindCountdownButton(button) {
+  if (button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  var remaining = parseInt(button.dataset.countdownSeconds || '0', 10);
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    button.disabled = false;
+    return;
+  }
+
+  var readyLabel = button.dataset.countdownReadyLabel || 'Request another code';
+  button.disabled = true;
+
+  function renderCountdown(seconds) {
+    if (seconds <= 0) {
+      button.disabled = false;
+      button.textContent = readyLabel;
+      delete button.dataset.countdownSeconds;
+      return;
+    }
+    button.textContent = 'You can request another code in ' + seconds + 's';
+  }
+
+  renderCountdown(remaining);
+  var timer = window.setInterval(function() {
+    remaining -= 1;
+    renderCountdown(remaining);
+    if (remaining <= 0) {
+      window.clearInterval(timer);
+    }
+  }, 1000);
+}
+
 function flowershowActivateAgentTab(widget, tabName) {
   if (!widget || !tabName) return;
   widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
@@ -219,6 +251,7 @@ function flowershowInit(root) {
   const scope = root || document;
   scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
   scope.querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
+  scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);

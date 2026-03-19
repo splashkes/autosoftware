@@ -458,7 +458,7 @@ func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T
 	if strings.Contains(body, `type="password" id="login_password"`) {
 		t.Fatal("initial step should not show a password field")
 	}
-	if strings.Contains(body, "Email Me A Login Code") {
+	if strings.Contains(body, "Enter password instead") {
 		t.Fatal("initial step should not show the email-code option")
 	}
 	if strings.Contains(body, "Continue With Cognito") {
@@ -482,20 +482,17 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
-	stepReq := httptest.NewRequest("GET", "/admin/login?email=simon%40example.com", nil)
+	stepReq := httptest.NewRequest("GET", "/admin/login?email=simon%40example.com&mode=password", nil)
 	stepW := httptest.NewRecorder()
 	mux.ServeHTTP(stepW, stepReq)
 	if stepW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", stepW.Code)
 	}
-	if !strings.Contains(stepW.Body.String(), "Choose Sign-In Method") {
-		t.Fatal("choice step should render before credential submission")
+	if !strings.Contains(stepW.Body.String(), "Enter password") {
+		t.Fatal("password fallback step should render before credential submission")
 	}
-	if !strings.Contains(stepW.Body.String(), "Email Me A Login Code") {
-		t.Fatal("choice step should include the email-code action")
-	}
-	if !strings.Contains(stepW.Body.String(), ">OR<") {
-		t.Fatal("choice step should include the OR divider")
+	if !strings.Contains(stepW.Body.String(), "Email a login code instead") {
+		t.Fatal("password step should include the email-code fallback action")
 	}
 
 	req := httptest.NewRequest("POST", "/auth/login/password", strings.NewReader("email=simon%40example.com&password=secret"))
@@ -588,11 +585,14 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	}
 	loginW := httptest.NewRecorder()
 	mux.ServeHTTP(loginW, loginReq)
-	if !strings.Contains(loginW.Body.String(), "Verify Login Code") {
+	if !strings.Contains(loginW.Body.String(), "Let") || !strings.Contains(loginW.Body.String(), "confirm your email") {
 		t.Fatal("login page missing otp verification form")
 	}
-	if strings.Contains(loginW.Body.String(), "Enter Password") {
-		t.Fatal("otp verification step should hide the password choice step")
+	if !strings.Contains(loginW.Body.String(), "Enter password instead") {
+		t.Fatal("otp verification step should expose the password fallback action")
+	}
+	if !strings.Contains(loginW.Body.String(), "You can request another code in 20s") {
+		t.Fatal("otp verification step should show the resend cooldown")
 	}
 
 	verifyReq := httptest.NewRequest("POST", "/auth/login/email-code/verify", strings.NewReader("code=123456"))

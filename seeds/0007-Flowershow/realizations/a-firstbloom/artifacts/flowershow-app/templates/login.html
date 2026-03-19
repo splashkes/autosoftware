@@ -15,24 +15,40 @@
       <div class="login-step-row">
         <div>
           <div class="login-step-label">Step 2 of 2</div>
-          <h2>Enter Login Code</h2>
+          <h2>Let&apos;s confirm your email</h2>
         </div>
         <span class="login-email-chip">{{.PendingEmail}}</span>
       </div>
-      <p class="card-meta">Enter the code from your email to finish signing in.</p>
+      <p class="card-meta">Enter the secure code we sent to {{.PendingEmail}}. Check junk mail if it&apos;s not in your inbox.</p>
       <form method="POST" action="{{bp}}/auth/login/email-code/verify" class="form login-form">
         <div class="form-group">
-          <label for="otp_code">Login Code</label>
-          <input type="text" id="otp_code" name="code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+          <label for="otp_code">Secure code</label>
+          <input type="text" id="otp_code" name="code" class="form-input form-input-code" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter the code" required autofocus>
         </div>
         <div class="login-actions">
-          <button type="submit" class="btn btn-primary">Verify Login Code</button>
+          <button type="submit" class="btn btn-primary">Continue</button>
         </div>
       </form>
-      <form method="POST" action="{{bp}}/auth/login/back" class="login-back-form">
-        <input type="hidden" name="email" value="{{.PendingEmail}}">
-        <button type="submit" class="btn btn-outline">Back</button>
-      </form>
+      <div class="login-support-actions">
+        <div class="login-support-copy">
+          <strong>Didn&apos;t receive a code?</strong>
+        </div>
+        <form method="POST" action="{{bp}}/auth/login/email-code" class="login-subtle-form">
+          <input type="hidden" name="email" value="{{.PendingEmail}}">
+          <button type="submit" class="login-subtle-link" data-countdown-seconds="{{.PendingResendIn}}" data-countdown-ready-label="Request another code" {{if gt .PendingResendIn 0}}disabled{{end}}>
+            {{if gt .PendingResendIn 0}}You can request another code in {{.PendingResendIn}}s{{else}}Request another code{{end}}
+          </button>
+        </form>
+        <form action="{{bp}}/admin/login" method="GET" class="login-subtle-form">
+          <input type="hidden" name="email" value="{{.PendingEmail}}">
+          <input type="hidden" name="mode" value="password">
+          <button type="submit" class="login-subtle-link">Enter password instead</button>
+        </form>
+        <form method="POST" action="{{bp}}/auth/login/forgot-password" class="login-subtle-form">
+          <input type="hidden" name="email" value="{{.PendingEmail}}">
+          <button type="submit" class="login-subtle-link">Request password reset link</button>
+        </form>
+      </div>
     </section>
 
     {{else if .PendingReset}}
@@ -68,16 +84,16 @@
       </form>
     </section>
 
-    {{else if .ChoiceStep}}
+    {{else if .PasswordStep}}
     <section class="login-card">
       <div class="login-step-row">
         <div>
           <div class="login-step-label">Step 2 of 2</div>
-          <h2>Choose Sign-In Method</h2>
+          <h2>Enter password</h2>
         </div>
         <span class="login-email-chip">{{.CurrentEmail}}</span>
       </div>
-      <p class="card-meta">Use your password now, or email a one-time login code to {{.CurrentEmail}}.</p>
+      <p class="card-meta">Enter your password for {{.CurrentEmail}} to continue.</p>
       <form method="POST" action="{{bp}}/auth/login/password" class="form login-form">
         <input type="hidden" name="email" value="{{.CurrentEmail}}">
         <div class="form-group">
@@ -85,19 +101,16 @@
           <input type="password" id="login_password" name="password" class="form-input" autocomplete="current-password" required autofocus>
         </div>
         <div class="login-actions">
-          <button type="submit" class="btn btn-primary">Sign In</button>
+          <button type="submit" class="btn btn-primary">Continue</button>
         </div>
       </form>
-      <div class="login-divider" aria-hidden="true">
-        <span>OR</span>
-      </div>
-      <form method="POST" action="{{bp}}/auth/login/email-code" class="login-alt-form">
+      <form method="POST" action="{{bp}}/auth/login/email-code" class="login-subtle-form">
         <input type="hidden" name="email" value="{{.CurrentEmail}}">
-        <button type="submit" class="btn btn-secondary">Email Me A Login Code</button>
+        <button type="submit" class="login-subtle-link">Email a login code instead</button>
       </form>
       <form method="POST" action="{{bp}}/auth/login/forgot-password" class="login-subtle-form">
         <input type="hidden" name="email" value="{{.CurrentEmail}}">
-        <button type="submit" class="login-subtle-link">Send password reset code</button>
+        <button type="submit" class="login-subtle-link">Request password reset link</button>
       </form>
       <form method="POST" action="{{bp}}/auth/login/back" class="login-back-form">
         <input type="hidden" name="email" value="{{.CurrentEmail}}">
@@ -114,7 +127,7 @@
         </div>
       </div>
       <p class="card-meta">Enter your email to continue.</p>
-      <form action="{{bp}}/admin/login" method="GET" class="form login-form">
+      <form action="{{bp}}/auth/login/email-code" method="POST" class="form login-form">
         <div class="form-group">
           <label for="login_email">Email</label>
           <input type="email" id="login_email" name="email" value="{{.CurrentEmail}}" class="form-input" autocomplete="email" required autofocus>

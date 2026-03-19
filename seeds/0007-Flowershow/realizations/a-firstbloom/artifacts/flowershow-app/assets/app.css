@@ -432,6 +432,9 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .login-actions { display: grid; gap: .75rem; }
 .login-actions-secondary { display: grid; gap: .75rem; }
 .login-actions-secondary .btn { width: 100%; }
+.login-support-actions { display: grid; gap: .55rem; margin-top: 1rem; }
+.login-support-copy { color: var(--gray-700); font-size: .88rem; }
+.form-input-code { font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; }
 .login-divider {
   display: flex;
   align-items: center;
@@ -451,7 +454,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 }
 .login-alt-form .btn { width: 100%; }
 .login-back-form { margin-top: .75rem; }
-.login-subtle-form { margin-top: .9rem; }
+.login-subtle-form { margin-top: .1rem; }
 .login-subtle-link {
   background: none;
   border: none;
@@ -460,8 +463,15 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   font-size: .88rem;
   text-decoration: underline;
   cursor: pointer;
+  text-align: left;
 }
 .login-subtle-link:hover { color: var(--green); }
+.login-subtle-link[disabled] {
+  color: var(--gray-500);
+  cursor: default;
+  text-decoration: none;
+  opacity: .8;
+}
 
 .account-shell { margin-top: 1rem; }
 .account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
