@@ -264,19 +264,6 @@ type agentAccessLink struct {
 var templateFuncMap = template.FuncMap{
 	"bp":           func() string { return globalBasePath },
 	"assetVersion": func() string { return assetVersion },
-	"withBasePath": func(path string) string {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return globalBasePath
-		}
-		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-			return path
-		}
-		if !strings.HasPrefix(path, "/") {
-			path = "/" + path
-		}
-		return globalBasePath + path
-	},
 	"agentRegistryLinks": func(data any) []agentAccessLink {
 		return agentRegistryLinks(data)
 	},
