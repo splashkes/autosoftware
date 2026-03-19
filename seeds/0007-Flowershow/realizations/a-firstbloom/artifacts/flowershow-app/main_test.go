@@ -174,6 +174,33 @@ func TestHomePageLoads(t *testing.T) {
 	}
 }
 
+func TestHomePagePrefixesAgentWidgetLinksWhenBasePathIsSet(t *testing.T) {
+	prev := globalBasePath
+	globalBasePath = "/flowershow"
+	defer func() {
+		globalBasePath = prev
+	}()
+
+	a := testApp()
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	a.handleHome(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	for _, expected := range []string{
+		`href="/flowershow/v1/contracts"`,
+		`href="/flowershow/v1/contracts/0007-Flowershow/a-firstbloom"`,
+		`href="/flowershow/v1/projections/0007-Flowershow/shows"`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("home page missing base-prefixed widget link %s", expected)
+		}
+	}
+}
+
 func TestShowDetailBySlug(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -738,7 +765,7 @@ func TestViewerAccountTokenCanReadAccountButNotAdminAPI(t *testing.T) {
 	if !strings.Contains(createW.Body.String(), "Copy This Token Now") {
 		t.Fatal("issued token flow should focus on the one-time token state")
 	}
-	if strings.Contains(createW.Body.String(), "Issue A New Agent Token") {
+	if strings.Contains(createW.Body.String(), "Issue A New Agent / API Access Token") {
 		t.Fatal("issued token flow should hide the token generator while the token is visible")
 	}
 	token := extractIssuedAgentToken(t, createW.Body.String())

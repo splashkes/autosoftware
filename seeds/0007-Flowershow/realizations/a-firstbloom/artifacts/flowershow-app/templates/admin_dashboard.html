@@ -2,7 +2,7 @@
 <div class="admin-header">
   <h1>Admin Dashboard</h1>
   <div class="show-actions">
-    <a href="{{bp}}/account#agent-tokens" class="btn btn-outline btn-sm">Agent Tokens</a>
+    <a href="{{bp}}/account#agent-tokens" class="btn btn-outline btn-sm">Agent / API Access Tokens</a>
     <form method="POST" action="{{bp}}/admin/logout" class="inline">
       <button type="submit" class="btn btn-outline btn-sm">Logout</button>
     </form>
@@ -57,10 +57,10 @@
 <section class="section">
   <div class="section-header">
     <div>
-      <h2>Agent Delegation</h2>
+      <h2>Agent / API Access Tokens</h2>
       <p class="section-desc">Agent tokens are managed from the signed-in account page so there is only one issuance and revocation surface.</p>
     </div>
-    <a href="{{bp}}/account#agent-tokens" class="btn btn-primary btn-sm">Open Token Manager</a>
+    <a href="{{bp}}/account#agent-tokens" class="btn btn-primary btn-sm">Open Shared Token Manager</a>
   </div>
 </section>
 {{end}}

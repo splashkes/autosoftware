@@ -7,13 +7,4 @@ subdomain: flowershow
 path_prefix: /flowershow/
 artifacts:
   - artifacts/runtime.yaml
-  - artifacts/flowershow-app/go.mod
-  - artifacts/flowershow-app/go.sum
-  - artifacts/flowershow-app/main.go
-  - artifacts/flowershow-app/models.go
-  - artifacts/flowershow-app/store.go
-  - artifacts/flowershow-app/handlers_public.go
-  - artifacts/flowershow-app/handlers_admin.go
-  - artifacts/flowershow-app/handlers_api.go
-  - artifacts/flowershow-app/sse.go
-  - artifacts/flowershow-app/main_test.go
+  - artifacts/flowershow-app
