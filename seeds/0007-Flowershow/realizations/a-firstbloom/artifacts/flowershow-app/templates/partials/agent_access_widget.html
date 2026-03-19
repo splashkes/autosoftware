@@ -13,13 +13,13 @@
           <div>
             <h3>This Page</h3>
             <p>Current page: <code data-agent-current-path>...</code></p>
-            <p><a href="{{bp}}/v1/contracts">GET /v1/contracts</a></p>
-            <p><a href="{{bp}}/v1/contracts/0007-Flowershow/a-firstbloom">GET /v1/contracts/0007-Flowershow/a-firstbloom</a></p>
+            <p><a href="{{withBasePath "/v1/contracts"}}">GET /v1/contracts</a></p>
+            <p><a href="{{withBasePath "/v1/contracts/0007-Flowershow/a-firstbloom"}}">GET /v1/contracts/0007-Flowershow/a-firstbloom</a></p>
           </div>
           <div>
             <h3>Registry Objects</h3>
             {{range agentRegistryLinks .}}
-            <p><a href="{{bp}}{{.Href}}">{{.Label}}</a></p>
+            <p><a href="{{withBasePath .Href}}">{{.Label}}</a></p>
             {{end}}
           </div>
           <div>
