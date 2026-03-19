@@ -62,6 +62,7 @@ type adminLoginData struct {
 	Info            string
 	CognitoEnabled  bool
 	CurrentEmail    string
+	ChoiceStep      bool
 	PasswordStep    bool
 	PendingEmail    string
 	PendingEmailOTP bool
@@ -770,6 +771,7 @@ func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string
 		Info:           infoMessage,
 		CognitoEnabled: a.authEnabled(),
 		CurrentEmail:   currentEmail,
+		ChoiceStep:     strings.TrimSpace(currentEmail) != "",
 		PasswordStep:   passwordStep && strings.TrimSpace(currentEmail) != "",
 	}
 	if pending != nil {
@@ -777,6 +779,7 @@ func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string
 		data.PendingEmailOTP = pending.Flow == pendingAuthFlowEmailOTP
 		data.PendingReset = pending.Flow == pendingAuthFlowForgotPassword
 		data.CurrentEmail = pending.Email
+		data.ChoiceStep = false
 		data.PasswordStep = false
 	}
 	if strings.TrimSpace(data.CurrentEmail) != "" {
@@ -789,6 +792,9 @@ func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string
 
 func (a *app) loginPageData(r *http.Request, errMessage, infoMessage string) adminLoginData {
 	currentEmail := strings.TrimSpace(r.URL.Query().Get("email"))
+	if currentEmail == "" {
+		currentEmail = strings.TrimSpace(r.URL.Query().Get("prefill_email"))
+	}
 	passwordStep := strings.TrimSpace(r.URL.Query().Get("mode")) == "password"
 	var pending *pendingAuthState
 	if state, ok := a.currentPendingAuth(r); ok {
@@ -870,7 +876,7 @@ func (a *app) handleAdminLoginBack(w http.ResponseWriter, r *http.Request) {
 	a.clearPendingAuth(w, r)
 	location := "/admin/login"
 	if email != "" {
-		location += "?email=" + url.QueryEscape(email)
+		location += "?prefill_email=" + url.QueryEscape(email)
 	}
 	http.Redirect(w, r, location, http.StatusSeeOther)
 }

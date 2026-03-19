@@ -422,17 +422,14 @@ func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T
 	if !strings.Contains(body, "Login: Email") {
 		t.Fatal("login page missing initial email step")
 	}
-	if !strings.Contains(body, "Enter Password") {
-		t.Fatal("login page missing password continuation action")
-	}
-	if !strings.Contains(body, "Get Email Login Code") {
-		t.Fatal("login page missing email-code sign-in")
-	}
-	if !strings.Contains(body, "Send password reset code") {
-		t.Fatal("login page missing forgot-password flow")
+	if !strings.Contains(body, ">Next<") {
+		t.Fatal("login page missing next continuation action")
 	}
 	if strings.Contains(body, `type="password" id="login_password"`) {
 		t.Fatal("initial step should not show a password field")
+	}
+	if strings.Contains(body, "Email Me A Login Code") {
+		t.Fatal("initial step should not show the email-code option")
 	}
 	if strings.Contains(body, "Continue With Cognito") {
 		t.Fatal("login page should not send users to hosted cognito ui")
@@ -455,17 +452,20 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
-	stepReq := httptest.NewRequest("GET", "/admin/login?mode=password&email=simon%40example.com", nil)
+	stepReq := httptest.NewRequest("GET", "/admin/login?email=simon%40example.com", nil)
 	stepW := httptest.NewRecorder()
 	mux.ServeHTTP(stepW, stepReq)
 	if stepW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", stepW.Code)
 	}
-	if !strings.Contains(stepW.Body.String(), "Enter Password") {
-		t.Fatal("password step should render before credential submission")
+	if !strings.Contains(stepW.Body.String(), "Choose Sign-In Method") {
+		t.Fatal("choice step should render before credential submission")
 	}
-	if strings.Contains(stepW.Body.String(), "Get Email Login Code") {
-		t.Fatal("password step should hide alternate sign-in actions")
+	if !strings.Contains(stepW.Body.String(), "Email Me A Login Code") {
+		t.Fatal("choice step should include the email-code action")
+	}
+	if !strings.Contains(stepW.Body.String(), ">OR<") {
+		t.Fatal("choice step should include the OR divider")
 	}
 
 	req := httptest.NewRequest("POST", "/auth/login/password", strings.NewReader("email=simon%40example.com&password=secret"))
@@ -562,7 +562,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 		t.Fatal("login page missing otp verification form")
 	}
 	if strings.Contains(loginW.Body.String(), "Enter Password") {
-		t.Fatal("otp verification step should hide the start-step actions")
+		t.Fatal("otp verification step should hide the password choice step")
 	}
 
 	verifyReq := httptest.NewRequest("POST", "/auth/login/email-code/verify", strings.NewReader("code=123456"))
@@ -932,7 +932,7 @@ func TestAdminForgotPasswordFlow(t *testing.T) {
 		t.Fatal("reset step should render after reset start")
 	}
 	if strings.Contains(loginW.Body.String(), "Enter Password") {
-		t.Fatal("reset step should hide the start-step actions")
+		t.Fatal("reset step should hide the password choice step")
 	}
 
 	confirmReq := httptest.NewRequest("POST", "/auth/login/forgot-password/confirm", strings.NewReader("code=654321&new_password=new-secret&confirm_password=new-secret"))

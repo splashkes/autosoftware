@@ -382,6 +382,24 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .login-actions { display: grid; gap: .75rem; }
 .login-actions-secondary { display: grid; gap: .75rem; }
 .login-actions-secondary .btn { width: 100%; }
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: 1rem 0;
+  color: var(--gray-500);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .18em;
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--gray-200);
+}
+.login-alt-form .btn { width: 100%; }
 .login-back-form { margin-top: .75rem; }
 .login-subtle-form { margin-top: .9rem; }
 .login-subtle-link {
