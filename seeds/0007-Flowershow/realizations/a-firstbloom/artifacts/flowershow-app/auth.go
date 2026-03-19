@@ -95,8 +95,8 @@ func (e *authDisplayError) Error() string {
 }
 
 type cognitoIdentityAPI interface {
-	AdminInitiateAuth(context.Context, *cognitoidentityprovider.AdminInitiateAuthInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminInitiateAuthOutput, error)
-	AdminRespondToAuthChallenge(context.Context, *cognitoidentityprovider.AdminRespondToAuthChallengeInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.AdminRespondToAuthChallengeOutput, error)
+	InitiateAuth(context.Context, *cognitoidentityprovider.InitiateAuthInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.InitiateAuthOutput, error)
+	RespondToAuthChallenge(context.Context, *cognitoidentityprovider.RespondToAuthChallengeInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
 	ForgotPassword(context.Context, *cognitoidentityprovider.ForgotPasswordInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ForgotPasswordOutput, error)
 	ConfirmForgotPassword(context.Context, *cognitoidentityprovider.ConfirmForgotPasswordInput, ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
 }
@@ -326,10 +326,9 @@ func (a *cognitoAuth) startUserAuth(ctx context.Context, email string, preferred
 	if secretHash := a.secretHash(email); secretHash != "" {
 		authParameters["SECRET_HASH"] = secretHash
 	}
-	resp, err := a.client.AdminInitiateAuth(ctx, &cognitoidentityprovider.AdminInitiateAuthInput{
+	resp, err := a.client.InitiateAuth(ctx, &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow:       cognitotypes.AuthFlowTypeUserAuth,
 		ClientId:       stringPtr(a.clientID),
-		UserPoolId:     stringPtr(a.userPoolID),
 		AuthParameters: authParameters,
 	})
 	if err != nil {
@@ -353,16 +352,15 @@ func (a *cognitoAuth) respondToAuthChallenge(ctx context.Context, email, session
 		challengeResponses[key] = value
 	}
 
-	input := &cognitoidentityprovider.AdminRespondToAuthChallengeInput{
+	input := &cognitoidentityprovider.RespondToAuthChallengeInput{
 		ChallengeName:      challengeName,
 		ClientId:           stringPtr(a.clientID),
-		UserPoolId:         stringPtr(a.userPoolID),
 		ChallengeResponses: challengeResponses,
 	}
 	if session != "" {
 		input.Session = stringPtr(session)
 	}
-	resp, err := a.client.AdminRespondToAuthChallenge(ctx, input)
+	resp, err := a.client.RespondToAuthChallenge(ctx, input)
 	if err != nil {
 		return nil, err
 	}
