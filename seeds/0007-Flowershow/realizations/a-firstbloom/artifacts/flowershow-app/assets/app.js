@@ -140,6 +140,9 @@ function flowershowInit(root) {
   (root || document).querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
+  document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {
+    el.textContent = window.location.pathname;
+  });
 }
 
 // Auto-remove toasts after 4 seconds

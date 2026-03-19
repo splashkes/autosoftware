@@ -63,6 +63,9 @@ func TestHomePageLoads(t *testing.T) {
 	if !strings.Contains(body, "Spring Rose Show") {
 		t.Fatal("home page missing seeded show")
 	}
+	if !strings.Contains(body, "/v1/contracts/0007-Flowershow/a-firstbloom") {
+		t.Fatal("home page missing shared agent access widget")
+	}
 }
 
 func TestShowDetailBySlug(t *testing.T) {
@@ -434,6 +437,25 @@ func TestCommandEndpointsRequireAuth(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", w.Code)
 	}
+	var payload struct {
+		Error struct {
+			Code      string `json:"code"`
+			AuthMode  string `json:"auth_mode"`
+			RequestID string `json:"request_id"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal unauthorized error: %v", err)
+	}
+	if payload.Error.Code != "unauthorized" {
+		t.Fatalf("expected unauthorized code, got %q", payload.Error.Code)
+	}
+	if payload.Error.AuthMode != "anonymous" {
+		t.Fatalf("expected anonymous auth mode, got %q", payload.Error.AuthMode)
+	}
+	if payload.Error.RequestID == "" {
+		t.Fatal("expected request id in error payload")
+	}
 }
 
 func TestCommandEndpointsAcceptServiceToken(t *testing.T) {
@@ -450,6 +472,49 @@ func TestCommandEndpointsAcceptServiceToken(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		body, _ := io.ReadAll(w.Body)
 		t.Fatalf("expected 201, got %d: %s", w.Code, body)
+	}
+}
+
+func TestCommandEndpointsReturnUsefulStructuredErrorsForAuthenticatedCallers(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+
+	req := httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/shows.create", strings.NewReader(`{"name":"bad"`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	var payload struct {
+		Error struct {
+			Code        string `json:"code"`
+			Hint        string `json:"hint"`
+			ContractRef string `json:"contract_ref"`
+			RequestID   string `json:"request_id"`
+			AuthMode    string `json:"auth_mode"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal authenticated error: %v", err)
+	}
+	if payload.Error.Code != "invalid_json" {
+		t.Fatalf("expected invalid_json code, got %q", payload.Error.Code)
+	}
+	if payload.Error.AuthMode != "service_token" {
+		t.Fatalf("expected service_token auth mode, got %q", payload.Error.AuthMode)
+	}
+	if payload.Error.Hint == "" {
+		t.Fatal("expected recovery hint for authenticated caller")
+	}
+	if payload.Error.ContractRef != "/v1/contracts/0007-Flowershow/a-firstbloom" {
+		t.Fatalf("unexpected contract ref %q", payload.Error.ContractRef)
+	}
+	if payload.Error.RequestID == "" {
+		t.Fatal("expected request id in authenticated error")
 	}
 }
 
@@ -502,6 +567,86 @@ func TestLedgerProjection(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestContractsEndpointsReturnLocalContract(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/contracts", a.handleContractsList)
+	mux.HandleFunc("GET /v1/contracts/{seed_id}/{realization_id}", a.handleContractDetail)
+
+	req := httptest.NewRequest("GET", "/v1/contracts", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"self":"/v1/contracts/0007-Flowershow/a-firstbloom"`) {
+		t.Fatal("contract list missing self link")
+	}
+
+	req = httptest.NewRequest("GET", "/v1/contracts/0007-Flowershow/a-firstbloom", nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"seed_agent_principles"`) {
+		t.Fatal("contract detail missing agent principles links")
+	}
+	if !strings.Contains(w.Body.String(), `"ui_surfaces"`) {
+		t.Fatal("contract detail missing ui surface declarations")
+	}
+}
+
+func TestShowWorkspaceProjectionAcceptsServiceToken(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+
+	req := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/workspace", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"Title":"Admin: Spring Rose Show 2025"`) {
+		t.Fatal("workspace projection missing admin workspace payload")
+	}
+}
+
+func TestScheduleUpsertCommandCreatesSchedule(t *testing.T) {
+	a := testApp()
+	show, err := a.store.createShow(ShowInput{
+		OrganizationID: "org_demo1",
+		Name:           "Winter Daffodil Show",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
+
+	req := httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert",
+		strings.NewReader(`{"show_id":"`+show.ID+`","notes":"OJES governs unless the local schedule is narrower."}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-token")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	schedule, ok := a.store.scheduleByShowID(show.ID)
+	if !ok {
+		t.Fatal("expected schedule to be created")
+	}
+	if schedule.Notes == "" {
+		t.Fatal("expected schedule notes to be stored")
 	}
 }
 

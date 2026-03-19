@@ -46,6 +46,56 @@ body {
 .main { min-height: 70vh; padding: 2rem 0; }
 .footer { text-align: center; padding: 2rem 0; color: var(--gray-500); font-size: .85rem; border-top: 1px solid var(--gray-200); }
 
+.agent-access-shell { padding: 0 0 1.25rem; }
+.agent-access-widget {
+  border: 1px solid rgba(45, 106, 79, .18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(216, 243, 220, .9), rgba(253, 248, 225, .85)), white;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.agent-access-summary {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--green);
+  list-style: none;
+}
+.agent-access-summary::-webkit-details-marker { display: none; }
+.agent-access-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.agent-access-content { padding: 0 1.25rem 1.25rem; color: var(--gray-700); }
+.agent-access-lead { margin-bottom: .9rem; }
+.agent-access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .9rem;
+  margin-bottom: .9rem;
+}
+.agent-access-grid h3 {
+  margin-bottom: .35rem;
+  color: var(--green);
+  font-size: .95rem;
+}
+.agent-access-grid p { margin: .2rem 0; font-size: .92rem; }
+.agent-access-grid a { color: var(--green); text-decoration: none; }
+.agent-access-grid a:hover { text-decoration: underline; }
+.agent-access-note { font-size: .88rem; color: var(--gray-500); }
+
 /* Hero */
 .hero { text-align: center; padding: 3rem 0 2rem; }
 .hero h1 { font-size: 2.5rem; color: var(--green); }
@@ -469,6 +519,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .summary-header { flex-direction: column; align-items: flex-start; }
   .summary-actions { justify-content: flex-start; }
   .winner-mag-card { min-height: 300px; }
+  .agent-access-summary { align-items: flex-start; }
 }
 
 /* Print */

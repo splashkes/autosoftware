@@ -208,6 +208,62 @@ func TestRepositoryRealizationsDeclareInteractionContracts(t *testing.T) {
 	}
 }
 
+func TestRepositorySeedsDeclareAgentPrinciplesDocs(t *testing.T) {
+	repoRoot, err := FindRepoRoot(".")
+	if err != nil {
+		t.Fatalf("FindRepoRoot() error = %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(repoRoot, "seeds"))
+	if err != nil {
+		t.Fatalf("ReadDir(seeds): %v", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		seedDir := filepath.Join(repoRoot, "seeds", entry.Name())
+		if _, err := os.Stat(filepath.Join(seedDir, "seed.yaml")); err != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(seedDir, "AUTOSOFTWARE_AGENT_PRINCIPLES.md")); err != nil {
+			t.Fatalf("seed %s is missing AUTOSOFTWARE_AGENT_PRINCIPLES.md: %v", entry.Name(), err)
+		}
+	}
+}
+
+func TestRepositoryInteractiveContractsLinkAgentPrinciplesDocs(t *testing.T) {
+	repoRoot, err := FindRepoRoot(".")
+	if err != nil {
+		t.Fatalf("FindRepoRoot() error = %v", err)
+	}
+
+	contracts, err := DiscoverContracts(repoRoot)
+	if err != nil {
+		t.Fatalf("DiscoverContracts() error = %v", err)
+	}
+
+	for _, item := range contracts {
+		if item.Contract.SurfaceKind != "interactive" {
+			continue
+		}
+		contractPath := filepath.Join(item.RootDir, "interaction_contract.yaml")
+		if strings.TrimSpace(item.Contract.Links.KernelAgentPrinciples) == "" {
+			t.Fatalf("%s missing links.kernel_agent_principles", item.Reference)
+		}
+		if err := validateContractRef(repoRoot, contractPath, item.Contract.Links.KernelAgentPrinciples); err != nil {
+			t.Fatalf("%s invalid links.kernel_agent_principles: %v", item.Reference, err)
+		}
+		if strings.TrimSpace(item.Contract.Links.SeedAgentPrinciples) == "" {
+			t.Fatalf("%s missing links.seed_agent_principles", item.Reference)
+		}
+		if err := validateContractRef(repoRoot, contractPath, item.Contract.Links.SeedAgentPrinciples); err != nil {
+			t.Fatalf("%s invalid links.seed_agent_principles: %v", item.Reference, err)
+		}
+	}
+}
+
 func TestLoadInteractionContractRequiresDataViewsToCoverProjectionAuthModes(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
@@ -294,6 +350,95 @@ func TestLoadInteractionContractRequiresDataViewsToCoverProjectionAuthModes(t *t
 	}
 	if got := err.Error(); !strings.Contains(got, `must cover projection auth mode "session"`) {
 		t.Fatalf("unexpected error %q", got)
+	}
+}
+
+func TestLoadInteractionContractValidatesUISurfaceReferences(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeRepoFile(t, filepath.Join(repoRoot, "genesis", "README.md"), "# Genesis\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "kernel", "README.md"), "# Kernel\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "README.md"), "# Seeds\n")
+
+	realizationDir := filepath.Join(repoRoot, "seeds", "1234-demo", "realizations", "a-test")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "brief.md"), "# Brief\n")
+	writeRepoFile(t, filepath.Join(repoRoot, "seeds", "1234-demo", "design.md"), "# Design\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "README.md"), "# Demo\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "realization.yaml"), ""+
+		"realization_id: a-test\n"+
+		"seed_id: 1234-demo\n"+
+		"approach_id: a-approach\n"+
+		"summary: Demo realization.\n"+
+		"status: draft\n")
+	writeRepoFile(t, filepath.Join(realizationDir, "interaction_contract.yaml"), ""+
+		"contract_version: v1\n"+
+		"surface_kind: interactive\n"+
+		"seed_id: 1234-demo\n"+
+		"realization_id: a-test\n"+
+		"summary: Demo contract.\n"+
+		"links:\n"+
+		"  seed_design: ../../design.md\n"+
+		"  seed_brief: ../../brief.md\n"+
+		"  realization_readme: README.md\n"+
+		"auth_modes:\n"+
+		"  - session\n"+
+		"capabilities:\n"+
+		"  - name: sessions\n"+
+		"    summary: Session plumbing.\n"+
+		"domain_objects:\n"+
+		"  - kind: demo_item\n"+
+		"    summary: Demo item.\n"+
+		"    schema_ref: ../../design.md#demo-item\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"commands:\n"+
+		"  - name: demo_items.create\n"+
+		"    summary: Create a demo item.\n"+
+		"    path: /v1/commands/1234-demo/demo_items.create\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    idempotency: required\n"+
+		"    input_schema_ref: ../../design.md#demo-input\n"+
+		"    result_schema_ref: README.md#demo\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    projection: demo_items.detail\n"+
+		"    consistency: read_your_writes\n"+
+		"projections:\n"+
+		"  - name: demo_items.detail\n"+
+		"    summary: Demo projection.\n"+
+		"    path: /v1/projections/1234-demo/demo-items/{item_id}\n"+
+		"    object_kinds:\n"+
+		"      - demo_item\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    capabilities:\n"+
+		"      - sessions\n"+
+		"    freshness: materialized\n"+
+		"ui_surfaces:\n"+
+		"  - name: demo_admin\n"+
+		"    summary: Demo admin screen.\n"+
+		"    path: /admin/demo\n"+
+		"    auth_modes:\n"+
+		"      - session\n"+
+		"    uses_projections:\n"+
+		"      - demo_items.missing\n"+
+		"consistency:\n"+
+		"  write_visibility: read_your_writes\n"+
+		"  projection_freshness: materialized\n")
+
+	entries, err := Discover(repoRoot)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	_, err = LoadInteractionContract(repoRoot, entries[0])
+	if err == nil {
+		t.Fatal("expected ui surface reference validation error")
+	}
+	if got := err.Error(); !strings.Contains(got, "ui_surfaces[0].uses_projections[0]") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -2,12 +2,14 @@ contract_version: v1
 surface_kind: interactive
 seed_id: 0007-Flowershow
 realization_id: a-firstbloom
-summary: First-bloom realization — standards-backed flower show management with schedule hierarchy, rubric scoring, taxonomy, and real-time show admin.
+summary: First-bloom realization with agent-equal flower-show authoring, standards-backed schedule governance, rubric scoring, taxonomy, and live admin workspaces.
 links:
   seed_design: ../../design.md
   seed_brief: ../../brief.md
   seed_acceptance: ../../acceptance.md
   realization_readme: README.md
+  kernel_agent_principles: ../../../../kernel/protocol/v1/AUTOSOFTWARE_AGENT_PRINCIPLES.md
+  seed_agent_principles: ../../AUTOSOFTWARE_AGENT_PRINCIPLES.md
 auth_modes:
   - anonymous
   - session
@@ -26,35 +28,159 @@ capabilities:
 domain_objects:
   - kind: show
     summary: A single flower show competition event hosted by an organization.
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#2-show
     capabilities:
       - state_transitions
       - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable show identity and routing fields shared across clients.
+        fields:
+          - name: id
+            type: string
+            summary: Stable show id.
+          - name: slug
+            type: string
+            summary: Public handle used by browser routes.
+          - name: organization_id
+            type: string
+            summary: Stable hosting organization id.
+          - name: status
+            type: string
+            summary: Lifecycle status for the show.
+      public_payload:
+        summary: Publicly shareable show content.
+        fields:
+          - name: name
+            type: string
+            summary: Public show name.
+          - name: location
+            type: string
+            summary: Public venue or location label.
+          - name: date
+            type: string
+            summary: Public event date string.
+          - name: season
+            type: string
+            summary: Season grouping for the show.
   - kind: entry
     summary: A submission into a class within a show, linked to a person.
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#8-entries
     capabilities:
       - state_transitions
       - activity_events
       - uploads
+    data_layout:
+      shared_metadata:
+        summary: Stable entry identity and related object ids.
+        fields:
+          - name: id
+            type: string
+            summary: Stable entry id.
+          - name: show_id
+            type: string
+            summary: Stable parent show id.
+          - name: class_id
+            type: string
+            summary: Stable parent class id.
+      public_payload:
+        summary: Publicly visible entry information.
+        fields:
+          - name: name
+            type: string
+            summary: Entry display title.
+          - name: placement
+            type: integer
+            summary: Public competition placement when available.
+          - name: points
+            type: number
+            summary: Public points tally when available.
+          - name: taxon_refs
+            type: array<string>
+            summary: Referenced taxonomy ids for the entry.
+      private_payload:
+        summary: Authenticated-only entry details.
+        fields:
+          - name: person_id
+            type: string
+            summary: Stable entrant person id.
+          - name: suppressed
+            type: boolean
+            summary: Whether the entry is hidden from public views.
+          - name: notes
+            type: string
+            summary: Private or operator-facing notes.
   - kind: show_class
     summary: A class within a section of a division in a show schedule.
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#3-show-schedule--class-hierarchy
     capabilities:
       - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable class addressing fields.
+        fields:
+          - name: id
+            type: string
+            summary: Stable class id.
+          - name: section_id
+            type: string
+            summary: Stable parent section id.
+          - name: class_number
+            type: string
+            summary: Human schedule number for the class.
+          - name: domain
+            type: string
+            summary: Domain such as horticulture or design.
+      public_payload:
+        summary: Public class wording and constraints.
+        fields:
+          - name: title
+            type: string
+            summary: Public class title.
+          - name: description
+            type: string
+            summary: Public class description.
+          - name: specimen_count
+            type: integer
+            summary: Number of specimens or stems required when applicable.
+          - name: schedule_notes
+            type: string
+            summary: Public schedule note text for the class.
   - kind: person
     summary: An entrant, judge, or member with private identity.
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#7-people
     capabilities:
       - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable person identity safe to traverse publicly.
+        fields:
+          - name: id
+            type: string
+            summary: Stable person id.
+          - name: initials
+            type: string
+            summary: Public initials used in anonymous views.
+      private_payload:
+        summary: Authenticated-only identity fields.
+        fields:
+          - name: first_name
+            type: string
+            summary: Private first name.
+          - name: last_name
+            type: string
+            summary: Private last name.
+          - name: email
+            type: string
+            summary: Private email address when present.
   - kind: taxon
     summary: A concept in the taxonomy graph (botanical, design, etc).
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#10-domains
     capabilities:
       - search_documents
   - kind: award_definition
     summary: An award defined per organization and season with scoring rules.
-    schema_ref: ../../design.md
+    schema_ref: ../../design.md#9-judging--rubric-scoring
     capabilities:
       - state_transitions
       - activity_events
@@ -68,13 +194,29 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#11-interface-and-agent-access
+    result_schema_ref: README.md#realization
     capabilities:
       - state_transitions
       - activity_events
     projection: shows.detail
     consistency: read_your_writes
+    runtime_context:
+      summary: Optional runtime-only guidance carried by remote agents when composing a show authoring request.
+      fields:
+        - name: assistant_goal
+          type: string
+          summary: Brief note about the outcome the operator wants the agent to achieve.
+        - name: source_excerpt
+          type: string
+          summary: Human-supplied excerpt used only to guide request composition.
+    error_codes:
+      - code: invalid_json
+        summary: Request body did not match the declared JSON schema.
+      - code: show_create_failed
+        summary: Show creation failed validation or referenced invalid objects.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
   - name: shows.update
     summary: Update show details.
     path: /v1/commands/0007-Flowershow/shows.update
@@ -84,11 +226,83 @@ commands:
       - session
       - service_token
     idempotency: required
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#11-interface-and-agent-access
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
     projection: shows.detail
+    consistency: read_your_writes
+  - name: schedules.upsert
+    summary: Create or update the schedule governance record for a show.
+    path: /v1/commands/0007-Flowershow/schedules.upsert
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+    runtime_context:
+      summary: Optional interpretation guidance for schedule and standards linkage.
+      fields:
+        - name: governing_standard_rule
+          type: string
+          summary: Runtime-only note describing how to prefer one cited standard over another.
+    error_codes:
+      - code: schedule_show_required
+        summary: The schedule upsert request did not include a stable show id.
+      - code: schedule_upsert_failed
+        summary: Schedule governance could not be created or updated.
+  - name: judges.assign
+    summary: Assign a judge to a show.
+    path: /v1/commands/0007-Flowershow/judges.assign
+    object_kinds:
+      - show
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+  - name: divisions.create
+    summary: Add a division to a show schedule.
+    path: /v1/commands/0007-Flowershow/divisions.create
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+  - name: sections.create
+    summary: Add a section to a division.
+    path: /v1/commands/0007-Flowershow/sections.create
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.workspace
     consistency: read_your_writes
   - name: entries.create
     summary: Create a new entry in a show class.
@@ -99,12 +313,12 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
     capabilities:
       - state_transitions
       - activity_events
-    projection: entries.list
+    projection: entries.detail
     consistency: read_your_writes
   - name: entries.update
     summary: Update an existing entry.
@@ -115,11 +329,11 @@ commands:
       - session
       - service_token
     idempotency: required
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: entries.list
+    projection: entries.detail
     consistency: read_your_writes
   - name: entries.set_placement
     summary: Set placement and points for an entry.
@@ -130,12 +344,28 @@ commands:
       - session
       - service_token
     idempotency: required
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - state_transitions
       - activity_events
-    projection: entries.list
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: entries.set_visibility
+    summary: Suppress or unsuppress an entry from public views.
+    path: /v1/commands/0007-Flowershow/entries.set_visibility
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
     consistency: read_your_writes
   - name: classes.create
     summary: Add a class to a section in the schedule.
@@ -146,14 +376,29 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: classes.detail
+    consistency: read_your_writes
+  - name: classes.compute_placements
+    summary: Recompute placements for a class from submitted scorecards.
+    path: /v1/commands/0007-Flowershow/classes.compute_placements
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: none
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: classes.detail
     consistency: read_your_writes
   - name: persons.create
-    summary: Register a new person (entrant, judge, or member).
+    summary: Register a new person record.
     path: /v1/commands/0007-Flowershow/persons.create
     object_kinds:
       - person
@@ -161,11 +406,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: shows.detail
+    projection: admin.dashboard
     consistency: read_your_writes
   - name: awards.create
     summary: Define a new award for an organization.
@@ -176,12 +421,12 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - state_transitions
       - activity_events
-    projection: shows.detail
+    projection: admin.dashboard
     consistency: read_your_writes
   - name: awards.compute
     summary: Compute award results from matching entries.
@@ -192,12 +437,12 @@ commands:
       - session
       - service_token
     idempotency: none
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - state_transitions
       - activity_events
-    projection: shows.detail
+    projection: admin.dashboard
     consistency: read_your_writes
   - name: taxons.create
     summary: Add a taxon to the taxonomy.
@@ -208,11 +453,43 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#10-domains
+    result_schema_ref: README.md#realization
     capabilities:
       - search_documents
     projection: taxonomy.browse
+    consistency: read_your_writes
+  - name: media.attach
+    summary: Attach external or already-uploaded media metadata to an entry.
+    path: /v1/commands/0007-Flowershow/media.attach
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - uploads
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: media.delete
+    summary: Delete media metadata from an entry record.
+    path: /v1/commands/0007-Flowershow/media.delete
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - uploads
+      - activity_events
+    projection: entries.detail
     consistency: read_your_writes
   - name: rubrics.create
     summary: Create a judging rubric.
@@ -223,11 +500,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: shows.detail
+    projection: shows.workspace
     consistency: read_your_writes
   - name: criteria.create
     summary: Add a criterion to a rubric.
@@ -238,11 +515,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: shows.detail
+    projection: shows.workspace
     consistency: read_your_writes
   - name: scorecards.submit
     summary: Submit a scorecard with per-criterion scores.
@@ -253,11 +530,11 @@ commands:
       - session
       - service_token
     idempotency: required
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: entries.list
+    projection: entries.detail
     consistency: read_your_writes
   - name: standards.create
     summary: Register a standard document.
@@ -268,11 +545,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#4-standards--editions
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
     consistency: read_your_writes
   - name: editions.create
     summary: Add an edition to a standard document.
@@ -283,11 +560,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#4-standards--editions
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
     consistency: read_your_writes
   - name: sources.create
     summary: Register a source document.
@@ -298,11 +575,11 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#5-source-documents--citations
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
     consistency: read_your_writes
   - name: citations.create
     summary: Create a source citation for a target record.
@@ -313,12 +590,39 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#5-source-documents--citations
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
     consistency: read_your_writes
+    runtime_context:
+      summary: Optional runtime-only extraction or interpretation notes for the cited source.
+      fields:
+        - name: interpretation_note
+          type: string
+          summary: Temporary note about how the caller interpreted the cited schedule text.
+    error_codes:
+      - code: citation_create_failed
+        summary: Citation creation failed validation or referenced invalid objects.
+  - name: ingestions.import
+    summary: Import pre-structured cited records into the flower-show graph.
+    path: /v1/commands/0007-Flowershow/ingestions.import
+    object_kinds:
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: none
+    input_schema_ref: ../../design.md#11-interface-and-agent-access
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+    error_codes:
+      - code: ingestion_import_failed
+        summary: The structured import payload was invalid or incomplete.
   - name: rules.create
     summary: Add a standard rule to an edition.
     path: /v1/commands/0007-Flowershow/rules.create
@@ -328,12 +632,18 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#6-standard-rules--local-overrides
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
     consistency: read_your_writes
+    runtime_context:
+      summary: Optional runtime-only note about how a standard rule was interpreted before encoding it structurally.
+      fields:
+        - name: source_excerpt
+          type: string
+          summary: Short excerpt from a cited rulebook used only for authoring guidance.
   - name: overrides.create
     summary: Create a local class rule override.
     path: /v1/commands/0007-Flowershow/overrides.create
@@ -343,11 +653,33 @@ commands:
       - session
       - service_token
     idempotency: recommended
-    input_schema_ref: ../../design.md
-    result_schema_ref: README.md
+    input_schema_ref: ../../design.md#6-standard-rules--local-overrides
+    result_schema_ref: README.md#realization
     capabilities:
       - activity_events
-    projection: classes.list
+    projection: shows.workspace
+    consistency: read_your_writes
+    runtime_context:
+      summary: Optional runtime-only note explaining why the caller believes the local schedule text overrides the governing standard.
+      fields:
+        - name: override_interpretation
+          type: string
+          summary: Temporary reasoning note used while composing the override command.
+  - name: roles.assign
+    summary: Assign an application role to a subject for organization or show scope.
+    path: /v1/commands/0007-Flowershow/roles.assign
+    object_kinds:
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - sessions
+      - activity_events
+    projection: admin.dashboard
     consistency: read_your_writes
 projections:
   - name: shows.directory
@@ -357,21 +689,75 @@ projections:
       - show
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - state_transitions
       - activity_events
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: All callers get the shared and public show slice for the directory.
   - name: shows.detail
-    summary: Single show with schedule, entries, awards.
+    summary: Canonical show detail projection with public schedule and entry data.
     path: /v1/projections/0007-Flowershow/shows/{id}
     object_kinds:
       - show
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - state_transitions
       - activity_events
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: Anonymous callers see the public show projection.
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: Authenticated callers currently receive the same public show projection here and use shows.workspace for private detail.
+  - name: shows.workspace
+    summary: Private by-id show workspace consumed by the admin UI and authenticated agents.
+    path: /v1/projections/0007-Flowershow/shows/{id}/workspace
+    object_kinds:
+      - show
+      - entry
+      - show_class
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - state_transitions
+      - activity_events
+      - sessions
+      - uploads
+    freshness: materialized
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+          - private_payload
+          - runtime_only
+        summary: Authenticated callers get the full admin workspace including private detail and runtime helpers.
   - name: entries.list
     summary: Entries for a show or class.
     path: /v1/projections/0007-Flowershow/entries
@@ -379,10 +765,51 @@ projections:
       - entry
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - state_transitions
       - activity_events
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: List views expose public entry slices only.
+  - name: entries.detail
+    summary: Stable by-id entry detail projection.
+    path: /v1/projections/0007-Flowershow/entries/{id}
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
+    capabilities:
+      - state_transitions
+      - activity_events
+      - uploads
+    freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: Anonymous callers get public entry detail and masked person identity.
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+          - private_payload
+        summary: Authenticated callers also get private entry and person data.
   - name: classes.list
     summary: Classes within a schedule.
     path: /v1/projections/0007-Flowershow/classes
@@ -390,9 +817,42 @@ projections:
       - show_class
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: All callers get the public class slice for list views.
+  - name: classes.detail
+    summary: Stable by-id class detail projection with rules and citation context.
+    path: /v1/projections/0007-Flowershow/classes/{id}
+    object_kinds:
+      - show_class
+      - show
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+    freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - public_payload
+        summary: Class detail is public; authenticated agents still benefit from stable by-id access and richer surrounding context.
   - name: taxonomy.browse
     summary: Taxon listing and cross-references.
     path: /v1/projections/0007-Flowershow/taxonomy
@@ -400,6 +860,8 @@ projections:
       - taxon
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - search_documents
     freshness: materialized
@@ -411,6 +873,8 @@ projections:
       - person
     auth_modes:
       - anonymous
+      - session
+      - service_token
     capabilities:
       - activity_events
     freshness: materialized
@@ -425,11 +889,20 @@ projections:
     capabilities:
       - activity_events
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+        summary: Ledger views are private operational projections.
   - name: admin.dashboard
-    summary: Show admin overview with counts.
+    summary: Cross-show admin overview with counts and role visibility.
     path: /v1/projections/0007-Flowershow/admin/dashboard
     object_kinds:
       - show
+      - person
     auth_modes:
       - session
       - service_token
@@ -437,6 +910,75 @@ projections:
       - activity_events
       - sessions
     freshness: materialized
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Admin dashboard is a private operational projection.
+ui_surfaces:
+  - name: public_show_page
+    summary: Public show detail page.
+    path: /shows/{slug}
+    auth_modes:
+      - anonymous
+    uses_projections:
+      - shows.detail
+      - entries.list
+      - classes.list
+  - name: public_class_page
+    summary: Public class detail page.
+    path: /shows/{slug}/classes/{classID}
+    auth_modes:
+      - anonymous
+    uses_projections:
+      - classes.detail
+      - entries.list
+  - name: admin_show_workspace
+    summary: Private HTMX show admin screen used for schedule, entry, rule, scoring, and citation management.
+    path: /admin/shows/{showID}
+    auth_modes:
+      - session
+      - service_token
+    uses_projections:
+      - shows.workspace
+      - entries.detail
+      - classes.detail
+    mutates_commands:
+      - shows.update
+      - schedules.upsert
+      - judges.assign
+      - divisions.create
+      - sections.create
+      - classes.create
+      - entries.create
+      - entries.set_placement
+      - entries.set_visibility
+      - media.attach
+      - media.delete
+      - rubrics.create
+      - criteria.create
+      - scorecards.submit
+      - classes.compute_placements
+      - standards.create
+      - editions.create
+      - sources.create
+      - citations.create
+      - rules.create
+      - overrides.create
+  - name: admin_role_management
+    summary: Private role management screen for show and organization scopes.
+    path: /admin/roles
+    auth_modes:
+      - session
+      - service_token
+    uses_projections:
+      - admin.dashboard
+    mutates_commands:
+      - roles.assign
 consistency:
   write_visibility: read_your_writes
   projection_freshness: materialized

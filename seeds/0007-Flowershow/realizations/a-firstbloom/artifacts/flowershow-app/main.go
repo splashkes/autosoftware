@@ -74,6 +74,8 @@ func main() {
 	// Assets & health
 	mux.Handle("GET /assets/", a.assetHandler())
 	mux.HandleFunc("GET /healthz", a.handleHealth)
+	mux.HandleFunc("GET /v1/contracts", a.handleContractsList)
+	mux.HandleFunc("GET /v1/contracts/{seed_id}/{realization_id}", a.handleContractDetail)
 
 	// Public pages
 	mux.HandleFunc("GET /", a.handleHome)
@@ -153,8 +155,11 @@ func main() {
 	// JSON API
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries", a.handleAPIEntries)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/classes", a.handleAPIClasses)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/classes/{id}", a.handleAPIClassDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/taxonomy", a.handleAPITaxonomy)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/leaderboard", a.handleAPILeaderboard)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/ledger/{objectID}", a.handleAPILedger)
@@ -162,14 +167,22 @@ func main() {
 
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/judges.assign", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/divisions.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/sections.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.update", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_placement", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.compute_placements", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/persons.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/awards.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/awards.compute", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/taxons.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.attach", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/rubrics.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/criteria.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/scorecards.submit", a.handleAPICommand)
@@ -180,6 +193,7 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/ingestions.import", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/rules.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/overrides.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
 		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
@@ -360,7 +374,7 @@ func (a *app) isServiceToken(r *http.Request) bool {
 func (a *app) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !a.isAdmin(r) && !a.isServiceToken(r) {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to access this endpoint.", nil)
 			return
 		}
 		next(w, r)

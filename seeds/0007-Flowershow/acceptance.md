@@ -45,6 +45,8 @@ The system is complete when:
 - Manage judges, classes, entries, media, and winners per class
 - Multiple operators see live updates via SSE (no reload)
 - HTMX-driven partial updates
+- The same normal operations are reachable through declared semantic API
+  commands and projections for authenticated agents
 
 ## Media
 - Multiple photos and/or videos per entry
@@ -52,9 +54,15 @@ The system is complete when:
 - Server-side transcode if file exceeds threshold
 - Cross-browser, low-bandwidth, high-performance upload UI
 
-## Ingestion
-- Data can be ingested via API from unstructured sources (PDFs)
-- Ingestion preserves provenance (source document, page, confidence)
+## Agent Authoring
+- Data can be authored through API by remote agents using `service_token`
+  authentication
+- Runtime-only authoring context can be sent with commands without becoming
+  canonical truth
+- Cited source material is preserved as source documents and citations rather
+  than as opaque prompt text
+- Authenticated API errors expose stable codes, request ids, and actionable
+  hints
 
 ## Privacy
 - Public view shows initials only

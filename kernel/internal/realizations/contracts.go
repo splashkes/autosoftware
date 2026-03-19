@@ -26,14 +26,17 @@ type InteractionContract struct {
 	DomainRelations []InteractionRelation   `yaml:"domain_relations,omitempty" json:"domain_relations,omitempty"`
 	Commands        []InteractionCommand    `yaml:"commands" json:"commands"`
 	Projections     []InteractionProjection `yaml:"projections" json:"projections"`
+	UISurfaces      []InteractionUISurface  `yaml:"ui_surfaces,omitempty" json:"ui_surfaces,omitempty"`
 	Consistency     InteractionConsistency  `yaml:"consistency" json:"consistency"`
 }
 
 type InteractionLinks struct {
-	SeedDesign        string `yaml:"seed_design" json:"seed_design"`
-	SeedBrief         string `yaml:"seed_brief,omitempty" json:"seed_brief,omitempty"`
-	SeedAcceptance    string `yaml:"seed_acceptance,omitempty" json:"seed_acceptance,omitempty"`
-	RealizationReadme string `yaml:"realization_readme" json:"realization_readme"`
+	SeedDesign            string `yaml:"seed_design" json:"seed_design"`
+	SeedBrief             string `yaml:"seed_brief,omitempty" json:"seed_brief,omitempty"`
+	SeedAcceptance        string `yaml:"seed_acceptance,omitempty" json:"seed_acceptance,omitempty"`
+	RealizationReadme     string `yaml:"realization_readme" json:"realization_readme"`
+	KernelAgentPrinciples string `yaml:"kernel_agent_principles,omitempty" json:"kernel_agent_principles,omitempty"`
+	SeedAgentPrinciples   string `yaml:"seed_agent_principles,omitempty" json:"seed_agent_principles,omitempty"`
 }
 
 type InteractionCapability struct {
@@ -80,17 +83,19 @@ type InteractionDataField struct {
 }
 
 type InteractionCommand struct {
-	Name            string   `yaml:"name" json:"name"`
-	Summary         string   `yaml:"summary" json:"summary"`
-	Path            string   `yaml:"path" json:"path"`
-	ObjectKinds     []string `yaml:"object_kinds" json:"object_kinds"`
-	AuthModes       []string `yaml:"auth_modes" json:"auth_modes"`
-	Idempotency     string   `yaml:"idempotency" json:"idempotency"`
-	InputSchemaRef  string   `yaml:"input_schema_ref" json:"input_schema_ref"`
-	ResultSchemaRef string   `yaml:"result_schema_ref" json:"result_schema_ref"`
-	Capabilities    []string `yaml:"capabilities" json:"capabilities"`
-	Projection      string   `yaml:"projection" json:"projection"`
-	Consistency     string   `yaml:"consistency" json:"consistency"`
+	Name            string                 `yaml:"name" json:"name"`
+	Summary         string                 `yaml:"summary" json:"summary"`
+	Path            string                 `yaml:"path" json:"path"`
+	ObjectKinds     []string               `yaml:"object_kinds" json:"object_kinds"`
+	AuthModes       []string               `yaml:"auth_modes" json:"auth_modes"`
+	Idempotency     string                 `yaml:"idempotency" json:"idempotency"`
+	InputSchemaRef  string                 `yaml:"input_schema_ref" json:"input_schema_ref"`
+	ResultSchemaRef string                 `yaml:"result_schema_ref" json:"result_schema_ref"`
+	Capabilities    []string               `yaml:"capabilities" json:"capabilities"`
+	Projection      string                 `yaml:"projection" json:"projection"`
+	Consistency     string                 `yaml:"consistency" json:"consistency"`
+	RuntimeContext  InteractionDataSection `yaml:"runtime_context,omitempty" json:"runtime_context,omitempty"`
+	ErrorCodes      []InteractionErrorCode `yaml:"error_codes,omitempty" json:"error_codes,omitempty"`
 }
 
 type InteractionProjection struct {
@@ -108,6 +113,21 @@ type InteractionDataView struct {
 	AuthModes []string `yaml:"auth_modes" json:"auth_modes"`
 	Sections  []string `yaml:"sections" json:"sections"`
 	Summary   string   `yaml:"summary,omitempty" json:"summary,omitempty"`
+}
+
+type InteractionUISurface struct {
+	Name            string   `yaml:"name" json:"name"`
+	Summary         string   `yaml:"summary" json:"summary"`
+	Path            string   `yaml:"path" json:"path"`
+	AuthModes       []string `yaml:"auth_modes" json:"auth_modes"`
+	UsesProjections []string `yaml:"uses_projections,omitempty" json:"uses_projections,omitempty"`
+	MutatesCommands []string `yaml:"mutates_commands,omitempty" json:"mutates_commands,omitempty"`
+}
+
+type InteractionErrorCode struct {
+	Code      string   `yaml:"code" json:"code"`
+	Summary   string   `yaml:"summary" json:"summary"`
+	AuthModes []string `yaml:"auth_modes,omitempty" json:"auth_modes,omitempty"`
 }
 
 type InteractionConsistency struct {
@@ -206,6 +226,16 @@ func validateInteractionContract(repoRoot string, entry LocalRealization, contra
 			return fmt.Errorf("links.seed_acceptance: %w", err)
 		}
 	}
+	if strings.TrimSpace(contract.Links.KernelAgentPrinciples) != "" {
+		if err := validateContractRef(repoRoot, contractPath, contract.Links.KernelAgentPrinciples); err != nil {
+			return fmt.Errorf("links.kernel_agent_principles: %w", err)
+		}
+	}
+	if strings.TrimSpace(contract.Links.SeedAgentPrinciples) != "" {
+		if err := validateContractRef(repoRoot, contractPath, contract.Links.SeedAgentPrinciples); err != nil {
+			return fmt.Errorf("links.seed_agent_principles: %w", err)
+		}
+	}
 
 	authModes, err := validateNamedList(contract.AuthModes, allowedAuthModes, "auth_modes")
 	if err != nil {
@@ -238,7 +268,11 @@ func validateInteractionContract(repoRoot string, entry LocalRealization, contra
 		return fmt.Errorf("interactive realizations must declare at least one command")
 	}
 
-	if err := validateCommands(entry.SeedID, repoRoot, contractPath, contract.Commands, objectKinds, projections, capabilities, authModes); err != nil {
+	commandNames, err := validateCommands(entry.SeedID, repoRoot, contractPath, contract.Commands, objectKinds, projections, capabilities, authModes)
+	if err != nil {
+		return err
+	}
+	if err := validateUISurfaces("ui_surfaces", contract.UISurfaces, projections, commandNames, authModes); err != nil {
 		return err
 	}
 
@@ -507,63 +541,149 @@ func (section InteractionDataSection) hasContent() bool {
 	return strings.TrimSpace(section.Summary) != "" || len(section.Fields) > 0
 }
 
-func validateCommands(seedID, repoRoot, contractPath string, items []InteractionCommand, objectKinds, projections, capabilities, authModes map[string]struct{}) error {
+func validateCommands(seedID, repoRoot, contractPath string, items []InteractionCommand, objectKinds, projections, capabilities, authModes map[string]struct{}) (map[string]struct{}, error) {
 	names := make(map[string]struct{}, len(items))
 	paths := make(map[string]struct{}, len(items))
 	prefix := "/v1/commands/" + seedID + "/"
 	for i, item := range items {
 		name := strings.TrimSpace(item.Name)
 		if name == "" {
-			return fmt.Errorf("commands[%d].name is required", i)
+			return nil, fmt.Errorf("commands[%d].name is required", i)
 		}
 		if _, exists := names[name]; exists {
-			return fmt.Errorf("commands[%d].name %q is duplicated", i, name)
+			return nil, fmt.Errorf("commands[%d].name %q is duplicated", i, name)
 		}
 		if strings.TrimSpace(item.Summary) == "" {
-			return fmt.Errorf("commands[%d].summary is required", i)
+			return nil, fmt.Errorf("commands[%d].summary is required", i)
 		}
 		path := strings.TrimSpace(item.Path)
 		if path == "" {
-			return fmt.Errorf("commands[%d].path is required", i)
+			return nil, fmt.Errorf("commands[%d].path is required", i)
 		}
 		if !strings.HasPrefix(path, prefix) {
-			return fmt.Errorf("commands[%d].path %q must start with %q", i, path, prefix)
+			return nil, fmt.Errorf("commands[%d].path %q must start with %q", i, path, prefix)
 		}
 		if _, exists := paths[path]; exists {
-			return fmt.Errorf("commands[%d].path %q is duplicated", i, path)
+			return nil, fmt.Errorf("commands[%d].path %q is duplicated", i, path)
 		}
 		if err := validateSubset(fmt.Sprintf("commands[%d].object_kinds", i), item.ObjectKinds, objectKinds); err != nil {
-			return err
+			return nil, err
 		}
 		if err := validateSubset(fmt.Sprintf("commands[%d].auth_modes", i), item.AuthModes, authModes); err != nil {
-			return err
+			return nil, err
 		}
 		if _, ok := allowedIdempotency[strings.TrimSpace(item.Idempotency)]; !ok {
-			return fmt.Errorf("commands[%d].idempotency must be one of %s", i, formatAllowedKeys(allowedIdempotency))
+			return nil, fmt.Errorf("commands[%d].idempotency must be one of %s", i, formatAllowedKeys(allowedIdempotency))
 		}
 		if strings.TrimSpace(item.InputSchemaRef) == "" {
-			return fmt.Errorf("commands[%d].input_schema_ref is required", i)
+			return nil, fmt.Errorf("commands[%d].input_schema_ref is required", i)
 		}
 		if err := validateContractRef(repoRoot, contractPath, item.InputSchemaRef); err != nil {
-			return fmt.Errorf("commands[%d].input_schema_ref: %w", i, err)
+			return nil, fmt.Errorf("commands[%d].input_schema_ref: %w", i, err)
 		}
 		if strings.TrimSpace(item.ResultSchemaRef) == "" {
-			return fmt.Errorf("commands[%d].result_schema_ref is required", i)
+			return nil, fmt.Errorf("commands[%d].result_schema_ref is required", i)
 		}
 		if err := validateContractRef(repoRoot, contractPath, item.ResultSchemaRef); err != nil {
-			return fmt.Errorf("commands[%d].result_schema_ref: %w", i, err)
+			return nil, fmt.Errorf("commands[%d].result_schema_ref: %w", i, err)
 		}
 		if err := validateSubset(fmt.Sprintf("commands[%d].capabilities", i), item.Capabilities, capabilities); err != nil {
-			return err
+			return nil, err
 		}
 		if _, ok := projections[strings.TrimSpace(item.Projection)]; !ok {
-			return fmt.Errorf("commands[%d].projection %q must reference a declared projection", i, item.Projection)
+			return nil, fmt.Errorf("commands[%d].projection %q must reference a declared projection", i, item.Projection)
 		}
 		if _, ok := allowedWriteVisibility[strings.TrimSpace(item.Consistency)]; !ok {
-			return fmt.Errorf("commands[%d].consistency must be one of %s", i, formatAllowedKeys(allowedWriteVisibility))
+			return nil, fmt.Errorf("commands[%d].consistency must be one of %s", i, formatAllowedKeys(allowedWriteVisibility))
+		}
+		if err := validateOptionalDataSection(fmt.Sprintf("commands[%d].runtime_context", i), item.RuntimeContext); err != nil {
+			return nil, err
+		}
+		if err := validateErrorCodes(fmt.Sprintf("commands[%d].error_codes", i), item.ErrorCodes, item.AuthModes, authModes); err != nil {
+			return nil, err
 		}
 		names[name] = struct{}{}
 		paths[path] = struct{}{}
+	}
+	return names, nil
+}
+
+func validateErrorCodes(field string, items []InteractionErrorCode, projectionModes []string, authModes map[string]struct{}) error {
+	if len(items) == 0 {
+		return nil
+	}
+	allowedModes := authModes
+	if len(projectionModes) > 0 {
+		var err error
+		allowedModes, err = validateNamedList(projectionModes, authModes, field+".command_auth_modes")
+		if err != nil {
+			return err
+		}
+	}
+	seen := map[string]struct{}{}
+	for i, item := range items {
+		code := strings.TrimSpace(item.Code)
+		if code == "" {
+			return fmt.Errorf("%s[%d].code is required", field, i)
+		}
+		if _, exists := seen[code]; exists {
+			return fmt.Errorf("%s[%d].code %q is duplicated", field, i, code)
+		}
+		if strings.TrimSpace(item.Summary) == "" {
+			return fmt.Errorf("%s[%d].summary is required", field, i)
+		}
+		if len(item.AuthModes) > 0 {
+			if err := validateSubset(fmt.Sprintf("%s[%d].auth_modes", field, i), item.AuthModes, allowedModes); err != nil {
+				return err
+			}
+		}
+		seen[code] = struct{}{}
+	}
+	return nil
+}
+
+func validateUISurfaces(field string, items []InteractionUISurface, projections, commands, authModes map[string]struct{}) error {
+	seenNames := map[string]struct{}{}
+	seenPaths := map[string]struct{}{}
+	for i, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return fmt.Errorf("%s[%d].name is required", field, i)
+		}
+		if _, exists := seenNames[name]; exists {
+			return fmt.Errorf("%s[%d].name %q is duplicated", field, i, name)
+		}
+		if strings.TrimSpace(item.Summary) == "" {
+			return fmt.Errorf("%s[%d].summary is required", field, i)
+		}
+		path := strings.TrimSpace(item.Path)
+		if path == "" {
+			return fmt.Errorf("%s[%d].path is required", field, i)
+		}
+		if !strings.HasPrefix(path, "/") {
+			return fmt.Errorf("%s[%d].path %q must start with \"/\"", field, i, path)
+		}
+		if _, exists := seenPaths[path]; exists {
+			return fmt.Errorf("%s[%d].path %q is duplicated", field, i, path)
+		}
+		if err := validateSubset(fmt.Sprintf("%s[%d].auth_modes", field, i), item.AuthModes, authModes); err != nil {
+			return err
+		}
+		if len(item.UsesProjections) == 0 && len(item.MutatesCommands) == 0 {
+			return fmt.Errorf("%s[%d] must declare at least one projection or command reference", field, i)
+		}
+		if len(item.UsesProjections) > 0 {
+			if err := validateSubset(fmt.Sprintf("%s[%d].uses_projections", field, i), item.UsesProjections, projections); err != nil {
+				return err
+			}
+		}
+		if len(item.MutatesCommands) > 0 {
+			if err := validateSubset(fmt.Sprintf("%s[%d].mutates_commands", field, i), item.MutatesCommands, commands); err != nil {
+				return err
+			}
+		}
+		seenNames[name] = struct{}{}
+		seenPaths[path] = struct{}{}
 	}
 	return nil
 }
