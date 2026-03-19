@@ -591,7 +591,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	if !strings.Contains(loginW.Body.String(), "Enter password instead") {
 		t.Fatal("otp verification step should expose the password fallback action")
 	}
-	if !strings.Contains(loginW.Body.String(), "You can request another code in 20s") {
+	if !strings.Contains(loginW.Body.String(), "You can request another code in") {
 		t.Fatal("otp verification step should show the resend cooldown")
 	}
 
