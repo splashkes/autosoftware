@@ -176,6 +176,27 @@ domain_objects:
           - name: email
             type: string
             summary: Private email address when present.
+  - kind: organization
+    summary: A hosting club or society associated with shows and people.
+    schema_ref: ../../design.md#1-organizations
+    capabilities:
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable organization identity safe to traverse.
+        fields:
+          - name: id
+            type: string
+            summary: Stable organization id.
+      public_payload:
+        summary: Public organization naming fields.
+        fields:
+          - name: name
+            type: string
+            summary: Public organization name.
+          - name: level
+            type: string
+            summary: Organization level such as club, district, or society.
   - kind: show_credit
     summary: A free-form show page credit, separate from permissions.
     schema_ref: ../../design.md#7-people
