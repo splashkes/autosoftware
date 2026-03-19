@@ -33,6 +33,10 @@ seed-specific constraints.
   stronger or narrower mode is declared for the seed.
 - Anonymous access, session access, and service-token access must describe
   their different read boundaries clearly.
+- External authentication proves identity.
+- Durable authority should belong to system-native subjects, scopes, bundles,
+  grants, and materialized effective access rather than being permanently
+  outsourced to the auth provider.
 
 ## Runtime Context
 

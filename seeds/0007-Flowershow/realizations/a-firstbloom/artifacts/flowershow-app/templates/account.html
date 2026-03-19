@@ -1,0 +1,70 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header">
+    <div>
+      <h1>Your Profile</h1>
+      <p class="section-desc">You are signed in. This page shows the account identity and any role access currently attached to it.</p>
+    </div>
+  </div>
+
+  {{if .Notice.Message}}
+  <div class="alert {{if eq .Notice.Kind "error"}}alert-error{{else}}alert-info{{end}}">{{.Notice.Message}}</div>
+  {{end}}
+
+  <div class="card-grid account-grid">
+    <section class="card">
+      <div class="card-body">
+        <div class="login-step-kicker">Identity</div>
+        <h2 class="card-title">{{if .User.Email}}{{.User.Email}}{{else}}Signed-In User{{end}}</h2>
+        <p class="card-meta">Cognito subject: {{.User.CognitoSub}}</p>
+        {{if .User.Name}}<p class="card-meta">Display name: {{.User.Name}}</p>{{end}}
+        <div class="show-actions account-actions">
+          <a href="{{bp}}/" class="btn btn-secondary">Browse Shows</a>
+          {{if .IsAdmin}}<a href="{{bp}}/admin" class="btn btn-primary">Open Admin</a>{{end}}
+          <form method="POST" action="{{bp}}/admin/logout">
+            <button type="submit" class="btn btn-outline">Sign Out</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-body">
+        <div class="login-step-kicker">Access</div>
+        <h2 class="card-title">Roles</h2>
+        {{if .Roles}}
+        <div class="account-role-list">
+          {{range .Roles}}
+          <div class="account-role-item">
+            <span class="badge badge-green">{{.RoleLabel}}</span>
+            <span class="card-meta">{{.ScopeLabel}}</span>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="card-meta">No elevated roles are attached yet. You can still browse the public show experience from this signed-in account.</p>
+        {{end}}
+      </div>
+    </section>
+  </div>
+
+  <section class="section">
+    <div class="section-header">
+      <div>
+        <h2>Current Shows</h2>
+        <p class="section-desc">Use these links to move through the public flowershow surface while signed in.</p>
+      </div>
+    </div>
+    <div class="card-grid">
+      {{range .Shows}}
+      <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
+        <div class="card-body">
+          <h3 class="card-title">{{.Name}}</h3>
+          <p class="card-meta">{{.Date}} · {{.Location}}</p>
+        </div>
+      </a>
+      {{end}}
+    </div>
+  </section>
+</section>
+{{end}}

@@ -157,6 +157,60 @@ Identity:
 
 ---
 
+### 7A. Authority, Membership, and Delegation
+
+Authority for this seed should be system-native rather than delegated
+permanently to Cognito or any other auth provider.
+
+Identity comes from auth.
+Control comes from accepted Autosoftware authority history.
+
+The seed should distinguish three related but different ideas:
+
+- membership
+- office
+- operational authority
+
+Examples:
+
+- `organization_member`
+- `organization_executive`
+- `organization_admin`
+- `show_editor`
+- `show_judge`
+- `show_steward`
+- `show_scoring_operator`
+- `show_awards_operator`
+
+Authority should be scoped.
+Typical scopes here are:
+
+- organization
+- show
+- class
+
+The seed should support explicit grant lifecycle and history:
+
+- proposed grant
+- accepted grant
+- revoked grant
+- expired grant
+- superseded grant
+
+Delegation should be explicit.
+For example:
+
+- a club admin may be allowed to grant club-scoped executive or member access
+- a show editor may be allowed to grant narrower show-scoped roles
+- a show judge should usually not be allowed to delegate judge power
+
+Current effective access should be materialized from accepted grant history.
+Revocation should be represented as later accepted history, not by mutating old
+role rows in place and not by inventing status strings like `REVOKED
+executive`.
+
+---
+
 ### 8. Entries
 
 Entries are submissions into a class within a show.
@@ -242,6 +296,11 @@ Required interface expectations:
   also exposes a slug
 - authenticated agents receive structured validation and permission errors
   useful enough to recover without guessing
+- command authorization should resolve through system-native authority over the
+  relevant organization, show, or narrower scope, not through hidden
+  seed-local-only checks that alternate clients cannot inspect
+- authority changes should become ledger-visible history and effective-access
+  projections once the seed adopts the kernel-native authority model
 
 Runtime-only assistant instructions may accompany authoring requests, for
 example guidance about how to interpret a cited schedule or which standard

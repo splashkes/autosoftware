@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { expectAgentPath, loginLocalAdmin, uniqueName } from './flowershow.helpers';
+import {
+  expectAgentPath,
+  loginLocalAdmin,
+  loginLocalViewer,
+  uniqueName,
+} from './flowershow.helpers';
 
 test.describe('Flowershow Admin Local', () => {
   test('admin login and dashboard work locally', async ({ page }) => {
@@ -8,6 +13,19 @@ test.describe('Flowershow Admin Local', () => {
     await expect(page.locator('body')).not.toContainText('Bootstrap Override');
 
     await loginLocalAdmin(page);
+  });
+
+  test('signed-in non-admin lands on account instead of looping through admin', async ({
+    page,
+  }) => {
+    await loginLocalViewer(page);
+    await page.goto('/admin');
+
+    await expect(page).toHaveURL(/\/account\?notice=admin_required$/);
+    await expect(page.locator('h1')).toContainText('Your Profile');
+    await expect(page.locator('body')).toContainText(
+      'does not currently have admin access',
+    );
   });
 
   test('admin can assign a judge on a seeded show', async ({ page }) => {

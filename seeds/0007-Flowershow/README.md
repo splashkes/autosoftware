@@ -16,6 +16,8 @@ Federated, append-only registry for horticulture and design competitions.
 - **Awards** — organization-scoped, taxonomy-filtered, computed from scores
 - **Media** — multiple photos/videos per entry, client-optimized uploads to S3
 - **Privacy** — public display of initials; private identity mapping; append-only suppression
+- **Authority & Delegation** — system-native club and show control with
+  delegated grants, revocations, and ledger-visible authority history
 
 ## Design Principles
 
@@ -26,6 +28,7 @@ Federated, append-only registry for horticulture and design competitions.
 - Append-only with suppression (no deletion)
 - Organization-scoped computation
 - Agent-equal or agent-better access for normal authenticated workflows
+- External auth for identity, internal registry-backed authority for control
 
 ## Domains
 

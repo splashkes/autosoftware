@@ -74,6 +74,8 @@ func main() {
 
 	// Public pages
 	mux.HandleFunc("GET /", a.handleHome)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
+	mux.HandleFunc("GET /profile", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
@@ -317,6 +319,7 @@ func parseTemplates() map[string]*template.Template {
 		"templates/taxon_detail.html",
 		"templates/leaderboard.html",
 		"templates/login.html",
+		"templates/account.html",
 		"templates/standards.html",
 		"templates/show_rules.html",
 		"templates/show_admin.html",
@@ -355,7 +358,21 @@ func (a *app) render(w http.ResponseWriter, name string, data any) {
 
 func (a *app) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := a.currentUser(r); !ok {
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			return
+		}
 		if !a.isAdmin(r) {
+			http.Redirect(w, r, "/account?notice=admin_required", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (a *app) requireSignedInPage(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := a.currentUser(r); !ok {
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
 		}

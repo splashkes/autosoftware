@@ -21,6 +21,9 @@ Document boundaries:
   checkpoint before implementation.
 - `AUTOSOFTWARE_AGENT_PRINCIPLES.md` records the seed-local agent-access rules
   that specialize the stable kernel doctrine.
+- when a seed has meaningful authority, it should build on
+  `kernel/protocol/v1/permissions.md` rather than inventing a private local
+  role model
 - `PUBLIC_PRIVATE_DATA.md` defines the seed-local shared/public/private/runtime
   data boundary when the seed needs one, ideally in graph-first terms.
 - `approaches/` defines the named YAML approaches that realizations may
@@ -52,5 +55,7 @@ The normal collaboration path is:
 7. keep iteration detail in `notes.md`
 8. write or update `AUTOSOFTWARE_AGENT_PRINCIPLES.md` for seed-local agent
    expectations
-9. define the realization interaction contract under `realizations/<id>/`
-10. place concrete outputs under `realizations/`
+9. define the seed-local authority model when membership, office, or delegated
+   control matter
+10. define the realization interaction contract under `realizations/<id>/`
+11. place concrete outputs under `realizations/`

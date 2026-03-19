@@ -2,9 +2,77 @@ package main
 
 import (
 	"net/http"
+	"strings"
 )
 
 // --- Home Page ---
+
+type accountRoleView struct {
+	RoleLabel  string
+	ScopeLabel string
+}
+
+type accountData struct {
+	Title       string
+	CurrentPath string
+	User        *UserIdentity
+	IsAdmin     bool
+	Notice      accountNotice
+	Roles       []accountRoleView
+	Shows       []*Show
+}
+
+func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	showLabels := make(map[string]string)
+	for _, show := range a.store.allShows() {
+		showLabels[show.ID] = show.Name
+	}
+	orgLabels := make(map[string]string)
+	for _, org := range a.store.allOrganizations() {
+		orgLabels[org.ID] = org.Name
+	}
+
+	roles := make([]accountRoleView, 0)
+	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+		scopeLabel := "Across the platform"
+		switch {
+		case role.ShowID != "" && showLabels[role.ShowID] != "":
+			scopeLabel = showLabels[role.ShowID]
+		case role.OrganizationID != "" && orgLabels[role.OrganizationID] != "":
+			scopeLabel = orgLabels[role.OrganizationID]
+		case role.ShowID != "":
+			scopeLabel = role.ShowID
+		case role.OrganizationID != "":
+			scopeLabel = role.OrganizationID
+		}
+		roles = append(roles, accountRoleView{
+			RoleLabel:  role.Role,
+			ScopeLabel: scopeLabel,
+		})
+	}
+	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
+		roles = append(roles, accountRoleView{
+			RoleLabel:  "admin",
+			ScopeLabel: "Deployment allowlist",
+		})
+	}
+
+	a.render(w, "account.html", accountData{
+		Title:       "Your Profile",
+		CurrentPath: "/account",
+		User:        user,
+		IsAdmin:     a.isAdmin(r),
+		Notice:      accountNoticeMessage(r.URL.Query().Get("notice")),
+		Roles:       roles,
+		Shows:       a.store.allShows(),
+	})
+}
 
 type homeData struct {
 	Title       string

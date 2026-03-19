@@ -359,6 +359,7 @@ func TestAdminLoginFlow(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
 	// GET login page
@@ -381,6 +382,9 @@ func TestAdminLoginFlow(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303 redirect, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login" {
+		t.Fatalf("expected redirect to /admin/login, got %q", got)
 	}
 }
 
@@ -427,6 +431,7 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
@@ -450,8 +455,21 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
-	if got := w.Result().Header.Get("Location"); got != "/admin" {
-		t.Fatalf("expected redirect to /admin, got %q", got)
+	if got := w.Result().Header.Get("Location"); got != "/account" {
+		t.Fatalf("expected redirect to /account, got %q", got)
+	}
+
+	accountReq := httptest.NewRequest("GET", "/account", nil)
+	for _, cookie := range w.Result().Cookies() {
+		accountReq.AddCookie(cookie)
+	}
+	accountW := httptest.NewRecorder()
+	mux.ServeHTTP(accountW, accountReq)
+	if accountW.Code != http.StatusOK {
+		t.Fatalf("expected signed-in profile page, got %d", accountW.Code)
+	}
+	if !strings.Contains(accountW.Body.String(), "simon@example.com") {
+		t.Fatal("account page missing signed-in email")
 	}
 
 	adminReq := httptest.NewRequest("GET", "/admin", nil)
@@ -461,7 +479,10 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	adminW := httptest.NewRecorder()
 	mux.ServeHTTP(adminW, adminReq)
 	if adminW.Code != http.StatusSeeOther {
-		t.Fatalf("expected non-admin user to redirect for missing role, got %d", adminW.Code)
+		t.Fatalf("expected non-admin user to redirect away from admin, got %d", adminW.Code)
+	}
+	if got := adminW.Result().Header.Get("Location"); got != "/account?notice=admin_required" {
+		t.Fatalf("expected redirect to signed-in account page, got %q", got)
 	}
 }
 
@@ -494,6 +515,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("POST /auth/login/back", a.handleAdminLoginBack)
 	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
 	mux.HandleFunc("POST /auth/login/email-code/verify", a.handleAdminEmailCodeVerify)
@@ -556,6 +578,73 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	mux.ServeHTTP(adminW, adminReq)
 	if adminW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", adminW.Code)
+	}
+}
+
+func TestAccountPageRequiresSignedInSession(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
+
+	req := httptest.NewRequest("GET", "/account", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login" {
+		t.Fatalf("expected redirect to /admin/login, got %q", got)
+	}
+}
+
+func TestAdminLoginRedirectsSignedInUserToRoleAwareDestination(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	userReq := httptest.NewRequest("GET", "/admin/login", nil)
+	userW := httptest.NewRecorder()
+	if err := a.setUserSession(userW, UserIdentity{
+		CognitoSub: "sub_user",
+		Email:      "viewer@example.com",
+	}); err != nil {
+		t.Fatalf("set viewer session: %v", err)
+	}
+	for _, cookie := range userW.Result().Cookies() {
+		userReq.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, userReq)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/account" {
+		t.Fatalf("expected redirect to /account, got %q", got)
+	}
+
+	if _, err := a.store.assignUserRole(UserRoleInput{CognitoSub: "sub_admin_login", Role: "admin"}); err != nil {
+		t.Fatalf("assign admin role: %v", err)
+	}
+	adminReq := httptest.NewRequest("GET", "/admin/login", nil)
+	adminSession := httptest.NewRecorder()
+	if err := a.setUserSession(adminSession, UserIdentity{
+		CognitoSub: "sub_admin_login",
+		Email:      "admin@example.com",
+	}); err != nil {
+		t.Fatalf("set admin session: %v", err)
+	}
+	for _, cookie := range adminSession.Result().Cookies() {
+		adminReq.AddCookie(cookie)
+	}
+	adminW := httptest.NewRecorder()
+	mux.ServeHTTP(adminW, adminReq)
+	if adminW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", adminW.Code)
+	}
+	if got := adminW.Result().Header.Get("Location"); got != "/admin" {
+		t.Fatalf("expected redirect to /admin, got %q", got)
 	}
 }
 

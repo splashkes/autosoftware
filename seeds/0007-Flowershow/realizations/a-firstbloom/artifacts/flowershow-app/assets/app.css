@@ -370,18 +370,18 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 
 /* Login */
 .login-container { max-width: 360px; margin: 4rem auto; }
-.login-shell { max-width: 720px; display: grid; gap: 1rem; }
+.login-shell { max-width: 440px; display: grid; gap: 1rem; }
 .login-step-kicker { text-transform: uppercase; letter-spacing: .16em; font-size: .75rem; color: var(--green-light); margin-bottom: .35rem; }
 .login-header h1 { color: var(--green); margin-bottom: .25rem; }
-.login-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow); }
+.login-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1.1rem; box-shadow: var(--shadow); }
 .login-card h2 { color: var(--green); font-size: 1.1rem; margin-bottom: .35rem; }
 .login-form { margin-top: 1rem; }
-.login-step-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: .5rem; }
+.login-step-row { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; margin-bottom: .5rem; }
 .login-step-label { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; color: var(--gray-500); margin-bottom: .35rem; }
 .login-email-chip { display: inline-flex; align-items: center; justify-content: center; padding: .3rem .7rem; border-radius: 999px; background: var(--green-pale); color: var(--green); font-size: .8rem; font-weight: 600; }
 .login-actions { display: grid; gap: .75rem; }
-.login-actions-secondary { display: flex; flex-wrap: wrap; gap: .75rem; }
-.login-actions-secondary .btn { flex: 1 1 220px; }
+.login-actions-secondary { display: grid; gap: .75rem; }
+.login-actions-secondary .btn { width: 100%; }
 .login-back-form { margin-top: .75rem; }
 .login-subtle-form { margin-top: .9rem; }
 .login-subtle-link {
@@ -394,6 +394,22 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   cursor: pointer;
 }
 .login-subtle-link:hover { color: var(--green); }
+
+.account-shell { margin-top: 1rem; }
+.account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.account-actions { flex-wrap: wrap; align-items: center; }
+.account-actions form { margin: 0; }
+.account-role-list { display: grid; gap: .75rem; margin-top: .75rem; }
+.account-role-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+}
 
 /* Alert */
 .alert { padding: .75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; }

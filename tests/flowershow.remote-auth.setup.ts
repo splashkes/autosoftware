@@ -4,6 +4,7 @@ import {
   FLOWERSHOW_ADMIN_EMAIL,
   FLOWERSHOW_AUTH_STATE_PATH,
   FLOWERSHOW_REMOTE_E2E,
+  expectSignedInLanding,
 } from './flowershow.helpers';
 
 test.describe('Flowershow Remote Admin OTP Setup', () => {
@@ -27,8 +28,7 @@ test.describe('Flowershow Remote Admin OTP Setup', () => {
     console.log(`Enter the OTP for ${FLOWERSHOW_ADMIN_EMAIL}, then resume the paused Playwright session.`);
     await page.pause();
 
-    await expect(page).toHaveURL(/\/admin(?:$|\?)/);
-    await expect(page.locator('h1')).toContainText('Admin Dashboard');
+    await expectSignedInLanding(page);
 
     ensureAuthStateDir();
     await page.context().storageState({ path: FLOWERSHOW_AUTH_STATE_PATH });
