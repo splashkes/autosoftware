@@ -42,6 +42,7 @@ export async function loginLocalAdmin(page: Page) {
     },
     data: {
       user: {
+        subject_id: FLOWERSHOW_LOCAL_ADMIN_SUB,
         cognito_sub: FLOWERSHOW_LOCAL_ADMIN_SUB,
         email: 'playwright-admin@example.com',
         name: 'Playwright Admin',
@@ -62,6 +63,7 @@ export async function loginLocalViewer(page: Page) {
     },
     data: {
       user: {
+        subject_id: FLOWERSHOW_LOCAL_VIEWER_SUB,
         cognito_sub: FLOWERSHOW_LOCAL_VIEWER_SUB,
         email: 'playwright-viewer@example.com',
         name: 'Playwright Viewer',

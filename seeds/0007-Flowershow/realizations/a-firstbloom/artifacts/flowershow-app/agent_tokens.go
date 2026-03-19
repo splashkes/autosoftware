@@ -409,20 +409,23 @@ func (a *app) authorizeAPICapability(w http.ResponseWriter, r *http.Request, per
 	if permission == "" {
 		return true
 	}
-	if a.isServiceToken(r) || a.isAdmin(r) {
+	if a.isServiceToken(r) {
 		return true
+	}
+	if user, ok := a.currentUser(r); ok {
+		if a.userHasCapability(r.Context(), *user, permission, a.authorityScopesForRequest(r)...) {
+			return true
+		}
+		a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "Your signed-in account does not currently grant that action.", fmt.Sprintf("Required permission: %s.", agentPermissionLookup(permission).Label), []apiFieldError{
+			{Field: "required_permission", Message: permission},
+		})
+		return false
 	}
 	if token, ok := a.currentAgentToken(r); ok {
 		if agentTokenHasPermission(token, permission) {
 			return true
 		}
 		a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "This agent token does not grant that action.", fmt.Sprintf("This token currently grants: %s. Generate a new token from /account with %q if the agent needs it.", formatPermissionList(token.Permissions), agentPermissionLookup(permission).Label), []apiFieldError{
-			{Field: "required_permission", Message: permission},
-		})
-		return false
-	}
-	if _, ok := a.currentUser(r); ok {
-		a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "Your signed-in account does not currently grant that action.", fmt.Sprintf("Required permission: %s.", agentPermissionLookup(permission).Label), []apiFieldError{
 			{Field: "required_permission", Message: permission},
 		})
 		return false

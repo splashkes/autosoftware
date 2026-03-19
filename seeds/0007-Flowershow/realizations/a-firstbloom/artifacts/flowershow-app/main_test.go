@@ -68,15 +68,21 @@ func testApp() *app {
 		panic(err)
 	}
 	store := newMemoryStore()
-	return &app{
-		store:           store,
-		templates:       parseTemplates(),
-		serviceToken:    "test-token",
-		sseBroker:       newSSEBroker(),
-		media:           &localMediaStore{dir: dir},
-		sessions:        newAuthStateStore(store, nil),
-		bootstrapAdmins: map[string]bool{},
+	a := &app{
+		store:        store,
+		authority:    newRuntimeAuthorityResolver(store),
+		templates:    parseTemplates(),
+		serviceToken: "test-token",
+		sseBroker:    newSSEBroker(),
+		media:        &localMediaStore{dir: dir},
+		sessions:     newAuthStateStore(store, nil),
 	}
+	if a.authority != nil {
+		if err := a.authority.Init(context.Background(), store); err != nil {
+			panic(err)
+		}
+	}
+	return a
 }
 
 func jsonRequest(method, path, body string) *http.Request {
@@ -95,16 +101,10 @@ func addServiceToken(req *http.Request) {
 
 func addAdminSession(t *testing.T, a *app, req *http.Request) {
 	t.Helper()
-	if len(a.store.rolesBySubject("sub_admin_api")) == 0 {
-		if _, err := a.store.assignUserRole(UserRoleInput{
-			CognitoSub: "sub_admin_api",
-			Role:       "admin",
-		}); err != nil {
-			t.Fatalf("assign admin role: %v", err)
-		}
-	}
+	assignRuntimeRole(t, a, UserRoleInput{SubjectID: "sub_admin_api", CognitoSub: "sub_admin_api", Role: "admin"})
 	w := httptest.NewRecorder()
 	if err := a.setUserSession(w, req, UserIdentity{
+		SubjectID:  "sub_admin_api",
 		CognitoSub: "sub_admin_api",
 		Email:      "admin@example.com",
 	}); err != nil {
@@ -113,6 +113,18 @@ func addAdminSession(t *testing.T, a *app, req *http.Request) {
 	for _, cookie := range w.Result().Cookies() {
 		req.AddCookie(cookie)
 	}
+}
+
+func assignRuntimeRole(t *testing.T, a *app, input UserRoleInput) *UserRole {
+	t.Helper()
+	if a.authority == nil {
+		t.Fatal("runtime authority unavailable")
+	}
+	role, err := a.authority.AssignRole(context.Background(), input, "test_grantor")
+	if err != nil {
+		t.Fatalf("assign runtime role: %v", err)
+	}
+	return role
 }
 
 func extractIssuedAgentToken(t *testing.T, body string) string {
@@ -553,12 +565,10 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 			if email != "simon@example.com" || session != "pending-session" || code != "123456" {
 				t.Fatalf("unexpected verify payload %q %q %q", email, session, code)
 			}
-			return &UserIdentity{CognitoSub: "sub_admin", Email: email}, nil
+			return &UserIdentity{SubjectID: "sub_admin", CognitoSub: "sub_admin", Email: email}, nil
 		},
 	}
-	if _, err := a.store.assignUserRole(UserRoleInput{CognitoSub: "sub_admin", Role: "admin"}); err != nil {
-		t.Fatal(err)
-	}
+	assignRuntimeRole(t, a, UserRoleInput{SubjectID: "sub_admin", CognitoSub: "sub_admin", Role: "admin"})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
@@ -637,20 +647,26 @@ func TestBrowserSessionCookieIsOpaqueAndSurvivesNewAppInstance(t *testing.T) {
 	store := newMemoryStore()
 	sessions := newAuthStateStore(store, nil)
 	a1 := &app{
-		store:           store,
-		templates:       parseTemplates(),
-		serviceToken:    "test-token",
-		sseBroker:       newSSEBroker(),
-		sessions:        sessions,
-		bootstrapAdmins: map[string]bool{},
+		store:        store,
+		authority:    newRuntimeAuthorityResolver(store),
+		templates:    parseTemplates(),
+		serviceToken: "test-token",
+		sseBroker:    newSSEBroker(),
+		sessions:     sessions,
 	}
 	a2 := &app{
-		store:           store,
-		templates:       parseTemplates(),
-		serviceToken:    "test-token",
-		sseBroker:       newSSEBroker(),
-		sessions:        sessions,
-		bootstrapAdmins: map[string]bool{},
+		store:        store,
+		authority:    newRuntimeAuthorityResolver(store),
+		templates:    parseTemplates(),
+		serviceToken: "test-token",
+		sseBroker:    newSSEBroker(),
+		sessions:     sessions,
+	}
+	if err := a1.authority.Init(context.Background(), store); err != nil {
+		t.Fatalf("init authority a1: %v", err)
+	}
+	if err := a2.authority.Init(context.Background(), store); err != nil {
+		t.Fatalf("init authority a2: %v", err)
 	}
 
 	req := httptest.NewRequest("GET", "/account", nil)
@@ -690,16 +706,16 @@ func TestBrowserSessionCookieIsOpaqueAndSurvivesNewAppInstance(t *testing.T) {
 
 func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 	a := testApp()
-	if _, err := a.store.assignUserRole(UserRoleInput{
+	assignRuntimeRole(t, a, UserRoleInput{
+		SubjectID:  "sub_admin_account",
 		CognitoSub: "sub_admin_account",
 		Role:       "admin",
-	}); err != nil {
-		t.Fatalf("assign admin role: %v", err)
-	}
+	})
 
 	accountReq := httptest.NewRequest("GET", "/account", nil)
 	sessionW := httptest.NewRecorder()
 	if err := a.setUserSession(sessionW, accountReq, UserIdentity{
+		SubjectID:  "sub_admin_account",
 		CognitoSub: "sub_admin_account",
 		Email:      "admin-account@example.com",
 	}); err != nil {
@@ -795,12 +811,11 @@ func TestViewerAccountTokenCanReadAccountButNotAdminAPI(t *testing.T) {
 
 func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
 	a := testApp()
-	if _, err := a.store.assignUserRole(UserRoleInput{
+	assignRuntimeRole(t, a, UserRoleInput{
+		SubjectID:  "sub_admin_token_owner",
 		CognitoSub: "sub_admin_token_owner",
 		Role:       "admin",
-	}); err != nil {
-		t.Fatalf("assign admin role: %v", err)
-	}
+	})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
@@ -812,6 +827,7 @@ func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
 	sessionW := httptest.NewRecorder()
 	sessionReq := httptest.NewRequest("GET", "/account", nil)
 	if err := a.setUserSession(sessionW, sessionReq, UserIdentity{
+		SubjectID:  "sub_admin_token_owner",
 		CognitoSub: "sub_admin_token_owner",
 		Email:      "admin-token@example.com",
 		Name:       "Admin Token Owner",
@@ -902,12 +918,11 @@ func TestAdminLoginRedirectsSignedInUserToRoleAwareDestination(t *testing.T) {
 		t.Fatalf("expected redirect to /account, got %q", got)
 	}
 
-	if _, err := a.store.assignUserRole(UserRoleInput{CognitoSub: "sub_admin_login", Role: "admin"}); err != nil {
-		t.Fatalf("assign admin role: %v", err)
-	}
+	assignRuntimeRole(t, a, UserRoleInput{SubjectID: "sub_admin_login", CognitoSub: "sub_admin_login", Role: "admin"})
 	adminReq := httptest.NewRequest("GET", "/admin/login", nil)
 	adminSession := httptest.NewRecorder()
 	if err := a.setUserSession(adminSession, adminReq, UserIdentity{
+		SubjectID:  "sub_admin_login",
 		CognitoSub: "sub_admin_login",
 		Email:      "admin@example.com",
 	}); err != nil {
@@ -1001,20 +1016,14 @@ func TestAdminRequiresAuth(t *testing.T) {
 
 func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
 	a := testApp()
-	_, err := a.store.assignUserRole(UserRoleInput{
-		CognitoSub: "sub_admin",
-		Role:       "admin",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assignRuntimeRole(t, a, UserRoleInput{SubjectID: "sub_admin", CognitoSub: "sub_admin", Role: "admin"})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
 	w := httptest.NewRecorder()
-	if err := a.setUserSession(w, req, UserIdentity{CognitoSub: "sub_admin", Email: "admin@example.com"}); err != nil {
+	if err := a.setUserSession(w, req, UserIdentity{SubjectID: "sub_admin", CognitoSub: "sub_admin", Email: "admin@example.com"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, cookie := range w.Result().Cookies() {
@@ -1642,7 +1651,11 @@ func TestServiceTokenParityCommandChain(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("role assign: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
-	if len(a.store.rolesBySubject("sub_remote_agent")) != 1 {
+	roles, err := a.authority.RoleAssignmentsForUser(context.Background(), UserIdentity{SubjectID: "sub_remote_agent", CognitoSub: "sub_remote_agent"})
+	if err != nil {
+		t.Fatalf("list runtime roles: %v", err)
+	}
+	if len(roles) != 1 {
 		t.Fatal("expected assigned role to be stored")
 	}
 
