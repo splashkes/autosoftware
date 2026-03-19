@@ -13,6 +13,11 @@ const flowershowAppDir = path.resolve(
 
 const csBaseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:38090';
 const fsBaseURL = process.env.FLOWERSHOW_BASE_URL || 'http://127.0.0.1:38097';
+const flowershowRemoteE2E = process.env.FLOWERSHOW_REMOTE_E2E === '1';
+const flowershowAuthStatePath = path.resolve(
+  __dirname,
+  '.auth/flowershow-admin.json',
+);
 
 export default defineConfig({
   testDir: '.',
@@ -31,12 +36,45 @@ export default defineConfig({
       },
     },
     {
-      name: 'flowershow',
-      testMatch: 'flowershow.spec.ts',
+      name: 'flowershow-local',
+      testMatch:
+        /flowershow\.(public|admin\.local|api|widget)\.spec\.ts/,
       use: {
         baseURL: fsBaseURL,
       },
     },
+    ...(flowershowRemoteE2E
+      ? [
+          {
+            name: 'flowershow-remote-auth',
+            testMatch: 'flowershow.remote-auth.setup.ts',
+            use: {
+              baseURL: fsBaseURL,
+              headless: false,
+            },
+          },
+          {
+            name: 'flowershow-remote-admin',
+            testMatch: 'flowershow.remote-admin.spec.ts',
+            dependencies: ['flowershow-remote-auth'],
+            use: {
+              baseURL: fsBaseURL,
+              headless: false,
+              storageState: flowershowAuthStatePath,
+            },
+          },
+          {
+            name: 'flowershow-remote-agent-api',
+            testMatch: 'flowershow.remote-agent-api.spec.ts',
+            dependencies: ['flowershow-remote-auth'],
+            use: {
+              baseURL: fsBaseURL,
+              headless: false,
+              storageState: flowershowAuthStatePath,
+            },
+          },
+        ]
+      : []),
   ],
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
     ? undefined
@@ -63,6 +101,7 @@ export default defineConfig({
             ...process.env,
             AS_ADDR: new URL(fsBaseURL).host,
             AS_ADMIN_PASSWORD: 'admin',
+            AS_SERVICE_TOKEN: 'test-token',
           },
         },
       ],

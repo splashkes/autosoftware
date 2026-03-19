@@ -639,8 +639,12 @@ cause={{.ReasonCode}}{{end}}</pre>
       }
 
       function completionTarget(session) {
+        if (session && session.open_path) {
+          if (session.open_path.indexOf("/__runs/") !== 0) return session.open_path;
+          if (!refreshPath) return session.open_path;
+          return "";
+        }
         if (refreshPath) return refreshPath;
-        if (session && session.open_path && session.open_path.indexOf("/__runs/") !== 0) return session.open_path;
         return window.location.pathname + window.location.search;
       }
 
@@ -663,8 +667,11 @@ cause={{.ReasonCode}}{{end}}</pre>
         setProgress(progress, session && session.status ? session.status : initialStatus);
 
         if (session && session.status === "healthy" && (session.open_path || refreshPath)) {
-          window.location.replace(completionTarget(session));
-          return true;
+          var target = completionTarget(session);
+          if (target) {
+            window.location.replace(target);
+            return true;
+          }
         }
         if (window.ASLaunchState && window.ASLaunchState.isTerminalExecutionStatus(session && session.status ? session.status : "")) {
           return true;
@@ -1574,6 +1581,21 @@ func normalizeRoutePrefix(prefix string) string {
 	return prefix
 }
 
+func routePathMatches(requestPath, prefix string) bool {
+	normalizedPrefix := normalizeRoutePrefix(prefix)
+	if normalizedPrefix == "" {
+		return false
+	}
+	requestPath = strings.TrimSpace(requestPath)
+	if requestPath == "" {
+		return false
+	}
+	if requestPath == strings.TrimSuffix(normalizedPrefix, "/") {
+		return true
+	}
+	return strings.HasPrefix(requestPath, normalizedPrefix)
+}
+
 func buildRoutingHandler(
 	ctx context.Context,
 	repoRoot string,
@@ -1842,7 +1864,7 @@ func realizationRoutingMiddleware(
 
 		// Path prefix fallback.
 		for _, route := range routes {
-			if route.PathPrefix != "" && strings.HasPrefix(r.URL.Path, route.PathPrefix) {
+			if route.PathPrefix != "" && routePathMatches(r.URL.Path, route.PathPrefix) {
 				r2 := trimMountedRequestPrefix(r, route.PathPrefix)
 				proxyToMountedRealization(route, route.PathPrefix, w, r2)
 				return
@@ -1858,7 +1880,7 @@ func realizationRoutingMiddleware(
 		}
 		for _, suspension := range suspensions {
 			pathPrefix := strings.TrimSpace(suspension.RoutePathPrefix)
-			if pathPrefix != "" && strings.HasPrefix(r.URL.Path, pathPrefix) {
+			if pathPrefix != "" && routePathMatches(r.URL.Path, pathPrefix) {
 				renderSuspensionPage(w, r, suspension)
 				return
 			}

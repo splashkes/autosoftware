@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,11 +25,46 @@ type localContractSummaryDoc struct {
 }
 
 func interactionContractPath() (string, error) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", errors.New("could not resolve contract path")
+	for _, candidate := range interactionContractPathCandidates() {
+		if candidate == "" {
+			continue
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "interaction_contract.yaml")), nil
+	return "", errors.New("could not resolve contract path")
+}
+
+func interactionContractPathCandidates() []string {
+	candidates := make([]string, 0, 4)
+	appendCandidate := func(path string) {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "." || path == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == path {
+				return
+			}
+		}
+		candidates = append(candidates, path)
+	}
+
+	if explicit := strings.TrimSpace(os.Getenv("AS_INTERACTION_CONTRACT_PATH")); explicit != "" {
+		appendCandidate(explicit)
+	}
+	if wd, err := os.Getwd(); err == nil {
+		appendCandidate(filepath.Join(wd, "..", "..", "interaction_contract.yaml"))
+	}
+	if exe, err := os.Executable(); err == nil {
+		appendCandidate(filepath.Join(filepath.Dir(exe), "..", "..", "interaction_contract.yaml"))
+	}
+	if _, file, _, ok := runtime.Caller(0); ok {
+		appendCandidate(filepath.Join(filepath.Dir(file), "..", "..", "interaction_contract.yaml"))
+	}
+
+	return candidates
 }
 
 func loadInteractionContractDocument() (map[string]any, localContractSummaryDoc, error) {
