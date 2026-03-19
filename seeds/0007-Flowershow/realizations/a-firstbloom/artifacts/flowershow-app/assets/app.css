@@ -370,18 +370,18 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 
 /* Login */
 .login-container { max-width: 360px; margin: 4rem auto; }
-.login-shell { max-width: 720px; display: grid; gap: 1rem; }
+.login-shell { max-width: 440px; display: grid; gap: 1rem; }
 .login-step-kicker { text-transform: uppercase; letter-spacing: .16em; font-size: .75rem; color: var(--green-light); margin-bottom: .35rem; }
 .login-header h1 { color: var(--green); margin-bottom: .25rem; }
-.login-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow); }
+.login-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1.1rem; box-shadow: var(--shadow); }
 .login-card h2 { color: var(--green); font-size: 1.1rem; margin-bottom: .35rem; }
 .login-form { margin-top: 1rem; }
-.login-step-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: .5rem; }
+.login-step-row { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; margin-bottom: .5rem; }
 .login-step-label { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; color: var(--gray-500); margin-bottom: .35rem; }
 .login-email-chip { display: inline-flex; align-items: center; justify-content: center; padding: .3rem .7rem; border-radius: 999px; background: var(--green-pale); color: var(--green); font-size: .8rem; font-weight: 600; }
 .login-actions { display: grid; gap: .75rem; }
-.login-actions-secondary { display: flex; flex-wrap: wrap; gap: .75rem; }
-.login-actions-secondary .btn { flex: 1 1 220px; }
+.login-actions-secondary { display: grid; gap: .75rem; }
+.login-actions-secondary .btn { width: 100%; }
 .login-back-form { margin-top: .75rem; }
 .login-subtle-form { margin-top: .9rem; }
 .login-subtle-link {
@@ -395,10 +395,72 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 }
 .login-subtle-link:hover { color: var(--green); }
 
+.account-shell { margin-top: 1rem; }
+.account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.account-token-grid { grid-template-columns: minmax(320px, 1.1fr) minmax(320px, .9fr); align-items: start; }
+.account-actions { flex-wrap: wrap; align-items: center; }
+.account-actions form { margin: 0; }
+.account-role-list { display: grid; gap: .75rem; margin-top: .75rem; }
+.account-role-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+}
+.account-permission-list { display: grid; gap: .75rem; margin-top: .9rem; }
+.account-permission-list.compact { gap: .5rem; margin-top: .75rem; }
+.account-permission-item { display: grid; gap: .1rem; }
+.account-token-form { display: grid; gap: 1rem; }
+.account-token-profile-picker { border: 0; display: grid; gap: .75rem; }
+.account-token-profile-picker legend { font-weight: 600; color: var(--gray-700); margin-bottom: .25rem; }
+.account-token-profile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .75rem;
+  align-items: start;
+  padding: .85rem 1rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, white, rgba(216, 243, 220, .35));
+}
+.account-token-profile.selected {
+  border-color: rgba(45, 106, 79, .35);
+  box-shadow: 0 0 0 3px rgba(216, 243, 220, .75);
+}
+.account-token-profile input[type="radio"] { margin-top: .2rem; }
+.issued-token-card label {
+  display: block;
+  font-weight: 600;
+  margin: 1rem 0 .35rem;
+}
+.issued-token-field {
+  min-height: 7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.account-token-list { display: grid; gap: 1rem; }
+.account-token-item {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: linear-gradient(135deg, white, rgba(253, 240, 237, .45));
+}
+.account-token-meta {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: .45rem;
+}
+
 /* Alert */
 .alert { padding: .75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; }
 .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 .alert-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.alert-warning { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 
 /* Admin */
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
@@ -537,6 +599,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .nav-links { gap: .5rem; font-size: .8rem; }
   .hero h1 { font-size: 1.75rem; }
   .card-grid { grid-template-columns: 1fr; }
+  .account-token-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
   .winner-row { flex-direction: column; align-items: flex-start; }

@@ -23,6 +23,9 @@ Boundary:
 - make the intended command and projection surface clear enough to encode in
   `realizations/<id>/interaction_contract.yaml`
 - explain what "agent equal or better than human access" means for this seed
+- when the seed has meaningful control or membership semantics, define the
+  subject, scope, capability, bundle, grant, and delegation vocabulary using
+  the kernel authority model from `kernel/protocol/v1/permissions.md`
 - define the canonical graph before describing flattened convenience payloads
 - identify which projections are public, which are private, and whether any
   public surface is metadata-only or digest-only
@@ -49,6 +52,7 @@ Suggested section order:
 - canonical graph
 - versions and provenance
 - public/private boundary
+- authority and delegation
 - agent access and runtime-only context
 - early design check
 - approach candidates
@@ -68,6 +72,19 @@ changes.
 
 Describe which content-bearing objects have immutable versions, who created or
 accepted them, and whether any historical snapshot rules matter.
+
+## Authority and Delegation
+
+If the seed has meaningful permission, control, membership, office, or
+delegation behavior, describe:
+
+- the stable subject kinds
+- the stable scope kinds
+- the capability or bundle vocabulary
+- which commands require which capabilities
+- whether grants can be delegated, narrowed, revoked, or time-boxed
+- whether authority history must be visible through ledger or effective-access
+  projections
 
 ## Data and Claim Changes
 

@@ -158,6 +158,12 @@ type flowershowStore interface {
 	rolesBySubject(cognitoSub string) []*UserRole
 	allUserRoles() []*UserRole
 
+	// Agent tokens
+	issueAgentToken(AgentTokenIssueInput) (*IssuedAgentToken, error)
+	listAgentTokensBySubject(cognitoSub string) []*AgentToken
+	revokeAgentToken(tokenID, ownerCognitoSub string) (*AgentToken, error)
+	authenticateAgentToken(raw string) (*AgentToken, bool)
+
 	// Ledger
 	ledgerByObjectID(objectID string) ([]FlowershowClaim, error)
 
@@ -199,6 +205,8 @@ type memoryStore struct {
 	scorecards     map[string]*EntryScorecard
 	critScores     map[string]*EntryCriterionScore
 	userRoles      map[string]*UserRole
+	agentTokens    map[string]*AgentToken
+	agentTokenHash map[string]string
 	objects        map[string]*FlowershowObject
 	claims         []FlowershowClaim
 	claimSeq       int64
@@ -229,6 +237,8 @@ func newMemoryStore() *memoryStore {
 		scorecards:     make(map[string]*EntryScorecard),
 		critScores:     make(map[string]*EntryCriterionScore),
 		userRoles:      make(map[string]*UserRole),
+		agentTokens:    make(map[string]*AgentToken),
+		agentTokenHash: make(map[string]string),
 		objects:        make(map[string]*FlowershowObject),
 	}
 	s.seedDemoData()
@@ -1773,6 +1783,26 @@ CREATE TABLE IF NOT EXISTS as_flowershow_claims (
 
 CREATE INDEX IF NOT EXISTS as_flowershow_claims_obj_idx
   ON as_flowershow_claims (object_id, claim_seq DESC);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_agent_tokens (
+  id TEXT PRIMARY KEY,
+  owner_cognito_sub TEXT NOT NULL,
+  owner_email TEXT NOT NULL DEFAULT '',
+  owner_name TEXT NOT NULL DEFAULT '',
+  label TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  permission_profile TEXT NOT NULL,
+  permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  revoked_reason TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_agent_tokens_owner_idx
+  ON as_flowershow_agent_tokens (owner_cognito_sub, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_organizations (
   id TEXT PRIMARY KEY,

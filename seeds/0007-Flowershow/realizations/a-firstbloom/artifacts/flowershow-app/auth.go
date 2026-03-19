@@ -74,6 +74,11 @@ type adminLoginData struct {
 	BackHref        string
 }
 
+type accountNotice struct {
+	Message string
+	Kind    string
+}
+
 type authStartResult struct {
 	User    *UserIdentity
 	Pending *pendingAuthState
@@ -576,6 +581,10 @@ func (a *app) currentRoles(r *http.Request) []string {
 	if !ok {
 		return nil
 	}
+	return a.rolesForUser(*user)
+}
+
+func (a *app) rolesForUser(user UserIdentity) []string {
 	roles := make(map[string]struct{})
 	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
 		roles[role.Role] = struct{}{}
@@ -785,11 +794,48 @@ func loginNoticeMessage(code string) string {
 	}
 }
 
+func accountNoticeMessage(code string) accountNotice {
+	switch strings.TrimSpace(code) {
+	case "admin_required":
+		return accountNotice{
+			Message: "You are signed in, but this account does not currently have admin access.",
+			Kind:    "info",
+		}
+	case "agent_token_revoked":
+		return accountNotice{
+			Message: "Agent token revoked.",
+			Kind:    "info",
+		}
+	default:
+		return accountNotice{}
+	}
+}
+
+func (a *app) postLoginPathForRequest(r *http.Request) string {
+	if a.isAdmin(r) {
+		return "/admin"
+	}
+	return "/account"
+}
+
+func (a *app) postLoginPathForUser(user UserIdentity) string {
+	for _, role := range a.rolesForUser(user) {
+		if role == "admin" {
+			return "/admin"
+		}
+	}
+	return "/account"
+}
+
 func (a *app) renderAdminLogin(w http.ResponseWriter, r *http.Request, errMessage, infoMessage string) {
 	a.render(w, "login.html", a.loginPageData(r, errMessage, infoMessage))
 }
 
 func (a *app) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.currentUser(r); ok {
+		http.Redirect(w, r, a.postLoginPathForRequest(r), http.StatusSeeOther)
+		return
+	}
 	a.renderAdminLogin(w, r, "", loginNoticeMessage(r.URL.Query().Get("notice")))
 }
 
@@ -831,7 +877,7 @@ func (a *app) handleAdminPasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.clearPendingAuth(w)
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, a.postLoginPathForUser(*user), http.StatusSeeOther)
 }
 
 func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) {
@@ -855,7 +901,7 @@ func (a *app) handleAdminEmailCodeStart(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		a.clearPendingAuth(w)
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		http.Redirect(w, r, a.postLoginPathForUser(*result.User), http.StatusSeeOther)
 		return
 	}
 	if result == nil || result.Pending == nil {
@@ -893,7 +939,7 @@ func (a *app) handleAdminEmailCodeVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	a.clearPendingAuth(w)
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, a.postLoginPathForUser(*user), http.StatusSeeOther)
 }
 
 func (a *app) handleAdminForgotPasswordStart(w http.ResponseWriter, r *http.Request) {

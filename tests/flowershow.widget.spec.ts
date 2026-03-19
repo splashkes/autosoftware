@@ -34,7 +34,7 @@ test.describe('Flowershow Agent Widget', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expectAgentPath(page, '/admin/shows/show_spring2025');
     await expect(page.locator('.agent-access-content')).toContainText(
-      'Authorization: Bearer <service token>',
+      'account-issued agent token with the required permissions',
     );
   });
 });

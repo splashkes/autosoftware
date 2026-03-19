@@ -11,6 +11,9 @@ For `0007-Flowershow`:
 - the normal remote-agent path is `service_token`; session users and service
   agents should reach equivalent operational capabilities and comparable or
   better observability
+- flower-show control should evolve toward system-native authority over
+  organizations and shows, with delegated grants and revocations visible in the
+  ledger, rather than relying permanently on auth-provider role claims
 - cited source content and runtime prompt context must stay separate: citations
   become canonical flower-show truth, while assistant instructions remain
   runtime-only

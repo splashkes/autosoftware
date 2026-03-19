@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -12,6 +13,29 @@ import (
 
 func (a *app) handleAPIShowsDirectory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.store.allShows())
+}
+
+func (a *app) handleAPIAccount(w http.ResponseWriter, r *http.Request) {
+	if user, ok := a.currentUser(r); ok {
+		writeJSON(w, http.StatusOK, a.accountProjection(*user, nil))
+		return
+	}
+	token, ok := a.currentAgentToken(r)
+	if !ok {
+		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use a signed-in session or a Bearer agent token generated from /account to inspect this account projection.", nil)
+		return
+	}
+	if !agentTokenHasPermission(token, "account.read") {
+		a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "This agent token does not grant account access.", fmt.Sprintf("This token currently grants: %s. Generate a new token from /account with %q if the agent should read this account projection.", formatPermissionList(token.Permissions), agentPermissionLookup("account.read").Label), []apiFieldError{
+			{Field: "required_permission", Message: "account.read"},
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, a.accountProjection(UserIdentity{
+		CognitoSub: token.OwnerCognitoSub,
+		Email:      token.OwnerEmail,
+		Name:       token.OwnerName,
+	}, token))
 }
 
 func (a *app) handleAPIShowDetail(w http.ResponseWriter, r *http.Request) {
@@ -24,8 +48,7 @@ func (a *app) handleAPIShowDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAPIShowWorkspace(w http.ResponseWriter, r *http.Request) {
-	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect the private show workspace.", nil)
+	if !a.authorizeAPICapability(w, r, "shows.workspace.read", "Use an admin session, a Bearer service token, or an account-issued agent token with private workspace access.") {
 		return
 	}
 	data, err := a.adminShowDetailData(r.PathValue("id"))
@@ -64,7 +87,29 @@ func (a *app) handleAPIEntries(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAPIEntryDetail(w http.ResponseWriter, r *http.Request) {
 	entry, ok := a.store.entryByID(r.PathValue("id"))
-	if !ok || (!isPublicEntry(entry) && !a.isAdmin(r) && !a.isServiceToken(r)) {
+	if !ok {
+		a.writeAPIError(w, r, http.StatusNotFound, "entry_not_found", "Entry not found.", "Use a stable entry id from an entry list or workspace projection.", nil)
+		return
+	}
+	includePrivate := a.isAdmin(r) || a.isServiceToken(r)
+	if !includePrivate {
+		if token, ok := a.currentAgentToken(r); ok && agentTokenHasPermission(token, "entries.private.read") {
+			includePrivate = true
+		}
+	}
+	if !isPublicEntry(entry) && !includePrivate {
+		if _, ok := a.currentUser(r); ok {
+			a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "This account does not grant private entry access.", fmt.Sprintf("Required permission: %s.", agentPermissionLookup("entries.private.read").Label), []apiFieldError{
+				{Field: "required_permission", Message: "entries.private.read"},
+			})
+			return
+		}
+		if token, ok := a.currentAgentToken(r); ok {
+			a.writeAPIError(w, r, http.StatusForbidden, "permission_denied", "This agent token does not grant private entry access.", fmt.Sprintf("This token currently grants: %s. Generate a new token from /account with %q if the agent should read suppressed entries or private entrant fields.", formatPermissionList(token.Permissions), agentPermissionLookup("entries.private.read").Label), []apiFieldError{
+				{Field: "required_permission", Message: "entries.private.read"},
+			})
+			return
+		}
 		a.writeAPIError(w, r, http.StatusNotFound, "entry_not_found", "Entry not found.", "Use a stable entry id from an entry list or workspace projection.", nil)
 		return
 	}
@@ -80,9 +125,9 @@ func (a *app) handleAPIEntryDetail(w http.ResponseWriter, r *http.Request) {
 		payload["show"] = show
 	}
 	if person, ok := a.store.personByID(entry.PersonID); ok {
-		payload["person"] = a.personProjection(person, a.isAdmin(r) || a.isServiceToken(r))
+		payload["person"] = a.personProjection(person, includePrivate)
 	}
-	if a.isAdmin(r) || a.isServiceToken(r) {
+	if includePrivate {
 		payload["scorecards"] = a.store.scorecardsByEntry(entry.ID)
 	}
 	writeJSON(w, http.StatusOK, payload)
@@ -176,8 +221,7 @@ func (a *app) handleAPILeaderboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAPILedger(w http.ResponseWriter, r *http.Request) {
-	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect ledger history.", nil)
+	if !a.authorizeAPICapability(w, r, "ledger.read", "Use an admin session, a Bearer service token, or an account-issued agent token with ledger access.") {
 		return
 	}
 	objectID := r.PathValue("objectID")
@@ -190,8 +234,7 @@ func (a *app) handleAPILedger(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
-	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to inspect the admin dashboard projection.", nil)
+	if !a.authorizeAPICapability(w, r, "admin.dashboard.read", "Use an admin session, a Bearer service token, or an account-issued agent token with dashboard access.") {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -205,12 +248,10 @@ func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 // --- Commands ---
 
 func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
-	if !a.isAdmin(r) && !a.isServiceToken(r) {
-		a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required.", "Use an admin session or a Bearer service token to execute commands.", nil)
+	command := commandNameFromPath(r.URL.Path)
+	if !a.authorizeAPICapability(w, r, requiredCapabilityForCommand(command), "Use an admin session, a Bearer service token, or an account-issued agent token with the required command permissions.") {
 		return
 	}
-
-	command := commandNameFromPath(r.URL.Path)
 
 	switch command {
 	case "shows.create":
@@ -795,6 +836,70 @@ func (a *app) personProjection(person *Person, includePrivate bool) map[string]a
 		payload["first_name"] = person.FirstName
 		payload["last_name"] = person.LastName
 		payload["email"] = person.Email
+	}
+	return payload
+}
+
+func (a *app) accountProjection(user UserIdentity, token *AgentToken) map[string]any {
+	roles := make([]map[string]any, 0)
+	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+		roles = append(roles, map[string]any{
+			"id":              role.ID,
+			"role":            role.Role,
+			"organization_id": role.OrganizationID,
+			"show_id":         role.ShowID,
+			"created_at":      role.CreatedAt,
+		})
+	}
+	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
+		roles = append(roles, map[string]any{
+			"role":       "admin",
+			"scope_type": "deployment_allowlist",
+		})
+	}
+	profiles := make([]map[string]any, 0)
+	for _, profile := range a.availableAgentTokenProfiles(user) {
+		profiles = append(profiles, map[string]any{
+			"id":          profile.ID,
+			"label":       profile.Label,
+			"description": profile.Description,
+			"permissions": profile.Permissions,
+		})
+	}
+	agentTokens := make([]map[string]any, 0)
+	for _, item := range a.store.listAgentTokensBySubject(user.CognitoSub) {
+		agentTokens = append(agentTokens, map[string]any{
+			"id":                 item.ID,
+			"label":              item.Label,
+			"token_prefix":       item.TokenPrefix,
+			"permission_profile": item.PermissionProfile,
+			"permissions":        item.Permissions,
+			"created_at":         item.CreatedAt,
+			"expires_at":         item.ExpiresAt,
+			"last_used_at":       item.LastUsedAt,
+			"revoked_at":         item.RevokedAt,
+		})
+	}
+	payload := map[string]any{
+		"account": map[string]any{
+			"cognito_sub": user.CognitoSub,
+			"email":       user.Email,
+			"name":        user.Name,
+			"is_admin":    a.userIsAdmin(user),
+		},
+		"roles":                         roles,
+		"available_permission_profiles": profiles,
+		"agent_tokens":                  agentTokens,
+	}
+	if token != nil {
+		payload["authenticated_agent_token"] = map[string]any{
+			"id":                 token.ID,
+			"label":              token.Label,
+			"token_prefix":       token.TokenPrefix,
+			"permission_profile": token.PermissionProfile,
+			"permissions":        token.Permissions,
+			"expires_at":         token.ExpiresAt,
+		}
 	}
 	return payload
 }

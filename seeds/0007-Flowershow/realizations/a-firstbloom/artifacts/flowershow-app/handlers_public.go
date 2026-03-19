@@ -1,10 +1,290 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // --- Home Page ---
+
+type accountRoleView struct {
+	RoleLabel  string
+	ScopeLabel string
+}
+
+type accountData struct {
+	Title              string
+	CurrentPath        string
+	User               *UserIdentity
+	IsAdmin            bool
+	Notice             accountNotice
+	Roles              []accountRoleView
+	Shows              []*Show
+	AgentTokens        []accountAgentTokenView
+	TokenProfiles      []accountTokenProfileView
+	SelectedProfileID  string
+	DefaultExpiryDays  int
+	IssuedAgentToken   *issuedAgentTokenView
+	AccountPermissions []accountPermissionView
+}
+
+type accountPermissionView struct {
+	Key         string
+	Label       string
+	Description string
+}
+
+type accountTokenProfileView struct {
+	ID          string
+	Label       string
+	Description string
+	Selected    bool
+	Permissions []accountPermissionView
+}
+
+type accountAgentTokenView struct {
+	ID                string
+	Label             string
+	TokenPrefix       string
+	PermissionProfile string
+	StatusLabel       string
+	CreatedLabel      string
+	ExpiresLabel      string
+	LastUsedLabel     string
+	Permissions       []accountPermissionView
+}
+
+type issuedAgentTokenView struct {
+	Label             string
+	Secret            string
+	TokenPrefix       string
+	PermissionProfile string
+	ExpiresLabel      string
+	Permissions       []accountPermissionView
+}
+
+func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+	a.render(w, "account.html", a.buildAccountData(*user, accountNoticeMessage(r.URL.Query().Get("notice")), nil, "", 14))
+}
+
+func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *IssuedAgentToken, selectedProfile string, defaultExpiryDays int) accountData {
+	if defaultExpiryDays < agentTokenMinDays || defaultExpiryDays > agentTokenMaxDays {
+		defaultExpiryDays = 14
+	}
+
+	showLabels := make(map[string]string)
+	for _, show := range a.store.allShows() {
+		showLabels[show.ID] = show.Name
+	}
+	orgLabels := make(map[string]string)
+	for _, org := range a.store.allOrganizations() {
+		orgLabels[org.ID] = org.Name
+	}
+
+	roles := make([]accountRoleView, 0)
+	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+		scopeLabel := "Across the platform"
+		switch {
+		case role.ShowID != "" && showLabels[role.ShowID] != "":
+			scopeLabel = showLabels[role.ShowID]
+		case role.OrganizationID != "" && orgLabels[role.OrganizationID] != "":
+			scopeLabel = orgLabels[role.OrganizationID]
+		case role.ShowID != "":
+			scopeLabel = role.ShowID
+		case role.OrganizationID != "":
+			scopeLabel = role.OrganizationID
+		}
+		roles = append(roles, accountRoleView{
+			RoleLabel:  role.Role,
+			ScopeLabel: scopeLabel,
+		})
+	}
+	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
+		roles = append(roles, accountRoleView{
+			RoleLabel:  "admin",
+			ScopeLabel: "Deployment allowlist",
+		})
+	}
+
+	profiles := a.availableAgentTokenProfiles(user)
+	if selectedProfile == "" && len(profiles) > 0 {
+		selectedProfile = profiles[0].ID
+	}
+	profileViews := make([]accountTokenProfileView, 0, len(profiles))
+	accountPermissionMap := make(map[string]accountPermissionView)
+	for _, profile := range profiles {
+		permissionViews := make([]accountPermissionView, 0, len(profile.Permissions))
+		for _, permission := range profile.Permissions {
+			item := agentPermissionLookup(permission)
+			view := accountPermissionView{
+				Key:         item.Key,
+				Label:       item.Label,
+				Description: item.Description,
+			}
+			permissionViews = append(permissionViews, view)
+			if _, ok := accountPermissionMap[view.Key]; !ok {
+				accountPermissionMap[view.Key] = view
+			}
+		}
+		profileViews = append(profileViews, accountTokenProfileView{
+			ID:          profile.ID,
+			Label:       profile.Label,
+			Description: profile.Description,
+			Selected:    profile.ID == selectedProfile,
+			Permissions: permissionViews,
+		})
+	}
+
+	accountPermissions := make([]accountPermissionView, 0, len(accountPermissionMap))
+	for _, view := range accountPermissionMap {
+		accountPermissions = append(accountPermissions, view)
+	}
+	sortAccountPermissions(accountPermissions)
+
+	tokenViews := make([]accountAgentTokenView, 0)
+	for _, token := range a.store.listAgentTokensBySubject(user.CognitoSub) {
+		statusLabel := "Active"
+		switch {
+		case token.RevokedAt != nil:
+			statusLabel = "Revoked"
+		case !token.ExpiresAt.After(time.Now().UTC()):
+			statusLabel = "Expired"
+		}
+		lastUsedLabel := "Not used yet"
+		if token.LastUsedAt != nil {
+			lastUsedLabel = token.LastUsedAt.Local().Format("2006-01-02 15:04")
+		}
+		tokenViews = append(tokenViews, accountAgentTokenView{
+			ID:                token.ID,
+			Label:             token.Label,
+			TokenPrefix:       token.TokenPrefix,
+			PermissionProfile: agentProfileLabel(token.PermissionProfile),
+			StatusLabel:       statusLabel,
+			CreatedLabel:      token.CreatedAt.Local().Format("2006-01-02 15:04"),
+			ExpiresLabel:      token.ExpiresAt.Local().Format("2006-01-02 15:04"),
+			LastUsedLabel:     lastUsedLabel,
+			Permissions:       permissionViewsForKeys(token.Permissions),
+		})
+	}
+
+	var issuedView *issuedAgentTokenView
+	if issued != nil && issued.Token != nil {
+		issuedView = &issuedAgentTokenView{
+			Label:             issued.Token.Label,
+			Secret:            issued.Secret,
+			TokenPrefix:       issued.Token.TokenPrefix,
+			PermissionProfile: agentProfileLabel(issued.Token.PermissionProfile),
+			ExpiresLabel:      issued.Token.ExpiresAt.Local().Format("2006-01-02 15:04"),
+			Permissions:       permissionViewsForKeys(issued.Token.Permissions),
+		}
+	}
+
+	return accountData{
+		Title:              "Your Profile",
+		CurrentPath:        "/account",
+		User:               &user,
+		IsAdmin:            a.userIsAdmin(user),
+		Notice:             notice,
+		Roles:              roles,
+		Shows:              a.store.allShows(),
+		AgentTokens:        tokenViews,
+		TokenProfiles:      profileViews,
+		SelectedProfileID:  selectedProfile,
+		DefaultExpiryDays:  defaultExpiryDays,
+		IssuedAgentToken:   issuedView,
+		AccountPermissions: accountPermissions,
+	}
+}
+
+func permissionViewsForKeys(keys []string) []accountPermissionView {
+	views := make([]accountPermissionView, 0, len(keys))
+	for _, key := range keys {
+		item := agentPermissionLookup(key)
+		views = append(views, accountPermissionView{
+			Key:         item.Key,
+			Label:       item.Label,
+			Description: item.Description,
+		})
+	}
+	sortAccountPermissions(views)
+	return views
+}
+
+func sortAccountPermissions(items []accountPermissionView) {
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Label < items[j].Label
+	})
+}
+
+func agentProfileLabel(profileID string) string {
+	if profile, ok := agentPermissionProfiles[profileID]; ok {
+		return profile.Label
+	}
+	return profileID
+}
+
+func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		return
+	}
+	selectedProfile := strings.TrimSpace(r.FormValue("permission_profile"))
+	profile, ok := a.agentTokenProfileForUser(*user, selectedProfile)
+	if !ok {
+		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: "Choose one of the available permission profiles for this account.", Kind: "error"}, nil, selectedProfile, 14))
+		return
+	}
+	expiryDays, err := strconv.Atoi(strings.TrimSpace(r.FormValue("expires_in_days")))
+	if err != nil {
+		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: "Enter a valid expiry in days between 1 and 60.", Kind: "error"}, nil, selectedProfile, 14))
+		return
+	}
+	issued, err := a.store.issueAgentToken(AgentTokenIssueInput{
+		OwnerCognitoSub:   user.CognitoSub,
+		OwnerEmail:        user.Email,
+		OwnerName:         user.Name,
+		Label:             r.FormValue("label"),
+		PermissionProfile: profile.ID,
+		Permissions:       profile.Permissions,
+		ExpiresInDays:     expiryDays,
+	})
+	if err != nil {
+		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, selectedProfile, expiryDays))
+		return
+	}
+	a.render(w, "account.html", a.buildAccountData(*user, accountNotice{
+		Message: fmt.Sprintf("Token issued. Copy it now. It will not be shown again and it currently grants %s.", formatPermissionList(profile.Permissions)),
+		Kind:    "info",
+	}, issued, selectedProfile, expiryDays))
+}
+
+func (a *app) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+	tokenID := r.PathValue("tokenID")
+	if _, err := a.store.revokeAgentToken(tokenID, user.CognitoSub); err != nil {
+		a.render(w, "account.html", a.buildAccountData(*user, accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		return
+	}
+	http.Redirect(w, r, "/account?notice=agent_token_revoked#agent-tokens", http.StatusSeeOther)
+}
 
 type homeData struct {
 	Title       string

@@ -43,3 +43,7 @@ Typical acceptance requirements should cover:
   flight rather than incidental implementation detail
 - realization-specific extra structured truth is added additively instead of by
   silently repurposing older canonical fields
+- when the seed has meaningful authority semantics, the docs and interaction
+  contract define subject, scope, bundle, grant, and delegation rules clearly
+- when the seed has meaningful authority semantics, effective access is derived
+  from explicit accepted history rather than hidden local-only role checks

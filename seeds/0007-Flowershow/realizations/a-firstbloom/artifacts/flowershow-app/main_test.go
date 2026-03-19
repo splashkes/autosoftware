@@ -113,6 +113,25 @@ func addAdminSession(t *testing.T, a *app, req *http.Request) {
 	}
 }
 
+func extractIssuedAgentToken(t *testing.T, body string) string {
+	t.Helper()
+	const marker = `data-issued-agent-token>`
+	start := strings.Index(body, marker)
+	if start < 0 {
+		t.Fatal("issued agent token textarea not found")
+	}
+	start += len(marker)
+	end := strings.Index(body[start:], "</textarea>")
+	if end < 0 {
+		t.Fatal("issued agent token textarea terminator not found")
+	}
+	token := strings.TrimSpace(body[start : start+end])
+	if token == "" {
+		t.Fatal("issued agent token value empty")
+	}
+	return token
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	a := testApp()
 	req := httptest.NewRequest("GET", "/healthz", nil)
@@ -359,6 +378,7 @@ func TestAdminLoginFlow(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
 	// GET login page
@@ -381,6 +401,9 @@ func TestAdminLoginFlow(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303 redirect, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login" {
+		t.Fatalf("expected redirect to /admin/login, got %q", got)
 	}
 }
 
@@ -427,6 +450,7 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("POST /auth/login/password", a.handleAdminPasswordLogin)
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 
@@ -450,8 +474,21 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
-	if got := w.Result().Header.Get("Location"); got != "/admin" {
-		t.Fatalf("expected redirect to /admin, got %q", got)
+	if got := w.Result().Header.Get("Location"); got != "/account" {
+		t.Fatalf("expected redirect to /account, got %q", got)
+	}
+
+	accountReq := httptest.NewRequest("GET", "/account", nil)
+	for _, cookie := range w.Result().Cookies() {
+		accountReq.AddCookie(cookie)
+	}
+	accountW := httptest.NewRecorder()
+	mux.ServeHTTP(accountW, accountReq)
+	if accountW.Code != http.StatusOK {
+		t.Fatalf("expected signed-in profile page, got %d", accountW.Code)
+	}
+	if !strings.Contains(accountW.Body.String(), "simon@example.com") {
+		t.Fatal("account page missing signed-in email")
 	}
 
 	adminReq := httptest.NewRequest("GET", "/admin", nil)
@@ -461,7 +498,10 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	adminW := httptest.NewRecorder()
 	mux.ServeHTTP(adminW, adminReq)
 	if adminW.Code != http.StatusSeeOther {
-		t.Fatalf("expected non-admin user to redirect for missing role, got %d", adminW.Code)
+		t.Fatalf("expected non-admin user to redirect away from admin, got %d", adminW.Code)
+	}
+	if got := adminW.Result().Header.Get("Location"); got != "/account?notice=admin_required" {
+		t.Fatalf("expected redirect to signed-in account page, got %q", got)
 	}
 }
 
@@ -494,6 +534,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("POST /auth/login/back", a.handleAdminLoginBack)
 	mux.HandleFunc("POST /auth/login/email-code", a.handleAdminEmailCodeStart)
 	mux.HandleFunc("POST /auth/login/email-code/verify", a.handleAdminEmailCodeVerify)
@@ -556,6 +597,252 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	mux.ServeHTTP(adminW, adminReq)
 	if adminW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", adminW.Code)
+	}
+}
+
+func TestAccountPageRequiresSignedInSession(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
+
+	req := httptest.NewRequest("GET", "/account", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/admin/login" {
+		t.Fatalf("expected redirect to /admin/login, got %q", got)
+	}
+}
+
+func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
+	a := testApp()
+	if _, err := a.store.assignUserRole(UserRoleInput{
+		CognitoSub: "sub_admin_account",
+		Role:       "admin",
+	}); err != nil {
+		t.Fatalf("assign admin role: %v", err)
+	}
+
+	accountReq := httptest.NewRequest("GET", "/account", nil)
+	sessionW := httptest.NewRecorder()
+	if err := a.setUserSession(sessionW, UserIdentity{
+		CognitoSub: "sub_admin_account",
+		Email:      "admin-account@example.com",
+	}); err != nil {
+		t.Fatalf("set session: %v", err)
+	}
+	for _, cookie := range sessionW.Result().Cookies() {
+		accountReq.AddCookie(cookie)
+	}
+	accountW := httptest.NewRecorder()
+	a.handleAccount(accountW, accountReq)
+	if accountW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", accountW.Code)
+	}
+	body := accountW.Body.String()
+	if !strings.Contains(body, "Generate Agent Token") {
+		t.Fatal("account page missing agent token generator")
+	}
+	if !strings.Contains(body, "Account Assistant") || !strings.Contains(body, "Full Admin Delegate") {
+		t.Fatal("account page missing expected permission profiles")
+	}
+
+	adminReq := httptest.NewRequest("GET", "/admin", nil)
+	for _, cookie := range sessionW.Result().Cookies() {
+		adminReq.AddCookie(cookie)
+	}
+	adminW := httptest.NewRecorder()
+	a.requireAdmin(a.handleAdminDashboard)(adminW, adminReq)
+	if adminW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", adminW.Code)
+	}
+	if !strings.Contains(adminW.Body.String(), "/account#agent-tokens") {
+		t.Fatal("admin dashboard should link to the shared account token manager")
+	}
+}
+
+func TestViewerAccountTokenCanReadAccountButNotAdminAPI(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/account", a.handleAPIAccount)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/admin/dashboard", a.handleAPIAdminDashboard)
+
+	sessionW := httptest.NewRecorder()
+	if err := a.setUserSession(sessionW, UserIdentity{
+		CognitoSub: "sub_viewer_token",
+		Email:      "viewer-token@example.com",
+		Name:       "Viewer Token",
+	}); err != nil {
+		t.Fatalf("set session: %v", err)
+	}
+
+	createReq := httptest.NewRequest("POST", "/account/agent-tokens", strings.NewReader("label=Viewer+Assistant&expires_in_days=7&permission_profile=account_agent"))
+	createReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range sessionW.Result().Cookies() {
+		createReq.AddCookie(cookie)
+	}
+	createW := httptest.NewRecorder()
+	mux.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", createW.Code, createW.Body.String())
+	}
+	token := extractIssuedAgentToken(t, createW.Body.String())
+
+	accountReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/account", nil)
+	accountReq.Header.Set("Authorization", "Bearer "+token)
+	accountW := httptest.NewRecorder()
+	mux.ServeHTTP(accountW, accountReq)
+	if accountW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", accountW.Code, accountW.Body.String())
+	}
+	if !strings.Contains(accountW.Body.String(), `"email":"viewer-token@example.com"`) {
+		t.Fatal("account projection missing token owner identity")
+	}
+
+	adminReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/admin/dashboard", nil)
+	adminReq.Header.Set("Authorization", "Bearer "+token)
+	adminW := httptest.NewRecorder()
+	mux.ServeHTTP(adminW, adminReq)
+	if adminW.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", adminW.Code, adminW.Body.String())
+	}
+	if !strings.Contains(adminW.Body.String(), `"auth_mode":"agent_token"`) {
+		t.Fatal("permission denial should report agent_token auth mode")
+	}
+}
+
+func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
+	a := testApp()
+	if _, err := a.store.assignUserRole(UserRoleInput{
+		CognitoSub: "sub_admin_token_owner",
+		Role:       "admin",
+	}); err != nil {
+		t.Fatalf("assign admin role: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
+	mux.HandleFunc("POST /account/agent-tokens/{tokenID}/revoke", a.requireSignedInPage(a.handleAccountTokenRevoke))
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/ledger/{objectID}", a.handleAPILedger)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
+
+	sessionW := httptest.NewRecorder()
+	if err := a.setUserSession(sessionW, UserIdentity{
+		CognitoSub: "sub_admin_token_owner",
+		Email:      "admin-token@example.com",
+		Name:       "Admin Token Owner",
+	}); err != nil {
+		t.Fatalf("set session: %v", err)
+	}
+
+	createReq := httptest.NewRequest("POST", "/account/agent-tokens", strings.NewReader("label=Show+Operator&expires_in_days=7&permission_profile=show_operator"))
+	createReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range sessionW.Result().Cookies() {
+		createReq.AddCookie(cookie)
+	}
+	createW := httptest.NewRecorder()
+	mux.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", createW.Code, createW.Body.String())
+	}
+	operatorToken := extractIssuedAgentToken(t, createW.Body.String())
+
+	workspaceReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/workspace", nil)
+	workspaceReq.Header.Set("Authorization", "Bearer "+operatorToken)
+	workspaceW := httptest.NewRecorder()
+	mux.ServeHTTP(workspaceW, workspaceReq)
+	if workspaceW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", workspaceW.Code, workspaceW.Body.String())
+	}
+
+	ledgerReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/ledger/show_spring2025", nil)
+	ledgerReq.Header.Set("Authorization", "Bearer "+operatorToken)
+	ledgerW := httptest.NewRecorder()
+	mux.ServeHTTP(ledgerW, ledgerReq)
+	if ledgerW.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", ledgerW.Code, ledgerW.Body.String())
+	}
+
+	roleReq := jsonRequest("POST", "/v1/commands/0007-Flowershow/roles.assign", `{"cognito_sub":"sub_agent_target","role":"admin"}`)
+	roleReq.Header.Set("Authorization", "Bearer "+operatorToken)
+	roleW := httptest.NewRecorder()
+	mux.ServeHTTP(roleW, roleReq)
+	if roleW.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", roleW.Code, roleW.Body.String())
+	}
+
+	tokenID := a.store.listAgentTokensBySubject("sub_admin_token_owner")[0].ID
+	revokeReq := httptest.NewRequest("POST", "/account/agent-tokens/"+tokenID+"/revoke", nil)
+	for _, cookie := range sessionW.Result().Cookies() {
+		revokeReq.AddCookie(cookie)
+	}
+	revokeW := httptest.NewRecorder()
+	mux.ServeHTTP(revokeW, revokeReq)
+	if revokeW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", revokeW.Code)
+	}
+
+	accountReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/workspace", nil)
+	accountReq.Header.Set("Authorization", "Bearer "+operatorToken)
+	accountW := httptest.NewRecorder()
+	mux.ServeHTTP(accountW, accountReq)
+	if accountW.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 after revocation, got %d: %s", accountW.Code, accountW.Body.String())
+	}
+}
+
+func TestAdminLoginRedirectsSignedInUserToRoleAwareDestination(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/login", a.handleAdminLogin)
+	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
+	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+
+	userReq := httptest.NewRequest("GET", "/admin/login", nil)
+	userW := httptest.NewRecorder()
+	if err := a.setUserSession(userW, UserIdentity{
+		CognitoSub: "sub_user",
+		Email:      "viewer@example.com",
+	}); err != nil {
+		t.Fatalf("set viewer session: %v", err)
+	}
+	for _, cookie := range userW.Result().Cookies() {
+		userReq.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, userReq)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if got := w.Result().Header.Get("Location"); got != "/account" {
+		t.Fatalf("expected redirect to /account, got %q", got)
+	}
+
+	if _, err := a.store.assignUserRole(UserRoleInput{CognitoSub: "sub_admin_login", Role: "admin"}); err != nil {
+		t.Fatalf("assign admin role: %v", err)
+	}
+	adminReq := httptest.NewRequest("GET", "/admin/login", nil)
+	adminSession := httptest.NewRecorder()
+	if err := a.setUserSession(adminSession, UserIdentity{
+		CognitoSub: "sub_admin_login",
+		Email:      "admin@example.com",
+	}); err != nil {
+		t.Fatalf("set admin session: %v", err)
+	}
+	for _, cookie := range adminSession.Result().Cookies() {
+		adminReq.AddCookie(cookie)
+	}
+	adminW := httptest.NewRecorder()
+	mux.ServeHTTP(adminW, adminReq)
+	if adminW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", adminW.Code)
+	}
+	if got := adminW.Result().Header.Get("Location"); got != "/admin" {
+		t.Fatalf("expected redirect to /admin, got %q", got)
 	}
 }
 

@@ -19,6 +19,9 @@ Current protocol focus:
 - `objects.md` defines stable object identity and immutable creation metadata
 - `claims.md` defines append-only assertions, supersession, and interpretation
 - `schemas.md` defines schema identity, versioning, and interpretation rules
+- `permissions.md` defines the system-native authority, delegation, and
+  effective-access materialization model that seeds should build on when they
+  need meaningful control
 - `interactions.md` defines the normalized operational API contract that every
   runnable realization must expose for both UI and machine clients
 - `growth.md` defines the kernel growth-console contract from seed docs to

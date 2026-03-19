@@ -111,6 +111,96 @@ type AuthChallengeIssue struct {
 	Verifier  string        `json:"verifier,omitempty"`
 }
 
+type AuthIdentity struct {
+	IdentityID      string                 `json:"identity_id"`
+	ProviderID      string                 `json:"provider_id"`
+	PrincipalID     string                 `json:"principal_id"`
+	ProviderSubject string                 `json:"provider_subject"`
+	Profile         map[string]interface{} `json:"profile"`
+	LinkedAt        time.Time              `json:"linked_at"`
+	LastSeenAt      *time.Time             `json:"last_seen_at,omitempty"`
+}
+
+type BindAuthIdentityInput struct {
+	IdentityID      string                 `json:"identity_id,omitempty"`
+	ProviderID      string                 `json:"provider_id"`
+	PrincipalID     string                 `json:"principal_id"`
+	ProviderSubject string                 `json:"provider_subject"`
+	Profile         map[string]interface{} `json:"profile,omitempty"`
+	LastSeenAt      *time.Time             `json:"last_seen_at,omitempty"`
+}
+
+type AuthorityBundle struct {
+	BundleID     string                 `json:"bundle_id"`
+	DisplayName  string                 `json:"display_name,omitempty"`
+	Capabilities []string               `json:"capabilities"`
+	Status       string                 `json:"status"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	RetiredAt    *time.Time             `json:"retired_at,omitempty"`
+}
+
+type UpsertAuthorityBundleInput struct {
+	BundleID     string                 `json:"bundle_id"`
+	DisplayName  string                 `json:"display_name,omitempty"`
+	Capabilities []string               `json:"capabilities"`
+	Status       string                 `json:"status,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type AuthorityGrant struct {
+	GrantID              string                 `json:"grant_id"`
+	GrantorPrincipalID   string                 `json:"grantor_principal_id,omitempty"`
+	GranteePrincipalID   string                 `json:"grantee_principal_id"`
+	BundleID             string                 `json:"bundle_id"`
+	CapabilitiesSnapshot []string               `json:"capabilities_snapshot"`
+	ScopeKind            string                 `json:"scope_kind"`
+	ScopeID              string                 `json:"scope_id"`
+	DelegationMode       string                 `json:"delegation_mode"`
+	Basis                string                 `json:"basis"`
+	Status               string                 `json:"status"`
+	EffectiveAt          *time.Time             `json:"effective_at,omitempty"`
+	ExpiresAt            *time.Time             `json:"expires_at,omitempty"`
+	SupersedesGrantID    string                 `json:"supersedes_grant_id,omitempty"`
+	Reason               string                 `json:"reason,omitempty"`
+	EvidenceRefs         []string               `json:"evidence_refs"`
+	Metadata             map[string]interface{} `json:"metadata"`
+	CreatedAt            time.Time              `json:"created_at"`
+}
+
+type CreateAuthorityGrantInput struct {
+	GrantID            string                 `json:"grant_id,omitempty"`
+	GrantorPrincipalID string                 `json:"grantor_principal_id,omitempty"`
+	GranteePrincipalID string                 `json:"grantee_principal_id,omitempty"`
+	BundleID           string                 `json:"bundle_id,omitempty"`
+	ScopeKind          string                 `json:"scope_kind,omitempty"`
+	ScopeID            string                 `json:"scope_id,omitempty"`
+	DelegationMode     string                 `json:"delegation_mode,omitempty"`
+	Basis              string                 `json:"basis,omitempty"`
+	Status             string                 `json:"status,omitempty"`
+	EffectiveAt        *time.Time             `json:"effective_at,omitempty"`
+	ExpiresAt          *time.Time             `json:"expires_at,omitempty"`
+	SupersedesGrantID  string                 `json:"supersedes_grant_id,omitempty"`
+	Reason             string                 `json:"reason,omitempty"`
+	EvidenceRefs       []string               `json:"evidence_refs,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type EffectiveAuthorityCapability struct {
+	Capability string   `json:"capability"`
+	ScopeKind  string   `json:"scope_kind"`
+	ScopeID    string   `json:"scope_id"`
+	GrantIDs   []string `json:"grant_ids"`
+}
+
+type PrincipalEffectiveAuthority struct {
+	PrincipalID       string                         `json:"principal_id"`
+	ComputedAt        time.Time                      `json:"computed_at"`
+	ActiveGrants      []AuthorityGrant               `json:"active_grants"`
+	EffectivePolicies []EffectiveAuthorityCapability `json:"effective_policies"`
+}
+
 type Handle struct {
 	HandleID           string                 `json:"handle_id"`
 	Namespace          string                 `json:"namespace"`
