@@ -8,8 +8,8 @@ import (
 )
 
 func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
-	a.clearPendingAuth(w)
-	a.clearUserSession(w)
+	a.clearPendingAuth(w, r)
+	a.clearUserSession(w, r)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

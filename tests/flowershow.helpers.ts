@@ -1,5 +1,4 @@
 import { expect, Page } from '@playwright/test';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -13,22 +12,9 @@ export const FLOWERSHOW_AUTH_STATE_PATH = path.resolve(
   __dirname,
   '.auth/flowershow-admin.json',
 );
-const FLOWERSHOW_BASE_URL =
-  process.env.FLOWERSHOW_BASE_URL || 'http://127.0.0.1:38097';
 
-const FLOWERSHOW_SESSION_SECRET =
-  process.env.AS_SESSION_SECRET || 'playwright-flowershow-session-secret';
 const FLOWERSHOW_LOCAL_ADMIN_SUB = 'sub_playwright_admin';
 const FLOWERSHOW_LOCAL_VIEWER_SUB = 'sub_playwright_viewer';
-
-function encodeSignedCookie(value: unknown) {
-  const payload = Buffer.from(JSON.stringify(value));
-  const signature = crypto
-    .createHmac('sha256', FLOWERSHOW_SESSION_SECRET)
-    .update(payload)
-    .digest();
-  return `${payload.toString('base64url')}.${signature.toString('base64url')}`;
-}
 
 async function ensureLocalAdminRole(page: Page) {
   const response = await page.request.post(
@@ -49,48 +35,40 @@ async function ensureLocalAdminRole(page: Page) {
 
 export async function loginLocalAdmin(page: Page) {
   await ensureLocalAdminRole(page);
-  const sessionCookie = encodeSignedCookie({
-    user: {
-      cognito_sub: FLOWERSHOW_LOCAL_ADMIN_SUB,
-      email: 'playwright-admin@example.com',
-      name: 'Playwright Admin',
+  const response = await page.request.post('/__test/session', {
+    headers: {
+      Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+      'Content-Type': 'application/json',
     },
-    expires_at: Math.floor(Date.now() / 1000) + 33 * 24 * 60 * 60,
+    data: {
+      user: {
+        cognito_sub: FLOWERSHOW_LOCAL_ADMIN_SUB,
+        email: 'playwright-admin@example.com',
+        name: 'Playwright Admin',
+      },
+    },
   });
-  await page.context().addCookies([
-    {
-      name: 'as_flowershow_session',
-      value: sessionCookie,
-      url: FLOWERSHOW_BASE_URL,
-      httpOnly: true,
-      sameSite: 'Lax',
-      expires: Math.floor(Date.now() / 1000) + 33 * 24 * 60 * 60,
-    },
-  ]);
+  expect(response.ok()).toBeTruthy();
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('h1')).toContainText('Admin Dashboard');
 }
 
 export async function loginLocalViewer(page: Page) {
-  const sessionCookie = encodeSignedCookie({
-    user: {
-      cognito_sub: FLOWERSHOW_LOCAL_VIEWER_SUB,
-      email: 'playwright-viewer@example.com',
-      name: 'Playwright Viewer',
+  const response = await page.request.post('/__test/session', {
+    headers: {
+      Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+      'Content-Type': 'application/json',
     },
-    expires_at: Math.floor(Date.now() / 1000) + 33 * 24 * 60 * 60,
+    data: {
+      user: {
+        cognito_sub: FLOWERSHOW_LOCAL_VIEWER_SUB,
+        email: 'playwright-viewer@example.com',
+        name: 'Playwright Viewer',
+      },
+    },
   });
-  await page.context().addCookies([
-    {
-      name: 'as_flowershow_session',
-      value: sessionCookie,
-      url: FLOWERSHOW_BASE_URL,
-      httpOnly: true,
-      sameSite: 'Lax',
-      expires: Math.floor(Date.now() / 1000) + 33 * 24 * 60 * 60,
-    },
-  ]);
+  expect(response.ok()).toBeTruthy();
 }
 
 export async function expectSignedInLanding(page: Page) {

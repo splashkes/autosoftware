@@ -91,7 +91,7 @@ func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *
 	}
 
 	roles := make([]accountRoleView, 0)
-	for _, role := range a.store.rolesBySubject(user.CognitoSub) {
+	for _, role := range a.roleAssignmentsForUser(user) {
 		scopeLabel := "Across the platform"
 		switch {
 		case role.ShowID != "" && showLabels[role.ShowID] != "":
