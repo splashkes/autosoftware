@@ -153,11 +153,6 @@ type flowershowStore interface {
 	// Leaderboard
 	leaderboard(orgID, season string) []LeaderboardEntry
 
-	// Roles
-	assignUserRole(UserRoleInput) (*UserRole, error)
-	rolesBySubject(cognitoSub string) []*UserRole
-	allUserRoles() []*UserRole
-
 	// Agent tokens
 	issueAgentToken(AgentTokenIssueInput) (*IssuedAgentToken, error)
 	listAgentTokensBySubject(cognitoSub string) []*AgentToken
@@ -204,7 +199,6 @@ type memoryStore struct {
 	criteria       map[string]*JudgingCriterion
 	scorecards     map[string]*EntryScorecard
 	critScores     map[string]*EntryCriterionScore
-	userRoles      map[string]*UserRole
 	agentTokens    map[string]*AgentToken
 	agentTokenHash map[string]string
 	objects        map[string]*FlowershowObject
@@ -236,7 +230,6 @@ func newMemoryStore() *memoryStore {
 		criteria:       make(map[string]*JudgingCriterion),
 		scorecards:     make(map[string]*EntryScorecard),
 		critScores:     make(map[string]*EntryCriterionScore),
-		userRoles:      make(map[string]*UserRole),
 		agentTokens:    make(map[string]*AgentToken),
 		agentTokenHash: make(map[string]string),
 		objects:        make(map[string]*FlowershowObject),
@@ -1414,67 +1407,6 @@ func (s *memoryStore) leaderboard(orgID, season string) []LeaderboardEntry {
 	return out
 }
 
-// --- Roles ---
-
-func (s *memoryStore) assignUserRole(input UserRoleInput) (*UserRole, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	input.SubjectID = strings.TrimSpace(input.SubjectID)
-	input.CognitoSub = strings.TrimSpace(input.CognitoSub)
-	if input.SubjectID == "" && input.CognitoSub == "" {
-		return nil, errors.New("subject identifier required")
-	}
-	if strings.TrimSpace(input.Role) == "" {
-		return nil, errors.New("role required")
-	}
-	for _, existing := range s.userRoles {
-		if existing.SubjectID == input.SubjectID &&
-			existing.CognitoSub == input.CognitoSub &&
-			existing.OrganizationID == input.OrganizationID &&
-			existing.ShowID == input.ShowID &&
-			existing.Role == input.Role {
-			return existing, nil
-		}
-	}
-	role := &UserRole{
-		ID:             newID("role"),
-		SubjectID:      input.SubjectID,
-		CognitoSub:     input.CognitoSub,
-		OrganizationID: input.OrganizationID,
-		ShowID:         input.ShowID,
-		Role:           input.Role,
-		CreatedAt:      time.Now().UTC(),
-	}
-	s.userRoles[role.ID] = role
-	s.appendClaim(role.ID, "user_role", "user_role.assigned", role)
-	return role, nil
-}
-
-func (s *memoryStore) rolesBySubject(cognitoSub string) []*UserRole {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cognitoSub = strings.TrimSpace(cognitoSub)
-	var out []*UserRole
-	for _, role := range s.userRoles {
-		if role.CognitoSub == cognitoSub || role.SubjectID == cognitoSub {
-			out = append(out, role)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out
-}
-
-func (s *memoryStore) allUserRoles() []*UserRole {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []*UserRole
-	for _, role := range s.userRoles {
-		out = append(out, role)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out
-}
-
 // --- Ledger ---
 
 func (s *memoryStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
@@ -1820,25 +1752,6 @@ CREATE TABLE IF NOT EXISTS as_flowershow_auth_pending (
 
 CREATE INDEX IF NOT EXISTS as_flowershow_auth_pending_expires_idx
   ON as_flowershow_auth_pending (expires_at);
-
-CREATE TABLE IF NOT EXISTS as_flowershow_user_roles (
-  id TEXT PRIMARY KEY,
-  subject_id TEXT NOT NULL DEFAULT '',
-  cognito_sub TEXT NOT NULL DEFAULT '',
-  organization_id TEXT NOT NULL DEFAULT '',
-  show_id TEXT NOT NULL DEFAULT '',
-  role TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS as_flowershow_user_roles_unique_idx
-  ON as_flowershow_user_roles (subject_id, cognito_sub, organization_id, show_id, role);
-
-CREATE INDEX IF NOT EXISTS as_flowershow_user_roles_subject_idx
-  ON as_flowershow_user_roles (subject_id, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS as_flowershow_user_roles_cognito_idx
-  ON as_flowershow_user_roles (cognito_sub, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_organizations (
   id TEXT PRIMARY KEY,
@@ -2338,83 +2251,6 @@ func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) er
 }
 func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry {
 	return s.mem.leaderboard(orgID, season)
-}
-func (s *postgresFlowershowStore) assignUserRole(input UserRoleInput) (*UserRole, error) {
-	input.SubjectID = strings.TrimSpace(input.SubjectID)
-	input.CognitoSub = strings.TrimSpace(input.CognitoSub)
-	input.OrganizationID = strings.TrimSpace(input.OrganizationID)
-	input.ShowID = strings.TrimSpace(input.ShowID)
-	input.Role = strings.TrimSpace(input.Role)
-	if input.SubjectID == "" && input.CognitoSub == "" {
-		return nil, errors.New("subject identifier required")
-	}
-	if input.Role == "" {
-		return nil, errors.New("role required")
-	}
-	role := &UserRole{
-		ID:             newID("role"),
-		SubjectID:      input.SubjectID,
-		CognitoSub:     input.CognitoSub,
-		OrganizationID: input.OrganizationID,
-		ShowID:         input.ShowID,
-		Role:           input.Role,
-		CreatedAt:      time.Now().UTC(),
-	}
-	row := s.pool.QueryRow(context.Background(), `
-		insert into as_flowershow_user_roles (
-		  id, subject_id, cognito_sub, organization_id, show_id, role, created_at
-		)
-		values ($1, $2, $3, $4, $5, $6, $7)
-		on conflict (subject_id, cognito_sub, organization_id, show_id, role) do update
-		set subject_id = excluded.subject_id
-		returning id, subject_id, cognito_sub, organization_id, show_id, role, created_at
-	`, role.ID, role.SubjectID, role.CognitoSub, role.OrganizationID, role.ShowID, role.Role, role.CreatedAt)
-	if err := row.Scan(&role.ID, &role.SubjectID, &role.CognitoSub, &role.OrganizationID, &role.ShowID, &role.Role, &role.CreatedAt); err != nil {
-		return nil, err
-	}
-	return role, nil
-}
-func (s *postgresFlowershowStore) rolesBySubject(cognitoSub string) []*UserRole {
-	cognitoSub = strings.TrimSpace(cognitoSub)
-	rows, err := s.pool.Query(context.Background(), `
-		select id, subject_id, cognito_sub, organization_id, show_id, role, created_at
-		from as_flowershow_user_roles
-		where subject_id = $1 or cognito_sub = $1
-		order by created_at asc
-	`, cognitoSub)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	out := make([]*UserRole, 0)
-	for rows.Next() {
-		item := new(UserRole)
-		if err := rows.Scan(&item.ID, &item.SubjectID, &item.CognitoSub, &item.OrganizationID, &item.ShowID, &item.Role, &item.CreatedAt); err != nil {
-			return out
-		}
-		out = append(out, item)
-	}
-	return out
-}
-func (s *postgresFlowershowStore) allUserRoles() []*UserRole {
-	rows, err := s.pool.Query(context.Background(), `
-		select id, subject_id, cognito_sub, organization_id, show_id, role, created_at
-		from as_flowershow_user_roles
-		order by created_at asc
-	`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	out := make([]*UserRole, 0)
-	for rows.Next() {
-		item := new(UserRole)
-		if err := rows.Scan(&item.ID, &item.SubjectID, &item.CognitoSub, &item.OrganizationID, &item.ShowID, &item.Role, &item.CreatedAt); err != nil {
-			return out
-		}
-		out = append(out, item)
-	}
-	return out
 }
 func (s *postgresFlowershowStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
 	return s.mem.ledgerByObjectID(objectID)

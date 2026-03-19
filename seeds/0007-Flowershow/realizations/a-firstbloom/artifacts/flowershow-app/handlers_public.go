@@ -107,13 +107,6 @@ func (a *app) buildAccountData(user UserIdentity, notice accountNotice, issued *
 			ScopeLabel: scopeLabel,
 		})
 	}
-	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
-		roles = append(roles, accountRoleView{
-			RoleLabel:  "admin",
-			ScopeLabel: "Deployment allowlist",
-		})
-	}
-
 	profiles := a.availableAgentTokenProfiles(user)
 	if selectedProfile == "" && len(profiles) > 0 {
 		selectedProfile = profiles[0].ID
