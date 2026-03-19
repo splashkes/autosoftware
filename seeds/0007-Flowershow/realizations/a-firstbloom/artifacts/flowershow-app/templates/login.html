@@ -3,7 +3,7 @@
   <div class="login-header">
     <div class="login-step-kicker">Flowershow Admin</div>
     <h1>Sign In</h1>
-    <p class="card-meta">One active step at a time: email first, then password, login code, or password reset.</p>
+    <p class="card-meta">Start with your email, then choose password or an emailed login code.</p>
   </div>
 
   {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
@@ -99,22 +99,25 @@
       <div class="login-step-row">
         <div>
           <div class="login-step-label">Step 1 of 2</div>
-          <h2>Enter Email</h2>
+          <h2>Login: Email</h2>
         </div>
       </div>
-      <p class="card-meta">Choose how you want to continue after entering your email.</p>
+      <p class="card-meta">Enter your email, then pick how you want to continue.</p>
       <form action="{{bp}}/admin/login" method="GET" class="form login-form">
         <div class="form-group">
           <label for="login_email">Email</label>
           <input type="email" id="login_email" name="email" value="{{.CurrentEmail}}" class="form-input" autocomplete="email" required autofocus>
         </div>
         <div class="login-actions">
-          <button type="submit" name="mode" value="password" class="btn btn-primary">Continue With Password</button>
+          <button type="submit" name="mode" value="password" class="btn btn-primary">Enter Password</button>
           <div class="login-actions-secondary">
-            <button type="submit" formaction="{{bp}}/auth/login/email-code" formmethod="POST" class="btn btn-secondary">Send Login Code</button>
-            <button type="submit" formaction="{{bp}}/auth/login/forgot-password" formmethod="POST" class="btn btn-outline">Send Password Reset Code</button>
+            <button type="submit" formaction="{{bp}}/auth/login/email-code" formmethod="POST" class="btn btn-secondary">Get Email Login Code</button>
           </div>
         </div>
+      </form>
+      <form method="POST" action="{{bp}}/auth/login/forgot-password" class="login-subtle-form">
+        <input type="hidden" name="email" value="{{.CurrentEmail}}">
+        <button type="submit" class="login-subtle-link">Send password reset code</button>
       </form>
     </section>
     {{end}}

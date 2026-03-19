@@ -395,17 +395,20 @@ func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Enter Email") {
+	if !strings.Contains(body, "Login: Email") {
 		t.Fatal("login page missing initial email step")
 	}
-	if !strings.Contains(body, "Continue With Password") {
+	if !strings.Contains(body, "Enter Password") {
 		t.Fatal("login page missing password continuation action")
 	}
-	if !strings.Contains(body, "Send Login Code") {
+	if !strings.Contains(body, "Get Email Login Code") {
 		t.Fatal("login page missing email-code sign-in")
 	}
-	if !strings.Contains(body, "Send Password Reset Code") {
+	if !strings.Contains(body, "Send password reset code") {
 		t.Fatal("login page missing forgot-password flow")
+	}
+	if strings.Contains(body, `type="password" id="login_password"`) {
+		t.Fatal("initial step should not show a password field")
 	}
 	if strings.Contains(body, "Continue With Cognito") {
 		t.Fatal("login page should not send users to hosted cognito ui")
@@ -436,7 +439,7 @@ func TestAdminDirectPasswordLogin(t *testing.T) {
 	if !strings.Contains(stepW.Body.String(), "Enter Password") {
 		t.Fatal("password step should render before credential submission")
 	}
-	if strings.Contains(stepW.Body.String(), "Send Login Code") {
+	if strings.Contains(stepW.Body.String(), "Get Email Login Code") {
 		t.Fatal("password step should hide alternate sign-in actions")
 	}
 
@@ -516,7 +519,7 @@ func TestAdminEmailOTPLoginFlow(t *testing.T) {
 	if !strings.Contains(loginW.Body.String(), "Verify Login Code") {
 		t.Fatal("login page missing otp verification form")
 	}
-	if strings.Contains(loginW.Body.String(), "Continue With Password") {
+	if strings.Contains(loginW.Body.String(), "Enter Password") {
 		t.Fatal("otp verification step should hide the start-step actions")
 	}
 
@@ -597,7 +600,7 @@ func TestAdminForgotPasswordFlow(t *testing.T) {
 	if !strings.Contains(loginW.Body.String(), "Reset Password") {
 		t.Fatal("reset step should render after reset start")
 	}
-	if strings.Contains(loginW.Body.String(), "Continue With Password") {
+	if strings.Contains(loginW.Body.String(), "Enter Password") {
 		t.Fatal("reset step should hide the start-step actions")
 	}
 

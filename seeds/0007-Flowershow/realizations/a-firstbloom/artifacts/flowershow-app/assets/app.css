@@ -383,6 +383,17 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .login-actions-secondary { display: flex; flex-wrap: wrap; gap: .75rem; }
 .login-actions-secondary .btn { flex: 1 1 220px; }
 .login-back-form { margin-top: .75rem; }
+.login-subtle-form { margin-top: .9rem; }
+.login-subtle-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gray-500);
+  font-size: .88rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.login-subtle-link:hover { color: var(--green); }
 
 /* Alert */
 .alert { padding: .75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; }
