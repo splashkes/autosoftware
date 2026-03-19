@@ -126,6 +126,8 @@ func main() {
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 	mux.HandleFunc("GET /admin/roles", a.requireAdmin(a.handleRoleManagement))
 	mux.HandleFunc("POST /admin/roles", a.requireAdmin(a.handleRoleAssign))
+	mux.HandleFunc("GET /admin/clubs/{organizationID}", a.requireCapabilityPage("organization.manage", a.handleAdminClubDetail))
+	mux.HandleFunc("POST /admin/clubs/{organizationID}/invites", a.requireCapabilityPage("organization.invites.manage", a.handleAdminClubInviteCreate))
 
 	// Admin shows
 	mux.HandleFunc("GET /admin/shows/new", a.requireAdmin(a.handleAdminShowNew))
@@ -180,6 +182,7 @@ func main() {
 
 	// JSON API
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/account", a.handleAPIAccount)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/clubs/{id}/workspace", a.handleAPIClubWorkspace)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
@@ -196,6 +199,7 @@ func main() {
 
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/clubs.invites.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/judges.assign", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/divisions.create", a.handleAPICommand)
@@ -439,6 +443,10 @@ func agentRegistryLinks(data any) []agentAccessLink {
 	if personID == "" {
 		personID = templateNestedObjectID(data, "Person")
 	}
+	organizationID := templateStringField(data, "OrganizationID")
+	if organizationID == "" {
+		organizationID = templateNestedObjectID(data, "Organization")
+	}
 
 	links := make([]agentAccessLink, 0, 8)
 	seen := make(map[string]struct{})
@@ -467,6 +475,11 @@ func agentRegistryLinks(data any) []agentAccessLink {
 		add("Admin dashboard projection", "/v1/projections/0007-Flowershow/admin/dashboard")
 	case strings.HasPrefix(currentPath, "/admin/"):
 		add("Admin dashboard projection", "/v1/projections/0007-Flowershow/admin/dashboard")
+	}
+
+	if organizationID != "" {
+		add("Club workspace projection", "/v1/projections/0007-Flowershow/clubs/"+organizationID+"/workspace")
+		add("Organization ledger", "/v1/projections/0007-Flowershow/ledger/"+organizationID)
 	}
 
 	if showID != "" {
@@ -615,6 +628,7 @@ func parseTemplates() map[string]*template.Template {
 		"templates/show_rules.html",
 		"templates/show_admin.html",
 		"templates/admin_dashboard.html",
+		"templates/admin_club.html",
 		"templates/admin_show_new.html",
 		"templates/admin_persons.html",
 		"templates/admin_roles.html",

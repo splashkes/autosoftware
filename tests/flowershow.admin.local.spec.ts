@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   expectAgentPath,
   loginLocalAdmin,
+  loginLocalClubAdmin,
   loginLocalIntakeOperator,
   loginLocalViewer,
   uniqueName,
@@ -212,5 +213,29 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/roles');
     await expect(page).toHaveURL(/\/account\?notice=admin_required$/);
     await expect(page.locator('h1')).toContainText('Your Profile');
+  });
+
+  test('club admin can use the club workspace and create an invite without global admin access', async ({
+    page,
+  }) => {
+    await loginLocalClubAdmin(page);
+
+    await page.goto('/admin/clubs/org_demo1');
+    await expect(page.locator('h1')).toContainText('Metro Rose Society');
+    await expect(page.locator('body')).toContainText('Invite Someone To Join This Club');
+
+    await page.fill('#invite_first_name', 'Taylor');
+    await page.fill('#invite_last_name', 'Grant');
+    await page.fill('#invite_email', `taylor+${Date.now()}@example.com`);
+    await page
+      .locator('label.account-token-profile:has-text("Club Admin") input[type="checkbox"]')
+      .check();
+    await page.getByRole('button', { name: 'Create Club Invite' }).click();
+
+    await expect(page).toHaveURL(/\/admin\/clubs\/org_demo1\?section=invites#club-invites$/);
+    await expect(page.locator('body')).toContainText('Taylor Grant');
+
+    await page.goto('/admin');
+    await expect(page).toHaveURL(/\/account\?notice=admin_required$/);
   });
 });

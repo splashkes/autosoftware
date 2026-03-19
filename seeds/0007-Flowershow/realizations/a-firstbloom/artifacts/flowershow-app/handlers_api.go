@@ -38,6 +38,19 @@ func (a *app) handleAPIAccount(w http.ResponseWriter, r *http.Request) {
 	}, token))
 }
 
+func (a *app) handleAPIClubWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !a.authorizeAPICapability(w, r, "organization.manage", "Use a signed-in club admin session, a Bearer service token, or an account-issued agent token with club-management access.") {
+		return
+	}
+	user, _ := a.currentUser(r)
+	data, err := a.clubAdminData(r.PathValue("id"), "overview", user)
+	if err != nil {
+		a.writeAPIError(w, r, http.StatusNotFound, "organization_not_found", "Club workspace not found.", "Use a stable organization id from a club or show projection.", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
+}
+
 func (a *app) handleAPIShowDetail(w http.ResponseWriter, r *http.Request) {
 	show, ok := a.apiShowByIdentifier(r.PathValue("id"))
 	if !ok {
@@ -316,6 +329,31 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, show)
+
+	case "clubs.invites.create":
+		var input OrganizationInviteInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		if !a.isServiceToken(r) {
+			user, ok := a.currentUser(r)
+			if !ok {
+				a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "A signed-in club admin account is required for invite creation.", "Sign in with an account that currently manages the target club, then retry.", nil)
+				return
+			}
+			input.InvitedBySubject = user.SubjectID
+			if strings.TrimSpace(user.Name) != "" {
+				input.InvitedByName = user.Name
+			} else {
+				input.InvitedByName = user.Email
+			}
+		}
+		invite, err := a.store.createOrganizationInvite(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "club_invite_create_failed", err.Error(), "Pass organization_id, first_name, last_name, email, and any organization-scoped permission_roles to create a club invite.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, invite)
 
 	case "schedules.upsert":
 		var req ShowSchedule
@@ -1042,6 +1080,16 @@ func (a *app) accountProjection(user UserIdentity, token *AgentToken) map[string
 			"revoked_at":         item.RevokedAt,
 		})
 	}
+	managedClubs := make([]map[string]any, 0)
+	for _, club := range a.managedClubsForUser(user) {
+		managedClubs = append(managedClubs, map[string]any{
+			"id":         club.ID,
+			"name":       club.Name,
+			"level":      club.Level,
+			"admin_href": club.AdminHref,
+			"projection": "/v1/projections/0007-Flowershow/clubs/" + club.ID + "/workspace",
+		})
+	}
 	payload := map[string]any{
 		"account": map[string]any{
 			"cognito_sub": user.CognitoSub,
@@ -1050,6 +1098,7 @@ func (a *app) accountProjection(user UserIdentity, token *AgentToken) map[string
 			"is_admin":    a.userIsAdmin(user),
 		},
 		"roles":                         roles,
+		"managed_clubs":                 managedClubs,
 		"available_permission_profiles": profiles,
 		"agent_tokens":                  agentTokens,
 	}

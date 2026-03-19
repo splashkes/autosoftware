@@ -898,6 +898,17 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   justify-content: space-between;
   margin-bottom: .45rem;
 }
+.club-admin-role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .45rem;
+}
+.club-admin-invite-status {
+  display: grid;
+  justify-items: end;
+  gap: .35rem;
+}
 
 /* Alert */
 .alert { padding: .75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; }

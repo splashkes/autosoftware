@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ type accountData struct {
 	DefaultExpiryDays  int
 	IssuedAgentToken   *issuedAgentTokenView
 	AccountPermissions []accountPermissionView
+	ManagedClubs       []managedClubView
 }
 
 type accountSectionView struct {
@@ -73,6 +75,13 @@ type issuedAgentTokenView struct {
 	PermissionProfile string
 	ExpiresLabel      string
 	Permissions       []accountPermissionView
+}
+
+type managedClubView struct {
+	ID       string
+	Name     string
+	Level    string
+	AdminHref string
 }
 
 func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +216,30 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 		DefaultExpiryDays:  defaultExpiryDays,
 		IssuedAgentToken:   issuedView,
 		AccountPermissions: accountPermissions,
+		ManagedClubs:       a.managedClubsForUser(user),
 	}
+}
+
+func (a *app) managedClubsForUser(user UserIdentity) []managedClubView {
+	items := make([]managedClubView, 0)
+	for _, org := range a.store.allOrganizations() {
+		if org == nil {
+			continue
+		}
+		if !a.userHasCapability(context.Background(), user, "organization.manage", authorityScope{Kind: "organization", ID: org.ID}) {
+			continue
+		}
+		items = append(items, managedClubView{
+			ID:        org.ID,
+			Name:      org.Name,
+			Level:     org.Level,
+			AdminHref: "/admin/clubs/" + org.ID,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items
 }
 
 func accountSection(raw string) string {

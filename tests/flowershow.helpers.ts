@@ -16,6 +16,7 @@ export const FLOWERSHOW_AUTH_STATE_PATH = path.resolve(
 const FLOWERSHOW_LOCAL_ADMIN_SUB = 'sub_playwright_admin';
 const FLOWERSHOW_LOCAL_VIEWER_SUB = 'sub_playwright_viewer';
 const FLOWERSHOW_LOCAL_INTAKE_SUB = 'sub_playwright_intake';
+const FLOWERSHOW_LOCAL_CLUB_ADMIN_SUB = 'sub_playwright_club_admin';
 
 async function ensureLocalAdminRole(page: Page) {
   return ensureLocalRole(page, {
@@ -95,6 +96,29 @@ export async function loginLocalIntakeOperator(page: Page, showID = 'show_spring
         cognito_sub: FLOWERSHOW_LOCAL_INTAKE_SUB,
         email: 'playwright-intake@example.com',
         name: 'Playwright Intake',
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+export async function loginLocalClubAdmin(page: Page, organizationID = 'org_demo1') {
+  await ensureLocalRole(page, {
+    cognito_sub: FLOWERSHOW_LOCAL_CLUB_ADMIN_SUB,
+    organization_id: organizationID,
+    role: 'organization_admin',
+  });
+  const response = await page.request.post('/__test/session', {
+    headers: {
+      Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      user: {
+        subject_id: FLOWERSHOW_LOCAL_CLUB_ADMIN_SUB,
+        cognito_sub: FLOWERSHOW_LOCAL_CLUB_ADMIN_SUB,
+        email: 'playwright-club-admin@example.com',
+        name: 'Playwright Club Admin',
       },
     },
   });

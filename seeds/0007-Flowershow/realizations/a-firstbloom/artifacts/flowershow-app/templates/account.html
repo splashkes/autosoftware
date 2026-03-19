@@ -120,6 +120,27 @@
           {{end}}
         </div>
       </section>
+
+      {{if .ManagedClubs}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Club Admin</div>
+          <h2 class="card-title">Club Workspaces</h2>
+          <p class="card-meta">These clubs currently grant this account organization-scoped administration access.</p>
+          <div class="account-role-list">
+            {{range .ManagedClubs}}
+            <div class="account-role-item">
+              <div>
+                <strong>{{.Name}}</strong>
+                <div class="card-meta">{{.Level}}</div>
+              </div>
+              <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+            </div>
+            {{end}}
+          </div>
+        </div>
+      </section>
+      {{end}}
       {{end}}
 
       {{if eq .ActiveSection "shows"}}
@@ -169,6 +190,22 @@
               {{end}}
             </div>
           </details>
+          {{if .ManagedClubs}}
+          <details class="account-collapsible">
+            <summary>Club workspaces</summary>
+            <div class="account-role-list">
+              {{range .ManagedClubs}}
+              <div class="account-role-item">
+                <div>
+                  <strong>{{.Name}}</strong>
+                  <div class="card-meta">{{.Level}}</div>
+                </div>
+                <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+              </div>
+              {{end}}
+            </div>
+          </details>
+          {{end}}
         </div>
       </section>
       {{end}}

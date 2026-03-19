@@ -2570,3 +2570,121 @@ func TestScorecardAndPlacement(t *testing.T) {
 		t.Fatalf("expected entry_02 2nd, got %d", e2.Placement)
 	}
 }
+
+func TestClubAdminPageAllowsOrganizationScopedAdmin(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/clubs/{organizationID}", a.requireCapabilityPage("organization.manage", a.handleAdminClubDetail))
+
+	req := httptest.NewRequest("GET", "/admin/clubs/org_demo1", nil)
+	addRoleSession(t, a, req, UserRoleInput{
+		SubjectID:      "sub_org_admin",
+		CognitoSub:     "sub_org_admin",
+		OrganizationID: "org_demo1",
+		Role:           "organization_admin",
+	}, UserIdentity{
+		SubjectID:  "sub_org_admin",
+		CognitoSub: "sub_org_admin",
+		Email:      "club-admin@example.com",
+		Name:       "Club Admin",
+	})
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Invite Someone To Join This Club") {
+		t.Fatal("club admin page missing invite form")
+	}
+	if !strings.Contains(body, "Spring Rose Show 2025") {
+		t.Fatal("club admin page missing linked show")
+	}
+}
+
+func TestInviteIsClaimedDuringLogin(t *testing.T) {
+	a := testApp()
+	invite, err := a.store.createOrganizationInvite(OrganizationInviteInput{
+		OrganizationID:   "org_demo1",
+		FirstName:        "Jamie",
+		LastName:         "Rivera",
+		Email:            "jamie@example.com",
+		OrganizationRole: "executive",
+		PermissionRoles:  []string{"organization_admin"},
+	})
+	if err != nil {
+		t.Fatalf("create invite: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/admin/login", nil)
+	w := httptest.NewRecorder()
+	if err := a.setUserSession(w, req, UserIdentity{
+		SubjectID:  "sub_invited_user",
+		CognitoSub: "sub_invited_user",
+		Email:      "jamie@example.com",
+		Name:       "Jamie Rivera",
+	}); err != nil {
+		t.Fatalf("set user session: %v", err)
+	}
+
+	roles := a.rolesForUser(UserIdentity{
+		SubjectID:  "sub_invited_user",
+		CognitoSub: "sub_invited_user",
+		Email:      "jamie@example.com",
+		Name:       "Jamie Rivera",
+	})
+	if !containsTestString(roles, "organization_admin") {
+		t.Fatalf("expected organization_admin role after invite claim, got %#v", roles)
+	}
+
+	var claimed *OrganizationInvite
+	for _, item := range a.store.organizationInvitesByOrganization("org_demo1") {
+		if item.ID == invite.ID {
+			claimed = item
+			break
+		}
+	}
+	if claimed == nil || claimed.Status != "accepted" {
+		t.Fatalf("expected invite to be accepted, got %#v", claimed)
+	}
+	if claimed.ClaimedSubjectID != "sub_invited_user" {
+		t.Fatalf("expected claimed subject id, got %#v", claimed.ClaimedSubjectID)
+	}
+	if _, ok := a.store.personByEmail("jamie@example.com"); !ok {
+		t.Fatal("expected invite claim to create or link a person record")
+	}
+}
+
+func TestClubInviteCommandCreatesInvite(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/clubs.invites.create", a.handleAPICommand)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/clubs.invites.create", `{
+		"organization_id": "org_demo1",
+		"first_name": "Morgan",
+		"last_name": "Lee",
+		"email": "morgan@example.com",
+		"organization_role": "member",
+		"permission_roles": ["show_intake_operator"]
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"show_intake_operator"`) {
+		t.Fatal("invite command response missing permission role")
+	}
+}
+
+func containsTestString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}

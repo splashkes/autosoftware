@@ -842,7 +842,47 @@ commands:
       - activity_events
     projection: admin.dashboard
     consistency: read_your_writes
+  - name: clubs.invites.create
+    summary: Create a club invite that can grant organization-scoped access after sign-in.
+    path: /v1/commands/0007-Flowershow/clubs.invites.create
+    object_kinds:
+      - organization
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - sessions
+      - activity_events
+    projection: clubs.workspace
+    consistency: read_your_writes
 projections:
+  - name: clubs.workspace
+    summary: Private club workspace for invitation, membership context, and linked-show administration.
+    path: /v1/projections/0007-Flowershow/clubs/{id}/workspace
+    object_kinds:
+      - organization
+      - person
+      - show
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - sessions
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Authenticated club admins and agents can inspect invite state, linked shows, and current club membership context.
   - name: shows.directory
     summary: List of all shows with summary info.
     path: /v1/projections/0007-Flowershow/shows
@@ -1186,6 +1226,16 @@ ui_surfaces:
       - admin.dashboard
     mutates_commands:
       - roles.assign
+  - name: admin_club_workspace
+    summary: Private club admin screen for invite creation and organization-scoped access management.
+    path: /admin/clubs/{organizationID}
+    auth_modes:
+      - session
+      - service_token
+    uses_projections:
+      - clubs.workspace
+    mutates_commands:
+      - clubs.invites.create
 consistency:
   write_visibility: read_your_writes
   projection_freshness: materialized
