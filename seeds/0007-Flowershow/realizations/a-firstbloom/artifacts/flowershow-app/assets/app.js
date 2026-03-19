@@ -218,6 +218,7 @@ function flowershowBindCountdownButton(button) {
 
 function flowershowActivateAgentTab(widget, tabName) {
   if (!widget || !tabName) return;
+  widget.setAttribute('data-agent-active-tab', tabName);
   widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
     const active = button.dataset.agentTabTrigger === tabName;
     button.classList.toggle('is-active', active);
@@ -237,7 +238,7 @@ function flowershowBindAgentWidget(widget) {
   const activeTrigger = widget.querySelector('[data-agent-tab-trigger].is-active');
   const defaultTab = activeTrigger && activeTrigger.dataset
     ? activeTrigger.dataset.agentTabTrigger
-    : 'access';
+    : 'summary';
   flowershowActivateAgentTab(widget, defaultTab);
 
   widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {

@@ -1,6 +1,7 @@
 (function() {
   function activateAgentTab(widget, tabName) {
     if (!widget || !tabName) return;
+    widget.setAttribute('data-agent-active-tab', tabName);
     widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
       var active = button.getAttribute('data-agent-tab-trigger') === tabName;
       button.classList.toggle('is-active', active);
@@ -27,7 +28,7 @@
     if (!widget || widget.dataset.bound === 'true') return;
     widget.dataset.bound = 'true';
     var activeTrigger = widget.querySelector('[data-agent-tab-trigger].is-active');
-    var defaultTab = activeTrigger ? activeTrigger.getAttribute('data-agent-tab-trigger') : 'access';
+    var defaultTab = activeTrigger ? activeTrigger.getAttribute('data-agent-tab-trigger') : 'summary';
     activateAgentTab(widget, defaultTab);
     widget.querySelectorAll('[data-agent-tab-trigger]').forEach(function(button) {
       button.addEventListener('click', function() {

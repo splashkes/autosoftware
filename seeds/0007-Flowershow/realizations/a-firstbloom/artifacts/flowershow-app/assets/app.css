@@ -57,49 +57,10 @@ body {
   overflow: hidden;
   font-size: .88rem;
 }
-.agent-access-summary {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  padding: .95rem 1.1rem .7rem;
-  font-size: .86rem;
-  font-weight: 700;
-  letter-spacing: .01em;
-  color: var(--green);
-}
-.agent-access-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: var(--green);
-  color: white;
-  font-size: .88rem;
-  font-weight: 800;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.16);
-}
-.agent-access-summary-copy {
-  display: grid;
-  gap: .12rem;
-}
-.agent-access-summary-title {
-  font-size: .96rem;
-  font-weight: 700;
-}
-.agent-access-summary-subtitle {
-  color: var(--gray-500);
-  font-size: .78rem;
-  font-weight: 500;
-  letter-spacing: 0;
-}
 .agent-access-tabs {
   display: flex;
   gap: .55rem;
-  padding: 0 1.1rem .8rem;
+  padding: .95rem 1.1rem .75rem;
   flex-wrap: wrap;
 }
 .agent-access-tab {
@@ -126,6 +87,7 @@ body {
 }
 .agent-access-content { padding: 0 1.1rem 1rem; color: var(--gray-700); }
 .agent-access-panel[hidden] { display: none; }
+.agent-access-panel-summary .agent-access-body { margin: 0; font-size: .8rem; }
 .agent-access-lead { margin-bottom: .45rem; font-size: .86rem; }
 .agent-access-body { margin-bottom: .8rem; font-size: .82rem; color: var(--gray-500); }
 .agent-access-grid {
@@ -729,7 +691,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .summary-header { flex-direction: column; align-items: flex-start; }
   .summary-actions { justify-content: flex-start; }
   .winner-mag-card { min-height: 300px; }
-  .agent-access-summary { align-items: flex-start; }
+  .agent-access-tabs { gap: .45rem; }
 }
 
 /* Print */
