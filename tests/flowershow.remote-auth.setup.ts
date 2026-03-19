@@ -17,10 +17,12 @@ test.describe('Flowershow Remote Admin OTP Setup', () => {
 
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/admin\/login(?:$|\?)/);
-    await expect(page.getByRole('heading', { name: 'Admin Login' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible();
 
     await page.fill('#login_email', FLOWERSHOW_ADMIN_EMAIL);
-    await page.getByRole('button', { name: 'Get Email Login Code' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText(/choose sign-in method/i)).toBeVisible();
+    await page.getByRole('button', { name: 'Email Me A Login Code' }).click();
 
     await expect(page.getByText(/check your email for the sign-in code/i)).toBeVisible();
     await expect(page.getByLabel(/Login Code/i)).toBeVisible();
