@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -81,6 +82,27 @@ func hashToken(token string) string {
 
 func normalizeIdentifier(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizeStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func jsonBytes(value map[string]interface{}) []byte {
@@ -269,6 +291,95 @@ func scanSession(row rowScanner) (Session, error) {
 	item.LastSeenAt = toTimePtr(lastSeenAt)
 	item.ExpiresAt = toTimePtr(expiresAt)
 	item.EndedAt = toTimePtr(endedAt)
+	return item, nil
+}
+
+func scanAuthIdentity(row rowScanner) (AuthIdentity, error) {
+	var item AuthIdentity
+	var profile string
+	var lastSeenAt sql.NullTime
+	if err := row.Scan(
+		&item.IdentityID,
+		&item.ProviderID,
+		&item.PrincipalID,
+		&item.ProviderSubject,
+		&profile,
+		&item.LinkedAt,
+		&lastSeenAt,
+	); err != nil {
+		return AuthIdentity{}, rowNotFound(err)
+	}
+	item.Profile = parseJSON(profile)
+	item.LastSeenAt = toTimePtr(lastSeenAt)
+	return item, nil
+}
+
+func scanAuthorityBundle(row rowScanner) (AuthorityBundle, error) {
+	var item AuthorityBundle
+	var metadata string
+	var displayName sql.NullString
+	var retiredAt sql.NullTime
+	if err := row.Scan(
+		&item.BundleID,
+		&displayName,
+		&item.Capabilities,
+		&item.Status,
+		&metadata,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&retiredAt,
+	); err != nil {
+		return AuthorityBundle{}, rowNotFound(err)
+	}
+	if displayName.Valid {
+		item.DisplayName = displayName.String
+	}
+	item.Metadata = parseJSON(metadata)
+	item.RetiredAt = toTimePtr(retiredAt)
+	return item, nil
+}
+
+func scanAuthorityGrant(row rowScanner) (AuthorityGrant, error) {
+	var item AuthorityGrant
+	var metadata string
+	var grantorPrincipalID sql.NullString
+	var effectiveAt sql.NullTime
+	var expiresAt sql.NullTime
+	var supersedesGrantID sql.NullString
+	var reason sql.NullString
+	if err := row.Scan(
+		&item.GrantID,
+		&grantorPrincipalID,
+		&item.GranteePrincipalID,
+		&item.BundleID,
+		&item.CapabilitiesSnapshot,
+		&item.ScopeKind,
+		&item.ScopeID,
+		&item.DelegationMode,
+		&item.Basis,
+		&item.Status,
+		&effectiveAt,
+		&expiresAt,
+		&supersedesGrantID,
+		&reason,
+		&item.EvidenceRefs,
+		&metadata,
+		&item.CreatedAt,
+	); err != nil {
+		return AuthorityGrant{}, rowNotFound(err)
+	}
+	if grantorPrincipalID.Valid {
+		item.GrantorPrincipalID = grantorPrincipalID.String
+	}
+	item.EffectiveAt = toTimePtr(effectiveAt)
+	item.ExpiresAt = toTimePtr(expiresAt)
+	if supersedesGrantID.Valid {
+		item.SupersedesGrantID = supersedesGrantID.String
+	}
+	if reason.Valid {
+		item.Reason = reason.String
+	}
+	item.Metadata = parseJSON(metadata)
 	return item, nil
 }
 

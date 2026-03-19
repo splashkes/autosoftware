@@ -34,10 +34,16 @@ func (api *RuntimeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/runtime/health", api.handleRuntimeHealth)
 	mux.HandleFunc("POST /v1/runtime/principals", api.handleCreatePrincipal)
 	mux.HandleFunc("POST /v1/runtime/principal-identifiers", api.handleCreatePrincipalIdentifier)
+	mux.HandleFunc("POST /v1/runtime/auth-identities", api.handleBindAuthIdentity)
+	mux.HandleFunc("GET /v1/runtime/auth-identities/resolve", api.handleResolveAuthIdentity)
 	mux.HandleFunc("POST /v1/runtime/sessions", api.handleCreateSession)
 	mux.HandleFunc("GET /v1/runtime/sessions/{session_id}", api.handleGetSession)
 	mux.HandleFunc("POST /v1/runtime/auth-challenges", api.handleCreateAuthChallenge)
 	mux.HandleFunc("POST /v1/runtime/auth-challenges/{challenge_id}/consume", api.handleConsumeAuthChallenge)
+	mux.HandleFunc("POST /v1/runtime/authority/bundles", api.handleUpsertAuthorityBundle)
+	mux.HandleFunc("POST /v1/runtime/authority/grants", api.handleCreateAuthorityGrant)
+	mux.HandleFunc("GET /v1/runtime/authority/ledger/principals/{principal_id}", api.handleListAuthorityLedgerByPrincipal)
+	mux.HandleFunc("GET /v1/runtime/authority/effective/principals/{principal_id}", api.handleGetEffectiveAuthorityByPrincipal)
 	mux.HandleFunc("POST /v1/runtime/handles", api.handleAssignHandle)
 	mux.HandleFunc("GET /v1/runtime/handles/{namespace}/{handle}", api.handleResolveHandle)
 	mux.HandleFunc("POST /v1/runtime/access-links", api.handleCreateAccessLink)
@@ -111,6 +117,24 @@ func (api *RuntimeAPI) handleCreatePrincipalIdentifier(w http.ResponseWriter, r 
 	writeRuntimeResult(w, item, err)
 }
 
+func (api *RuntimeAPI) handleBindAuthIdentity(w http.ResponseWriter, r *http.Request) {
+	var input interactions.BindAuthIdentityInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	item, err := api.Service.BindAuthIdentity(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleResolveAuthIdentity(w http.ResponseWriter, r *http.Request) {
+	item, err := api.Service.ResolveAuthIdentity(
+		r.Context(),
+		r.URL.Query().Get("provider_id"),
+		r.URL.Query().Get("provider_subject"),
+	)
+	writeRuntimeResult(w, item, err)
+}
+
 func (api *RuntimeAPI) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	var input interactions.CreateSessionInput
 	if !decodeJSON(w, r, &input) {
@@ -142,6 +166,35 @@ func (api *RuntimeAPI) handleConsumeAuthChallenge(w http.ResponseWriter, r *http
 		return
 	}
 	item, err := api.Service.ConsumeAuthChallenge(r.Context(), r.PathValue("challenge_id"), payload.Verifier)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleUpsertAuthorityBundle(w http.ResponseWriter, r *http.Request) {
+	var input interactions.UpsertAuthorityBundleInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	item, err := api.Service.UpsertAuthorityBundle(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleCreateAuthorityGrant(w http.ResponseWriter, r *http.Request) {
+	var input interactions.CreateAuthorityGrantInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	item, err := api.Service.CreateAuthorityGrant(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleListAuthorityLedgerByPrincipal(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := api.Service.ListAuthorityLedgerByPrincipal(r.Context(), r.PathValue("principal_id"), limit)
+	writeRuntimeResult(w, items, err)
+}
+
+func (api *RuntimeAPI) handleGetEffectiveAuthorityByPrincipal(w http.ResponseWriter, r *http.Request) {
+	item, err := api.Service.GetEffectiveAuthorityByPrincipal(r.Context(), r.PathValue("principal_id"))
 	writeRuntimeResult(w, item, err)
 }
 
