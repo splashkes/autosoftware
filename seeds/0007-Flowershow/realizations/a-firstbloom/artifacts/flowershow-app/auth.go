@@ -595,25 +595,14 @@ func (a *app) currentRoles(r *http.Request) []string {
 }
 
 func (a *app) roleAssignmentsForUser(user UserIdentity) []*UserRole {
-	keys := []string{}
-	if key := strings.TrimSpace(user.SubjectID); key != "" {
-		keys = append(keys, key)
+	if a.authority == nil || strings.TrimSpace(user.subjectLookupKey()) == "" {
+		return nil
 	}
-	if key := strings.TrimSpace(user.CognitoSub); key != "" && key != strings.TrimSpace(user.SubjectID) {
-		keys = append(keys, key)
+	roles, err := a.authority.RoleAssignmentsForUser(context.Background(), user)
+	if err != nil {
+		return nil
 	}
-	seen := make(map[string]struct{})
-	out := make([]*UserRole, 0)
-	for _, key := range keys {
-		for _, role := range a.store.rolesBySubject(key) {
-			if _, ok := seen[role.ID]; ok {
-				continue
-			}
-			seen[role.ID] = struct{}{}
-			out = append(out, role)
-		}
-	}
-	return out
+	return roles
 }
 
 func (a *app) rolesForUser(user UserIdentity) []string {
@@ -621,8 +610,10 @@ func (a *app) rolesForUser(user UserIdentity) []string {
 	for _, role := range a.roleAssignmentsForUser(user) {
 		roles[role.Role] = struct{}{}
 	}
-	if user.Email != "" && a.bootstrapAdmins[strings.ToLower(user.Email)] {
-		roles["admin"] = struct{}{}
+	if a.authority != nil && strings.TrimSpace(user.SubjectID) != "" {
+		if a.userHasCapability(context.Background(), user, "admin.dashboard.read", authorityScope{Kind: flowershowAuthorityScopeSeed, ID: flowershowAuthorityScopeSeedID}) {
+			roles["admin"] = struct{}{}
+		}
 	}
 	out := make([]string, 0, len(roles))
 	for role := range roles {
@@ -632,6 +623,13 @@ func (a *app) rolesForUser(user UserIdentity) []string {
 }
 
 func (a *app) hasRole(r *http.Request, role string) bool {
+	user, ok := a.currentUser(r)
+	if !ok {
+		return false
+	}
+	if a.authority != nil && role == "admin" && a.userHasCapability(r.Context(), *user, "admin.dashboard.read", authorityScope{Kind: flowershowAuthorityScopeSeed, ID: flowershowAuthorityScopeSeedID}) {
+		return true
+	}
 	for _, candidate := range a.currentRoles(r) {
 		if candidate == role {
 			return true
@@ -750,21 +748,6 @@ func (a *app) clearPendingAuth(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   cookieSecure(r),
 	})
-}
-
-func bootstrapAdminMap() map[string]bool {
-	raw := strings.TrimSpace(os.Getenv("AS_COGNITO_ADMIN_EMAILS"))
-	if raw == "" {
-		return map[string]bool{}
-	}
-	out := make(map[string]bool)
-	for _, email := range strings.Split(raw, ",") {
-		email = strings.ToLower(strings.TrimSpace(email))
-		if email != "" {
-			out[email] = true
-		}
-	}
-	return out
 }
 
 func (a *app) loginPageDataForState(errMessage, infoMessage, currentEmail string, passwordStep bool, pending *pendingAuthState) adminLoginData {
@@ -1061,11 +1044,17 @@ type roleManagementData struct {
 
 func (a *app) handleRoleManagement(w http.ResponseWriter, r *http.Request) {
 	user, _ := a.currentUser(r)
+	roles := []*UserRole{}
+	if a.authority != nil {
+		if items, err := a.authority.AllRoleAssignments(r.Context()); err == nil {
+			roles = items
+		}
+	}
 	a.render(w, "admin_roles.html", roleManagementData{
 		Title:       "Role Management",
 		CurrentPath: "/admin/roles",
 		User:        user,
-		Roles:       a.store.allUserRoles(),
+		Roles:       roles,
 		Shows:       a.store.allShows(),
 		Orgs:        a.store.allOrganizations(),
 	})
@@ -1076,12 +1065,21 @@ func (a *app) handleRoleAssign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err := a.store.assignUserRole(UserRoleInput{
+	if a.authority == nil {
+		http.Error(w, "runtime authority unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Error(w, "signed-in user required", http.StatusUnauthorized)
+		return
+	}
+	_, err := a.authority.AssignRole(r.Context(), UserRoleInput{
 		CognitoSub:     r.FormValue("cognito_sub"),
 		OrganizationID: r.FormValue("organization_id"),
 		ShowID:         r.FormValue("show_id"),
 		Role:           r.FormValue("role"),
-	})
+	}, user.SubjectID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
