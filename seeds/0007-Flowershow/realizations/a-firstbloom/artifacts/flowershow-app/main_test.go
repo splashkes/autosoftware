@@ -833,6 +833,7 @@ func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
 	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
 	mux.HandleFunc("POST /account/agent-tokens/{tokenID}/revoke", a.requireSignedInPage(a.handleAccountTokenRevoke))
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/board", a.handleAPIShowBoard)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/ledger/{objectID}", a.handleAPILedger)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
@@ -865,6 +866,17 @@ func TestAdminScopedAgentTokensRespectCapabilitiesAndRevocation(t *testing.T) {
 	mux.ServeHTTP(workspaceW, workspaceReq)
 	if workspaceW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", workspaceW.Code, workspaceW.Body.String())
+	}
+
+	boardReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/board", nil)
+	boardReq.Header.Set("Authorization", "Bearer "+operatorToken)
+	boardW := httptest.NewRecorder()
+	mux.ServeHTTP(boardW, boardReq)
+	if boardW.Code != http.StatusOK {
+		t.Fatalf("expected 200 board, got %d: %s", boardW.Code, boardW.Body.String())
+	}
+	if !strings.Contains(boardW.Body.String(), "board_divisions") {
+		t.Fatal("board projection missing board_divisions")
 	}
 
 	ledgerReq := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/ledger/show_spring2025", nil)

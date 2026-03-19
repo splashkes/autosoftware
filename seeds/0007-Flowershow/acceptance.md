@@ -45,6 +45,8 @@ The system is complete when:
 - Control panel for live show operations
 - Manage judges, classes, entries, media, and winners per class
 - The same operator workspace is used for show setup and live event admin
+- The operator workspace clearly supports setup, intake, floor correction,
+  scoring, and board inspection as one coherent event flow
 - Operators can move an entry to a different class when judging corrects it
 - Operators can change the assigned entrant on an entry
 - Operators can delete a mistaken entry when it has not progressed into scoring

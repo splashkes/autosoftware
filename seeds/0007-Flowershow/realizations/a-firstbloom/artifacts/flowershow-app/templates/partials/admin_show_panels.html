@@ -1,9 +1,186 @@
+{{define "admin_setup_panel"}}
+<div class="workflow-panel-grid">
+  <section class="workflow-lane">
+    <div class="workflow-lane-header">
+      <h3>Setup basics</h3>
+      <p>Keep the show profile, assigned judges, and public-facing credits accurate before and during the event.</p>
+    </div>
+    {{template "admin_info_panel" .}}
+  </section>
+  <section class="workflow-lane">
+    <div class="workflow-lane-header">
+      <h3>Schedule and class order</h3>
+      <p>Use the same workspace to create divisions, sections, and classes, then tighten the ordering before intake begins.</p>
+    </div>
+    {{template "admin_schedule_panel" .}}
+  </section>
+</div>
+{{end}}
+
+{{define "admin_intake_panel"}}
+<div class="workflow-panel-grid">
+  <section class="workflow-lane workflow-lane-wide">
+    <div class="workflow-lane-header">
+      <h3>Rapid intake</h3>
+      <p>Start from the class, link the entrant from host-club members or guests, and keep moving even if photos come later.</p>
+    </div>
+    {{template "admin_entry_intake_form" .}}
+  </section>
+  <section class="workflow-lane">
+    <div class="workflow-lane-header">
+      <h3>Needs photos</h3>
+      <p>These entries are in the show but still need media. Another operator can complete them later.</p>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        {{if .EntriesNeedingPhotos}}
+        <div class="intake-list">
+          {{range .EntriesNeedingPhotos}}
+          <div class="intake-item">
+            <div>
+              <strong>{{.Entry.Name}}</strong>
+              <p class="card-meta">{{if .Class}}{{.Class.ClassNumber}} · {{.Class.Title}}{{end}}{{if .Person}} · {{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
+            </div>
+            <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-intake-panel" class="media-add-form media-add-form-inline">
+              <input type="file" id="intake-media-input-{{.Entry.ID}}" name="media" class="visually-hidden" accept="image/jpeg,image/png,image/webp" capture="environment" required>
+              <button type="button" class="media-add-button media-add-button-sm" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('intake-media-input-{{.Entry.ID}}').click()">
+                <span class="media-add-plus">+</span>
+                <span class="media-add-badge">+</span>
+              </button>
+            </form>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="empty-state">Every current entry already has at least one photo.</p>
+        {{end}}
+      </div>
+    </div>
+  </section>
+  <section class="workflow-lane">
+    <div class="workflow-lane-header">
+      <h3>Recent intake</h3>
+      <p>The newest entries stay visible here so operators can confirm names, classes, and photo follow-up.</p>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        {{if .RecentEntries}}
+        <div class="intake-list">
+          {{range .RecentEntries}}
+          <div class="intake-item">
+            <div>
+              <strong>{{.Entry.Name}}</strong>
+              <p class="card-meta">{{if .Class}}{{.Class.ClassNumber}} · {{.Class.Title}}{{end}}{{if .Person}} · {{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
+            </div>
+            <div class="tag-list">
+              {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="empty-state">No entries yet.</p>
+        {{end}}
+      </div>
+    </div>
+  </section>
+</div>
+{{end}}
+
+{{define "admin_floor_panel"}}
+<div class="workflow-panel-grid">
+  <section class="workflow-lane workflow-lane-wide">
+    <div class="workflow-lane-header">
+      <h3>Floor corrections</h3>
+      <p>Use this lane when judges correct classes, when entrant assignments need fixing, or when mistaken entries must be removed.</p>
+    </div>
+    {{template "admin_entry_floor_table" .}}
+  </section>
+  <section class="workflow-lane">
+    <div class="workflow-lane-header">
+      <h3>Placement control</h3>
+      <p>Set placements quickly without leaving the live operator workspace.</p>
+    </div>
+    {{template "admin_winners_panel" .}}
+  </section>
+</div>
+{{end}}
+
+{{define "admin_board_panel"}}
+<div class="workflow-lane-header">
+  <h3>Full show board</h3>
+  <p>All classes and entries in one place, with thumbnail and workflow status cues for missing photos, placements, and suppression.</p>
+</div>
+<div class="board-summary-grid">
+  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.TotalEntries}}</span><span class="board-summary-label">entries</span></div>
+  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.ClassesWithEntries}}</span><span class="board-summary-label">classes with entries</span></div>
+  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.MissingPhotos}}</span><span class="board-summary-label">needing photos</span></div>
+  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.PlacedEntries}}</span><span class="board-summary-label">placed</span></div>
+</div>
+{{if .BoardDivisions}}
+<div class="board-division-stack">
+  {{range .BoardDivisions}}
+  <section class="board-division">
+    <div class="board-division-header">
+      <h3>Division {{.Division.Code}}: {{.Division.Title}}</h3>
+      <span class="badge badge-muted">{{.Division.Domain}}</span>
+    </div>
+    {{range .Sections}}
+    <div class="board-section">
+      <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+      <div class="board-class-grid">
+        {{range .Classes}}
+        <article class="board-class-card">
+          <header class="board-class-header">
+            <div>
+              <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
+              <p class="card-meta">{{.EntryCount}} entries · {{.MissingPhotoCount}} needing photos · {{.PlacedCount}} placed</p>
+            </div>
+          </header>
+          {{if .Entries}}
+          <div class="board-entry-grid">
+            {{range .Entries}}
+            {{$entry := .}}
+            <div class="board-entry-card {{placementClass .Entry.Placement}}">
+              <div class="board-entry-thumb">
+                {{with primaryMedia .Media}}
+                <img src="{{bp}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="board-entry-image">
+                {{else}}
+                <div class="board-entry-placeholder">No photo</div>
+                {{end}}
+              </div>
+              <div class="board-entry-body">
+                <strong>{{.Entry.Name}}</strong>
+                <p class="card-meta">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
+                <div class="tag-list">
+                  {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+                </div>
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="empty-state">No entries in this class yet.</p>
+          {{end}}
+        </article>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </section>
+  {{end}}
+</div>
+{{else}}
+<p class="empty-state">Create a schedule to view the board.</p>
+{{end}}
+{{end}}
+
 {{define "admin_info_panel"}}
 <div class="card-grid">
   <div class="card">
     <div class="card-body">
       <h3 class="card-title">Show Profile</h3>
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}" hx-post="{{bp}}/admin/shows/{{.Show.ID}}" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}" hx-post="{{bp}}/admin/shows/{{.Show.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
         <div class="form-group">
           <label>Show Name</label>
           <input type="text" name="name" value="{{.Show.Name}}" class="form-input" required>
@@ -53,7 +230,7 @@
       {{end}}
 
       {{if .AvailableJudges}}
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
         <select name="person_id" class="form-input" required>
           <option value="">Select person...</option>
           {{range .AvailableJudges}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
@@ -80,7 +257,7 @@
           </div>
           <p>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Credit.DisplayName}}{{end}}</p>
           {{if .Credit.Notes}}<p class="card-meta">{{.Credit.Notes}}</p>{{end}}
-          <form method="POST" action="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-post="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-target="#admin-info-panel" hx-swap="innerHTML" class="inline">
+          <form method="POST" action="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-post="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="inline">
             <input type="hidden" name="show_id" value="{{$.Show.ID}}">
             <button type="submit" class="btn btn-outline btn-sm">Remove</button>
           </form>
@@ -91,7 +268,7 @@
       <p class="empty-state">No show credits yet.</p>
       {{end}}
 
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-info-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
         <div class="form-row">
           <div class="form-group">
             <label>Credit Label</label>
@@ -130,7 +307,7 @@
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">{{if .Schedule}}Schedule Governance{{else}}Create Schedule{{end}}</h3>
-    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form">
+    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
       <div class="form-row">
         <div class="form-group">
           <label>Effective Standard Edition</label>
@@ -181,7 +358,7 @@
       </div>
       <details class="add-form" style="margin-top:.5rem;">
         <summary class="btn btn-outline btn-sm">Edit Class</summary>
-        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}" hx-post="{{bp}}/admin/classes/{{.ID}}" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}" hx-post="{{bp}}/admin/classes/{{.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
           <input type="hidden" name="show_id" value="{{$.Show.ID}}">
           <input type="hidden" name="section_id" value="{{.SectionID}}">
           <input type="text" name="class_number" value="{{.ClassNumber}}" class="form-input form-sm" required>
@@ -202,7 +379,7 @@
     {{end}}
     <details class="add-form">
       <summary class="btn btn-outline btn-sm">+ Add Class</summary>
-      <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+      <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
         <input type="hidden" name="section_id" value="{{.Section.ID}}">
         <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
         <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1" min="1">
@@ -222,7 +399,7 @@
   {{end}}
   <details class="add-form">
     <summary class="btn btn-outline btn-sm">+ Add Section</summary>
-    <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+    <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
       <input type="hidden" name="division_id" value="{{.Division.ID}}">
       <input type="text" name="code" placeholder="Code" class="form-input form-sm">
       <input type="text" name="title" placeholder="Section title" class="form-input" required>
@@ -235,7 +412,7 @@
 
 <details class="add-form">
   <summary class="btn btn-outline btn-sm">+ Add Division</summary>
-  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-schedule-panel" hx-swap="innerHTML" class="form form-compact">
+  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
     <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
     <input type="text" name="code" placeholder="Code" class="form-input form-sm">
     <input type="text" name="title" placeholder="Division title" class="form-input" required>
@@ -252,11 +429,11 @@
 {{end}}
 {{end}}
 
-{{define "admin_entries_panel"}}
+{{define "admin_entry_intake_form"}}
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">Add Entry</h3>
-    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-intake-panel" hx-swap="innerHTML" class="form form-compact">
       <div class="form-row">
         <div class="form-group">
           <label>Class</label>
@@ -288,7 +465,9 @@
     </form>
   </div>
 </div>
+{{end}}
 
+{{define "admin_entry_floor_table"}}
 <h3>All Entries ({{len .Entries}})</h3>
 {{if .Entries}}
 <table class="table">
@@ -304,7 +483,7 @@
       <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
       <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
       <td>
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="inline">
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline">
           <input type="hidden" name="suppressed" value="{{if .Entry.Suppressed}}false{{else}}true{{end}}">
           <button type="submit" class="btn btn-outline btn-sm">{{if .Entry.Suppressed}}Restore{{else}}Suppress{{end}}</button>
         </form>
@@ -319,7 +498,7 @@
           {{end}}
         </div>
         {{end}}
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-entries-panel" class="media-add-form" style="margin-top:.5rem;">
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form" style="margin-top:.5rem;">
           <input
             type="file"
             id="media-input-{{.Entry.ID}}"
@@ -351,7 +530,7 @@
       <td>
         <details class="add-form">
           <summary class="btn btn-outline btn-sm">Move</summary>
-          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
             <select name="class_id" class="form-input" required>
               {{range $.Classes}}<option value="{{.ID}}" {{if eq .ID $currentEntry.ClassID}}selected{{end}}>{{.ClassNumber}}: {{.Title}}</option>{{end}}
             </select>
@@ -361,7 +540,7 @@
         </details>
         <details class="add-form" style="margin-top:.5rem;">
           <summary class="btn btn-outline btn-sm">Entrant</summary>
-          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="form form-compact">
+          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
             <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
             <select id="entrant-select-{{$currentEntry.ID}}" name="person_id" class="form-input" required>
               {{range $.EntrantCandidates}}<option value="{{.Person.ID}}" {{if eq .Person.ID $currentEntry.PersonID}}selected{{end}}>{{.Label}}</option>{{end}}
@@ -369,7 +548,7 @@
             <button type="submit" class="btn btn-primary btn-sm">Change Entrant</button>
           </form>
         </details>
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-entries-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
+        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
           <button type="submit" class="btn btn-outline btn-sm">Delete</button>
         </form>
       </td>
@@ -382,13 +561,24 @@
 {{end}}
 {{end}}
 
+{{define "admin_entries_panel"}}
+<div class="workflow-panel-grid">
+  <section class="workflow-lane">
+    {{template "admin_entry_intake_form" .}}
+  </section>
+  <section class="workflow-lane workflow-lane-wide">
+    {{template "admin_entry_floor_table" .}}
+  </section>
+</div>
+{{end}}
+
 {{define "admin_winners_panel"}}
 <h3>Set Placements</h3>
 {{if .Entries}}
 {{range .Entries}}
 <div class="winner-row">
   <span class="winner-name">{{.Entry.Name}} {{if .Class}}<span class="card-meta">({{.Class.ClassNumber}})</span>{{end}}</span>
-  <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-winners-panel" hx-swap="innerHTML" class="form form-inline">
+  <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-inline">
     <select name="placement" class="form-input form-sm">
       <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
       <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>

@@ -9,10 +9,14 @@ import (
 
 func adminSectionTemplate(section string) (string, bool) {
 	templates := map[string]string{
-		"info":       "admin_info_panel",
-		"schedule":   "admin_schedule_panel",
-		"entries":    "admin_entries_panel",
-		"winners":    "admin_winners_panel",
+		"setup":      "admin_setup_panel",
+		"intake":     "admin_intake_panel",
+		"floor":      "admin_floor_panel",
+		"board":      "admin_board_panel",
+		"info":       "admin_setup_panel",
+		"schedule":   "admin_setup_panel",
+		"entries":    "admin_floor_panel",
+		"winners":    "admin_board_panel",
 		"scoring":    "admin_scoring_panel",
 		"governance": "admin_governance_panel",
 	}

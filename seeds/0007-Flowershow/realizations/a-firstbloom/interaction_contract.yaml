@@ -920,6 +920,30 @@ projections:
           - private_payload
           - runtime_only
         summary: Authenticated operators and agents can search host-organization members and guests for fast entrant assignment.
+  - name: shows.board
+    summary: Private full-show board projection with class-grouped entries and workflow status cues.
+    path: /v1/projections/0007-Flowershow/shows/{id}/board
+    object_kinds:
+      - show
+      - show_class
+      - entry
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+      - sessions
+    freshness: runtime
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Authenticated operators and agents can inspect the full show board, including class-grouped entries, photo gaps, and live floor workflow status.
   - name: entries.list
     summary: Entries for a show or class.
     path: /v1/projections/0007-Flowershow/entries

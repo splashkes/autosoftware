@@ -191,6 +191,18 @@ test.describe('Flowershow API', () => {
     expect(workspaceText).toContain(showName);
     expect(workspaceText).not.toContain('assistant_goal');
 
+    const board = await request.get(
+      `/v1/projections/0007-Flowershow/shows/${show.id}/board`,
+      {
+        headers: {
+          Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+        },
+      },
+    );
+    expect(board.ok()).toBeTruthy();
+    const boardText = await board.text();
+    expect(boardText).toContain('API Entry');
+
     const classDetail = await request.get(
       `/v1/projections/0007-Flowershow/classes/${classBody.id}`,
       {

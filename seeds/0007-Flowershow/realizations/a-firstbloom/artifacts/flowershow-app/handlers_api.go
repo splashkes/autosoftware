@@ -59,6 +59,18 @@ func (a *app) handleAPIShowWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, data)
 }
 
+func (a *app) handleAPIShowBoard(w http.ResponseWriter, r *http.Request) {
+	if !a.authorizeAPICapability(w, r, "shows.workspace.read", "Use an operator session, a Bearer service token, or an account-issued agent token with workspace access.") {
+		return
+	}
+	show, ok := a.apiShowByIdentifier(r.PathValue("id"))
+	if !ok {
+		a.writeAPIError(w, r, http.StatusNotFound, "show_not_found", "Show not found.", "Use a stable show id from the shows directory projection.", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.showBoardProjection(show.ID))
+}
+
 func (a *app) handleAPIShowPeopleLookup(w http.ResponseWriter, r *http.Request) {
 	if !a.authorizeAPICapability(w, r, "shows.workspace.read", "Use a signed-in operator session, a Bearer service token, or an account-issued agent token with private workspace access.") {
 		return
@@ -912,6 +924,21 @@ func (a *app) showDetailProjection(show *Show, includePrivate bool) map[string]a
 		}())
 	}
 	return payload
+}
+
+func (a *app) showBoardProjection(showID string) map[string]any {
+	show, ok := a.store.showByID(showID)
+	if !ok {
+		return map[string]any{}
+	}
+	entries := a.entryViewsForShow(show.ID, true)
+	boardDivisions, stats := a.boardDataForShow(show.ID, entries)
+	return map[string]any{
+		"show":            show,
+		"board_divisions": boardDivisions,
+		"board_stats":     stats,
+		"entries":         entries,
+	}
 }
 
 func (a *app) divisionViewsForShow(showID string) (*ShowSchedule, []*divisionView) {

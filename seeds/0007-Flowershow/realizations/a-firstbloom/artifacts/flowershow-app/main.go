@@ -181,6 +181,7 @@ func main() {
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/board", a.handleAPIShowBoard)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/people.lookup", a.handleAPIShowPeopleLookup)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries", a.handleAPIEntries)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
@@ -349,6 +350,69 @@ var templateFuncMap = template.FuncMap{
 		}
 		return template.HTML(`<span class="badge ` + cls + `">` + template.HTMLEscapeString(status) + `</span>`)
 	},
+	"entriesForClass": func(entries []*entryView, classID string) []*entryView {
+		out := make([]*entryView, 0)
+		for _, entry := range entries {
+			if entry != nil && entry.Entry != nil && entry.Entry.ClassID == classID {
+				out = append(out, entry)
+			}
+		}
+		return out
+	},
+	"primaryMedia": func(media []*Media) *Media {
+		for _, item := range media {
+			if item != nil && item.MediaType == "photo" {
+				return item
+			}
+		}
+		if len(media) > 0 {
+			return media[0]
+		}
+		return nil
+	},
+	"entryWorkflowBadges": func(entry *entryView) []string {
+		if entry == nil || entry.Entry == nil {
+			return nil
+		}
+		out := make([]string, 0, 4)
+		if len(entry.Media) == 0 {
+			out = append(out, "needs photo")
+		}
+		if entry.Entry.Suppressed {
+			out = append(out, "suppressed")
+		}
+		if entry.Entry.Placement > 0 {
+			switch entry.Entry.Placement {
+			case 1:
+				out = append(out, "1st")
+			case 2:
+				out = append(out, "2nd")
+			case 3:
+				out = append(out, "3rd")
+			}
+		} else if entry.Entry.Points > 0 {
+			out = append(out, "scored")
+		}
+		return out
+	},
+	"entryCountWithPhotosMissing": func(entries []*entryView) int {
+		count := 0
+		for _, entry := range entries {
+			if entry != nil && len(entry.Media) == 0 {
+				count++
+			}
+		}
+		return count
+	},
+	"entryCountPlaced": func(entries []*entryView) int {
+		count := 0
+		for _, entry := range entries {
+			if entry != nil && entry.Entry != nil && entry.Entry.Placement > 0 {
+				count++
+			}
+		}
+		return count
+	},
 }
 
 func agentRegistryLinks(data any) []agentAccessLink {
@@ -391,6 +455,7 @@ func agentRegistryLinks(data any) []agentAccessLink {
 	if showID != "" {
 		add("Show projection", "/v1/projections/0007-Flowershow/shows/"+showID)
 		add("Show workspace projection", "/v1/projections/0007-Flowershow/shows/"+showID+"/workspace")
+		add("Show board projection", "/v1/projections/0007-Flowershow/shows/"+showID+"/board")
 		add("Show ledger", "/v1/projections/0007-Flowershow/ledger/"+showID)
 	}
 	if classID != "" {

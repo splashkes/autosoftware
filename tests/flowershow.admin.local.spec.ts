@@ -97,7 +97,7 @@ test.describe('Flowershow Admin Local', () => {
       .locator('form[action$="/judges"] button:has-text("Assign Judge")')
       .click();
 
-    await expect(page.locator('#admin-info-panel')).toContainText('assigned');
+    await expect(page.locator('#admin-setup-panel')).toContainText('assigned');
   });
 
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
@@ -119,13 +119,12 @@ test.describe('Flowershow Admin Local', () => {
       .getAttribute('href');
     expect(publicPath).toBeTruthy();
 
-    await page.getByRole('button', { name: 'Schedule' }).click();
     const scheduleForm = page.locator('form[action$="/schedule"]');
     await scheduleForm.locator('input[name="notes"]').fill(
       'Local test schedule with HTMX parity coverage.',
     );
     await scheduleForm.getByRole('button').click();
-    await expect(page.locator('#admin-schedule-panel')).toContainText(
+    await expect(page.locator('#admin-setup-panel')).toContainText(
       'Update Schedule Governance',
     );
 
@@ -135,7 +134,7 @@ test.describe('Flowershow Admin Local', () => {
     await divisionForm.locator('input[name="title"]').fill('Playwright Division');
     await divisionForm.locator('select[name="domain"]').selectOption('horticulture');
     await divisionForm.locator('button:has-text("Add Division")').click();
-    await expect(page.locator('#admin-schedule-panel')).toContainText(
+    await expect(page.locator('#admin-setup-panel')).toContainText(
       'Playwright Division',
     );
 
@@ -144,7 +143,7 @@ test.describe('Flowershow Admin Local', () => {
     await sectionForm.locator('input[name="code"]').fill('A');
     await sectionForm.locator('input[name="title"]').fill('Playwright Section');
     await sectionForm.locator('button:has-text("Add Section")').click();
-    await expect(page.locator('#admin-schedule-panel')).toContainText(
+    await expect(page.locator('#admin-setup-panel')).toContainText(
       'Playwright Section',
     );
 
@@ -157,11 +156,11 @@ test.describe('Flowershow Admin Local', () => {
       'Browser-created class for parity coverage.',
     );
     await classForm.locator('button:has-text("Add Class")').click();
-    await expect(page.locator('#admin-schedule-panel')).toContainText(
+    await expect(page.locator('#admin-setup-panel')).toContainText(
       'Playwright Bloom Class',
     );
 
-    await page.getByRole('button', { name: 'Entries' }).click();
+    await page.getByRole('button', { name: 'Intake' }).click();
     const entryForm = page.locator('form[action$="/entries"]');
     await entryForm
       .locator('select[name="class_id"]')
@@ -170,19 +169,22 @@ test.describe('Flowershow Admin Local', () => {
     await entryForm.locator('input[name="name"]').fill('Playwright Peace');
     await entryForm.locator('input[name="notes"]').fill('Created in Playwright.');
     await entryForm.locator('button:has-text("Add Entry")').click();
-    await expect(page.locator('#admin-entries-panel')).toContainText(
+    await expect(page.locator('#admin-intake-panel')).toContainText(
       'Playwright Peace',
     );
+
+    await page.getByRole('button', { name: 'Board' }).click();
+    await expect(page.locator('#admin-board-panel')).toContainText('Playwright Peace');
 
     await page.goto(publicPath!);
     await expect(page.locator('body')).toContainText('Playwright Peace');
     await expectAgentPath(page, publicPath!);
 
     await page.goto(adminShowPath);
-    await page.getByRole('button', { name: 'Entries' }).click();
+    await page.getByRole('button', { name: 'Floor' }).click();
     const entryRow = page.locator('tr', { hasText: 'Playwright Peace' });
     await entryRow.locator('button:has-text("Suppress")').click();
-    await expect(page.locator('#admin-entries-panel')).toContainText('suppressed');
+    await expect(page.locator('#admin-floor-panel')).toContainText('suppressed');
 
     await page.goto(publicPath!);
     await expect(page.locator('body')).not.toContainText('Playwright Peace');
@@ -196,7 +198,7 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
 
-    await page.getByRole('button', { name: 'Entries' }).click();
+    await page.getByRole('button', { name: 'Intake' }).click();
     const filter = page.locator('[data-person-filter-input]').first();
     await expect(filter).toBeVisible();
     await filter.fill('susan');
