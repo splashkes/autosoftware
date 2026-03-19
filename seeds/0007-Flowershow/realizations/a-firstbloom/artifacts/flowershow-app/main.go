@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -255,9 +256,17 @@ func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 var globalBasePath = strings.TrimSuffix(strings.TrimSpace(os.Getenv("AS_PATH_PREFIX")), "/")
 var assetVersion = time.Now().UTC().Format("20060102150405")
 
+type agentAccessLink struct {
+	Label string
+	Href  string
+}
+
 var templateFuncMap = template.FuncMap{
 	"bp":           func() string { return globalBasePath },
 	"assetVersion": func() string { return assetVersion },
+	"agentRegistryLinks": func(data any) []agentAccessLink {
+		return agentRegistryLinks(data)
+	},
 	"placementLabel": func(p int) string {
 		switch p {
 		case 1:
@@ -311,6 +320,161 @@ var templateFuncMap = template.FuncMap{
 		}
 		return template.HTML(`<span class="badge ` + cls + `">` + template.HTMLEscapeString(status) + `</span>`)
 	},
+}
+
+func agentRegistryLinks(data any) []agentAccessLink {
+	currentPath := templateCurrentPath(data)
+	showID := templateNestedObjectID(data, "Show")
+	classID := templateNestedObjectID(data, "Class")
+	entryID := templateNestedObjectID(data, "Entry")
+	taxonID := templateNestedObjectID(data, "Taxon")
+	personID := templateNestedObjectID(data, "Person")
+
+	links := make([]agentAccessLink, 0, 8)
+	seen := make(map[string]struct{})
+	add := func(label, href string) {
+		href = strings.TrimSpace(href)
+		if href == "" {
+			return
+		}
+		if _, ok := seen[href]; ok {
+			return
+		}
+		seen[href] = struct{}{}
+		links = append(links, agentAccessLink{Label: label, Href: href})
+	}
+
+	switch {
+	case currentPath == "/" || currentPath == "/browse":
+		add("Shows directory projection", "/v1/projections/0007-Flowershow/shows")
+	case currentPath == "/account" || currentPath == "/profile":
+		add("Account projection", "/v1/projections/0007-Flowershow/account")
+	case currentPath == "/taxonomy":
+		add("Taxonomy projection", "/v1/projections/0007-Flowershow/taxonomy")
+	case currentPath == "/leaderboard":
+		add("Leaderboard projection", "/v1/projections/0007-Flowershow/leaderboard")
+	case currentPath == "/admin":
+		add("Admin dashboard projection", "/v1/projections/0007-Flowershow/admin/dashboard")
+	case strings.HasPrefix(currentPath, "/admin/"):
+		add("Admin dashboard projection", "/v1/projections/0007-Flowershow/admin/dashboard")
+	}
+
+	if showID != "" {
+		add("Show projection", "/v1/projections/0007-Flowershow/shows/"+showID)
+		add("Show workspace projection", "/v1/projections/0007-Flowershow/shows/"+showID+"/workspace")
+		add("Show ledger", "/v1/projections/0007-Flowershow/ledger/"+showID)
+	}
+	if classID != "" {
+		add("Class projection", "/v1/projections/0007-Flowershow/classes/"+classID)
+		add("Class ledger", "/v1/projections/0007-Flowershow/ledger/"+classID)
+	}
+	if entryID != "" {
+		add("Entry projection", "/v1/projections/0007-Flowershow/entries/"+entryID)
+		add("Entry ledger", "/v1/projections/0007-Flowershow/ledger/"+entryID)
+	}
+	if taxonID != "" {
+		add("Taxonomy projection", "/v1/projections/0007-Flowershow/taxonomy")
+		add("Taxon ledger", "/v1/projections/0007-Flowershow/ledger/"+taxonID)
+	}
+	if personID != "" {
+		add("Person ledger", "/v1/projections/0007-Flowershow/ledger/"+personID)
+	}
+	if len(links) == 0 {
+		add("Shows directory projection", "/v1/projections/0007-Flowershow/shows")
+		add("Contract detail", flowershowContractSelf)
+	}
+
+	return links
+}
+
+func templateCurrentPath(data any) string {
+	return templateStringField(data, "CurrentPath")
+}
+
+func templateNestedObjectID(data any, fieldName string) string {
+	value, ok := templateFieldValue(data, fieldName)
+	if !ok {
+		return ""
+	}
+	if id, ok := templateValueStringField(value, "ID"); ok {
+		return id
+	}
+	return ""
+}
+
+func templateStringField(data any, fieldName string) string {
+	value, ok := templateFieldValue(data, fieldName)
+	if !ok {
+		return ""
+	}
+	if str, ok := templateValueAsString(value); ok {
+		return strings.TrimSpace(str)
+	}
+	return ""
+}
+
+func templateFieldValue(data any, fieldName string) (reflect.Value, bool) {
+	value := reflect.ValueOf(data)
+	for value.IsValid() && value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return reflect.Value{}, false
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() {
+		return reflect.Value{}, false
+	}
+	switch value.Kind() {
+	case reflect.Struct:
+		field := value.FieldByName(fieldName)
+		if !field.IsValid() {
+			return reflect.Value{}, false
+		}
+		return field, true
+	case reflect.Map:
+		for _, key := range value.MapKeys() {
+			if key.Kind() == reflect.String && key.String() == fieldName {
+				return value.MapIndex(key), true
+			}
+		}
+	}
+	return reflect.Value{}, false
+}
+
+func templateValueStringField(value reflect.Value, fieldName string) (string, bool) {
+	for value.IsValid() && value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return "", false
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() || value.Kind() != reflect.Struct {
+		return "", false
+	}
+	field := value.FieldByName(fieldName)
+	if !field.IsValid() {
+		return "", false
+	}
+	return templateValueAsString(field)
+}
+
+func templateValueAsString(value reflect.Value) (string, bool) {
+	for value.IsValid() && value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return "", false
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() {
+		return "", false
+	}
+	if value.Kind() == reflect.Interface {
+		return templateValueAsString(value.Elem())
+	}
+	if value.Kind() != reflect.String {
+		return "", false
+	}
+	return value.String(), true
 }
 
 func parseTemplates() map[string]*template.Template {

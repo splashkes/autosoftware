@@ -4,8 +4,11 @@ import { expectAgentPath, loginLocalAdmin, openAgentAccess } from './flowershow.
 test.describe('Flowershow Agent Widget', () => {
   test('widget exposes contract links on public pages', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('footer + section.agent-access-shell')).toBeVisible();
     await openAgentAccess(page);
-    await expect(page.getByText('This realization exposes a live contract')).toBeVisible();
+    await expect(
+      page.getByText('This software is designed to be accessed by people and agents'),
+    ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'GET /v1/contracts', exact: true }),
     ).toBeVisible();
@@ -19,6 +22,8 @@ test.describe('Flowershow Agent Widget', () => {
   test('widget shows current page path and contract detail', async ({ page }) => {
     await page.goto('/shows/spring-rose-show-2025');
     await expectAgentPath(page, '/shows/spring-rose-show-2025');
+    await expect(page.getByRole('link', { name: 'Show projection' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Show workspace projection' })).toBeVisible();
 
     await page
       .getByRole('link', {
@@ -36,5 +41,6 @@ test.describe('Flowershow Agent Widget', () => {
     await expect(page.locator('.agent-access-content')).toContainText(
       'account-issued agent token with the required permissions',
     );
+    await expect(page.getByRole('link', { name: 'Show workspace projection' })).toBeVisible();
   });
 });

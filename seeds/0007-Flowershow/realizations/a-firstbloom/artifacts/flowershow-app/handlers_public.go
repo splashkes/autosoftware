@@ -809,24 +809,27 @@ func (a *app) handleBrowse(w http.ResponseWriter, r *http.Request) {
 // --- Standards ---
 
 type standardsData struct {
-	Title     string
-	Standards []*standardView
+	Title       string
+	CurrentPath string
+	Standards   []*standardView
 }
 
 func (a *app) handleStandards(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "standards.html", standardsData{
-		Title:     "Standards",
-		Standards: a.standardViews(),
+		Title:       "Standards",
+		CurrentPath: "/standards",
+		Standards:   a.standardViews(),
 	})
 }
 
 // --- Show Rules ---
 
 type showRulesData struct {
-	Title    string
-	Show     *Show
-	Rules    []effectiveRule
-	Schedule *ShowSchedule
+	Title       string
+	CurrentPath string
+	Show        *Show
+	Rules       []effectiveRule
+	Schedule    *ShowSchedule
 }
 
 func (a *app) handleShowRules(w http.ResponseWriter, r *http.Request) {
@@ -847,9 +850,10 @@ func (a *app) handleShowRules(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, "show_rules.html", showRulesData{
-		Title:    "Rules — " + show.Name,
-		Show:     show,
-		Rules:    rules,
-		Schedule: sched,
+		Title:       "Rules — " + show.Name,
+		CurrentPath: "/shows/" + slug + "/rules",
+		Show:        show,
+		Rules:       rules,
+		Schedule:    sched,
 	})
 }
