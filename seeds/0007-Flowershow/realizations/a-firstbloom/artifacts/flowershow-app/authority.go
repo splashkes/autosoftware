@@ -227,8 +227,9 @@ func (r *postgresRuntimeAuthorityResolver) EffectivePolicies(ctx context.Context
 	}
 	now := time.Now().UTC()
 	rows, err := r.pool.Query(ctx, `
-		select g.capabilities_snapshot, g.scope_kind, g.scope_id
+		select coalesce(b.capabilities, g.capabilities_snapshot), g.scope_kind, g.scope_id
 		from runtime_authority_grants g
+		left join runtime_authority_bundles b on b.bundle_id = g.bundle_id
 		where g.grantee_principal_id = $1
 		  and g.status = 'accepted'
 		  and (g.effective_at is null or g.effective_at <= $2)
