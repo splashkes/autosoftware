@@ -11,6 +11,12 @@ commands:
     claim_types: [person.created, person.organization_linked]
     projection_tables: [as_flowershow_m_persons, as_flowershow_m_person_organizations]
     replay_covered: true
+  - command: persons.update
+    durability_class: domain_fact_claim_backed_projection
+    store_method: updatePerson
+    claim_types: [person.updated]
+    projection_tables: [as_flowershow_m_persons]
+    replay_covered: true
   - command: shows.create
     durability_class: domain_fact_claim_backed_projection
     store_method: createShow
@@ -109,6 +115,12 @@ commands:
   - command: media.attach
     durability_class: domain_fact_claim_backed_projection
     store_method: attachMedia
+    claim_types: [media.attached]
+    projection_tables: [as_flowershow_m_media]
+    replay_covered: true
+  - command: media.upload
+    durability_class: domain_fact_claim_backed_projection
+    store_method: mediaStore.Store|attachMedia
     claim_types: [media.attached]
     projection_tables: [as_flowershow_m_media]
     replay_covered: true

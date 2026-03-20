@@ -178,6 +178,26 @@ test.describe('Flowershow API', () => {
     expect(createEntry.status()).toBe(201);
     const entry = await createEntry.json();
 
+    const uploadMedia = await request.post(
+      `/v1/commands/0007-Flowershow/entries/${entry.id}/media.upload`,
+      {
+        multipart: {
+          media: {
+            name: 'api-upload.jpg',
+            mimeType: 'image/jpeg',
+            buffer: Buffer.from('api upload bytes'),
+          },
+        },
+        headers: {
+          Authorization: `Bearer ${FLOWERSHOW_SERVICE_TOKEN}`,
+        },
+      },
+    );
+    expect(uploadMedia.status()).toBe(201);
+    const uploadBody = await uploadMedia.json();
+    expect(uploadBody.entry_id).toBe(entry.id);
+    expect(uploadBody.media).toHaveLength(1);
+
     const workspace = await request.get(
       `/v1/projections/0007-Flowershow/shows/${show.id}/workspace`,
       {
@@ -255,6 +275,11 @@ test.describe('Flowershow API', () => {
         id: entry.id,
         suppressed: true,
       },
+      media: [
+        {
+          id: uploadBody.media[0].id,
+        },
+      ],
       person: {
         first_name: 'Margaret',
       },
