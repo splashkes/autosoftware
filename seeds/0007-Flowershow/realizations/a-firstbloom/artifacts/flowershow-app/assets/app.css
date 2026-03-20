@@ -814,11 +814,17 @@ a:hover {
   background: transparent;
   text-align: left;
   cursor: zoom-in;
+  padding: .75rem;
 }
 .entry-inline-media {
   width: 100%;
   border-radius: 12px;
   display: block;
+  max-height: 360px;
+  object-fit: cover;
+}
+.entry-gallery-note {
+  margin-bottom: .75rem;
 }
 .media-lightbox {
   position: fixed;

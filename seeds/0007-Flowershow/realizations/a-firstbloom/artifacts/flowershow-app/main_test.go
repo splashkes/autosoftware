@@ -1939,13 +1939,52 @@ func TestClubDetailPageShowsClubContext(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	for _, expected := range []string{"Metro Rose Society", "Upcoming Shows", "Past Shows", "Top Members", "Show Credits"} {
+	for _, expected := range []string{"Metro Rose Society", "Upcoming Shows", "Past Shows", "Members &amp; Exhibitors", "Show Credits"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("club detail page missing %q", expected)
 		}
 	}
 	if !strings.Contains(body, `/shows/spring-rose-show-2025`) {
 		t.Fatal("club detail page should link to club shows")
+	}
+}
+
+func TestClubDetailPageTreatsEntrantsAsActiveExhibitors(t *testing.T) {
+	a := testApp()
+	person, err := a.store.createPerson(PersonInput{
+		FirstName: "Guest",
+		LastName:  "Exhibitor",
+	})
+	if err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	_, err = a.store.createEntry(EntryInput{
+		ShowID:   "show_spring2025",
+		ClassID:  "class_01",
+		PersonID: person.ID,
+		Name:     "Guest Exhibitor Bloom",
+	})
+	if err != nil {
+		t.Fatalf("create entry: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /clubs/{organizationID}", a.handleClubDetail)
+
+	req := httptest.NewRequest("GET", "/clubs/org_demo1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Members &amp; Exhibitors") {
+		t.Fatal("club detail should surface combined member and exhibitor activity")
+	}
+	if !strings.Contains(body, "exhibitor") {
+		t.Fatal("club detail should label entrants without org membership as exhibitors")
+	}
+	if !strings.Contains(body, `/people/`+person.ID) {
+		t.Fatal("club detail should list active exhibitor people linked through public entries")
 	}
 }
 

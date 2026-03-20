@@ -109,6 +109,7 @@ type publicClubMemberView struct {
 	Role        string
 	EntryCount  int
 	TotalPoints float64
+	Affiliated  bool
 }
 
 type clubCreditView struct {
@@ -392,8 +393,18 @@ func (a *app) showVisualFrames(show *Show) []showVisualFrame {
 	themes := []string{"rose", "fern", "gold"}
 	for _, entry := range entries {
 		media := a.store.mediaByEntry(entry.ID)
+		class, _ := a.store.classByID(entry.ClassID)
+		label := strings.TrimSpace(entry.Name)
+		if class != nil {
+			switch {
+			case strings.TrimSpace(class.Description) != "":
+				label = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Description)
+			case strings.TrimSpace(class.Title) != "":
+				label = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Title)
+			}
+		}
 		frame := showVisualFrame{
-			Label: entry.Name,
+			Label: label,
 			Theme: themes[len(frames)%len(themes)],
 		}
 		if len(media) > 0 {
@@ -461,14 +472,29 @@ func (a *app) clubDetailData(organizationID string, now time.Time) (clubDetailDa
 	}
 
 	memberStats := map[string]*publicClubMemberView{}
+	ensureMember := func(personID string) *publicClubMemberView {
+		person, ok := a.store.personByID(personID)
+		if !ok || person == nil {
+			return nil
+		}
+		if existing := memberStats[personID]; existing != nil {
+			return existing
+		}
+		item := &publicClubMemberView{Person: person, Role: "exhibitor"}
+		memberStats[personID] = item
+		return item
+	}
 	for _, person := range a.store.allPersons() {
 		for _, link := range a.store.personOrganizationsByPerson(person.ID) {
 			if link.OrganizationID != org.ID {
 				continue
 			}
-			memberStats[person.ID] = &publicClubMemberView{
-				Person: person,
-				Role:   link.Role,
+			item := ensureMember(person.ID)
+			if item != nil {
+				item.Affiliated = true
+				if role := strings.TrimSpace(link.Role); role != "" {
+					item.Role = role
+				}
 			}
 			break
 		}
@@ -488,7 +514,7 @@ func (a *app) clubDetailData(organizationID string, now time.Time) (clubDetailDa
 		}
 		for _, entry := range a.publicEntriesByShow(show.ID) {
 			data.TotalEntries++
-			if item := memberStats[entry.PersonID]; item != nil {
+			if item := ensureMember(entry.PersonID); item != nil {
 				item.EntryCount++
 				item.TotalPoints += entry.Points
 			}
@@ -518,6 +544,12 @@ func (a *app) clubDetailData(organizationID string, now time.Time) (clubDetailDa
 	sort.Slice(data.UpcomingShows, func(i, j int) bool { return data.UpcomingShows[i].Show.Date < data.UpcomingShows[j].Show.Date })
 	sort.Slice(data.PastShows, func(i, j int) bool { return data.PastShows[i].Show.Date > data.PastShows[j].Show.Date })
 	sort.Slice(data.Members, func(i, j int) bool {
+		if data.Members[i].EntryCount == data.Members[j].EntryCount && data.Members[i].Affiliated != data.Members[j].Affiliated {
+			return data.Members[i].Affiliated
+		}
+		if data.Members[i].EntryCount != data.Members[j].EntryCount {
+			return data.Members[i].EntryCount > data.Members[j].EntryCount
+		}
 		if data.Members[i].TotalPoints == data.Members[j].TotalPoints {
 			return publicPersonLabel(data.Members[i].Person) < publicPersonLabel(data.Members[j].Person)
 		}

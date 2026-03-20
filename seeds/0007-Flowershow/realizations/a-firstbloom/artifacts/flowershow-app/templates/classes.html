@@ -33,8 +33,8 @@
       </div>
       <div class="card-body show-card-body">
         <h3 class="card-title">{{.Class.ClassNumber}} · {{.Class.Title}}</h3>
-        <p class="card-meta">{{.ShowCount}} show{{if ne .ShowCount 1}}s{{end}} · Latest example from {{.Show.Name}}</p>
-        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Date}}</p>
+        <p class="card-meta">{{.ShowCount}} show{{if ne .ShowCount 1}}s{{end}} · {{.Show.Name}}</p>
+        {{with showContextMeta .Show .Org}}<p class="card-meta">{{.}}</p>{{end}}
         {{if .Class.Description}}<p class="card-meta">{{.Class.Description}}</p>{{end}}
       </div>
     </a>

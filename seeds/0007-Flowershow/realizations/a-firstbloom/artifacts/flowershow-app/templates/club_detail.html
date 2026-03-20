@@ -23,7 +23,7 @@
     </div>
     <div class="hero-stat-card">
       <strong>{{.TotalMembers}}</strong>
-      <span>Members</span>
+      <span>Active people</span>
     </div>
   </div>
 </section>
@@ -52,8 +52,8 @@
           <span class="badge badge-muted">{{.SeasonLabel}}</span>
         </div>
         <h3 class="card-title">{{.Show.Name}}</h3>
-        <p class="card-meta">{{.Show.Location}} · {{.Show.Date}}</p>
-        <p class="card-meta">{{.ClassCount}} classes · {{.EntryCount}} public entries</p>
+        {{with showLocationDateMeta .Show}}<p class="card-meta">{{.}}</p>{{end}}
+        <p class="card-meta">{{showSummaryMeta .EntryCount .ClassCount ""}}</p>
       </div>
     </a>
     {{end}}
@@ -66,8 +66,8 @@
 <section class="section">
   <div class="section-header">
     <div>
-      <h2>Top Members</h2>
-      <p class="section-desc">Members and exhibitors with the strongest current public history in this club.</p>
+      <h2>Members &amp; Exhibitors</h2>
+      <p class="section-desc">Affiliated members and active public exhibitors connected to this club’s visible show history.</p>
     </div>
   </div>
   {{if .Members}}
@@ -75,7 +75,7 @@
     <div class="card-body">
       <table class="table">
         <thead>
-          <tr><th>Member</th><th>Role</th><th>Entries</th><th>Points</th></tr>
+          <tr><th>Person</th><th>Role</th><th>Entries</th><th>Points</th></tr>
         </thead>
         <tbody>
           {{range .Members}}
@@ -91,7 +91,7 @@
     </div>
   </div>
   {{else}}
-  <p class="empty-state">No club members are public yet.</p>
+  <p class="empty-state">No affiliated members or public exhibitors are visible yet.</p>
   {{end}}
 </section>
 
@@ -144,8 +144,8 @@
           <span class="badge badge-muted">{{.SeasonLabel}}</span>
         </div>
         <h3 class="card-title">{{.Show.Name}}</h3>
-        <p class="card-meta">{{.Show.Location}} · {{.Show.Date}}</p>
-        <p class="card-meta">{{.ClassCount}} classes · {{.EntryCount}} public entries</p>
+        {{with showLocationDateMeta .Show}}<p class="card-meta">{{.}}</p>{{end}}
+        <p class="card-meta">{{showSummaryMeta .EntryCount .ClassCount ""}}</p>
       </div>
     </a>
     {{end}}

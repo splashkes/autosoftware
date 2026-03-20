@@ -40,7 +40,7 @@ test.describe('Flowershow Public', () => {
     await expect(page.locator('h1')).toContainText('Metro Rose Society');
     await expect(page.getByRole('heading', { name: 'Upcoming Shows' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Past Shows' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Top Members' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Members & Exhibitors' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Show Credits' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Spring Rose Show 2025' }).first()).toBeVisible();
     await expectAgentPath(page, '/clubs/org_demo1');
@@ -83,6 +83,7 @@ test.describe('Flowershow Public', () => {
     await page.locator('[data-media-open]').first().click();
     await expect(page.locator('[data-media-lightbox]')).toBeVisible();
     await expect(page.locator('[data-media-lightbox-stage] img')).toBeVisible();
+    await expect(page.locator('text=entry-thumb.png')).toHaveCount(0);
     await page.getByRole('button', { name: 'Close image viewer' }).click();
 
     await page.goto('/shows/spring-rose-show-2025/classes/class_01');
