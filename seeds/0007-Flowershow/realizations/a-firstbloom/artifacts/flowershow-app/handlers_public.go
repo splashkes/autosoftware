@@ -850,16 +850,18 @@ func (a *app) handleClassBrowse(w http.ResponseWriter, r *http.Request) {
 // --- Class Detail ---
 
 type classDetailData struct {
-	Title       string
-	CurrentPath string
-	ShowID      string
-	ClassID     string
-	Show        *Show
-	Class       *ShowClass
-	Section     *Section
-	Division    *Division
-	Entries     []*entryView
-	HasMedia    bool
+	Title          string
+	CurrentPath    string
+	ShowID         string
+	ClassID        string
+	Show           *Show
+	Class          *ShowClass
+	Section        *Section
+	Division       *Division
+	Taxons         []*Taxon
+	EffectiveRules []effectiveRule
+	Entries        []*entryView
+	HasMedia       bool
 }
 
 func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
@@ -885,6 +887,16 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 
 	var entries []*entryView
 	hasMedia := false
+	var taxons []*Taxon
+	for _, ref := range cls.TaxonRefs {
+		if taxon, ok := a.store.taxonByID(ref); ok && taxon != nil {
+			taxons = append(taxons, taxon)
+		}
+	}
+	var effectiveRules []effectiveRule
+	if showSchedule, ok := a.store.scheduleByShowID(show.ID); ok && showSchedule != nil && showSchedule.EffectiveStandardEditionID != "" {
+		effectiveRules = a.store.effectiveRulesForClass(cls.ID, showSchedule.EffectiveStandardEditionID)
+	}
 	for _, e := range a.store.entriesByClass(classID) {
 		if !isPublicEntry(e) {
 			continue
@@ -906,16 +918,18 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "class_detail.html", classDetailData{
-		Title:       cls.Title + " — " + show.Name,
-		CurrentPath: "/shows/" + slug + "/classes/" + classID,
-		ShowID:      show.ID,
-		ClassID:     cls.ID,
-		Show:        show,
-		Class:       cls,
-		Section:     sec,
-		Division:    div,
-		Entries:     entries,
-		HasMedia:    hasMedia,
+		Title:          cls.Title + " — " + show.Name,
+		CurrentPath:    "/shows/" + slug + "/classes/" + classID,
+		ShowID:         show.ID,
+		ClassID:        cls.ID,
+		Show:           show,
+		Class:          cls,
+		Section:        sec,
+		Division:       div,
+		Taxons:         taxons,
+		EffectiveRules: effectiveRules,
+		Entries:        entries,
+		HasMedia:       hasMedia,
 	})
 }
 

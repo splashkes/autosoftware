@@ -13,8 +13,73 @@
   {{if .Division}}<span class="badge badge-muted">{{divisionDisplay .Division}}</span>{{with divisionDomainLabel .Division}} <span class="badge badge-muted">{{.}}</span>{{end}}{{end}}
   {{if .Section}}<span class="badge badge-muted">Section {{.Section.Code}}: {{.Section.Title}}</span>{{end}}
   <span class="badge badge-muted">{{.Class.Domain}}</span>
-  {{if .Class.SpecimenCount}}<span class="badge badge-green">{{.Class.SpecimenCount}} specimen{{if gt .Class.SpecimenCount 1}}s{{end}}</span>{{end}}
+  {{if .Class.SpecimenCount}}<span class="badge badge-green">{{.Class.SpecimenCount}} {{if .Class.Unit}}{{.Class.Unit}}{{else}}specimen{{if gt .Class.SpecimenCount 1}}s{{end}}{{end}}</span>{{end}}
 </div>
+
+<section class="section">
+  <h2>Class Details</h2>
+  <div class="card">
+    <div class="card-body">
+      <dl class="detail-list">
+        {{if .Class.SpecimenCount}}
+        <div class="detail-item">
+          <dt>Presentation</dt>
+          <dd>{{.Class.SpecimenCount}} {{if .Class.Unit}}{{.Class.Unit}}{{else}}specimen{{if gt .Class.SpecimenCount 1}}s{{end}}{{end}}</dd>
+        </div>
+        {{end}}
+        {{if .Taxons}}
+        <div class="detail-item">
+          <dt>Taxon</dt>
+          <dd>{{range $i, $taxon := .Taxons}}{{if $i}}, {{end}}<a href="{{$.BasePath}}/taxonomy/{{$taxon.ID}}">{{$taxon.Name}}</a>{{if $taxon.ScientificName}} ({{$taxon.ScientificName}}){{end}}{{end}}</dd>
+        </div>
+        {{end}}
+        {{if .Class.MeasurementRule}}
+        <div class="detail-item">
+          <dt>Measurement</dt>
+          <dd>{{.Class.MeasurementRule}}</dd>
+        </div>
+        {{end}}
+        {{if .Class.NamingRequirement}}
+        <div class="detail-item">
+          <dt>Naming</dt>
+          <dd>{{.Class.NamingRequirement}}</dd>
+        </div>
+        {{end}}
+        {{if .Class.ContainerRule}}
+        <div class="detail-item">
+          <dt>Container</dt>
+          <dd>{{.Class.ContainerRule}}</dd>
+        </div>
+        {{end}}
+        {{if .Class.EligibilityRule}}
+        <div class="detail-item">
+          <dt>Eligibility</dt>
+          <dd>{{.Class.EligibilityRule}}</dd>
+        </div>
+        {{end}}
+        {{if .Class.ScheduleNotes}}
+        <div class="detail-item">
+          <dt>Schedule Notes</dt>
+          <dd>{{.Class.ScheduleNotes}}</dd>
+        </div>
+        {{end}}
+      </dl>
+      {{if .EffectiveRules}}
+      <div class="class-rules">
+        <h3>Effective Rules</h3>
+        <ul class="plain-list">
+          {{range .EffectiveRules}}
+          <li>
+            {{if .Rule}}<strong>{{.Rule.SubjectLabel}}</strong>: {{.Rule.Body}}{{end}}
+            {{if .Override}}<span class="badge badge-muted">{{.Override.OverrideType}}</span> {{.Override.Body}}{{end}}
+          </li>
+          {{end}}
+        </ul>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</section>
 
 <section class="section">
   <h2>Entries</h2>

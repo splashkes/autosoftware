@@ -18,7 +18,10 @@
           <span class="class-number">{{.ClassNumber}}</span>
           <h4 class="card-title">{{.Title}}</h4>
           {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
-          {{if .SpecimenCount}}<p class="card-meta">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</p>{{end}}
+          {{if .SpecimenCount}}<p class="card-meta">{{.SpecimenCount}} {{if .Unit}}{{.Unit}}{{else}}specimen{{if gt .SpecimenCount 1}}s{{end}}{{end}}</p>{{end}}
+          {{if .MeasurementRule}}<p class="card-meta">Measurement: {{.MeasurementRule}}</p>{{end}}
+          {{if .NamingRequirement}}<p class="card-meta">Naming: {{.NamingRequirement}}</p>{{end}}
+          {{if .ScheduleNotes}}<p class="card-meta">{{.ScheduleNotes}}</p>{{end}}
         </div>
       </a>
       {{end}}

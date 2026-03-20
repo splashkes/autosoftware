@@ -739,6 +739,47 @@ a:hover {
 .class-specimens { color: var(--gray-500); font-size: .8rem; white-space: nowrap; }
 .class-description { color: var(--gray-500); margin-bottom: 1rem; }
 .class-meta { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .85rem 1rem;
+  margin: 0;
+}
+.detail-item {
+  display: grid;
+  gap: .2rem;
+  padding: .8rem .9rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,.96), var(--green-pale));
+  border: 1px solid var(--gray-200);
+}
+.detail-item dt {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--green);
+  margin: 0;
+}
+.detail-item dd {
+  margin: 0;
+  color: var(--gray-800);
+}
+.class-rules {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--gray-200);
+}
+.class-rules h3 {
+  margin-bottom: .6rem;
+}
+.plain-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+.plain-list li + li {
+  margin-top: .45rem;
+}
 .entry-meta { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
 .entry-row-link {
   display: grid;
