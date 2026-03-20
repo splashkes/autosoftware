@@ -134,6 +134,13 @@ Every structured record traces back to a source.
 - quoted_text (nullable)
 - extraction_confidence
 
+For `citations.create`, callers send those fields directly or inside an `{ "input": ... }`
+envelope with optional `runtime_context`. `page_from` and `page_to` may be either JSON
+strings or numbers, but are normalized to stored string page references. Current valid
+`target_type` values are the same object kinds exposed by the realization, including
+`show_class`, `standard_rule`, `class_rule_override`, `show_schedule`, `division`, and
+`section`.
+
 ---
 
 ### 6. Standard Rules & Local Overrides

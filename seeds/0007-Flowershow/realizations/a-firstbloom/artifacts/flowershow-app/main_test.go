@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -1629,6 +1630,69 @@ func TestCommandEndpointsAcceptRuntimeContextEnvelopeWithoutPersistence(t *testi
 	body := w.Body.String()
 	if strings.Contains(body, "assistant_goal") || strings.Contains(body, "runtime_context") {
 		t.Fatal("runtime-only context must not be persisted into show projections")
+	}
+}
+
+func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/citations.create", a.handleAPICommand)
+
+	doc, err := a.store.createSourceDocument(SourceDocument{
+		OrganizationID: "org_demo1",
+		ShowID:         "show_spring2025",
+		Title:          "June Schedule PDF",
+		DocumentType:   "schedule",
+	})
+	if err != nil {
+		t.Fatalf("create source document: %v", err)
+	}
+
+	expectedPages := []string{"1", "2"}
+	for i, body := range []string{
+		fmt.Sprintf(`{
+			"source_document_id": %q,
+			"target_type": "show_class",
+			"target_id": "class_01",
+			"page_from": 1,
+			"page_to": 1,
+			"quoted_text": "Imported citation",
+			"extraction_confidence": 0.99
+		}`, doc.ID),
+		fmt.Sprintf(`{
+			"input": {
+				"source_document_id": %q,
+				"target_type": "show_class",
+				"target_id": "class_01",
+				"page_from": 2,
+				"page_to": 2,
+				"quoted_text": "Wrapped imported citation",
+				"extraction_confidence": 0.88
+			},
+			"runtime_context": {
+				"interpretation_note": "Prompt-only note"
+			}
+		}`, doc.ID),
+	} {
+		req := jsonRequest("POST", "/v1/commands/0007-Flowershow/citations.create", body)
+		addServiceToken(req)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+		}
+		var created SourceCitation
+		if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+			t.Fatalf("unmarshal citation response: %v", err)
+		}
+		if created.PageFrom != expectedPages[i] || created.PageTo != expectedPages[i] {
+			t.Fatalf("expected page refs %q, got %q/%q", expectedPages[i], created.PageFrom, created.PageTo)
+		}
+	}
+
+	citations := a.store.citationsByTarget("show_class", "class_01")
+	if len(citations) < 3 {
+		t.Fatalf("expected seeded citation plus two created citations, got %d", len(citations))
 	}
 }
 
