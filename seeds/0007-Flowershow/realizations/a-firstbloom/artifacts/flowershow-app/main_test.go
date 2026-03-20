@@ -462,6 +462,27 @@ func TestAdminLoginFlow(t *testing.T) {
 	}
 }
 
+func TestAdminNewClubPageLoads(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/clubs/new", a.requireAdmin(a.handleAdminClubNew))
+
+	req := httptest.NewRequest("GET", "/admin/clubs/new", nil)
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Create Club") {
+		t.Fatal("new club page missing heading")
+	}
+	if !strings.Contains(body, "Invite The Initial Club Administrator") {
+		t.Fatal("new club page missing first-admin workflow")
+	}
+}
+
 func TestAdminLoginPageShowsDirectSiteAuthOptionsWhenCognitoEnabled(t *testing.T) {
 	a := testApp()
 	a.auth = &mockAuthProvider{}

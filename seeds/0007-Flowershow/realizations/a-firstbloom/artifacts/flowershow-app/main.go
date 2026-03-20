@@ -633,6 +633,7 @@ func parseTemplates() map[string]*template.Template {
 		"templates/show_admin.html",
 		"templates/admin_dashboard.html",
 		"templates/admin_club.html",
+		"templates/admin_club_new.html",
 		"templates/admin_show_new.html",
 		"templates/admin_persons.html",
 		"templates/admin_roles.html",
