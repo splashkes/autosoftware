@@ -35,7 +35,7 @@ func newMockRegistry() *httptest.Server {
 			ObjectID:      "note-1",
 			Payload: map[string]any{
 				"id":          "note-1",
-				"object_type": "shared_note",
+				"object_type": "note",
 				"slug":        "hello-world",
 			},
 			AcceptedAt: noteCreatedAt,
@@ -53,7 +53,7 @@ func newMockRegistry() *httptest.Server {
 			Payload: map[string]any{
 				"claim_id":   "claim-note-create",
 				"object_id":  "note-1",
-				"claim_type": "shared_note.created",
+				"claim_type": "note.created",
 				"title":      "Hello World",
 				"edited_by":  "actor-1",
 			},
@@ -106,7 +106,7 @@ func newMockRegistry() *httptest.Server {
 			Payload: map[string]any{
 				"claim_id":   "claim-note-update",
 				"object_id":  "note-1",
-				"claim_type": "shared_note.updated",
+				"claim_type": "note.updated",
 				"title":      "Hello World Revised",
 				"edited_by":  "actor-1",
 			},
@@ -1209,6 +1209,24 @@ func TestObjectInstanceDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "/objects/0001-notepad/actor/instances/actor-1") {
 		t.Error("instance detail missing related instance link")
+	}
+}
+
+func TestObjectInstanceDetailAliasRedirectsToCanonicalKind(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/objects/0001-notepad/note/instances/note-1", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("alias instance detail returned %d", rec.Code)
+	}
+	if location := rec.Header().Get("Location"); location != "/objects/0001-notepad/shared_note/instances/note-1" {
+		t.Fatalf("alias instance detail redirected to %q", location)
 	}
 }
 

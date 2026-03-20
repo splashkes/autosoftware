@@ -1394,6 +1394,7 @@ type instanceAccumulator struct {
 type seedInstanceIndex struct {
 	instances      map[string]*instanceAccumulator
 	kindByObjectID map[string]string
+	knownKinds     []string
 }
 
 func (app *App) objectInstancesForKind(seedID, kind string) ([]ObjectInstanceSummary, error) {
@@ -1432,6 +1433,7 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 	index := &seedInstanceIndex{
 		instances:      make(map[string]*instanceAccumulator),
 		kindByObjectID: make(map[string]string),
+		knownKinds:     knownKinds,
 	}
 
 	for _, row := range rows {
@@ -1484,7 +1486,7 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 }
 
 func (idx *seedInstanceIndex) summariesForKind(kind string) []ObjectInstanceSummary {
-	kind = strings.TrimSpace(kind)
+	kind = idx.canonicalKind(kind)
 	out := make([]ObjectInstanceSummary, 0)
 	for _, acc := range idx.instances {
 		if acc.Kind != kind {
@@ -1505,6 +1507,7 @@ func (idx *seedInstanceIndex) summariesForKind(kind string) []ObjectInstanceSumm
 }
 
 func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceDetailView, error) {
+	kind = idx.canonicalKind(kind)
 	acc, ok := idx.instances[strings.TrimSpace(objectID)]
 	if !ok {
 		return nil, errors.New("instance not found")
@@ -1537,6 +1540,10 @@ func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceD
 		RelatedInstances:   related,
 		InstanceDefinition: browseObjectPath(acc.SeedID, acc.Kind),
 	}, nil
+}
+
+func (idx *seedInstanceIndex) canonicalKind(kind string) string {
+	return canonicalInstanceKind(kind, idx.knownKinds)
 }
 
 func (idx *seedInstanceIndex) summaryFor(acc *instanceAccumulator) ObjectInstanceSummary {
@@ -2200,6 +2207,10 @@ func (app *App) handleObjectInstanceDetail(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Object instance not found.")
 		log.Printf("instance detail error for %s/%s/%s: %v", seedID, kind, objectID, err)
+		return
+	}
+	if canonicalKind := strings.TrimSpace(item.Summary.Kind); canonicalKind != "" && canonicalKind != strings.TrimSpace(kind) {
+		http.Redirect(w, r, browseObjectInstancePath(seedID, canonicalKind, objectID), http.StatusFound)
 		return
 	}
 
