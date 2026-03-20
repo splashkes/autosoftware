@@ -10,7 +10,7 @@
 <p class="class-description">{{.Class.Description}}</p>
 
 <div class="class-meta">
-  {{if .Division}}<span class="badge badge-muted">{{divisionDisplay .Division}}</span>{{end}}
+  {{if .Division}}<span class="badge badge-muted">{{divisionDisplay .Division}}</span>{{with divisionDomainLabel .Division}} <span class="badge badge-muted">{{.}}</span>{{end}}{{end}}
   {{if .Section}}<span class="badge badge-muted">Section {{.Section.Code}}: {{.Section.Title}}</span>{{end}}
   <span class="badge badge-muted">{{.Class.Domain}}</span>
   {{if .Class.SpecimenCount}}<span class="badge badge-green">{{.Class.SpecimenCount}} specimen{{if gt .Class.SpecimenCount 1}}s{{end}}</span>{{end}}

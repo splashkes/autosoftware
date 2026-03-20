@@ -374,6 +374,23 @@ var templateFuncMap = template.FuncMap{
 		}
 		return "Division " + code + " · " + title
 	},
+	"divisionDomainLabel": func(d *Division) string {
+		if d == nil {
+			return ""
+		}
+		domain := strings.TrimSpace(d.Domain)
+		if domain == "" {
+			return ""
+		}
+		title := strings.ToLower(strings.TrimSpace(d.Title))
+		if title == "" {
+			return domain
+		}
+		if strings.Contains(title, strings.ToLower(domain)) {
+			return ""
+		}
+		return domain
+	},
 	"initials": func(p *Person) string {
 		if p == nil {
 			return ""
