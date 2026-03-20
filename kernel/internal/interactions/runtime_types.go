@@ -2,6 +2,62 @@ package interactions
 
 import "time"
 
+type RegistryChangeSet struct {
+	ChangeSetID    string                 `json:"change_set_id"`
+	Reference      string                 `json:"reference"`
+	SeedID         string                 `json:"seed_id"`
+	RealizationID  string                 `json:"realization_id"`
+	IdempotencyKey string                 `json:"idempotency_key,omitempty"`
+	AcceptedBy     string                 `json:"accepted_by"`
+	Metadata       map[string]interface{} `json:"metadata"`
+	AcceptedAt     time.Time              `json:"accepted_at"`
+}
+
+type RegistryRow struct {
+	RowID         int64                  `json:"row_id"`
+	ChangeSetID   string                 `json:"change_set_id"`
+	Reference     string                 `json:"reference"`
+	SeedID        string                 `json:"seed_id"`
+	RealizationID string                 `json:"realization_id"`
+	RowOrder      int                    `json:"row_order"`
+	RowType       string                 `json:"row_type"`
+	ObjectID      string                 `json:"object_id,omitempty"`
+	ClaimID       string                 `json:"claim_id,omitempty"`
+	Payload       map[string]interface{} `json:"payload"`
+	AcceptedAt    time.Time              `json:"accepted_at"`
+}
+
+type AppendRegistryChangeSetInput struct {
+	ChangeSetID    string                   `json:"change_set_id,omitempty"`
+	Reference      string                   `json:"reference"`
+	SeedID         string                   `json:"seed_id"`
+	RealizationID  string                   `json:"realization_id"`
+	IdempotencyKey string                   `json:"idempotency_key,omitempty"`
+	AcceptedBy     string                   `json:"accepted_by,omitempty"`
+	Metadata       map[string]interface{}   `json:"metadata,omitempty"`
+	Rows           []AppendRegistryRowInput `json:"rows"`
+}
+
+type AppendRegistryRowInput struct {
+	RowType  string                 `json:"row_type"`
+	ObjectID string                 `json:"object_id,omitempty"`
+	ClaimID  string                 `json:"claim_id,omitempty"`
+	Payload  map[string]interface{} `json:"payload,omitempty"`
+}
+
+type AppendedRegistryChangeSet struct {
+	ChangeSet RegistryChangeSet `json:"change_set"`
+	Rows      []RegistryRow     `json:"rows"`
+}
+
+type ListRegistryRowsInput struct {
+	Reference     string `json:"reference,omitempty"`
+	SeedID        string `json:"seed_id,omitempty"`
+	RealizationID string `json:"realization_id,omitempty"`
+	AfterRowID    int64  `json:"after_row_id,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+}
+
 type Principal struct {
 	PrincipalID   string                 `json:"principal_id"`
 	Kind          string                 `json:"kind"`

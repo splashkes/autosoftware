@@ -23,5 +23,6 @@ environment:
 notes:
   - AS_ADDR is injected by the kernel execution backend at launch time.
   - AS_RUNTIME_DATABASE_URL is injected by the kernel execution backend at launch time.
+  - AS_INTERNAL_API_URL is injected by the kernel execution backend at launch time.
   - Admin login uses AS_ADMIN_PASSWORD and defaults to admin for local development.
-  - Flower show objects, claims, and materialized projections persist in the shared runtime database.
+  - Flower show accepted history appends through the kernel runtime registry boundary; projections rebuild from that accepted history.

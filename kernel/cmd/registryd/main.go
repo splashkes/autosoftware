@@ -80,6 +80,7 @@ func main() {
 func newMux(repoRoot string, runtimeService *interactions.RuntimeService, appliedMigrations func(context.Context) ([]string, error)) *http.ServeMux {
 	mux := http.NewServeMux()
 	jsontransport.NewRegistryCatalogAPI(registry.NewCatalogReader(repoRoot)).Register(mux)
+	jsontransport.NewRegistryLedgerAPI(runtimeService).Register(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

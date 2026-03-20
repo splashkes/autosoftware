@@ -46,7 +46,13 @@ type refreshingStore interface {
 
 func main() {
 	addr := envOrDefault("AS_ADDR", "127.0.0.1:8097")
-	store, err := newFlowershowStore(envOrDefault("AS_RUNTIME_DATABASE_URL", ""))
+	store, err := newFlowershowStore(
+		envOrDefault("AS_RUNTIME_DATABASE_URL", ""),
+		envOrDefault("AS_INTERNAL_API_URL", ""),
+		envOrDefault("AS_INTERNAL_API_TOKEN", ""),
+		envOrDefault("AS_SEED_ID", "0007-Flowershow"),
+		envOrDefault("AS_REALIZATION_ID", "a-firstbloom"),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

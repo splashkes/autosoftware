@@ -44,6 +44,11 @@ func (api *RuntimeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/runtime/authority/grants", api.handleCreateAuthorityGrant)
 	mux.HandleFunc("GET /v1/runtime/authority/ledger/principals/{principal_id}", api.handleListAuthorityLedgerByPrincipal)
 	mux.HandleFunc("GET /v1/runtime/authority/effective/principals/{principal_id}", api.handleGetEffectiveAuthorityByPrincipal)
+	mux.HandleFunc("POST /v1/runtime/registry/change-sets", api.handleAppendRegistryChangeSet)
+	mux.HandleFunc("GET /v1/runtime/registry/change-sets", api.handleListRegistryChangeSets)
+	mux.HandleFunc("GET /v1/runtime/registry/change-sets/{change_set_id}", api.handleGetRegistryChangeSet)
+	mux.HandleFunc("GET /v1/runtime/registry/rows", api.handleListRegistryRows)
+	mux.HandleFunc("GET /v1/runtime/registry/rows/{row_id}", api.handleGetRegistryRow)
 	mux.HandleFunc("POST /v1/runtime/handles", api.handleAssignHandle)
 	mux.HandleFunc("GET /v1/runtime/handles/{namespace}/{handle}", api.handleResolveHandle)
 	mux.HandleFunc("POST /v1/runtime/access-links", api.handleCreateAccessLink)
@@ -195,6 +200,49 @@ func (api *RuntimeAPI) handleListAuthorityLedgerByPrincipal(w http.ResponseWrite
 
 func (api *RuntimeAPI) handleGetEffectiveAuthorityByPrincipal(w http.ResponseWriter, r *http.Request) {
 	item, err := api.Service.GetEffectiveAuthorityByPrincipal(r.Context(), r.PathValue("principal_id"))
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleAppendRegistryChangeSet(w http.ResponseWriter, r *http.Request) {
+	var input interactions.AppendRegistryChangeSetInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	item, err := api.Service.AppendRegistryChangeSet(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleListRegistryChangeSets(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := api.Service.ListRegistryChangeSets(r.Context(), r.URL.Query().Get("reference"), limit)
+	writeRuntimeResult(w, items, err)
+}
+
+func (api *RuntimeAPI) handleGetRegistryChangeSet(w http.ResponseWriter, r *http.Request) {
+	item, err := api.Service.GetRegistryChangeSet(r.Context(), r.PathValue("change_set_id"))
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleListRegistryRows(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	after, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("after")), 10, 64)
+	items, err := api.Service.ListRegistryRows(r.Context(), interactions.ListRegistryRowsInput{
+		Reference:     strings.TrimSpace(r.URL.Query().Get("reference")),
+		SeedID:        strings.TrimSpace(r.URL.Query().Get("seed_id")),
+		RealizationID: strings.TrimSpace(r.URL.Query().Get("realization_id")),
+		AfterRowID:    after,
+		Limit:         limit,
+	})
+	writeRuntimeResult(w, items, err)
+}
+
+func (api *RuntimeAPI) handleGetRegistryRow(w http.ResponseWriter, r *http.Request) {
+	rowID, err := strconv.ParseInt(strings.TrimSpace(r.PathValue("row_id")), 10, 64)
+	if err != nil || rowID <= 0 {
+		respondError(w, http.StatusBadRequest, errors.New("row_id must be a positive integer"))
+		return
+	}
+	item, err := api.Service.GetRegistryRow(r.Context(), rowID)
 	writeRuntimeResult(w, item, err)
 }
 
