@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- Mock registry API ---
@@ -18,6 +20,99 @@ func newMockRegistry() *httptest.Server {
 	projectionHash := strings.Repeat("4", 64)
 	objectHash := strings.Repeat("5", 64)
 	schemaHash := strings.Repeat("6", 64)
+	noteCreatedAt := time.Date(2026, time.March, 19, 12, 0, 0, 0, time.UTC)
+	noteUpdatedAt := time.Date(2026, time.March, 20, 9, 30, 0, 0, time.UTC)
+
+	rows := []RegistryRow{
+		{
+			RowID:         1,
+			ChangeSetID:   "cs-note-create",
+			Reference:     "0001-notepad/a-go-htmx",
+			SeedID:        "0001-notepad",
+			RealizationID: "a-go-htmx",
+			RowOrder:      1,
+			RowType:       "object.create",
+			ObjectID:      "note-1",
+			Payload: map[string]any{
+				"id":          "note-1",
+				"object_type": "shared_note",
+				"slug":        "hello-world",
+			},
+			AcceptedAt: noteCreatedAt,
+		},
+		{
+			RowID:         2,
+			ChangeSetID:   "cs-note-create",
+			Reference:     "0001-notepad/a-go-htmx",
+			SeedID:        "0001-notepad",
+			RealizationID: "a-go-htmx",
+			RowOrder:      2,
+			RowType:       "claim.create",
+			ObjectID:      "note-1",
+			ClaimID:       "claim-note-create",
+			Payload: map[string]any{
+				"claim_id":   "claim-note-create",
+				"object_id":  "note-1",
+				"claim_type": "shared_note.created",
+				"title":      "Hello World",
+				"edited_by":  "actor-1",
+			},
+			AcceptedAt: noteCreatedAt,
+		},
+		{
+			RowID:         3,
+			ChangeSetID:   "cs-actor-create",
+			Reference:     "0001-notepad/a-go-htmx",
+			SeedID:        "0001-notepad",
+			RealizationID: "a-go-htmx",
+			RowOrder:      1,
+			RowType:       "object.create",
+			ObjectID:      "actor-1",
+			Payload: map[string]any{
+				"id":          "actor-1",
+				"object_type": "actor",
+				"slug":        "sam-editor",
+			},
+			AcceptedAt: noteCreatedAt,
+		},
+		{
+			RowID:         4,
+			ChangeSetID:   "cs-actor-create",
+			Reference:     "0001-notepad/a-go-htmx",
+			SeedID:        "0001-notepad",
+			RealizationID: "a-go-htmx",
+			RowOrder:      2,
+			RowType:       "claim.create",
+			ObjectID:      "actor-1",
+			ClaimID:       "claim-actor-create",
+			Payload: map[string]any{
+				"claim_id":     "claim-actor-create",
+				"object_id":    "actor-1",
+				"claim_type":   "actor.created",
+				"display_name": "Sam Editor",
+			},
+			AcceptedAt: noteCreatedAt,
+		},
+		{
+			RowID:         5,
+			ChangeSetID:   "cs-note-update",
+			Reference:     "0001-notepad/a-go-htmx",
+			SeedID:        "0001-notepad",
+			RealizationID: "a-go-htmx",
+			RowOrder:      1,
+			RowType:       "claim.create",
+			ObjectID:      "note-1",
+			ClaimID:       "claim-note-update",
+			Payload: map[string]any{
+				"claim_id":   "claim-note-update",
+				"object_id":  "note-1",
+				"claim_type": "shared_note.updated",
+				"title":      "Hello World Revised",
+				"edited_by":  "actor-1",
+			},
+			AcceptedAt: noteUpdatedAt,
+		},
+	}
 
 	mux.HandleFunc("GET /v1/registry/catalog", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
@@ -200,6 +295,7 @@ func newMockRegistry() *httptest.Server {
 		seedID := r.URL.Query().Get("seed_id")
 		items := []ObjectSummary{
 			{SeedID: "0001-notepad", Kind: "shared_note", Summary: "A shared note", RealizationCount: 1, CommandCount: 2, ProjectionCount: 1, Self: "/v1/registry/object?seed_id=0001-notepad&kind=shared_note"},
+			{SeedID: "0001-notepad", Kind: "actor", Summary: "A note actor", RealizationCount: 1, CommandCount: 0, ProjectionCount: 0, Self: "/v1/registry/object?seed_id=0001-notepad&kind=actor"},
 			{SeedID: "0004-events", Kind: "event", Summary: "An event", RealizationCount: 1, CommandCount: 2, ProjectionCount: 3, Self: "/v1/registry/object?seed_id=0004-events&kind=event"},
 		}
 		if seedID != "" {
@@ -263,7 +359,63 @@ func newMockRegistry() *httptest.Server {
 			})
 			return
 		}
+		if seedID == "0001-notepad" && kind == "actor" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"object": ObjectDetail{
+					SeedID: seedID, Kind: kind, Summary: "A note actor",
+					DataLayout: DataLayout{
+						SharedMetadata: DataSection{
+							Summary: "Stable actor identity.",
+							Fields:  []DataField{{Name: "actor_id", Type: "string", Summary: "Stable actor id."}},
+						},
+						PublicPayload: DataSection{
+							Summary: "Public actor display fields.",
+							Fields:  []DataField{{Name: "display_name", Type: "string", Summary: "Visible actor name."}},
+						},
+					},
+					IncomingRelations: []GraphRelation{{
+						Kind:        "note_edited_by",
+						Summary:     "Tracks notes edited by this actor.",
+						Cardinality: "one_to_many",
+						Visibility:  "mixed",
+						FromObjects: []ResourceLink{{Kind: "shared_note"}},
+					}},
+					Schemas: []ResourceLink{{Ref: "seeds/0001-notepad/design.md"}},
+					Realizations: []ObjectRealization{
+						{Reference: "0001-notepad/a-go-htmx", SeedID: "0001-notepad", RealizationID: "a-go-htmx", Summary: "Shared notepad", Status: "draft", SurfaceKind: "interactive"},
+					},
+					Self:         "/v1/registry/object?seed_id=0001-notepad&kind=actor",
+					CanonicalURL: "/objects/0001-notepad/actor",
+					PermalinkURL: "/reg/" + objectHash,
+					ContentHash:  objectHash,
+				},
+			})
+			return
+		}
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	})
+
+	mux.HandleFunc("GET /v1/registry/rows", func(w http.ResponseWriter, r *http.Request) {
+		seedID := r.URL.Query().Get("seed_id")
+		after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		if limit <= 0 {
+			limit = len(rows)
+		}
+		filtered := make([]RegistryRow, 0, len(rows))
+		for _, row := range rows {
+			if seedID != "" && row.SeedID != seedID {
+				continue
+			}
+			if after > 0 && row.RowID <= after {
+				continue
+			}
+			filtered = append(filtered, row)
+			if len(filtered) == limit {
+				break
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"rows": filtered})
 	})
 
 	mux.HandleFunc("GET /v1/registry/schemas", func(w http.ResponseWriter, r *http.Request) {
@@ -443,7 +595,7 @@ func TestNoMutationRoutes(t *testing.T) {
 		"/contracts", "/contracts/test", "/realizations", "/realizations/test",
 		"/actions", "/actions/ref/name", "/commands", "/commands/ref/name",
 		"/read-models", "/read-models/ref/name", "/projections", "/projections/ref/name",
-		"/objects", "/objects/seed/kind",
+		"/objects", "/objects/seed/kind", "/objects/seed/kind/instances/object-id",
 		"/schemas", "/schemas/detail?ref=test",
 	}
 
@@ -997,8 +1149,11 @@ func TestObjectDetailPage(t *testing.T) {
 	if !strings.Contains(body, "Data Layout") || !strings.Contains(body, "note_id") || !strings.Contains(body, "Private Payload") {
 		t.Error("object detail missing grouped data layout")
 	}
-	if !strings.Contains(body, "Outgoing Relations") || !strings.Contains(body, "note_edited_by") || !strings.Contains(body, "Incoming Relations") {
+	if !strings.Contains(body, "Objects This Object Points To") || !strings.Contains(body, "note_edited_by") || !strings.Contains(body, "Objects That Point Here") {
 		t.Error("object detail missing graph relation sections")
+	}
+	if !strings.Contains(body, "Raw Instances") || !strings.Contains(body, "note-1") || !strings.Contains(body, "/objects/0001-notepad/shared_note/instances/note-1") {
+		t.Error("object detail missing raw instance browsing")
 	}
 }
 
@@ -1014,6 +1169,32 @@ func TestObjectDetailNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing object, got %d", rec.Code)
+	}
+}
+
+func TestObjectInstanceDetailPage(t *testing.T) {
+	mock := newMockRegistry()
+	defer mock.Close()
+	app := newTestApp(mock.URL)
+	mux := newTestMux(app)
+
+	req := httptest.NewRequest("GET", "/objects/0001-notepad/shared_note/instances/note-1", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("instance detail returned %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "Hello World Revised") {
+		t.Error("instance detail missing latest claim payload")
+	}
+	if !strings.Contains(body, "claim-note-update") {
+		t.Error("instance detail missing claim id")
+	}
+	if !strings.Contains(body, "/objects/0001-notepad/actor/instances/actor-1") {
+		t.Error("instance detail missing related instance link")
 	}
 }
 

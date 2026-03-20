@@ -274,6 +274,61 @@ type HashLookupDetail struct {
 	RedirectURL  string `json:"redirect_url"`
 }
 
+type RegistryRow struct {
+	RowID         int64          `json:"row_id"`
+	ChangeSetID   string         `json:"change_set_id"`
+	Reference     string         `json:"reference"`
+	SeedID        string         `json:"seed_id"`
+	RealizationID string         `json:"realization_id"`
+	RowOrder      int            `json:"row_order"`
+	RowType       string         `json:"row_type"`
+	ObjectID      string         `json:"object_id,omitempty"`
+	ClaimID       string         `json:"claim_id,omitempty"`
+	Payload       map[string]any `json:"payload"`
+	AcceptedAt    time.Time      `json:"accepted_at"`
+}
+
+type RelatedInstanceLink struct {
+	ObjectID string
+	Kind     string
+	Path     string
+}
+
+type ObjectInstanceSummary struct {
+	SeedID            string
+	Kind              string
+	ObjectID          string
+	Label             string
+	Slug              string
+	CreateRowID       int64
+	LatestClaimRowID  int64
+	LatestClaimType   string
+	ClaimCount        int
+	LatestAcceptedAt  time.Time
+	RelatedInstances  []RelatedInstanceLink
+	ObjectPath        string
+	InstancePath      string
+	LatestPayloadJSON string
+}
+
+type ClaimRowView struct {
+	RowID            int64
+	ClaimID          string
+	ClaimType        string
+	AcceptedAt       time.Time
+	PayloadJSON      string
+	RelatedInstances []RelatedInstanceLink
+}
+
+type ObjectInstanceDetailView struct {
+	Summary            ObjectInstanceSummary
+	ObjectPayloadJSON  string
+	LatestClaimJSON    string
+	ClaimRows          []ClaimRowView
+	RelatedInstances   []RelatedInstanceLink
+	InstanceDefinition string
+}
+
 type SchemaObjectUse struct {
 	Reference     string `json:"reference"`
 	SeedID        string `json:"seed_id"`
@@ -508,6 +563,65 @@ func (c *RegistryClient) Lookup(contentHash string) (*HashLookupDetail, error) {
 	return &resp.Lookup, nil
 }
 
+func (c *RegistryClient) Rows(seedID, reference, realizationID string, after int64, limit int) ([]RegistryRow, error) {
+	params := url.Values{}
+	if seedID = strings.TrimSpace(seedID); seedID != "" {
+		params.Set("seed_id", seedID)
+	}
+	if reference = strings.TrimSpace(reference); reference != "" {
+		params.Set("reference", reference)
+	}
+	if realizationID = strings.TrimSpace(realizationID); realizationID != "" {
+		params.Set("realization_id", realizationID)
+	}
+	if after > 0 {
+		params.Set("after", fmt.Sprintf("%d", after))
+	}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+
+	path := "/v1/registry/rows"
+	if encoded := params.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	var resp struct {
+		Rows []RegistryRow `json:"rows"`
+	}
+	if err := c.get(path, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Rows, nil
+}
+
+func (c *RegistryClient) AllRows(seedID string) ([]RegistryRow, error) {
+	const (
+		pageSize = 500
+		maxPages = 20
+	)
+
+	var (
+		all   []RegistryRow
+		after int64
+	)
+	for page := 0; page < maxPages; page++ {
+		rows, err := c.Rows(seedID, "", "", after, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		all = append(all, rows...)
+		after = rows[len(rows)-1].RowID
+		if len(rows) < pageSize {
+			break
+		}
+	}
+	return all, nil
+}
+
 func buildQuery(pairs ...string) string {
 	v := url.Values{}
 	for i := 0; i+1 < len(pairs); i += 2 {
@@ -529,11 +643,11 @@ type App struct {
 }
 
 const (
-	repoBlobBaseURL       = "https://github.com/splashkes/autosoftware/blob/main/"
-	publicRegistryBaseURL = "https://registry.autosoftware.app"
-	publicRegistryHost    = "registry.autosoftware.app"
-	publicAPIBaseURL      = "https://registry.autosoftware.app"
-	legacyRegistryPathRoot = "/registry/reading-room"
+	repoBlobBaseURL          = "https://github.com/splashkes/autosoftware/blob/main/"
+	publicRegistryBaseURL    = "https://registry.autosoftware.app"
+	publicRegistryHost       = "registry.autosoftware.app"
+	publicAPIBaseURL         = "https://registry.autosoftware.app"
+	legacyRegistryPathRoot   = "/registry/reading-room"
 	legacyRegistryPathPrefix = legacyRegistryPathRoot + "/"
 )
 
@@ -545,6 +659,7 @@ func (app *App) loadTemplates() {
 		},
 		"systemPath":         browseSystemPath,
 		"objectPath":         browseObjectPath,
+		"objectInstancePath": browseObjectInstancePath,
 		"objectsPath":        browseObjectsPath,
 		"relatedObjectsPath": browseRelatedObjectsPath,
 		"realizationPath":    browseRealizationPath,
@@ -554,6 +669,13 @@ func (app *App) loadTemplates() {
 		"hrefURL":            trustedURL,
 		"apiURL":             trustedAPIURL,
 		"repoSourceURL":      repoSourceURL,
+		"rowAPIPath":         browseRowAPIPath,
+		"formatTime": func(value time.Time) string {
+			if value.IsZero() {
+				return "Unknown"
+			}
+			return value.UTC().Format("2006-01-02 15:04:05 MST")
+		},
 		"queryEscape": func(s string) string {
 			return url.QueryEscape(s)
 		},
@@ -578,6 +700,7 @@ func (app *App) loadTemplates() {
 		"commands", "command_detail",
 		"projections", "projection_detail",
 		"objects", "object_detail",
+		"instance_detail",
 		"schemas", "schema_detail",
 	}
 
@@ -860,6 +983,32 @@ func parsePairPathParam(r *http.Request, prefix string) (string, string, bool) {
 		return "", "", false
 	}
 	return left, right, true
+}
+
+func parseObjectInstancePathParam(r *http.Request, prefix string) (string, string, string, bool) {
+	if r == nil || prefix == "" {
+		return "", "", "", false
+	}
+	rest := r.URL.EscapedPath()
+	if rest == "" {
+		rest = r.URL.Path
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", "", "", false
+	}
+	rest = strings.TrimPrefix(rest, prefix)
+	rest = strings.TrimSuffix(rest, "/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 4 || parts[2] != "instances" {
+		return "", "", "", false
+	}
+	seedID, err1 := url.PathUnescape(parts[0])
+	kind, err2 := url.PathUnescape(parts[1])
+	objectID, err3 := url.PathUnescape(parts[3])
+	if err1 != nil || err2 != nil || err3 != nil || seedID == "" || kind == "" || objectID == "" {
+		return "", "", "", false
+	}
+	return seedID, kind, objectID, true
 }
 
 func parseReferenceNamePathParam(r *http.Request, prefix string) (string, string, bool) {
@@ -1176,6 +1325,17 @@ func browseObjectPath(seedID, kind string) string {
 	return "/objects/" + url.PathEscape(seedID) + "/" + url.PathEscape(kind)
 }
 
+func browseObjectInstancePath(seedID, kind, objectID string) string {
+	return browseObjectPath(seedID, kind) + "/instances/" + url.PathEscape(objectID)
+}
+
+func browseRowAPIPath(rowID int64) template.URL {
+	if rowID <= 0 {
+		return ""
+	}
+	return trustedAPIURL("/v1/registry/rows/" + fmt.Sprintf("%d", rowID))
+}
+
 func hasDataLayout(layout DataLayout) bool {
 	return len(layout.SharedMetadata.Fields) > 0 ||
 		len(layout.PublicPayload.Fields) > 0 ||
@@ -1220,6 +1380,338 @@ func layoutShape(layout DataLayout) string {
 	}
 	lines = append(lines, "}")
 	return strings.Join(lines, "\n")
+}
+
+type instanceAccumulator struct {
+	SeedID   string
+	ObjectID string
+	Kind     string
+
+	CreateRow *RegistryRow
+	ClaimRows []RegistryRow
+}
+
+type seedInstanceIndex struct {
+	instances      map[string]*instanceAccumulator
+	kindByObjectID map[string]string
+}
+
+func (app *App) objectInstancesForKind(seedID, kind string) ([]ObjectInstanceSummary, error) {
+	index, err := app.buildSeedInstanceIndex(seedID)
+	if err != nil {
+		return nil, err
+	}
+	return index.summariesForKind(kind), nil
+}
+
+func (app *App) objectInstanceDetail(seedID, kind, objectID string) (*ObjectInstanceDetailView, error) {
+	index, err := app.buildSeedInstanceIndex(seedID)
+	if err != nil {
+		return nil, err
+	}
+	return index.detailFor(kind, objectID)
+}
+
+func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error) {
+	rows, err := app.registry.AllRows(seedID)
+	if err != nil {
+		return nil, err
+	}
+
+	index := &seedInstanceIndex{
+		instances:      make(map[string]*instanceAccumulator),
+		kindByObjectID: make(map[string]string),
+	}
+
+	for _, row := range rows {
+		objectID := strings.TrimSpace(row.ObjectID)
+		if objectID == "" {
+			objectID = extractStringField(row.Payload, "object_id", "objectId", "id")
+		}
+		if objectID == "" {
+			continue
+		}
+
+		acc, ok := index.instances[objectID]
+		if !ok {
+			acc = &instanceAccumulator{
+				SeedID:   strings.TrimSpace(row.SeedID),
+				ObjectID: objectID,
+			}
+			index.instances[objectID] = acc
+		}
+
+		if acc.Kind == "" {
+			acc.Kind = inferInstanceKind(row)
+		}
+
+		switch strings.TrimSpace(row.RowType) {
+		case "object.create":
+			copy := row
+			acc.CreateRow = &copy
+			if acc.Kind == "" {
+				acc.Kind = inferInstanceKind(copy)
+			}
+		case "claim.create":
+			acc.ClaimRows = append(acc.ClaimRows, row)
+			if acc.Kind == "" {
+				acc.Kind = inferInstanceKind(row)
+			}
+		}
+	}
+
+	for objectID, acc := range index.instances {
+		if acc.Kind == "" {
+			acc.Kind = "unknown"
+		}
+		index.kindByObjectID[objectID] = acc.Kind
+	}
+
+	return index, nil
+}
+
+func (idx *seedInstanceIndex) summariesForKind(kind string) []ObjectInstanceSummary {
+	kind = strings.TrimSpace(kind)
+	out := make([]ObjectInstanceSummary, 0)
+	for _, acc := range idx.instances {
+		if acc.Kind != kind {
+			continue
+		}
+		out = append(out, idx.summaryFor(acc))
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		left := out[i].LatestAcceptedAt
+		right := out[j].LatestAcceptedAt
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return out[i].ObjectID < out[j].ObjectID
+	})
+	return out
+}
+
+func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceDetailView, error) {
+	acc, ok := idx.instances[strings.TrimSpace(objectID)]
+	if !ok {
+		return nil, errors.New("instance not found")
+	}
+	if acc.Kind != strings.TrimSpace(kind) {
+		return nil, errors.New("instance not found")
+	}
+
+	summary := idx.summaryFor(acc)
+	claimViews := make([]ClaimRowView, 0, len(acc.ClaimRows))
+	related := mergeRelatedInstanceLinks(summary.RelatedInstances)
+	for _, row := range acc.ClaimRows {
+		claimRelated := detectRelatedInstances(row.Payload, idx.kindByObjectID, acc.ObjectID, acc.SeedID)
+		related = mergeRelatedInstanceLinks(append(related, claimRelated...))
+		claimViews = append(claimViews, ClaimRowView{
+			RowID:            row.RowID,
+			ClaimID:          strings.TrimSpace(row.ClaimID),
+			ClaimType:        claimTypeForRow(row),
+			AcceptedAt:       row.AcceptedAt,
+			PayloadJSON:      prettyJSON(row.Payload),
+			RelatedInstances: claimRelated,
+		})
+	}
+
+	return &ObjectInstanceDetailView{
+		Summary:            summary,
+		ObjectPayloadJSON:  prettyJSON(payloadForRow(acc.CreateRow)),
+		LatestClaimJSON:    prettyJSON(payloadForRow(latestClaimRow(acc))),
+		ClaimRows:          claimViews,
+		RelatedInstances:   related,
+		InstanceDefinition: browseObjectPath(acc.SeedID, acc.Kind),
+	}, nil
+}
+
+func (idx *seedInstanceIndex) summaryFor(acc *instanceAccumulator) ObjectInstanceSummary {
+	createPayload := payloadForRow(acc.CreateRow)
+	latestClaim := latestClaimRow(acc)
+	latestPayload := payloadForRow(latestClaim)
+	label := displayLabel(latestPayload)
+	if label == "" {
+		label = displayLabel(createPayload)
+	}
+	if label == "" {
+		label = acc.ObjectID
+	}
+	slug := extractStringField(latestPayload, "slug", "handle")
+	if slug == "" {
+		slug = extractStringField(createPayload, "slug", "handle")
+	}
+	related := detectRelatedInstances(createPayload, idx.kindByObjectID, acc.ObjectID, acc.SeedID)
+	related = mergeRelatedInstanceLinks(append(related, detectRelatedInstances(latestPayload, idx.kindByObjectID, acc.ObjectID, acc.SeedID)...))
+
+	summary := ObjectInstanceSummary{
+		SeedID:           acc.SeedID,
+		Kind:             acc.Kind,
+		ObjectID:         acc.ObjectID,
+		Label:            label,
+		Slug:             slug,
+		ClaimCount:       len(acc.ClaimRows),
+		RelatedInstances: related,
+		ObjectPath:       browseObjectPath(acc.SeedID, acc.Kind),
+		InstancePath:     browseObjectInstancePath(acc.SeedID, acc.Kind, acc.ObjectID),
+	}
+	if acc.CreateRow != nil {
+		summary.CreateRowID = acc.CreateRow.RowID
+		summary.LatestAcceptedAt = acc.CreateRow.AcceptedAt
+	}
+	if latestClaim != nil {
+		summary.LatestClaimRowID = latestClaim.RowID
+		summary.LatestClaimType = claimTypeForRow(*latestClaim)
+		summary.LatestAcceptedAt = latestClaim.AcceptedAt
+		summary.LatestPayloadJSON = prettyJSON(latestPayload)
+	} else {
+		summary.LatestPayloadJSON = prettyJSON(createPayload)
+	}
+	return summary
+}
+
+func latestClaimRow(acc *instanceAccumulator) *RegistryRow {
+	if acc == nil || len(acc.ClaimRows) == 0 {
+		return nil
+	}
+	row := acc.ClaimRows[len(acc.ClaimRows)-1]
+	return &row
+}
+
+func payloadForRow(row *RegistryRow) map[string]any {
+	if row == nil || row.Payload == nil {
+		return map[string]any{}
+	}
+	return row.Payload
+}
+
+func inferInstanceKind(row RegistryRow) string {
+	if kind := extractStringField(row.Payload, "kind", "object_type", "objectType", "type"); kind != "" {
+		return kind
+	}
+	if claimType := extractStringField(row.Payload, "claim_type", "claimType"); claimType != "" {
+		if prefix, _, ok := strings.Cut(claimType, "."); ok && prefix != "" {
+			return prefix
+		}
+	}
+	return ""
+}
+
+func claimTypeForRow(row RegistryRow) string {
+	if claimType := extractStringField(row.Payload, "claim_type", "claimType"); claimType != "" {
+		return claimType
+	}
+	if row.ClaimID != "" {
+		return row.RowType
+	}
+	return row.RowType
+}
+
+func extractStringField(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, ok := payload[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			if text := strings.TrimSpace(typed); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+func displayLabel(payload map[string]any) string {
+	for _, key := range []string{"name", "title", "label", "display_name", "displayName", "slug", "handle", "email"} {
+		if value := extractStringField(payload, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func prettyJSON(value any) string {
+	if value == nil {
+		return "{}"
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("%v", value)
+	}
+	if len(data) == 0 {
+		return "{}"
+	}
+	return string(data)
+}
+
+func detectRelatedInstances(value any, kindByObjectID map[string]string, selfID, seedID string) []RelatedInstanceLink {
+	seen := make(map[string]RelatedInstanceLink)
+	var walk func(any)
+	walk = func(current any) {
+		switch typed := current.(type) {
+		case map[string]any:
+			for _, item := range typed {
+				walk(item)
+			}
+		case []any:
+			for _, item := range typed {
+				walk(item)
+			}
+		case string:
+			id := strings.TrimSpace(typed)
+			if id == "" || id == selfID {
+				return
+			}
+			kind, ok := kindByObjectID[id]
+			if !ok || strings.TrimSpace(kind) == "" {
+				return
+			}
+			seen[id] = RelatedInstanceLink{
+				ObjectID: id,
+				Kind:     kind,
+				Path:     browseObjectInstancePath(seedID, kind, id),
+			}
+		}
+	}
+	walk(value)
+
+	out := make([]RelatedInstanceLink, 0, len(seen))
+	for _, item := range seen {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].ObjectID < out[j].ObjectID
+	})
+	return out
+}
+
+func mergeRelatedInstanceLinks(items []RelatedInstanceLink) []RelatedInstanceLink {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := make(map[string]RelatedInstanceLink)
+	for _, item := range items {
+		if strings.TrimSpace(item.ObjectID) == "" || strings.TrimSpace(item.Kind) == "" {
+			continue
+		}
+		seen[item.Kind+"|"+item.ObjectID] = item
+	}
+	out := make([]RelatedInstanceLink, 0, len(seen))
+	for _, item := range seen {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].ObjectID < out[j].ObjectID
+	})
+	return out
 }
 
 func parseSchemaBrowseRef(r *http.Request) (string, bool) {
@@ -1467,11 +1959,11 @@ func (app *App) handleCommandDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
 	app.render(w, "command_detail", withAgentAccess(withResourceIdentity(map[string]any{
-		"Title":    item.Name,
-		"Nav":      "actions",
-		"Command":  item,
+		"Title":      item.Name,
+		"Nav":        "actions",
+		"Command":    item,
 		"SourcePath": item.ContractFile,
-		"APIRoute": item.Self,
+		"APIRoute":   item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self, item.Path))
 }
 
@@ -1592,6 +2084,11 @@ func (app *App) handleObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
+	if seedID, kind, objectID, ok := parseObjectInstancePathParam(r, "/objects/"); ok {
+		app.handleObjectInstanceDetail(w, r, seedID, kind, objectID)
+		return
+	}
+
 	seedID, kind, ok := parsePairPathParam(r, "/objects/")
 	if !ok {
 		app.renderError(w, http.StatusNotFound, "Object not found.")
@@ -1608,12 +2105,36 @@ func (app *App) handleObjectDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
-	app.render(w, "object_detail", withAgentAccess(withResourceIdentity(map[string]any{
+	data := withAgentAccess(withResourceIdentity(map[string]any{
 		"Title":    item.Kind,
 		"Nav":      "objects",
 		"Object":   item,
 		"APIRoute": item.Self,
-	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self))
+	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self, "/v1/registry/rows?seed_id="+url.QueryEscape(seedID))
+	instances, err := app.objectInstancesForKind(seedID, kind)
+	if err != nil {
+		data["InstanceLoadError"] = "Raw instance rows are not currently available from the registry."
+		log.Printf("instance browse error for %s/%s: %v", seedID, kind, err)
+	} else {
+		data["Instances"] = instances
+	}
+	app.render(w, "object_detail", data)
+}
+
+func (app *App) handleObjectInstanceDetail(w http.ResponseWriter, r *http.Request, seedID, kind, objectID string) {
+	item, err := app.objectInstanceDetail(seedID, kind, objectID)
+	if err != nil {
+		app.renderError(w, http.StatusNotFound, "Object instance not found.")
+		log.Printf("instance detail error for %s/%s/%s: %v", seedID, kind, objectID, err)
+		return
+	}
+
+	app.render(w, "instance_detail", withAgentAccess(map[string]any{
+		"Title":      item.Summary.ObjectID,
+		"Nav":        "objects",
+		"Instance":   item,
+		"ObjectPath": browseObjectPath(seedID, kind),
+	}, "/v1/registry/rows?seed_id="+url.QueryEscape(seedID), "/v1/registry/object?seed_id="+url.QueryEscape(seedID)+"&kind="+url.QueryEscape(kind)))
 }
 
 func (app *App) handleSchemas(w http.ResponseWriter, r *http.Request) {
@@ -1664,11 +2185,11 @@ func (app *App) handleSchemaDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	setResourceIdentityHeaders(w, item.CanonicalURL, item.PermalinkURL, item.ContentHash)
 	app.render(w, "schema_detail", withAgentAccess(withResourceIdentity(map[string]any{
-		"Title":    item.Ref,
-		"Nav":      "contracts",
-		"Schema":   item,
+		"Title":      item.Ref,
+		"Nav":        "contracts",
+		"Schema":     item,
 		"SourcePath": item.Ref,
-		"APIRoute": item.Self,
+		"APIRoute":   item.Self,
 	}, item.CanonicalURL, item.PermalinkURL, item.ContentHash), item.Self))
 }
 
