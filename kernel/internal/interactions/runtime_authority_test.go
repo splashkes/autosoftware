@@ -204,3 +204,108 @@ func TestRuntimeAuthorityLedgerAndEffectiveAccess(t *testing.T) {
 		t.Fatalf("unexpected effective grants after rebuild: %+v", effectiveAfterRebuild.ActiveGrants)
 	}
 }
+
+func TestRuntimeAuthorityMaterializeMigratesLegacyGrantRowsIntoRegistry(t *testing.T) {
+	dsn := os.Getenv("AS_RUNTIME_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("AS_RUNTIME_DATABASE_URL is required")
+	}
+
+	ctx := context.Background()
+	pool, err := runtimedb.OpenPool(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open pool: %v", err)
+	}
+	defer pool.Close()
+
+	repoRoot, err := realizations.FindRepoRoot(".")
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	if err := runtimedb.RunMigrations(ctx, pool, repoRoot); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+
+	service := NewRuntimeService(pool)
+	service.now = func() time.Time {
+		return time.Date(2026, time.March, 20, 15, 0, 0, 0, time.UTC)
+	}
+
+	grantorID := newID("prn")
+	granteeID := newID("prn")
+	for _, item := range []CreatePrincipalInput{
+		{PrincipalID: grantorID, Kind: "person", DisplayName: "Legacy Grantor"},
+		{PrincipalID: granteeID, Kind: "person", DisplayName: "Legacy Grantee"},
+	} {
+		if _, err := service.CreatePrincipal(ctx, item); err != nil {
+			t.Fatalf("create principal %s: %v", item.PrincipalID, err)
+		}
+	}
+	if _, err := service.UpsertAuthorityBundle(ctx, UpsertAuthorityBundleInput{
+		BundleID:     "legacy_bundle",
+		DisplayName:  "Legacy Admin",
+		Capabilities: []string{"legacy.manage"},
+	}); err != nil {
+		t.Fatalf("upsert legacy bundle: %v", err)
+	}
+	if _, err := service.BindAuthIdentity(ctx, BindAuthIdentityInput{
+		ProviderID:      "legacy-provider",
+		PrincipalID:     granteeID,
+		ProviderSubject: "legacy-subject",
+		Profile:         map[string]interface{}{"email": "legacy@example.com"},
+	}); err != nil {
+		t.Fatalf("bind legacy auth identity: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into runtime_authority_grants (
+		  grant_id, grantor_principal_id, grantee_principal_id, bundle_id, capabilities_snapshot,
+		  scope_kind, scope_id, delegation_mode, basis, status, effective_at, evidence_refs, metadata, created_at
+		)
+		values ($1, $2, $3, $4, $5, 'seed', '0007-Flowershow', 'same_scope', 'bootstrap', 'accepted', $6, '{}'::text[], '{}'::jsonb, $6)
+	`, "legacy_grant_restore", grantorID, granteeID, "legacy_bundle", []string{"legacy.manage"}, service.now()); err != nil {
+		t.Fatalf("insert legacy grant row: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `delete from runtime_registry_rows where object_id = 'legacy_grant_restore'`); err != nil {
+		t.Fatalf("clear legacy migration rows: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `delete from runtime_registry_change_sets where change_set_id = 'authority-legacy-migration'`); err != nil {
+		t.Fatalf("clear legacy migration change set: %v", err)
+	}
+
+	var before int
+	if err := pool.QueryRow(ctx, `
+		select count(*)
+		from runtime_registry_rows
+		where reference = 'runtime-authority' and object_id = 'legacy_grant_restore'
+	`).Scan(&before); err != nil {
+		t.Fatalf("count registry rows before materialize: %v", err)
+	}
+	if before != 0 {
+		t.Fatalf("expected empty authority registry before migration, got %d", before)
+	}
+
+	if _, err := service.MaterializeAuthorityState(ctx); err != nil {
+		t.Fatalf("materialize authority state with legacy rows: %v", err)
+	}
+
+	var after int
+	if err := pool.QueryRow(ctx, `
+		select count(*)
+		from runtime_registry_rows
+		where reference = 'runtime-authority' and object_id = 'legacy_grant_restore'
+	`).Scan(&after); err != nil {
+		t.Fatalf("count registry rows after materialize: %v", err)
+	}
+	if after != 1 {
+		t.Fatalf("expected 1 migrated authority registry row, got %d", after)
+	}
+
+	effective, err := service.GetEffectiveAuthorityByPrincipal(ctx, granteeID)
+	if err != nil {
+		t.Fatalf("get effective authority after legacy migration: %v", err)
+	}
+	if len(effective.EffectivePolicies) != 1 || effective.EffectivePolicies[0].Capability != "legacy.manage" {
+		t.Fatalf("unexpected effective authority after legacy migration: %+v", effective.EffectivePolicies)
+	}
+}
