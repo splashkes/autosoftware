@@ -3129,6 +3129,14 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load claims: %w", err)
 	}
 
+	if len(fresh.claims) > 0 {
+		replayed, err := replayFlowershowSnapshotFromClaims(fresh.objects, fresh.claims)
+		if err != nil {
+			return nil, fmt.Errorf("replay claims: %w", err)
+		}
+		return replayed, nil
+	}
+
 	return fresh, nil
 }
 
@@ -3197,7 +3205,9 @@ func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organizat
 func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) {
 	return s.currentMem().organizationByID(id)
 }
-func (s *postgresFlowershowStore) allOrganizations() []*Organization { return s.currentMem().allOrganizations() }
+func (s *postgresFlowershowStore) allOrganizations() []*Organization {
+	return s.currentMem().allOrganizations()
+}
 func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3246,7 +3256,9 @@ func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show,
 	}
 	return show, nil
 }
-func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) { return s.currentMem().showByID(id) }
+func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) {
+	return s.currentMem().showByID(id)
+}
 func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) {
 	return s.currentMem().showBySlug(slug)
 }
@@ -3335,8 +3347,10 @@ func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*P
 	}
 	return person, nil
 }
-func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.currentMem().personByID(id) }
-func (s *postgresFlowershowStore) allPersons() []*Person                { return s.currentMem().allPersons() }
+func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) {
+	return s.currentMem().personByID(id)
+}
+func (s *postgresFlowershowStore) allPersons() []*Person { return s.currentMem().allPersons() }
 func (s *postgresFlowershowStore) linkPersonOrganization(link PersonOrganization) (*PersonOrganization, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3546,7 +3560,9 @@ func (s *postgresFlowershowStore) reorderClass(id string, sortOrder int) (*ShowC
 func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass {
 	return s.currentMem().classesBySection(sectionID)
 }
-func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) { return s.currentMem().classByID(id) }
+func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) {
+	return s.currentMem().classByID(id)
+}
 func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass {
 	return s.currentMem().classesByShowID(showID)
 }
@@ -3689,7 +3705,9 @@ func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, po
 	}
 	return s.persistNewClaims(ctx, mem, claimStart)
 }
-func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) { return s.currentMem().entryByID(id) }
+func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) {
+	return s.currentMem().entryByID(id)
+}
 func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry {
 	return s.currentMem().entriesByShow(showID)
 }
@@ -3767,7 +3785,9 @@ func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) {
 func (s *postgresFlowershowStore) mediaByEntry(entryID string) []*Media {
 	return s.currentMem().mediaByEntry(entryID)
 }
-func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) { return s.currentMem().mediaByID(id) }
+func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) {
+	return s.currentMem().mediaByID(id)
+}
 func (s *postgresFlowershowStore) deleteMedia(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3805,8 +3825,10 @@ func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) 
 	}
 	return item, nil
 }
-func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) { return s.currentMem().taxonByID(id) }
-func (s *postgresFlowershowStore) allTaxons() []*Taxon                { return s.currentMem().allTaxons() }
+func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) {
+	return s.currentMem().taxonByID(id)
+}
+func (s *postgresFlowershowStore) allTaxons() []*Taxon { return s.currentMem().allTaxons() }
 func (s *postgresFlowershowStore) taxonsByType(taxonType string) []*Taxon {
 	return s.currentMem().taxonsByType(taxonType)
 }

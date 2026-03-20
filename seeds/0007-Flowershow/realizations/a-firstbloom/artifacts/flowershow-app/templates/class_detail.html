@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="{{bp}}/">Home</a> &rsaquo;
-  <a href="{{bp}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;
-  <a href="{{bp}}/shows/{{.Show.Slug}}/classes">Classes</a> &rsaquo;
+  <a href="{{$.BasePath}}/">Home</a> &rsaquo;
+  <a href="{{$.BasePath}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;
+  <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes">Classes</a> &rsaquo;
   <span>{{.Class.ClassNumber}}</span>
 </div>
 
@@ -26,8 +26,8 @@
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
-        <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
-        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
+        <td><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>
       </tr>

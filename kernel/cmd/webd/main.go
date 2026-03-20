@@ -2489,6 +2489,40 @@ func rewriteMountedHTML(body []byte, mountPrefix, reference string) []byte {
 		`data-copy='`+doublePrefix, `data-copy='`+mountPrefix,
 	).Replace(rewritten)
 
+	trimmedMount := strings.Trim(strings.TrimSuffix(mountPrefix, "/"), "/")
+	if trimmedMount != "" {
+		if slash := strings.LastIndex(trimmedMount, "/"); slash >= 0 {
+			trimmedMount = trimmedMount[slash+1:]
+		}
+		if trimmedMount != "" {
+			doubleMountedSegment := strings.TrimSuffix(mountPrefix, "/") + "/" + trimmedMount + "/"
+			rewritten = strings.NewReplacer(
+				`href="`+doubleMountedSegment, `href="`+mountPrefix,
+				`href='`+doubleMountedSegment, `href='`+mountPrefix,
+				`src="`+doubleMountedSegment, `src="`+mountPrefix,
+				`src='`+doubleMountedSegment, `src='`+mountPrefix,
+				`action="`+doubleMountedSegment, `action="`+mountPrefix,
+				`action='`+doubleMountedSegment, `action='`+mountPrefix,
+				`formaction="`+doubleMountedSegment, `formaction="`+mountPrefix,
+				`formaction='`+doubleMountedSegment, `formaction='`+mountPrefix,
+				`hx-get="`+doubleMountedSegment, `hx-get="`+mountPrefix,
+				`hx-get='`+doubleMountedSegment, `hx-get='`+mountPrefix,
+				`hx-post="`+doubleMountedSegment, `hx-post="`+mountPrefix,
+				`hx-post='`+doubleMountedSegment, `hx-post='`+mountPrefix,
+				`hx-put="`+doubleMountedSegment, `hx-put="`+mountPrefix,
+				`hx-put='`+doubleMountedSegment, `hx-put='`+mountPrefix,
+				`hx-delete="`+doubleMountedSegment, `hx-delete="`+mountPrefix,
+				`hx-delete='`+doubleMountedSegment, `hx-delete='`+mountPrefix,
+				`hx-patch="`+doubleMountedSegment, `hx-patch="`+mountPrefix,
+				`hx-patch='`+doubleMountedSegment, `hx-patch='`+mountPrefix,
+				`sse-connect="`+doubleMountedSegment, `sse-connect="`+mountPrefix,
+				`sse-connect='`+doubleMountedSegment, `sse-connect='`+mountPrefix,
+				`data-copy="`+doubleMountedSegment, `data-copy="`+mountPrefix,
+				`data-copy='`+doubleMountedSegment, `data-copy='`+mountPrefix,
+			).Replace(rewritten)
+		}
+	}
+
 	reserved := strings.TrimSuffix(mountPrefix, "/") + "/__"
 	rewritten = strings.NewReplacer(
 		`href="`+reserved, `href="/__`,
@@ -2513,32 +2547,6 @@ func rewriteMountedHTML(body []byte, mountPrefix, reference string) []byte {
 		`sse-connect='`+reserved, `sse-connect='/__`,
 		`data-copy="`+reserved, `data-copy="/__`,
 		`data-copy='`+reserved, `data-copy='/__`,
-	).Replace(rewritten)
-
-	apiRoot := strings.TrimSuffix(mountPrefix, "/") + "/v1/"
-	rewritten = strings.NewReplacer(
-		`href="`+apiRoot, `href="/v1/`,
-		`href='`+apiRoot, `href='/v1/`,
-		`src="`+apiRoot, `src="/v1/`,
-		`src='`+apiRoot, `src='/v1/`,
-		`action="`+apiRoot, `action="/v1/`,
-		`action='`+apiRoot, `action='/v1/`,
-		`formaction="`+apiRoot, `formaction="/v1/`,
-		`formaction='`+apiRoot, `formaction='/v1/`,
-		`hx-get="`+apiRoot, `hx-get="/v1/`,
-		`hx-get='`+apiRoot, `hx-get='/v1/`,
-		`hx-post="`+apiRoot, `hx-post="/v1/`,
-		`hx-post='`+apiRoot, `hx-post='/v1/`,
-		`hx-put="`+apiRoot, `hx-put="/v1/`,
-		`hx-put='`+apiRoot, `hx-put='/v1/`,
-		`hx-delete="`+apiRoot, `hx-delete="/v1/`,
-		`hx-delete='`+apiRoot, `hx-delete='/v1/`,
-		`hx-patch="`+apiRoot, `hx-patch="/v1/`,
-		`hx-patch='`+apiRoot, `hx-patch='/v1/`,
-		`sse-connect="`+apiRoot, `sse-connect="/v1/`,
-		`sse-connect='`+apiRoot, `sse-connect='/v1/`,
-		`data-copy="`+apiRoot, `data-copy="/v1/`,
-		`data-copy='`+apiRoot, `data-copy='/v1/`,
 	).Replace(rewritten)
 
 	return []byte(injectMountedAgentWidget(rewritten, mountPrefix, reference))

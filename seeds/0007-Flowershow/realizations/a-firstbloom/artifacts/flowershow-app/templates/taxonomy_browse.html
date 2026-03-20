@@ -5,7 +5,7 @@
 {{if .Taxons}}
 <div class="card-grid">
   {{range .Taxons}}
-  <a href="{{bp}}/taxonomy/{{.ID}}" class="card taxon-card">
+  <a href="{{$.BasePath}}/taxonomy/{{.ID}}" class="card taxon-card">
     <div class="card-body">
       <h3 class="card-title">{{.Name}}</h3>
       {{if .ScientificName}}<p class="card-meta scientific">{{.ScientificName}}</p>{{end}}

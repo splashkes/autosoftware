@@ -14,7 +14,7 @@
         <h2 class="card-title">Flowershow Admin</h2>
         <nav class="account-section-nav">
           {{range .Sections}}
-          <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
           {{end}}
         </nav>
       </div>
@@ -26,7 +26,7 @@
         <div class="card-body">
           <div class="login-step-kicker">Search</div>
           <h2 class="card-title">Find Shows, Clubs, Classes, And People</h2>
-          <form method="GET" action="{{bp}}/admin" class="form admin-search-form">
+          <form method="GET" action="{{$.BasePath}}/admin" class="form admin-search-form">
             <input type="hidden" name="section" value="overview">
             <input type="search" name="q" value="{{.SearchQuery}}" class="form-input" placeholder="Search shows, clubs, classes, or people">
             <button type="submit" class="btn btn-primary">Search</button>
@@ -37,7 +37,7 @@
             {{if .SearchHits}}
             <div class="account-role-list">
               {{range .SearchHits}}
-              <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
+              <a href="{{$.BasePath}}{{.Href}}" class="account-role-item admin-search-result">
                 <div>
                   <span class="badge badge-green">{{.TypeLabel}}</span>
                   <strong>{{.Title}}</strong>
@@ -76,7 +76,7 @@
           <h2>Shows</h2>
         </div>
         <div class="card-grid">
-          <a href="{{bp}}/admin/shows/new" class="card show-card admin-action-card">
+          <a href="{{$.BasePath}}/admin/shows/new" class="card show-card admin-action-card">
             <div class="card-body">
               <div class="login-step-kicker">Create</div>
               <h3 class="card-title">New Show</h3>
@@ -84,7 +84,7 @@
             </div>
           </a>
           {{range .Shows}}
-          <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
+          <a href="{{$.BasePath}}/admin/shows/{{.ID}}" class="card show-card">
             <div class="card-body">
               <h3 class="card-title">{{.Name}}</h3>
               <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
@@ -102,7 +102,7 @@
           <h2>Clubs</h2>
         </div>
         <div class="card-grid">
-          <a href="{{bp}}/admin/clubs/new" class="card show-card admin-action-card">
+          <a href="{{$.BasePath}}/admin/clubs/new" class="card show-card admin-action-card">
             <div class="card-body">
               <div class="login-step-kicker">Create</div>
               <h3 class="card-title">New Club</h3>
@@ -110,7 +110,7 @@
             </div>
           </a>
           {{range .Orgs}}
-          <a href="{{bp}}/admin/clubs/{{.ID}}" class="card show-card">
+          <a href="{{$.BasePath}}/admin/clubs/{{.ID}}" class="card show-card">
             <div class="card-body">
               <h3 class="card-title">{{.Name}}</h3>
               <p class="card-meta">{{.Level}}</p>
@@ -128,13 +128,13 @@
           <h2 class="card-title">People Directory</h2>
           <p class="card-meta">Use clubs to invite the next administrators and members. This directory is still useful for lookup and cleanup.</p>
           <div class="show-actions">
-            <a href="{{bp}}/admin/persons" class="btn btn-outline">Manage People</a>
+            <a href="{{$.BasePath}}/admin/persons" class="btn btn-outline">Manage People</a>
           </div>
           <div class="account-role-list">
             {{range .Persons}}
             <div class="account-role-item">
               <div>
-                <strong><a href="{{bp}}/people/{{.ID}}">{{.FirstName}} {{.LastName}}</a></strong>
+                <strong><a href="{{$.BasePath}}/people/{{.ID}}">{{.FirstName}} {{.LastName}}</a></strong>
                 <div class="card-meta">{{if .Email}}{{.Email}}{{else}}No email yet{{end}}</div>
               </div>
             </div>
@@ -154,7 +154,7 @@
             {{range .Judges}}
             <div class="account-role-item">
               <div>
-                <strong><a href="{{bp}}{{.ShowHref}}">{{.ShowName}}</a></strong>
+                <strong><a href="{{$.BasePath}}{{.ShowHref}}">{{.ShowName}}</a></strong>
                 {{if .Judges}}
                 <div class="card-meta">{{range $i, $judge := .Judges}}{{if $i}}, {{end}}{{$judge}}{{end}}</div>
                 {{else}}
@@ -178,7 +178,7 @@
           <h2 class="card-title">Reference Materials And Secondary Surfaces</h2>
           <div class="account-role-list">
             {{range .References}}
-            <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
+            <a href="{{$.BasePath}}{{.Href}}" class="account-role-item admin-search-result">
               <div>
                 <strong>{{.Label}}</strong>
                 <div class="card-meta">{{.Description}}</div>

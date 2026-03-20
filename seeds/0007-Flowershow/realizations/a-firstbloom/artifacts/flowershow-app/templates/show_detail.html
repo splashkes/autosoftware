@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="{{bp}}/">Home</a> &rsaquo; <span>{{.Show.Name}}</span>
+  <a href="{{$.BasePath}}/">Home</a> &rsaquo; <span>{{.Show.Name}}</span>
 </div>
 
 <div class="show-header">
@@ -11,9 +11,9 @@
     {{statusBadge .Show.Status}}
   </p>
   <div class="show-actions">
-    <a href="{{bp}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary">Live Winners</a>
-    <a href="{{bp}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
-    <a href="{{bp}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary">Live Winners</a>
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
   </div>
 </div>
 
@@ -45,7 +45,7 @@
       <h4>{{.Section.Title}}</h4>
       <div class="class-list">
         {{range .Classes}}
-        <a href="{{bp}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="class-item">
+        <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="class-item">
           <span class="class-number">{{.ClassNumber}}</span>
           <span class="class-title">{{.Title}}{{if .Description}} <span class="card-meta">· {{.Description}}</span>{{end}}</span>
           {{if .SpecimenCount}}<span class="class-specimens">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
@@ -69,9 +69,9 @@
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
-        <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
         <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
-        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
+        <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>
       </tr>

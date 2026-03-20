@@ -5,9 +5,9 @@
     <h1>Flowershow</h1>
     <p class="hero-sub">Follow upcoming shows, revisit past blooms, browse classes and entries, and move through the public flower-show surface without getting buried in admin detail.</p>
     <div class="show-actions">
-      <a href="{{bp}}/browse" class="btn btn-primary">Browse Entries</a>
-      <a href="{{bp}}/clubs" class="btn btn-outline">View Clubs</a>
-      <a href="{{bp}}/admin/clubs/new" class="btn btn-outline">+ Add Your Club</a>
+      <a href="{{$.BasePath}}/browse" class="btn btn-primary">Browse Entries</a>
+      <a href="{{$.BasePath}}/clubs" class="btn btn-outline">View Clubs</a>
+      <a href="{{$.BasePath}}/admin/clubs/new" class="btn btn-outline">+ Add Your Club</a>
     </div>
   </div>
   <div class="hero-card-grid">
@@ -36,10 +36,10 @@
   {{if .UpcomingShows}}
   <div class="show-card-stack">
     {{range .UpcomingShows}}
-    <a href="{{bp}}/shows/{{.Show.Slug}}" class="card show-card-rich">
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich">
       <div class="show-card-media" data-show-rotator>
         {{range $index, $frame := .Featured}}
-        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{bp}}{{$frame.MediaPath}}');"{{end}}>
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{$.BasePath}}{{$frame.MediaPath}}');"{{end}}>
           <span>{{$frame.Label}}</span>
         </div>
         {{end}}
@@ -67,12 +67,12 @@
       <h2>Active Clubs</h2>
       <p class="section-desc">Clubs are the public organization surface. Use them to follow exhibitors, shows, and leaderboard context.</p>
     </div>
-    <a href="{{bp}}/clubs" class="btn btn-outline">All Clubs</a>
+    <a href="{{$.BasePath}}/clubs" class="btn btn-outline">All Clubs</a>
   </div>
   {{if .Clubs}}
   <div class="card-grid club-card-grid">
     {{range .Clubs}}
-    <a href="{{bp}}/clubs#{{.Org.ID}}" class="card club-card">
+    <a href="{{$.BasePath}}/clubs#{{.Org.ID}}" class="card club-card">
       <div class="card-body">
         <h3 class="card-title">{{.Org.Name}}</h3>
         <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent club context{{end}}</p>
@@ -103,10 +103,10 @@
   {{if .PastShows}}
   <div class="show-card-stack">
     {{range .PastShows}}
-    <a href="{{bp}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
       <div class="show-card-media" data-show-rotator>
         {{range $index, $frame := .Featured}}
-        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{bp}}{{$frame.MediaPath}}');"{{end}}>
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{$.BasePath}}{{$frame.MediaPath}}');"{{end}}>
           <span>{{$frame.Label}}</span>
         </div>
         {{end}}

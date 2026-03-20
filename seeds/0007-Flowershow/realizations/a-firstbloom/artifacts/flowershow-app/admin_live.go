@@ -29,18 +29,22 @@ func (a *app) isHTMX(r *http.Request) bool {
 }
 
 func (a *app) renderTemplateBlock(page, block string, data any) (string, error) {
+	return a.renderTemplateBlockForRequest(nil, page, block, data)
+}
+
+func (a *app) renderTemplateBlockForRequest(r *http.Request, page, block string, data any) (string, error) {
 	t, ok := a.templates[page]
 	if !ok {
 		return "", fmt.Errorf("template %q not found", page)
 	}
 	var buf bytes.Buffer
-	if err := t.ExecuteTemplate(&buf, block, data); err != nil {
+	if err := t.ExecuteTemplate(&buf, block, a.withChrome(r, data)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-func (a *app) renderAdminSection(w http.ResponseWriter, showID, section string) {
+func (a *app) renderAdminSection(w http.ResponseWriter, r *http.Request, showID, section string) {
 	block, ok := adminSectionTemplate(section)
 	if !ok {
 		http.NotFound(w, nil)
@@ -51,7 +55,7 @@ func (a *app) renderAdminSection(w http.ResponseWriter, showID, section string) 
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	html, err := a.renderTemplateBlock("show_admin.html", block, data)
+	html, err := a.renderTemplateBlockForRequest(r, "show_admin.html", block, data)
 	if err != nil {
 		log.Printf("render admin section %s: %v", section, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -87,7 +91,7 @@ func (a *app) publishAdminSections(showID string, sections ...string) {
 
 func (a *app) respondAdminSectionOrRedirect(w http.ResponseWriter, r *http.Request, showID, section string) {
 	if a.isHTMX(r) {
-		a.renderAdminSection(w, showID, section)
+		a.renderAdminSection(w, r, showID, section)
 		return
 	}
 	http.Redirect(w, r, "/admin/shows/"+showID, http.StatusSeeOther)
@@ -96,7 +100,7 @@ func (a *app) respondAdminSectionOrRedirect(w http.ResponseWriter, r *http.Reque
 func (a *app) handleAdminShowFragment(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("showID")
 	section := r.PathValue("section")
-	a.renderAdminSection(w, showID, section)
+	a.renderAdminSection(w, r, showID, section)
 }
 
 func showIDForClass(store flowershowStore, classID string) string {

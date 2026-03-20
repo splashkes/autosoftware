@@ -20,7 +20,7 @@
         <p class="card-meta">{{.Organization.Level}}</p>
         <nav class="account-section-nav">
           {{range .Sections}}
-          <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
           {{end}}
         </nav>
       </div>
@@ -35,7 +35,7 @@
           {{if .ManagedShows}}
           <div class="card-grid">
             {{range .ManagedShows}}
-            <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
+            <a href="{{$.BasePath}}/admin/shows/{{.ID}}" class="card show-card">
               <div class="card-body">
                 <h3 class="card-title">{{.Name}}</h3>
                 <p class="card-meta">{{.Date}} · {{.Location}}</p>
@@ -54,7 +54,7 @@
           <div class="login-step-kicker">Invites</div>
           <details class="account-collapsible club-invite-collapsible" {{if eq .ActiveSection "invites"}}open{{end}}>
             <summary>Invite</summary>
-            <form method="POST" action="{{bp}}/admin/clubs/{{.OrganizationID}}/invites" class="form account-token-form">
+            <form method="POST" action="{{$.BasePath}}/admin/clubs/{{.OrganizationID}}/invites" class="form account-token-form">
               <div class="form-row">
                 <div class="form-group">
                   <label for="invite_first_name">First Name</label>

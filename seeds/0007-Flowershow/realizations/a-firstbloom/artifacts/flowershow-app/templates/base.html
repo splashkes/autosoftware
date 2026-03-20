@@ -6,26 +6,26 @@
 <title>{{.Title}} — Flowershow</title>
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
-<link rel="stylesheet" href="{{bp}}/assets/app.css?v={{assetVersion}}">
+<link rel="stylesheet" href="{{$.BasePath}}/assets/app.css?v={{assetVersion}}">
 </head>
 <body>
 <nav class="nav">
   <div class="container nav-inner">
     <div class="nav-primary">
-      <a href="{{bp}}/" class="nav-brand">Flowershow</a>
+      <a href="{{$.BasePath}}/" class="nav-brand">Flowershow</a>
       <div class="nav-links">
-        <a href="{{bp}}/" class="nav-link">Shows</a>
-        <a href="{{bp}}/clubs" class="nav-link">Clubs</a>
-        <a href="{{bp}}/classes" class="nav-link">Classes</a>
-        <a href="{{bp}}/browse" class="nav-link">Browse</a>
+        <a href="{{$.BasePath}}/" class="nav-link">Shows</a>
+        <a href="{{$.BasePath}}/clubs" class="nav-link">Clubs</a>
+        <a href="{{$.BasePath}}/classes" class="nav-link">Classes</a>
+        <a href="{{$.BasePath}}/browse" class="nav-link">Browse</a>
       </div>
     </div>
     <div class="nav-user-links">
       {{if .NavSignedIn}}
-      <a href="{{bp}}{{.NavUserHref}}" class="nav-link nav-user-link">{{.NavUserLabel}}</a>
-      {{if .NavShowAdmin}}<a href="{{bp}}/admin" class="nav-link nav-admin">Admin</a>{{end}}
+      <a href="{{$.BasePath}}{{.NavUserHref}}" class="nav-link nav-user-link">{{.NavUserLabel}}</a>
+      {{if .NavShowAdmin}}<a href="{{$.BasePath}}/admin" class="nav-link nav-admin">Admin</a>{{end}}
       {{else}}
-      <a href="{{bp}}/admin/login" class="nav-link nav-user-link">Log in</a>
+      <a href="{{$.BasePath}}/admin/login" class="nav-link nav-user-link">Log in</a>
       {{end}}
     </div>
   </div>
@@ -41,7 +41,7 @@
   </div>
 </footer>
 {{template "agent_access_widget" .}}
-<script src="{{bp}}/assets/app.js?v={{assetVersion}}"></script>
+<script src="{{$.BasePath}}/assets/app.js?v={{assetVersion}}"></script>
 </body>
 </html>
 {{end}}

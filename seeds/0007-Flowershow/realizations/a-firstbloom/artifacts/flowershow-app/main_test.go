@@ -226,6 +226,37 @@ func TestHomePagePrefixesAgentWidgetLinksWhenBasePathIsSet(t *testing.T) {
 	}
 }
 
+func TestHomePageUsesForwardedPrefixForMountedPreviewPaths(t *testing.T) {
+	prev := globalBasePath
+	globalBasePath = "/flowershow"
+	defer func() {
+		globalBasePath = prev
+	}()
+
+	a := testApp()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-Prefix", "/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow")
+	w := httptest.NewRecorder()
+	a.handleHome(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	for _, expected := range []string{
+		`href="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/assets/app.css`,
+		`href="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/clubs"`,
+		`href="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/v1/contracts"`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("home page missing forwarded-prefix path %s", expected)
+		}
+	}
+	if strings.Contains(body, `/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/flowershow/`) {
+		t.Fatal("home page should not double-prefix forwarded paths")
+	}
+}
+
 func TestShowDetailBySlug(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -2528,6 +2559,125 @@ func TestStoreMemoryBasics(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatal("expected award results")
+	}
+}
+
+func TestReplayFlowershowSnapshotFromClaimsRebuildsCurrentState(t *testing.T) {
+	s := newMemoryStore()
+
+	org, err := s.createOrganization(Organization{Name: "Replay Club", Level: "society"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	personA, err := s.createPerson(PersonInput{
+		FirstName:         "Ada",
+		LastName:          "Bloom",
+		Email:             "ada@example.com",
+		OrganizationID:    org.ID,
+		OrganizationRole:  "member",
+		PublicDisplayMode: "full_name",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	personB, err := s.createPerson(PersonInput{
+		FirstName:         "Ben",
+		LastName:          "Fern",
+		Email:             "ben@example.com",
+		OrganizationID:    org.ID,
+		OrganizationRole:  "member",
+		PublicDisplayMode: "initials",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	show, err := s.createShow(ShowInput{
+		OrganizationID: org.ID,
+		Name:           "Replay Spring Show",
+		Location:       "Hall A",
+		Date:           "2026-05-01",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sched, err := s.createSchedule(ShowSchedule{ShowID: show.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	div, err := s.createDivision(DivisionInput{ShowScheduleID: sched.ID, Title: "Horticulture", Domain: "horticulture", SortOrder: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec, err := s.createSection(SectionInput{DivisionID: div.ID, Title: "Roses", SortOrder: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	classOne, err := s.createClass(ShowClassInput{SectionID: sec.ID, ClassNumber: "1", SortOrder: 1, Title: "Hybrid Tea", Domain: "horticulture", SpecimenCount: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	classTwo, err := s.createClass(ShowClassInput{SectionID: sec.ID, ClassNumber: "2", SortOrder: 2, Title: "Floribunda", Domain: "horticulture", SpecimenCount: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.reorderClass(classTwo.ID, 5); err != nil {
+		t.Fatal(err)
+	}
+	entry, err := s.createEntry(EntryInput{ShowID: show.ID, ClassID: classOne.ID, PersonID: personA.ID, Name: "Peace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.moveEntry(entry.ID, classTwo.ID, "judge correction"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.reassignEntry(entry.ID, personB.ID); err != nil {
+		t.Fatal(err)
+	}
+	credit, err := s.createShowCredit(ShowCreditInput{ShowID: show.ID, DisplayName: "Dana Photo", CreditLabel: "Photographer", SortOrder: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.deleteShowCredit(credit.ID); err != nil {
+		t.Fatal(err)
+	}
+	invite, err := s.createOrganizationInvite(OrganizationInviteInput{
+		OrganizationID:   org.ID,
+		FirstName:        "Chris",
+		LastName:         "Guest",
+		Email:            "chris@example.com",
+		OrganizationRole: "member",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := s.claimOrganizationInvites("chris@example.com", "sub_chris", "cog_chris", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(claimed) != 1 || claimed[0].ID != invite.ID {
+		t.Fatalf("expected invite claim, got %#v", claimed)
+	}
+
+	replayed, err := replayFlowershowSnapshotFromClaims(s.objects, s.claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := replayed.showByID(show.ID); !ok || got.Name != "Replay Spring Show" {
+		t.Fatalf("replayed show missing or wrong: %#v", got)
+	}
+	if got, ok := replayed.entryByID(entry.ID); !ok || got.ClassID != classTwo.ID || got.PersonID != personB.ID {
+		t.Fatalf("replayed entry mismatch: %#v", got)
+	}
+	if got, ok := replayed.classByID(classTwo.ID); !ok || got.SortOrder != 5 {
+		t.Fatalf("replayed class reorder missing: %#v", got)
+	}
+	if credits := replayed.showCreditsByShow(show.ID); len(credits) != 0 {
+		t.Fatalf("expected deleted show credit to stay deleted, got %#v", credits)
+	}
+	replayedInvites := replayed.organizationInvitesByOrganization(org.ID)
+	if len(replayedInvites) != 1 || replayedInvites[0].Status != "accepted" || replayedInvites[0].ClaimedSubjectID != "sub_chris" {
+		t.Fatalf("replayed invite mismatch: %#v", replayedInvites)
 	}
 }
 

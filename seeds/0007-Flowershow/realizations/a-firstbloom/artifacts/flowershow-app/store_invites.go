@@ -213,31 +213,7 @@ func (s *postgresFlowershowStore) createOrganizationInvite(input OrganizationInv
 }
 
 func (s *postgresFlowershowStore) organizationInvitesByOrganization(organizationID string) []*OrganizationInvite {
-	if s == nil || s.pool == nil {
-		return nil
-	}
-	rows, err := s.pool.Query(context.Background(), `
-		select id, organization_id, first_name, last_name, email, organization_role,
-		       permission_roles, status, invited_by_subject, invited_by_name, invited_at,
-		       claimed_subject_id, claimed_cognito_sub, claimed_at
-		from as_flowershow_m_organization_invites
-		where organization_id = $1
-		order by invited_at desc, id desc
-	`, strings.TrimSpace(organizationID))
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	out := make([]*OrganizationInvite, 0)
-	for rows.Next() {
-		item, err := scanOrganizationInvite(rows)
-		if err != nil {
-			return nil
-		}
-		out = append(out, item)
-	}
-	return out
+	return s.currentMem().organizationInvitesByOrganization(organizationID)
 }
 
 func (s *postgresFlowershowStore) claimOrganizationInvites(email, subjectID, cognitoSub string, assignRole func(UserRoleInput) error) ([]*OrganizationInvite, error) {

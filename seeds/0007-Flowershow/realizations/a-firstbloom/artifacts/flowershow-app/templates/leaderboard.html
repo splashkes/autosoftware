@@ -3,7 +3,7 @@
 <p class="section-desc">{{.OrgName}} — Season {{.Season}}</p>
 
 <section class="section">
-  <form method="GET" action="{{bp}}/leaderboard" class="form form-inline">
+  <form method="GET" action="{{$.BasePath}}/leaderboard" class="form form-inline">
     <label>Organization</label>
     <select name="org" class="form-input">
       <option value="all" {{if eq .SelectedOrg "all"}}selected{{end}}>All organizations</option>

@@ -3,7 +3,7 @@
 <p class="section-desc">Filter visible results by flower, category, scientific name, judge, or club.</p>
 
 <section class="section">
-  <form method="GET" action="{{bp}}/browse" class="card">
+  <form method="GET" action="{{$.BasePath}}/browse" class="card">
     <div class="card-body">
       <div class="form-row">
         <div class="form-group">
@@ -57,7 +57,7 @@
     <article class="card show-card-rich browse-card">
       <div class="show-card-media browse-card-media">
         {{if .Media}}
-        <div class="show-visual-frame is-active theme-{{.MockTheme}}" style="background-image:url('{{bp}}/media/{{(index .Media 0).ID}}');">
+        <div class="show-visual-frame is-active theme-{{.MockTheme}}" style="background-image:url('{{$.BasePath}}/media/{{(index .Media 0).ID}}');">
           <span>{{.Entry.Name}}</span>
         </div>
         {{else}}
@@ -67,13 +67,13 @@
         {{end}}
       </div>
       <div class="card-body show-card-body">
-        <h3 class="card-title"><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></h3>
+        <h3 class="card-title"><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></h3>
         <p class="card-meta">{{.Show.Name}} · {{.Show.Date}}</p>
         {{if .Class}}<p class="card-meta">Class {{.Class.ClassNumber}} · {{.Class.Title}}</p>{{end}}
         <div class="entry-meta">
-          {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>{{end}}
+          {{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>{{end}}
           {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
-          {{range .MatchedTaxons}}<a href="{{bp}}/taxonomy/{{.ID}}" class="badge badge-muted">{{.Name}}</a>{{end}}
+          {{range .MatchedTaxons}}<a href="{{$.BasePath}}/taxonomy/{{.ID}}" class="badge badge-muted">{{.Name}}</a>{{end}}
         </div>
         {{if .Judges}}
         <p class="card-meta">Judged by {{range $i, $judge := .Judges}}{{if $i}}, {{end}}{{$judge.Initials}}{{end}}</p>
