@@ -288,6 +288,99 @@ function flowershowBindShowRotator(container) {
   }, 5000);
 }
 
+function flowershowToggleNav(shell, forceOpen) {
+  if (!shell) return;
+  const currentlyOpen = shell.getAttribute('data-nav-open') === 'true';
+  const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !currentlyOpen;
+  shell.setAttribute('data-nav-open', nextOpen ? 'true' : 'false');
+  const toggle = shell.querySelector('[data-nav-toggle]');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  }
+}
+
+function flowershowBindNav(shell) {
+  if (!shell || shell.dataset.bound === 'true') return;
+  shell.dataset.bound = 'true';
+  const toggle = shell.querySelector('[data-nav-toggle]');
+  if (!toggle) return;
+  flowershowToggleNav(shell, false);
+  toggle.addEventListener('click', function() {
+    flowershowToggleNav(shell);
+  });
+  shell.querySelectorAll('.nav-menu a').forEach(function(link) {
+    link.addEventListener('click', function() {
+      flowershowToggleNav(shell, false);
+    });
+  });
+  window.addEventListener('resize', function() {
+    if (window.innerWidth > 640) {
+      flowershowToggleNav(shell, false);
+    }
+  });
+}
+
+function flowershowOpenLightbox(lightbox, trigger) {
+  if (!lightbox || !trigger) return;
+  const stage = lightbox.querySelector('[data-media-lightbox-stage]');
+  if (!stage) return;
+  const type = trigger.dataset.mediaType || 'image';
+  const src = trigger.dataset.mediaSrc || '';
+  const label = trigger.dataset.mediaLabel || 'Entry media';
+  if (!src) return;
+
+  stage.innerHTML = '';
+  let media;
+  if (type === 'video') {
+    media = document.createElement('video');
+    media.src = src;
+    media.controls = true;
+    media.autoplay = true;
+    media.playsInline = true;
+  } else {
+    media = document.createElement('img');
+    media.src = src;
+    media.alt = label;
+  }
+  stage.appendChild(media);
+  lightbox.hidden = false;
+  document.body.classList.add('body-lightbox-open');
+}
+
+function flowershowCloseLightbox(lightbox) {
+  if (!lightbox) return;
+  lightbox.hidden = true;
+  const stage = lightbox.querySelector('[data-media-lightbox-stage]');
+  if (stage) {
+    stage.innerHTML = '';
+  }
+  document.body.classList.remove('body-lightbox-open');
+}
+
+function flowershowBindLightbox(lightbox) {
+  if (!lightbox || lightbox.dataset.bound === 'true') return;
+  lightbox.dataset.bound = 'true';
+  lightbox.querySelectorAll('[data-media-close]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      flowershowCloseLightbox(lightbox);
+    });
+  });
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      flowershowCloseLightbox(lightbox);
+    }
+  });
+}
+
+function flowershowBindMediaTrigger(button) {
+  if (!button || button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  button.addEventListener('click', function() {
+    const lightbox = document.querySelector('[data-media-lightbox]');
+    flowershowOpenLightbox(lightbox, button);
+  });
+}
+
 function flowershowInit(root) {
   const scope = root || document;
   scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
@@ -296,6 +389,9 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
   scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);
+  scope.querySelectorAll('[data-nav-shell]').forEach(flowershowBindNav);
+  scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
+  scope.querySelectorAll('[data-media-lightbox]').forEach(flowershowBindLightbox);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

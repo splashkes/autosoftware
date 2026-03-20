@@ -23,24 +23,31 @@
 
 {{if .Media}}
 <section class="section">
-  <h2>Media</h2>
-  <div class="card-grid">
+  <div class="card-grid entry-media-grid">
     {{range .Media}}
     <div class="card">
-      <div class="card-body">
+      <button type="button" class="card-body entry-media-card" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}">
         {{if eq .MediaType "video"}}
-        <video controls preload="metadata" style="width:100%;">
+        <video muted playsinline preload="metadata" class="entry-inline-media">
           <source src="{{$.BasePath}}/media/{{.ID}}" type="{{.ContentType}}">
         </video>
         {{else}}
-        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{.FileName}}" style="width:100%;border-radius:12px;">
+        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{.FileName}}" class="entry-inline-media">
         {{end}}
         <p class="card-meta" style="margin-top:.75rem;">{{.FileName}}</p>
-      </div>
+      </button>
     </div>
     {{end}}
   </div>
 </section>
+
+<div class="media-lightbox" data-media-lightbox hidden>
+  <div class="media-lightbox-backdrop" data-media-close></div>
+  <div class="media-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Entry media viewer">
+    <button type="button" class="media-lightbox-close" aria-label="Close image viewer" data-media-close>&times;</button>
+    <div class="media-lightbox-stage" data-media-lightbox-stage></div>
+  </div>
+</div>
 {{end}}
 
 {{if .Taxons}}

@@ -134,10 +134,11 @@ type clubDetailData struct {
 }
 
 type publicClassCard struct {
-	Show     *Show
-	Org      *Organization
-	Class    *ShowClass
-	Featured showVisualFrame
+	Show      *Show
+	Org       *Organization
+	Class     *ShowClass
+	Featured  showVisualFrame
+	ShowCount int
 }
 
 type classesDomainView struct {
@@ -602,6 +603,7 @@ func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
 func (a *app) classesIndexDomains(query string) []*classesDomainView {
 	query = strings.ToLower(strings.TrimSpace(query))
 	domains := map[string]*classesDomainView{}
+	cardIndex := map[string]*publicClassCard{}
 	for _, show := range a.store.allShows() {
 		org, _ := a.store.organizationByID(show.OrganizationID)
 		for _, class := range a.store.classesByShowID(show.ID) {
@@ -635,18 +637,46 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 				}
 				domains[key] = view
 			}
-			view.Items = append(view.Items, &publicClassCard{
-				Show:     show,
-				Org:      org,
-				Class:    class,
-				Featured: a.classVisualFrame(show, class.ID),
-			})
+			cardKey := strings.Join([]string{
+				key,
+				strings.TrimSpace(class.ClassNumber),
+				strings.TrimSpace(strings.ToLower(class.Title)),
+				strings.TrimSpace(strings.ToLower(class.Description)),
+			}, "|")
+			card := cardIndex[cardKey]
+			frame := a.classVisualFrame(show, class.ID)
+			if card == nil {
+				card = &publicClassCard{
+					Show:      show,
+					Org:       org,
+					Class:     class,
+					Featured:  frame,
+					ShowCount: 1,
+				}
+				cardIndex[cardKey] = card
+				view.Items = append(view.Items, card)
+				continue
+			}
+			card.ShowCount++
+			currentHasImage := strings.TrimSpace(card.Featured.MediaPath) != ""
+			nextHasImage := strings.TrimSpace(frame.MediaPath) != ""
+			if (!currentHasImage && nextHasImage) || show.Date > card.Show.Date {
+				card.Show = show
+				card.Org = org
+				card.Class = class
+				card.Featured = frame
+			}
 		}
 	}
 	var out []*classesDomainView
 	for _, key := range []string{"horticulture", "design", "special", "other"} {
 		if view := domains[key]; view != nil {
 			sort.Slice(view.Items, func(i, j int) bool {
+				leftHasImage := strings.TrimSpace(view.Items[i].Featured.MediaPath) != ""
+				rightHasImage := strings.TrimSpace(view.Items[j].Featured.MediaPath) != ""
+				if leftHasImage != rightHasImage {
+					return leftHasImage
+				}
 				if view.Items[i].Show.Name == view.Items[j].Show.Name {
 					return view.Items[i].Class.ClassNumber < view.Items[j].Class.ClassNumber
 				}

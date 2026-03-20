@@ -706,15 +706,22 @@ type divisionView struct {
 }
 
 type sectionView struct {
-	Section *Section
-	Classes []*ShowClass
+	Section    *Section
+	Classes    []*ShowClass
+	ClassCards []*publicClassListItem
 }
 
 type entryView struct {
-	Entry  *Entry
-	Person *Person
-	Class  *ShowClass
-	Media  []*Media
+	Entry     *Entry
+	Person    *Person
+	Class     *ShowClass
+	Media     []*Media
+	LeadMedia *Media
+}
+
+type publicClassListItem struct {
+	Class      *ShowClass
+	EntryCount int
 }
 
 func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
@@ -727,8 +734,32 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 
 	org, _ := a.store.organizationByID(show.OrganizationID)
 	sched, _ := a.store.scheduleByShowID(show.ID)
+	entryCountByClass := map[string]int{}
 
 	var divisions []*divisionView
+	var entries []*entryView
+	for _, e := range a.store.entriesByShow(show.ID) {
+		if !isPublicEntry(e) {
+			continue
+		}
+		person, _ := a.store.personByID(e.PersonID)
+		cls, _ := a.store.classByID(e.ClassID)
+		media := a.store.mediaByEntry(e.ID)
+		var leadMedia *Media
+		if len(media) > 0 {
+			leadMedia = media[0]
+		}
+		if cls != nil {
+			entryCountByClass[cls.ID]++
+		}
+		entries = append(entries, &entryView{
+			Entry:     e,
+			Person:    person,
+			Class:     cls,
+			Media:     media,
+			LeadMedia: leadMedia,
+		})
+	}
 	if sched != nil {
 		for _, div := range a.store.divisionsBySchedule(sched.ID) {
 			dv := &divisionView{Division: div}
@@ -737,25 +768,16 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 					Section: sec,
 					Classes: a.store.classesBySection(sec.ID),
 				}
+				for _, class := range sv.Classes {
+					sv.ClassCards = append(sv.ClassCards, &publicClassListItem{
+						Class:      class,
+						EntryCount: entryCountByClass[class.ID],
+					})
+				}
 				dv.Sections = append(dv.Sections, sv)
 			}
 			divisions = append(divisions, dv)
 		}
-	}
-
-	var entries []*entryView
-	for _, e := range a.store.entriesByShow(show.ID) {
-		if !isPublicEntry(e) {
-			continue
-		}
-		person, _ := a.store.personByID(e.PersonID)
-		cls, _ := a.store.classByID(e.ClassID)
-		entries = append(entries, &entryView{
-			Entry:  e,
-			Person: person,
-			Class:  cls,
-			Media:  a.store.mediaByEntry(e.ID),
-		})
 	}
 	var showCredits []*showCreditView
 	for _, credit := range a.store.showCreditsByShow(show.ID) {
@@ -837,6 +859,7 @@ type classDetailData struct {
 	Section     *Section
 	Division    *Division
 	Entries     []*entryView
+	HasMedia    bool
 }
 
 func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
@@ -861,16 +884,24 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var entries []*entryView
+	hasMedia := false
 	for _, e := range a.store.entriesByClass(classID) {
 		if !isPublicEntry(e) {
 			continue
 		}
 		person, _ := a.store.personByID(e.PersonID)
+		media := a.store.mediaByEntry(e.ID)
+		var leadMedia *Media
+		if len(media) > 0 {
+			leadMedia = media[0]
+			hasMedia = true
+		}
 		entries = append(entries, &entryView{
-			Entry:  e,
-			Person: person,
-			Class:  cls,
-			Media:  a.store.mediaByEntry(e.ID),
+			Entry:     e,
+			Person:    person,
+			Class:     cls,
+			Media:     media,
+			LeadMedia: leadMedia,
 		})
 	}
 
@@ -884,6 +915,7 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 		Section:     sec,
 		Division:    div,
 		Entries:     entries,
+		HasMedia:    hasMedia,
 	})
 }
 
