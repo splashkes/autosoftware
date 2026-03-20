@@ -50,8 +50,8 @@
           <span class="badge badge-muted">{{.SeasonLabel}}</span>
         </div>
         <h3 class="card-title">{{.Show.Name}}</h3>
-        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}} · {{.Show.Date}}</p>
-        <p class="card-meta">{{.EntryCount}} public entries · {{.ClassCount}} classes · {{.StatusLabel}}</p>
+        {{with showContextMeta .Show .Org}}<p class="card-meta">{{.}}</p>{{end}}
+        <p class="card-meta">{{showSummaryMeta .EntryCount .ClassCount .StatusLabel}}</p>
       </div>
     </a>
     {{end}}
@@ -117,8 +117,8 @@
           <span class="badge badge-muted">{{.SeasonLabel}}</span>
         </div>
         <h3 class="card-title">{{.Show.Name}}</h3>
-        <p class="card-meta">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}} · {{.Show.Date}}</p>
-        <p class="card-meta">{{.EntryCount}} public entries · {{.ClassCount}} classes · {{.StatusLabel}}</p>
+        {{with showContextMeta .Show .Org}}<p class="card-meta">{{.}}</p>{{end}}
+        <p class="card-meta">{{showSummaryMeta .EntryCount .ClassCount .StatusLabel}}</p>
       </div>
     </a>
     {{end}}

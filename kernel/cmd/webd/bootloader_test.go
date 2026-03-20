@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -310,6 +312,23 @@ func TestRewriteMountedHTMLInjectsSharedAgentWidgetByDefault(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected injected mounted HTML to contain %q, got %q", want, got)
 		}
+	}
+}
+
+func TestSproutAssetHandlerServesUnderSproutPrefix(t *testing.T) {
+	handler := sproutAssetHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/__sprout-assets/as-agent-widget.css", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for sprout asset css, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "text/css") {
+		t.Fatalf("expected text/css content type, got %q", got)
+	}
+	if !strings.Contains(w.Body.String(), ".agent-access-widget") {
+		t.Fatal("expected widget stylesheet body to be served under /__sprout-assets/")
 	}
 }
 

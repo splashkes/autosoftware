@@ -1210,7 +1210,26 @@ func sproutAssetHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return http.StripPrefix("/assets/", http.FileServer(http.FS(sub)))
+	fileServer := http.FileServer(http.FS(sub))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasPrefix(path, "/assets/"):
+			path = strings.TrimPrefix(path, "/assets/")
+		case strings.HasPrefix(path, "/__sprout-assets/"):
+			path = strings.TrimPrefix(path, "/__sprout-assets/")
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if strings.TrimSpace(path) == "" {
+			http.NotFound(w, r)
+			return
+		}
+		r2 := r.Clone(r.Context())
+		r2.URL.Path = "/" + path
+		fileServer.ServeHTTP(w, r2)
+	})
 }
 
 func humanizeSeedID(seedID string) string {

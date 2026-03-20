@@ -23,18 +23,18 @@
 
 {{if .Media}}
 <section class="section">
+  {{if gt (len .Media) 1}}<p class="section-desc entry-gallery-note">{{len .Media}} images. Tap any image to view it full screen.</p>{{end}}
   <div class="card-grid entry-media-grid">
     {{range .Media}}
     <div class="card">
-      <button type="button" class="card-body entry-media-card" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}">
+      <button type="button" class="card-body entry-media-card" aria-label="Open {{$.Entry.Name}} media" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}">
         {{if eq .MediaType "video"}}
         <video muted playsinline preload="metadata" class="entry-inline-media">
           <source src="{{$.BasePath}}/media/{{.ID}}" type="{{.ContentType}}">
         </video>
         {{else}}
-        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{.FileName}}" class="entry-inline-media">
+        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$.Entry.Name}}" class="entry-inline-media">
         {{end}}
-        <p class="card-meta" style="margin-top:.75rem;">{{.FileName}}</p>
       </button>
     </div>
     {{end}}

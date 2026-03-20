@@ -391,6 +391,53 @@ var templateFuncMap = template.FuncMap{
 		}
 		return domain
 	},
+	"showContextMeta": func(show *Show, org *Organization) string {
+		if show == nil {
+			return ""
+		}
+		var parts []string
+		if org != nil && strings.TrimSpace(org.Name) != "" {
+			parts = append(parts, strings.TrimSpace(org.Name))
+		}
+		if location := strings.TrimSpace(show.Location); location != "" {
+			parts = append(parts, location)
+		}
+		if date := strings.TrimSpace(show.Date); date != "" {
+			parts = append(parts, date)
+		}
+		return strings.Join(parts, " · ")
+	},
+	"showLocationDateMeta": func(show *Show) string {
+		if show == nil {
+			return ""
+		}
+		var parts []string
+		if location := strings.TrimSpace(show.Location); location != "" {
+			parts = append(parts, location)
+		}
+		if date := strings.TrimSpace(show.Date); date != "" {
+			parts = append(parts, date)
+		}
+		return strings.Join(parts, " · ")
+	},
+	"showSummaryMeta": func(entryCount, classCount int, statusLabel string) string {
+		entryLabel := "entries"
+		if entryCount == 1 {
+			entryLabel = "entry"
+		}
+		classLabel := "classes"
+		if classCount == 1 {
+			classLabel = "class"
+		}
+		parts := []string{
+			fmt.Sprintf("%d public %s", entryCount, entryLabel),
+			fmt.Sprintf("%d %s", classCount, classLabel),
+		}
+		if status := strings.TrimSpace(statusLabel); status != "" {
+			parts = append(parts, status)
+		}
+		return strings.Join(parts, " · ")
+	},
 	"initials": func(p *Person) string {
 		if p == nil {
 			return ""
