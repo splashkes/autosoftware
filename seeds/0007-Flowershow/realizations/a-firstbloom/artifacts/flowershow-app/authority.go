@@ -44,7 +44,8 @@ type runtimeAuthorityResolver interface {
 }
 
 type postgresRuntimeAuthorityResolver struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	boundary registryBoundary
 }
 
 type memoryRuntimeAuthorityResolver struct {
@@ -176,7 +177,7 @@ func newRuntimeAuthorityResolver(store flowershowStore) runtimeAuthorityResolver
 		if typed == nil || typed.pool == nil {
 			return nil
 		}
-		return &postgresRuntimeAuthorityResolver{pool: typed.pool}
+		return &postgresRuntimeAuthorityResolver{pool: typed.pool, boundary: typed.registry}
 	case *memoryStore:
 		return &memoryRuntimeAuthorityResolver{
 			roles: make(map[string]*UserRole),
@@ -193,7 +194,15 @@ func (r *postgresRuntimeAuthorityResolver) Init(ctx context.Context, store flowe
 	if err := r.ensureBundles(ctx); err != nil {
 		return err
 	}
-	return r.migrateLegacyRoleTable(ctx)
+	if err := r.migrateLegacyRoleTable(ctx); err != nil {
+		return err
+	}
+	if r.boundary != nil {
+		if err := r.boundary.MaterializeAuthorityState(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *memoryRuntimeAuthorityResolver) Init(context.Context, flowershowStore) error {
@@ -209,19 +218,17 @@ func (r *memoryRuntimeAuthorityResolver) Init(context.Context, flowershowStore) 
 }
 
 func (r *postgresRuntimeAuthorityResolver) ensureBundles(ctx context.Context) error {
+	if r.boundary == nil {
+		return errors.New("kernel runtime authority boundary unavailable")
+	}
 	for _, def := range flowershowAuthorityBundles {
-		_, err := r.pool.Exec(ctx, `
-			insert into runtime_authority_bundles (
-			  bundle_id, display_name, capabilities, status, metadata, created_at, updated_at
-			)
-			values ($1, $2, $3, 'active', '{}'::jsonb, now(), now())
-			on conflict (bundle_id) do update
-			set display_name = excluded.display_name,
-			    capabilities = excluded.capabilities,
-			    status = 'active',
-			    updated_at = excluded.updated_at
-		`, def.BundleID, def.DisplayName, normalizeStringList(def.Capabilities))
-		if err != nil {
+		if err := r.boundary.UpsertAuthorityBundle(ctx, authorityBundleUpsertInput{
+			BundleID:     def.BundleID,
+			DisplayName:  def.DisplayName,
+			Capabilities: normalizeStringList(def.Capabilities),
+			Status:       "active",
+			Metadata:     map[string]any{"role": def.Role},
+		}); err != nil {
 			return err
 		}
 	}
@@ -427,6 +434,9 @@ func (r *postgresRuntimeAuthorityResolver) AssignRole(ctx context.Context, input
 	} else if ok {
 		return existing, nil
 	}
+	if r.boundary == nil {
+		return nil, errors.New("kernel runtime authority boundary unavailable")
+	}
 
 	role := &UserRole{
 		ID:             newID("grant"),
@@ -437,20 +447,24 @@ func (r *postgresRuntimeAuthorityResolver) AssignRole(ctx context.Context, input
 		Role:           input.Role,
 		CreatedAt:      time.Now().UTC(),
 	}
-	_, err = r.pool.Exec(ctx, `
-		insert into runtime_authority_grants (
-		  grant_id, grantor_principal_id, grantee_principal_id, bundle_id, capabilities_snapshot,
-		  scope_kind, scope_id, delegation_mode, basis, status, effective_at, expires_at,
-		  supersedes_grant_id, reason, evidence_refs, metadata
-		)
-		values ($1, $2, $3, $4, $5, $6, $7, 'same_scope', 'delegated', 'accepted', now(), null, null, $8, '{}'::text[], $9::jsonb)
-	`, role.ID, nullableString(grantorPrincipalID), principalID, def.BundleID, normalizeStringList(def.Capabilities), scope.Kind, scope.ID,
-		"flowershow role assignment: "+input.Role, jsonBytes(map[string]any{
+	err = r.boundary.CreateAuthorityGrant(ctx, authorityGrantCreateInput{
+		GrantID:            role.ID,
+		GrantorPrincipalID: strings.TrimSpace(grantorPrincipalID),
+		GranteePrincipalID: principalID,
+		BundleID:           def.BundleID,
+		ScopeKind:          scope.Kind,
+		ScopeID:            scope.ID,
+		DelegationMode:     "same_scope",
+		Basis:              "delegated",
+		Status:             "accepted",
+		Reason:             "flowershow role assignment: " + input.Role,
+		Metadata: map[string]any{
 			"role":            input.Role,
 			"organization_id": strings.TrimSpace(input.OrganizationID),
 			"show_id":         strings.TrimSpace(input.ShowID),
 			"cognito_sub":     cognitoSub,
-		}))
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

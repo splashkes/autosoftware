@@ -167,4 +167,40 @@ func TestRuntimeAuthorityLedgerAndEffectiveAccess(t *testing.T) {
 	if effective.EffectivePolicies[0].Capability != "show.entry.score" {
 		t.Fatalf("expected show.entry.score capability, got %+v", effective.EffectivePolicies[0])
 	}
+
+	if _, err := pool.Exec(ctx, `delete from runtime_authority_grants`); err != nil {
+		t.Fatalf("clear authority grants: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `delete from runtime_auth_identities`); err != nil {
+		t.Fatalf("clear auth identities: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `delete from runtime_principal_identifiers`); err != nil {
+		t.Fatalf("clear principal identifiers: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `delete from runtime_principals where principal_id = any($1)`, []string{grantorID, granteeID}); err != nil {
+		t.Fatalf("clear principals: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `delete from runtime_authority_bundles where bundle_id = any($1)`, []string{orgBundleID, showBundleID}); err != nil {
+		t.Fatalf("clear authority bundles: %v", err)
+	}
+
+	if _, err := service.MaterializeAuthorityState(ctx); err != nil {
+		t.Fatalf("materialize authority state: %v", err)
+	}
+
+	resolvedAfterRebuild, err := service.ResolveAuthIdentity(ctx, providerID, providerSubject)
+	if err != nil {
+		t.Fatalf("resolve auth identity after rebuild: %v", err)
+	}
+	if resolvedAfterRebuild.PrincipalID != granteeID {
+		t.Fatalf("expected rebuilt auth identity to point to %s, got %+v", granteeID, resolvedAfterRebuild)
+	}
+
+	effectiveAfterRebuild, err := service.GetEffectiveAuthorityByPrincipal(ctx, granteeID)
+	if err != nil {
+		t.Fatalf("get effective authority after rebuild: %v", err)
+	}
+	if len(effectiveAfterRebuild.ActiveGrants) != 1 || effectiveAfterRebuild.ActiveGrants[0].GrantID != showGrant.GrantID {
+		t.Fatalf("unexpected effective grants after rebuild: %+v", effectiveAfterRebuild.ActiveGrants)
+	}
 }
