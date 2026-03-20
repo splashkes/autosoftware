@@ -22,9 +22,13 @@ func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 type adminDashboardData struct {
 	Title       string
 	CurrentPath string
+	ActiveSection string
+	Sections    []accountSectionView
 	Shows       []*Show
 	Persons     []*Person
 	Orgs        []*Organization
+	Judges      []adminJudgeShowView
+	References  []adminReferenceLink
 	Awards      []*AwardDefinition
 	Rubrics     []*JudgingRubric
 	SearchQuery string
@@ -36,6 +40,18 @@ type adminSearchHit struct {
 	Title     string
 	Meta      string
 	Href      string
+}
+
+type adminJudgeShowView struct {
+	ShowName string
+	ShowHref string
+	Judges   []string
+}
+
+type adminReferenceLink struct {
+	Label       string
+	Href        string
+	Description string
 }
 
 type clubAdminData struct {
@@ -77,31 +93,87 @@ type inviteRoleOptionView struct {
 }
 
 type adminClubCreateData struct {
-	Title        string
-	CurrentPath  string
+	Title         string
+	CurrentPath   string
 	Organizations []*Organization
-	ClubLevels   []string
-	DefaultLevel string
 }
 
 func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	orgs := a.store.allOrganizations()
+	section := adminDashboardSection(r.URL.Query().Get("section"))
 	var awards []*AwardDefinition
 	for _, org := range orgs {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
 	searchQuery := strings.TrimSpace(r.URL.Query().Get("q"))
 	a.render(w, r, "admin_dashboard.html", adminDashboardData{
-		Title:       "Admin Dashboard",
-		CurrentPath: "/admin",
-		Shows:       a.store.allShows(),
-		Persons:     a.store.allPersons(),
-		Orgs:        orgs,
-		Awards:      awards,
-		Rubrics:     a.store.allRubrics(),
-		SearchQuery: searchQuery,
-		SearchHits:  a.adminSearchHits(searchQuery),
+		Title:         "Admin Dashboard",
+		CurrentPath:   "/admin",
+		ActiveSection: section,
+		Sections:      adminDashboardSections(section),
+		Shows:         a.store.allShows(),
+		Persons:       a.store.allPersons(),
+		Orgs:          orgs,
+		Judges:        a.adminJudgeShowViews(),
+		References:    adminReferenceLinks(),
+		Awards:        awards,
+		Rubrics:       a.store.allRubrics(),
+		SearchQuery:   searchQuery,
+		SearchHits:    a.adminSearchHits(searchQuery),
 	})
+}
+
+func adminDashboardSection(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "shows", "clubs", "people", "judges", "references":
+		return strings.TrimSpace(raw)
+	default:
+		return "overview"
+	}
+}
+
+func adminDashboardSections(active string) []accountSectionView {
+	return []accountSectionView{
+		{ID: "overview", Label: "Overview", Href: "/admin?section=overview", Current: active == "overview"},
+		{ID: "shows", Label: "Shows", Href: "/admin?section=shows", Current: active == "shows"},
+		{ID: "clubs", Label: "Clubs", Href: "/admin?section=clubs", Current: active == "clubs"},
+		{ID: "people", Label: "People", Href: "/admin?section=people", Current: active == "people"},
+		{ID: "judges", Label: "Judges", Href: "/admin?section=judges", Current: active == "judges"},
+		{ID: "references", Label: "References", Href: "/admin?section=references", Current: active == "references"},
+	}
+}
+
+func adminReferenceLinks() []adminReferenceLink {
+	return []adminReferenceLink{
+		{Label: "Standards", Href: "/standards", Description: "Reference materials and source documents."},
+		{Label: "Taxonomy", Href: "/taxonomy", Description: "Browse taxons and related show entries."},
+		{Label: "Leaderboard", Href: "/leaderboard?org=all&season=" + time.Now().Format("2006"), Description: "Current season results across organizations."},
+		{Label: "Browse", Href: "/browse", Description: "Search entries, classes, and public history."},
+		{Label: "Role Management", Href: "/admin/roles", Description: "Platform-level role assignment surface."},
+	}
+}
+
+func (a *app) adminJudgeShowViews() []adminJudgeShowView {
+	out := make([]adminJudgeShowView, 0)
+	for _, show := range a.store.allShows() {
+		if show == nil {
+			continue
+		}
+		item := adminJudgeShowView{
+			ShowName: show.Name,
+			ShowHref: "/admin/shows/" + show.ID,
+		}
+		for _, assignment := range a.store.judgesByShow(show.ID) {
+			person, _ := a.store.personByID(assignment.PersonID)
+			if person != nil {
+				item.Judges = append(item.Judges, strings.TrimSpace(person.FirstName+" "+person.LastName))
+			}
+		}
+		sort.Strings(item.Judges)
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ShowName < out[j].ShowName })
+	return out
 }
 
 func clubAdminSections(organizationID, active string) []accountSectionView {
@@ -362,8 +434,6 @@ func (a *app) handleAdminClubNew(w http.ResponseWriter, r *http.Request) {
 		Title:         "New Club",
 		CurrentPath:   "/admin/clubs/new",
 		Organizations: a.store.allOrganizations(),
-		ClubLevels:    organizationLevelOptions(),
-		DefaultLevel:  "society",
 	})
 }
 
@@ -378,14 +448,12 @@ func (a *app) handleAdminClubCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "club name is required", http.StatusBadRequest)
 		return
 	}
-	level := strings.TrimSpace(r.FormValue("level"))
-	if level == "" {
-		level = "society"
-	}
+	parentID := strings.TrimSpace(r.FormValue("parent_id"))
+	level := a.inferOrganizationLevel(parentID)
 	org, err := a.store.createOrganization(Organization{
 		Name:     name,
 		Level:    level,
-		ParentID: strings.TrimSpace(r.FormValue("parent_id")),
+		ParentID: parentID,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -440,6 +508,28 @@ func (a *app) handleAdminClubCreate(w http.ResponseWriter, r *http.Request) {
 		notice = "Club created. Invite sent to " + fullName + " · " + email
 	}
 	http.Redirect(w, r, "/admin/clubs/"+org.ID+"?notice="+url.QueryEscape(notice), http.StatusSeeOther)
+}
+
+func (a *app) inferOrganizationLevel(parentID string) string {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return "society"
+	}
+	parent, ok := a.store.organizationByID(parentID)
+	if !ok || parent == nil {
+		return "society"
+	}
+	order := []string{"society", "district", "region", "province", "country", "global"}
+	for i, level := range order {
+		if level != parent.Level {
+			continue
+		}
+		if i == 0 {
+			return "society"
+		}
+		return order[i-1]
+	}
+	return "society"
 }
 
 // --- Show CRUD ---

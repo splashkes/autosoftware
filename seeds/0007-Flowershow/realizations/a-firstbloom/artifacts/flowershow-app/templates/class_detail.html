@@ -27,7 +27,7 @@
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
         <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
-        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{.Person.Initials}}</a>{{end}}</td>
+        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>
       </tr>

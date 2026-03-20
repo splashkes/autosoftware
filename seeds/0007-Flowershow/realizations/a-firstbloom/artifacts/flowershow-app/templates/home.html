@@ -80,7 +80,7 @@
         {{if .TopPeople}}
         <div class="club-top-people">
           {{range .TopPeople}}
-          <span class="badge badge-muted">{{.Person.Initials}}</span>
+          <span class="badge badge-muted">{{publicPersonLabel .Person}}</span>
           {{end}}
         </div>
         {{end}}

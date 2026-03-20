@@ -874,6 +874,11 @@ func accountNoticeMessage(code string) accountNotice {
 			Message: "Agent token revoked.",
 			Kind:    "info",
 		}
+	case "profile_updated":
+		return accountNotice{
+			Message: "Profile updated.",
+			Kind:    "info",
+		}
 	default:
 		return accountNotice{}
 	}
