@@ -1,0 +1,67 @@
+{{define "content"}}
+{{$i := .Instance}}
+<div class="page-head">
+  <div class="page-kicker">Object Instance · {{$i.Summary.SeedID}}</div>
+  <h2>{{$i.Summary.Label}}</h2>
+  <p>Raw accepted registry content for <a href="{{$i.InstanceDefinition}}">{{$i.Summary.Kind}}</a>.</p>
+  <div class="page-meta">
+    <span class="page-chip">{{$i.Summary.Kind}}</span>
+    <span class="page-chip"><code>{{$i.Summary.ObjectID}}</code></span>
+    <span class="page-chip">{{$i.Summary.ClaimCount}} {{plural $i.Summary.ClaimCount "claim" "claims"}}</span>
+    <span class="page-chip">{{formatTime $i.Summary.LatestAcceptedAt}}</span>
+    {{if $i.Summary.Slug}}<span class="page-chip">slug: {{$i.Summary.Slug}}</span>{{end}}
+  </div>
+</div>
+
+<div class="detail-section">
+  <h3>Definition</h3>
+  <p><a href="{{$i.InstanceDefinition}}">Back to {{$i.Summary.Kind}} definition</a></p>
+</div>
+
+{{if $i.RelatedInstances}}
+<div class="detail-section">
+  <h3>Detected Related Objects</h3>
+  <ul class="resource-list">
+    {{range $i.RelatedInstances}}
+    <li class="resource-item">
+      <a href="{{.Path}}" class="name">{{.Kind}} · <code>{{.ObjectID}}</code></a>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+<div class="detail-section">
+  <h3>Stable Identity Row</h3>
+  <pre class="shape-block">{{$i.ObjectPayloadJSON}}</pre>
+</div>
+
+<div class="detail-section">
+  <h3>Latest Accepted Claim</h3>
+  <pre class="shape-block">{{$i.LatestClaimJSON}}</pre>
+</div>
+
+{{if $i.ClaimRows}}
+<div class="detail-section">
+  <h3>Accepted Claim History</h3>
+  <ul class="resource-list">
+    {{range $i.ClaimRows}}
+    <li class="resource-item">
+      <div class="name">{{.ClaimType}}</div>
+      <div class="meta">
+        <span>row <a href="{{rowAPIPath .RowID}}">{{.RowID}}</a></span>
+        {{if .ClaimID}}<span><code>{{.ClaimID}}</code></span>{{end}}
+        <span>{{formatTime .AcceptedAt}}</span>
+      </div>
+      <pre class="shape-block">{{.PayloadJSON}}</pre>
+      {{if .RelatedInstances}}
+      <div class="meta">
+        {{range $j, $related := .RelatedInstances}}{{if $j}}, {{end}}<a href="{{$related.Path}}">{{$related.Kind}} {{$related.ObjectID}}</a>{{end}}
+      </div>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

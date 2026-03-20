@@ -73,6 +73,51 @@
 {{end}}
 {{end}}
 
+{{if .InstanceLoadError}}
+<div class="detail-section">
+  <h3>Raw Instances</h3>
+  <p>{{.InstanceLoadError}}</p>
+</div>
+{{else if .Instances}}
+<div class="detail-section">
+  <h3>Raw Instances</h3>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Instance</th>
+        <th>Latest Claim</th>
+        <th>Accepted</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Instances}}
+      <tr>
+        <td>
+          <a href="{{.InstancePath}}"><strong>{{.Label}}</strong></a><br>
+          <code>{{.ObjectID}}</code>
+          {{if .Slug}}<div class="summary">slug: {{.Slug}}</div>{{end}}
+        </td>
+        <td>
+          {{if .LatestClaimType}}{{.LatestClaimType}}{{else}}object.create{{end}}
+          <div class="summary">{{.ClaimCount}} {{plural .ClaimCount "claim" "claims"}}</div>
+        </td>
+        <td>{{formatTime .LatestAcceptedAt}}</td>
+        <td>
+          <a href="{{.InstancePath}}">Raw detail</a>
+          {{if .RelatedInstances}}
+          <div class="summary">
+            {{range $i, $related := .RelatedInstances}}{{if $i}}, {{end}}<a href="{{$related.Path}}">{{$related.Kind}} {{$related.ObjectID}}</a>{{end}}
+          </div>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+
 {{if $o.OutgoingRelations}}
 <div class="detail-section">
   <h3>Objects This Object Points To</h3>

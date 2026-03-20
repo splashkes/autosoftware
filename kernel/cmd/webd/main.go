@@ -132,6 +132,11 @@ func registryPermalinkRedirectPath(record registrycatalog.HashLookupRecord) stri
 	return registrycatalog.PermalinkResolvePath(record.CanonicalURL, record.ContentHash)
 }
 
+func registerRegistryReadAPIs(mux *http.ServeMux, registryReader registrycatalog.CatalogReader, hashIndex *runtimedb.RegistryHashIndex, runtimeService *interactions.RuntimeService) {
+	jsontransport.NewRegistryCatalogAPI(registryReader, hashIndex).Register(mux)
+	jsontransport.NewRegistryLedgerAPI(runtimeService).Register(mux)
+}
+
 var materializationTemplate = template.Must(template.New("materialization").Parse(`
 {{if .NotFound}}
 <div class="empty">No realization matched <code>{{.Reference}}</code>.</div>
@@ -1237,7 +1242,7 @@ func main() {
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	mux.Handle("GET /__sprout-assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
-	jsontransport.NewRegistryCatalogAPI(registryReader, hashIndex).Register(mux)
+	registerRegistryReadAPIs(mux, registryReader, hashIndex, runtimeService)
 	mux.HandleFunc("GET /reg/{hash}", func(w http.ResponseWriter, r *http.Request) {
 		if hashIndex == nil {
 			http.Error(w, "registry permalink lookup unavailable", http.StatusServiceUnavailable)

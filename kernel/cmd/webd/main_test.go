@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"as/kernel/internal/interactions"
+	registrycatalog "as/kernel/internal/registry"
 )
 
 func TestLaunchRedirectPathPreservesEncodedReference(t *testing.T) {
@@ -384,5 +385,20 @@ func testMountedRoutingPreservesRawPath(t *testing.T, mountPrefix string) {
 	}
 	if want := strings.TrimSuffix(mountPrefix, "/"); got.ForwardedPrefix != want {
 		t.Fatalf("X-Forwarded-Prefix = %q, want %q", got.ForwardedPrefix, want)
+	}
+}
+
+func TestRegisterRegistryReadAPIsAddsLedgerRoutesToWebdMux(t *testing.T) {
+	mux := http.NewServeMux()
+	registerRegistryReadAPIs(mux, registrycatalog.CatalogReader{}, nil, nil)
+
+	for _, path := range []string{"/v1/registry/rows", "/v1/registry/change-sets"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s returned %d, want %d", path, rec.Code, http.StatusServiceUnavailable)
+		}
 	}
 }
