@@ -2583,7 +2583,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return rows.Err()
 	}
 
-	if err := loadRows(`SELECT id, name, level, parent_id FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, name, level, coalesce(parent_id, '') FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
 		var item Organization
 		if err := rows.Scan(&item.ID, &item.Name, &item.Level, &item.ParentID); err != nil {
 			return fmt.Errorf("scan organization: %w", err)
@@ -2649,7 +2649,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load organization invites: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_id, source_document_id, effective_standard_edition_id, notes FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, show_id, coalesce(source_document_id, ''), coalesce(effective_standard_edition_id, ''), notes FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
 		var item ShowSchedule
 		if err := rows.Scan(&item.ID, &item.ShowID, &item.SourceDocumentID, &item.EffectiveStandardEditionID, &item.Notes); err != nil {
 			return fmt.Errorf("scan schedule: %w", err)
@@ -2726,7 +2726,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load media: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, taxon_type, name, scientific_name, description, parent_id FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, taxon_type, name, scientific_name, description, coalesce(parent_id, '') FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
 		var item Taxon
 		if err := rows.Scan(&item.ID, &item.TaxonType, &item.Name, &item.ScientificName, &item.Description, &item.ParentID); err != nil {
 			return fmt.Errorf("scan taxon: %w", err)
@@ -2770,7 +2770,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load standard editions: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, organization_id, show_id, title, document_type, publication_date, source_url, local_path, checksum FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, organization_id, coalesce(show_id, ''), title, document_type, publication_date, source_url, local_path, checksum FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
 		var item SourceDocument
 		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.ShowID, &item.Title, &item.DocumentType, &item.PublicationDate, &item.SourceURL, &item.LocalPath, &item.Checksum); err != nil {
 			return fmt.Errorf("scan source document: %w", err)
@@ -2803,7 +2803,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load standard rules: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_class_id, base_standard_rule_id, override_type, body, rationale FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, show_class_id, coalesce(base_standard_rule_id, ''), override_type, body, rationale FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
 		var item ClassRuleOverride
 		if err := rows.Scan(&item.ID, &item.ShowClassID, &item.BaseStandardRuleID, &item.OverrideType, &item.Body, &item.Rationale); err != nil {
 			return fmt.Errorf("scan class override: %w", err)
@@ -2814,7 +2814,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load class rule overrides: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, standard_edition_id, show_id, domain, title FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(show_id, ''), domain, title FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
 		var item JudgingRubric
 		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.ShowID, &item.Domain, &item.Title); err != nil {
 			return fmt.Errorf("scan rubric: %w", err)
@@ -2858,7 +2858,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load criterion scores: %w", err)
 	}
 
-	if err := loadRows(`SELECT object_id, object_type, slug, created_at, created_by FROM as_flowershow_objects`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT object_id, object_type, coalesce(slug, ''), created_at, created_by FROM as_flowershow_objects`, func(rows pgx.Rows) error {
 		var item FlowershowObject
 		if err := rows.Scan(&item.ID, &item.ObjectType, &item.Slug, &item.CreatedAt, &item.CreatedBy); err != nil {
 			return fmt.Errorf("scan object: %w", err)
