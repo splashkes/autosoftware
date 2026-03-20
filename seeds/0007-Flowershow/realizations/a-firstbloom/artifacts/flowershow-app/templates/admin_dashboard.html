@@ -1,107 +1,195 @@
 {{define "content"}}
-<div class="admin-header">
-  <h1>Admin Dashboard</h1>
-</div>
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Admin</div>
+      <h1>Admin Workspace</h1>
+    </div>
+  </div>
 
-<section class="card admin-search-shell">
-  <div class="card-body">
-    <div class="login-step-kicker">Search</div>
-    <h2 class="card-title">Find Shows, Clubs, Classes, And People</h2>
-    <form method="GET" action="{{bp}}/admin" class="form admin-search-form">
-      <input type="search" name="q" value="{{.SearchQuery}}" class="form-input" placeholder="Search shows, clubs, classes, or people">
-      <button type="submit" class="btn btn-primary">Search</button>
-    </form>
-    {{if .SearchQuery}}
-    <div class="admin-search-results">
-      <div class="card-meta">Results for “{{.SearchQuery}}”</div>
-      {{if .SearchHits}}
-      <div class="account-role-list">
-        {{range .SearchHits}}
-        <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
-          <div>
-            <span class="badge badge-green">{{.TypeLabel}}</span>
-            <strong>{{.Title}}</strong>
-            {{if .Meta}}<div class="card-meta">{{.Meta}}</div>{{end}}
-          </div>
-        </a>
-        {{end}}
+  <section class="account-layout">
+    <aside class="card account-sidebar">
+      <div class="card-body">
+        <div class="login-step-kicker">Workspace Navigation</div>
+        <h2 class="card-title">Flowershow Admin</h2>
+        <nav class="account-section-nav">
+          {{range .Sections}}
+          <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          {{end}}
+        </nav>
       </div>
-      {{else}}
-      <p class="card-meta">No results matched that search.</p>
+    </aside>
+
+    <div class="account-main">
+      {{if eq .ActiveSection "overview"}}
+      <section class="card admin-search-shell">
+        <div class="card-body">
+          <div class="login-step-kicker">Search</div>
+          <h2 class="card-title">Find Shows, Clubs, Classes, And People</h2>
+          <form method="GET" action="{{bp}}/admin" class="form admin-search-form">
+            <input type="hidden" name="section" value="overview">
+            <input type="search" name="q" value="{{.SearchQuery}}" class="form-input" placeholder="Search shows, clubs, classes, or people">
+            <button type="submit" class="btn btn-primary">Search</button>
+          </form>
+          {{if .SearchQuery}}
+          <div class="admin-search-results">
+            <div class="card-meta">Results for “{{.SearchQuery}}”</div>
+            {{if .SearchHits}}
+            <div class="account-role-list">
+              {{range .SearchHits}}
+              <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
+                <div>
+                  <span class="badge badge-green">{{.TypeLabel}}</span>
+                  <strong>{{.Title}}</strong>
+                  {{if .Meta}}<div class="card-meta">{{.Meta}}</div>{{end}}
+                </div>
+              </a>
+              {{end}}
+            </div>
+            {{else}}
+            <p class="card-meta">No results matched that search.</p>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </section>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number">{{len .Shows}}</span>
+          <span class="stat-label">shows</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">{{len .Orgs}}</span>
+          <span class="stat-label">clubs</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">{{len .Persons}}</span>
+          <span class="stat-label">people</span>
+        </div>
+      </div>
+      {{end}}
+
+      {{if eq .ActiveSection "shows"}}
+      <section class="section">
+        <div class="section-header">
+          <h2>Shows</h2>
+        </div>
+        <div class="card-grid">
+          <a href="{{bp}}/admin/shows/new" class="card show-card admin-action-card">
+            <div class="card-body">
+              <div class="login-step-kicker">Create</div>
+              <h3 class="card-title">New Show</h3>
+              <p class="card-meta">Start a show and move directly into schedule and intake setup.</p>
+            </div>
+          </a>
+          {{range .Shows}}
+          <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
+            <div class="card-body">
+              <h3 class="card-title">{{.Name}}</h3>
+              <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
+              <p class="card-meta">{{statusBadge .Status}}</p>
+            </div>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "clubs"}}
+      <section class="section">
+        <div class="section-header">
+          <h2>Clubs</h2>
+        </div>
+        <div class="card-grid">
+          <a href="{{bp}}/admin/clubs/new" class="card show-card admin-action-card">
+            <div class="card-body">
+              <div class="login-step-kicker">Create</div>
+              <h3 class="card-title">New Club</h3>
+              <p class="card-meta">Create a club and invite its first administrator in one pass.</p>
+            </div>
+          </a>
+          {{range .Orgs}}
+          <a href="{{bp}}/admin/clubs/{{.ID}}" class="card show-card">
+            <div class="card-body">
+              <h3 class="card-title">{{.Name}}</h3>
+              <p class="card-meta">{{.Level}}</p>
+            </div>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "people"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">People</div>
+          <h2 class="card-title">People Directory</h2>
+          <p class="card-meta">Use clubs to invite the next administrators and members. This directory is still useful for lookup and cleanup.</p>
+          <div class="show-actions">
+            <a href="{{bp}}/admin/persons" class="btn btn-outline">Manage People</a>
+          </div>
+          <div class="account-role-list">
+            {{range .Persons}}
+            <div class="account-role-item">
+              <div>
+                <strong><a href="{{bp}}/people/{{.ID}}">{{.FirstName}} {{.LastName}}</a></strong>
+                <div class="card-meta">{{if .Email}}{{.Email}}{{else}}No email yet{{end}}</div>
+              </div>
+            </div>
+            {{end}}
+          </div>
+        </div>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "judges"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Judges</div>
+          <h2 class="card-title">Judges By Show</h2>
+          {{if .Judges}}
+          <div class="account-role-list">
+            {{range .Judges}}
+            <div class="account-role-item">
+              <div>
+                <strong><a href="{{bp}}{{.ShowHref}}">{{.ShowName}}</a></strong>
+                {{if .Judges}}
+                <div class="card-meta">{{range $i, $judge := .Judges}}{{if $i}}, {{end}}{{$judge}}{{end}}</div>
+                {{else}}
+                <div class="card-meta">No judges assigned yet.</div>
+                {{end}}
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="card-meta">No judge assignments yet.</p>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "references"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">References</div>
+          <h2 class="card-title">Reference Materials And Secondary Surfaces</h2>
+          <div class="account-role-list">
+            {{range .References}}
+            <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
+              <div>
+                <strong>{{.Label}}</strong>
+                <div class="card-meta">{{.Description}}</div>
+              </div>
+            </a>
+            {{end}}
+          </div>
+        </div>
+      </section>
       {{end}}
     </div>
-    {{end}}
-  </div>
-</section>
-
-<div class="stats-grid">
-  <div class="stat-card">
-    <span class="stat-number">{{len .Shows}}</span>
-    <span class="stat-label">Shows</span>
-  </div>
-  <div class="stat-card">
-    <span class="stat-number">{{len .Orgs}}</span>
-    <span class="stat-label">Clubs</span>
-  </div>
-  <div class="stat-card">
-    <span class="stat-number">{{len .Persons}}</span>
-    <span class="stat-label">People</span>
-  </div>
-</div>
-
-<section class="section">
-  <div class="section-header">
-    <h2>Shows</h2>
-  </div>
-  <div class="card-grid">
-    <a href="{{bp}}/admin/shows/new" class="card show-card admin-action-card">
-      <div class="card-body">
-        <div class="login-step-kicker">Create</div>
-        <h3 class="card-title">New Show</h3>
-        <p class="card-meta">Start a show and move directly into schedule and intake setup.</p>
-      </div>
-    </a>
-    {{range .Shows}}
-    <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
-      <div class="card-body">
-        <h3 class="card-title">{{.Name}}</h3>
-        <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
-        <p class="card-meta">{{statusBadge .Status}}</p>
-      </div>
-    </a>
-    {{end}}
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-header">
-    <h2>Clubs</h2>
-  </div>
-  <div class="card-grid">
-    <a href="{{bp}}/admin/clubs/new" class="card show-card admin-action-card">
-      <div class="card-body">
-        <div class="login-step-kicker">Create</div>
-        <h3 class="card-title">New Club</h3>
-        <p class="card-meta">Create a club and invite its first administrator in one pass.</p>
-      </div>
-    </a>
-    {{range .Orgs}}
-    <a href="{{bp}}/admin/clubs/{{.ID}}" class="card show-card">
-      <div class="card-body">
-        <h3 class="card-title">{{.Name}}</h3>
-        <p class="card-meta">{{.Level}}</p>
-      </div>
-    </a>
-    {{end}}
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-header">
-    <h2>People</h2>
-  </div>
-  <div class="show-actions">
-    <a href="{{bp}}/admin/persons" class="btn btn-outline">Manage People</a>
-  </div>
+  </section>
 </section>
 {{end}}

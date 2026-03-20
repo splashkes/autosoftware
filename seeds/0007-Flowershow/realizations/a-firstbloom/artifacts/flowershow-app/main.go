@@ -92,6 +92,7 @@ func main() {
 	mux.HandleFunc("GET /classes", a.handleClassesIndex)
 	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /profile", a.requireSignedInPage(a.handleAccount))
+	mux.HandleFunc("POST /account/profile", a.requireSignedInPage(a.handleAccountProfileUpdate))
 	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
 	mux.HandleFunc("POST /account/agent-tokens/{tokenID}/revoke", a.requireSignedInPage(a.handleAccountTokenRevoke))
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
@@ -334,6 +335,27 @@ var templateFuncMap = template.FuncMap{
 	"initials": func(p *Person) string {
 		if p == nil {
 			return ""
+		}
+		return p.Initials
+	},
+	"publicPersonLabel": func(p *Person) string {
+		if p == nil {
+			return ""
+		}
+		switch strings.TrimSpace(p.PublicDisplayMode) {
+		case "full_name":
+			if full := strings.TrimSpace(p.FirstName + " " + p.LastName); full != "" {
+				return full
+			}
+		case "first_name_last_initial":
+			firstName := strings.TrimSpace(p.FirstName)
+			lastRunes := []rune(strings.TrimSpace(p.LastName))
+			if firstName != "" && len(lastRunes) > 0 {
+				return firstName + " " + strings.ToUpper(string(lastRunes[:1])) + "."
+			}
+			if firstName != "" {
+				return firstName
+			}
 		}
 		return p.Initials
 	},

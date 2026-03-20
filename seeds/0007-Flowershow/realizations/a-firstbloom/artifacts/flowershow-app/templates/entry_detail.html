@@ -8,7 +8,7 @@
 <h1>{{.Entry.Name}}</h1>
 
 <div class="entry-meta">
-  {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">Entrant: {{.Person.Initials}}</a>{{end}}
+  {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">Entrant: {{publicPersonLabel .Person}}</a>{{end}}
   {{if .Class}}<span class="badge badge-muted">Class {{.Class.ClassNumber}}: {{.Class.Title}}</span>{{end}}
   {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
   {{if .Entry.Points}}<span class="badge badge-muted">{{.Entry.Points}} pts</span>{{end}}
