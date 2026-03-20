@@ -2680,6 +2680,26 @@ func TestClubInviteCommandCreatesInvite(t *testing.T) {
 	}
 }
 
+func TestOrganizationCreateCommandCreatesOrganization(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/organization.create", a.handleAPICommand)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/organization.create", `{
+		"name": "Uxbridge Horticultural Society",
+		"level": "society"
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"name":"Uxbridge Horticultural Society"`) {
+		t.Fatal("organization create response missing organization name")
+	}
+}
+
 func containsTestString(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {

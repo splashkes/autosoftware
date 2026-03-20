@@ -236,6 +236,29 @@ domain_objects:
       - state_transitions
       - activity_events
 commands:
+  - name: organization.create
+    summary: Create a new organization record that can later host shows and memberships.
+    path: /v1/commands/0007-Flowershow/organization.create
+    object_kinds:
+      - organization
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#1-organizations
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: organizations.directory
+    consistency: read_your_writes
+    error_codes:
+      - code: invalid_json
+        summary: Request body did not match the declared JSON schema.
+      - code: organization_create_failed
+        summary: Organization creation failed validation or referenced invalid parent objects.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
   - name: shows.create
     summary: Create a new flower show.
     path: /v1/commands/0007-Flowershow/shows.create
@@ -860,6 +883,26 @@ commands:
     projection: clubs.workspace
     consistency: read_your_writes
 projections:
+  - name: organizations.directory
+    summary: List of all organizations/clubs known to the flower-show realization.
+    path: /v1/projections/0007-Flowershow/organizations
+    object_kinds:
+      - organization
+    auth_modes:
+      - anonymous
+      - session
+      - service_token
+    capabilities:
+      - activity_events
+    freshness: materialized
+    data_views:
+      - auth_modes:
+          - anonymous
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+        summary: Agents can discover existing organizations before authoring or updating shows.
   - name: clubs.workspace
     summary: Private club workspace for invitation, membership context, and linked-show administration.
     path: /v1/projections/0007-Flowershow/clubs/{id}/workspace

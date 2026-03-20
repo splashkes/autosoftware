@@ -184,6 +184,7 @@ func main() {
 
 	// JSON API
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/account", a.handleAPIAccount)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/organizations", a.handleAPIOrganizationsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/clubs/{id}/workspace", a.handleAPIClubWorkspace)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
@@ -199,6 +200,7 @@ func main() {
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/ledger/{objectID}", a.handleAPILedger)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/admin/dashboard", a.handleAPIAdminDashboard)
 
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/organization.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.update", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/clubs.invites.create", a.handleAPICommand)
