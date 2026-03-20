@@ -2,13 +2,93 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+type testRegistryRuntime struct {
+	mu         sync.Mutex
+	changeSets map[string]registryAppendChangeSetInput
+	rows       []registryRowRecord
+}
+
+func newTestRegistryRuntime() *testRegistryRuntime {
+	return &testRegistryRuntime{
+		changeSets: map[string]registryAppendChangeSetInput{},
+		rows:       []registryRowRecord{},
+	}
+}
+
+func (r *testRegistryRuntime) server() *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/runtime/registry/change-sets", func(w http.ResponseWriter, req *http.Request) {
+		var input registryAppendChangeSetInput
+		if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		r.mu.Lock()
+		if _, exists := r.changeSets[input.ChangeSetID]; !exists {
+			r.changeSets[input.ChangeSetID] = input
+			for i, row := range input.Rows {
+				r.rows = append(r.rows, registryRowRecord{
+					RowID:         int64(len(r.rows) + 1),
+					ChangeSetID:   input.ChangeSetID,
+					Reference:     input.Reference,
+					SeedID:        input.SeedID,
+					RealizationID: input.RealizationID,
+					RowOrder:      i,
+					RowType:       row.RowType,
+					ObjectID:      row.ObjectID,
+					ClaimID:       row.ClaimID,
+					Payload:       row.Payload,
+					AcceptedAt:    time.Now().UTC(),
+				})
+			}
+		}
+		r.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	})
+	mux.HandleFunc("GET /v1/runtime/registry/rows", func(w http.ResponseWriter, req *http.Request) {
+		after := int64(0)
+		if trimmed := strings.TrimSpace(req.URL.Query().Get("after")); trimmed != "" {
+			fmt.Sscanf(trimmed, "%d", &after)
+		}
+		reference := strings.TrimSpace(req.URL.Query().Get("reference"))
+		seedID := strings.TrimSpace(req.URL.Query().Get("seed_id"))
+		realizationID := strings.TrimSpace(req.URL.Query().Get("realization_id"))
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		out := make([]registryRowRecord, 0, len(r.rows))
+		for _, row := range r.rows {
+			if row.RowID <= after {
+				continue
+			}
+			if reference != "" && row.Reference != reference {
+				continue
+			}
+			if seedID != "" && row.SeedID != seedID {
+				continue
+			}
+			if realizationID != "" && row.RealizationID != realizationID {
+				continue
+			}
+			out = append(out, row)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(out)
+	})
+	return httptest.NewServer(mux)
+}
 
 func dockerAvailable() bool {
 	return exec.Command("docker", "version").Run() == nil
@@ -53,26 +133,36 @@ func startTestPostgresContainer(t *testing.T) (string, func()) {
 	}
 	dsn := fmt.Sprintf("postgres://postgres:%s@127.0.0.1:%s/flowershow_test?sslmode=disable", password, hostPort)
 	deadline := time.Now().Add(45 * time.Second)
+	registry := newTestRegistryRuntime()
+	registryServer := registry.server()
 	for {
-		store, err := newFlowershowStore(dsn)
+		store, err := newFlowershowStore(dsn, registryServer.URL, "", "0007-Flowershow", "a-firstbloom")
 		if err == nil {
 			store.Close()
 			break
 		}
 		if time.Now().After(deadline) {
+			registryServer.Close()
 			cleanup()
 			t.Fatalf("wait for postgres readiness: %v", err)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return dsn, cleanup
+	return dsn, func() {
+		registryServer.Close()
+		cleanup()
+	}
 }
 
 func TestFlowershowProjectionTablesRebuildFromClaimsAfterTruncate(t *testing.T) {
 	dsn, cleanup := startTestPostgresContainer(t)
 	defer cleanup()
 
-	storeRaw, err := newFlowershowStore(dsn)
+	registry := newTestRegistryRuntime()
+	registryServer := registry.server()
+	defer registryServer.Close()
+
+	storeRaw, err := newFlowershowStore(dsn, registryServer.URL, "", "0007-Flowershow", "a-firstbloom")
 	if err != nil {
 		t.Fatalf("open postgres flowershow store: %v", err)
 	}
@@ -202,7 +292,7 @@ func TestFlowershowProjectionTablesRebuildFromClaimsAfterTruncate(t *testing.T) 
 	}
 	store.Close()
 
-	reopenedRaw, err := newFlowershowStore(dsn)
+	reopenedRaw, err := newFlowershowStore(dsn, registryServer.URL, "", "0007-Flowershow", "a-firstbloom")
 	if err != nil {
 		t.Fatalf("reopen postgres flowershow store: %v", err)
 	}

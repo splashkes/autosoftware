@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -2058,15 +2057,27 @@ func (s *memoryStore) seedDemoData() {
 // ============================================================================
 
 type postgresFlowershowStore struct {
-	pool *pgxpool.Pool
-	mu   sync.RWMutex
-	mem  *memoryStore // rebuildable read-through cache backed by SQL
+	pool          *pgxpool.Pool
+	registry      registryBoundary
+	seedID        string
+	realizationID string
+	mu            sync.RWMutex
+	mem           *memoryStore // rebuildable read-through cache backed by SQL
 }
 
-func newFlowershowStore(databaseURL string) (flowershowStore, error) {
+func newFlowershowStore(databaseURL, internalAPIURL, internalAPIToken, seedID, realizationID string) (flowershowStore, error) {
 	if strings.TrimSpace(databaseURL) == "" {
 		s := newMemoryStore()
 		return s, nil
+	}
+	registryClient, err := newRegistryHTTPClient(internalAPIURL, internalAPIToken)
+	if err != nil {
+		return nil, err
+	}
+	seedID = strings.TrimSpace(seedID)
+	realizationID = strings.TrimSpace(realizationID)
+	if seedID == "" || realizationID == "" {
+		return nil, fmt.Errorf("AS_SEED_ID and AS_REALIZATION_ID are required for durable flowershow runtime")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2081,12 +2092,22 @@ func newFlowershowStore(databaseURL string) (flowershowStore, error) {
 		return nil, fmt.Errorf("ping flowershow database: %w", err)
 	}
 
-	store := &postgresFlowershowStore{pool: pool, mem: newEmptyMemoryStore()}
+	store := &postgresFlowershowStore{
+		pool:          pool,
+		registry:      registryClient,
+		seedID:        seedID,
+		realizationID: realizationID,
+		mem:           newEmptyMemoryStore(),
+	}
 	if err := store.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
 	}
 	if err := store.seedIfEmpty(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if err := store.migrateLegacyClaimsToKernelRegistry(ctx); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -2806,388 +2827,7 @@ func (s *postgresFlowershowStore) Refresh(ctx context.Context) error {
 }
 
 func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStore, error) {
-	fresh := newEmptyMemoryStore()
-
-	loadRows := func(query string, scan func(pgx.Rows) error) error {
-		rows, err := s.pool.Query(ctx, query)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			if err := scan(rows); err != nil {
-				return err
-			}
-		}
-		return rows.Err()
-	}
-
-	if err := loadRows(`SELECT id, coalesce(name, ''), coalesce(level, ''), coalesce(parent_id, '') FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
-		var item Organization
-		if err := rows.Scan(&item.ID, &item.Name, &item.Level, &item.ParentID); err != nil {
-			return fmt.Errorf("scan organization: %w", err)
-		}
-		fresh.organizations[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load organizations: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(slug, ''), coalesce(organization_id, ''), coalesce(name, ''), coalesce(location, ''), coalesce(show_date, ''), coalesce(season, ''), coalesce(status, '') , coalesce(created_at, NOW()), coalesce(updated_at, NOW()) FROM as_flowershow_m_shows`, func(rows pgx.Rows) error {
-		var item Show
-		if err := rows.Scan(&item.ID, &item.Slug, &item.OrganizationID, &item.Name, &item.Location, &item.Date, &item.Season, &item.Status, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return fmt.Errorf("scan show: %w", err)
-		}
-		fresh.shows[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load shows: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(person_id, ''), coalesce(assigned_at, NOW()) FROM as_flowershow_m_show_judges`, func(rows pgx.Rows) error {
-		var item ShowJudgeAssignment
-		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.AssignedAt); err != nil {
-			return fmt.Errorf("scan show judge: %w", err)
-		}
-		fresh.showJudges[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load show judges: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(first_name, ''), coalesce(last_name, ''), coalesce(initials, ''), coalesce(email, ''), coalesce(public_display_mode, '') FROM as_flowershow_m_persons`, func(rows pgx.Rows) error {
-		var item Person
-		if err := rows.Scan(&item.ID, &item.FirstName, &item.LastName, &item.Initials, &item.Email, &item.PublicDisplayMode); err != nil {
-			return fmt.Errorf("scan person: %w", err)
-		}
-		fresh.persons[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load persons: %w", err)
-	}
-
-	if err := loadRows(`SELECT person_id, organization_id, coalesce(role, '') FROM as_flowershow_m_person_organizations`, func(rows pgx.Rows) error {
-		var item PersonOrganization
-		if err := rows.Scan(&item.PersonID, &item.OrganizationID, &item.Role); err != nil {
-			return fmt.Errorf("scan person organization: %w", err)
-		}
-		fresh.personOrgs[item.PersonID+"|"+item.OrganizationID+"|"+item.Role] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load person organizations: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(first_name, ''), coalesce(last_name, ''), coalesce(email, ''), coalesce(organization_role, ''), coalesce(permission_roles, '{}'::text[]), coalesce(status, 'pending'), coalesce(invited_by_subject, ''), coalesce(invited_by_name, ''), coalesce(invited_at, NOW()), coalesce(claimed_subject_id, ''), coalesce(claimed_cognito_sub, ''), claimed_at FROM as_flowershow_m_organization_invites`, func(rows pgx.Rows) error {
-		item, err := scanOrganizationInvite(rows)
-		if err != nil {
-			return fmt.Errorf("scan organization invite: %w", err)
-		}
-		fresh.orgInvites[item.ID] = item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load organization invites: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, show_id, coalesce(source_document_id, ''), coalesce(effective_standard_edition_id, ''), coalesce(notes, '') FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
-		var item ShowSchedule
-		if err := rows.Scan(&item.ID, &item.ShowID, &item.SourceDocumentID, &item.EffectiveStandardEditionID, &item.Notes); err != nil {
-			return fmt.Errorf("scan schedule: %w", err)
-		}
-		fresh.schedules[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load schedules: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(show_schedule_id, ''), coalesce(code, ''), coalesce(title, ''), coalesce(domain, ''), coalesce(sort_order, 0) FROM as_flowershow_m_divisions`, func(rows pgx.Rows) error {
-		var item Division
-		if err := rows.Scan(&item.ID, &item.ShowScheduleID, &item.Code, &item.Title, &item.Domain, &item.SortOrder); err != nil {
-			return fmt.Errorf("scan division: %w", err)
-		}
-		fresh.divisions[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load divisions: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(division_id, ''), coalesce(code, ''), coalesce(title, ''), coalesce(sort_order, 0) FROM as_flowershow_m_sections`, func(rows pgx.Rows) error {
-		var item Section
-		if err := rows.Scan(&item.ID, &item.DivisionID, &item.Code, &item.Title, &item.SortOrder); err != nil {
-			return fmt.Errorf("scan section: %w", err)
-		}
-		fresh.sections[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load sections: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(section_id, ''), coalesce(class_number, ''), coalesce(sort_order, 0), coalesce(title, ''), coalesce(domain, ''), coalesce(description, ''), coalesce(specimen_count, 0), coalesce(unit, ''), coalesce(measurement_rule, ''), coalesce(naming_requirement, ''), coalesce(container_rule, ''), coalesce(eligibility_rule, ''), coalesce(schedule_notes, ''), coalesce(taxon_refs, '{}'::text[]) FROM as_flowershow_m_classes`, func(rows pgx.Rows) error {
-		var item ShowClass
-		if err := rows.Scan(&item.ID, &item.SectionID, &item.ClassNumber, &item.SortOrder, &item.Title, &item.Domain, &item.Description, &item.SpecimenCount, &item.Unit, &item.MeasurementRule, &item.NamingRequirement, &item.ContainerRule, &item.EligibilityRule, &item.ScheduleNotes, &item.TaxonRefs); err != nil {
-			return fmt.Errorf("scan class: %w", err)
-		}
-		fresh.classes[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load classes: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(class_id, ''), coalesce(person_id, ''), coalesce(name, ''), coalesce(notes, ''), coalesce(suppressed, FALSE), coalesce(placement, 0), coalesce(points, 0), coalesce(taxon_refs, '{}'::text[]), coalesce(created_at, NOW()) FROM as_flowershow_m_entries`, func(rows pgx.Rows) error {
-		var item Entry
-		if err := rows.Scan(&item.ID, &item.ShowID, &item.ClassID, &item.PersonID, &item.Name, &item.Notes, &item.Suppressed, &item.Placement, &item.Points, &item.TaxonRefs, &item.CreatedAt); err != nil {
-			return fmt.Errorf("scan entry: %w", err)
-		}
-		fresh.entries[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load entries: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(person_id, ''), coalesce(display_name, ''), coalesce(credit_label, ''), coalesce(notes, ''), coalesce(sort_order, 0), coalesce(created_at, NOW()) FROM as_flowershow_m_show_credits`, func(rows pgx.Rows) error {
-		var item ShowCredit
-		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.DisplayName, &item.CreditLabel, &item.Notes, &item.SortOrder, &item.CreatedAt); err != nil {
-			return fmt.Errorf("scan show credit: %w", err)
-		}
-		fresh.showCredits[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load show credits: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, entry_id, coalesce(media_type, ''), coalesce(url, ''), coalesce(content_type, ''), coalesce(thumbnail_url, ''), coalesce(file_name, ''), coalesce(storage_key, ''), coalesce(file_size, 0), coalesce(width, 0), coalesce(height, 0), created_at FROM as_flowershow_m_media`, func(rows pgx.Rows) error {
-		var item Media
-		if err := rows.Scan(&item.ID, &item.EntryID, &item.MediaType, &item.URL, &item.ContentType, &item.ThumbnailURL, &item.FileName, &item.StorageKey, &item.FileSize, &item.Width, &item.Height, &item.CreatedAt); err != nil {
-			return fmt.Errorf("scan media: %w", err)
-		}
-		fresh.media[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load media: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(taxon_type, ''), coalesce(name, ''), coalesce(scientific_name, ''), coalesce(description, ''), coalesce(parent_id, '') FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
-		var item Taxon
-		if err := rows.Scan(&item.ID, &item.TaxonType, &item.Name, &item.ScientificName, &item.Description, &item.ParentID); err != nil {
-			return fmt.Errorf("scan taxon: %w", err)
-		}
-		fresh.taxons[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load taxons: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(name, ''), coalesce(description, ''), coalesce(season, ''), coalesce(taxon_filters, '{}'::text[]), coalesce(scoring_rule, ''), coalesce(min_entries, 0) FROM as_flowershow_m_awards`, func(rows pgx.Rows) error {
-		var item AwardDefinition
-		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.Name, &item.Description, &item.Season, &item.TaxonFilters, &item.ScoringRule, &item.MinEntries); err != nil {
-			return fmt.Errorf("scan award: %w", err)
-		}
-		fresh.awards[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load awards: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(name, ''), coalesce(issuing_org_id, ''), coalesce(domain_scope, ''), coalesce(description, '') FROM as_flowershow_m_standard_documents`, func(rows pgx.Rows) error {
-		var item StandardDocument
-		if err := rows.Scan(&item.ID, &item.Name, &item.IssuingOrg, &item.DomainScope, &item.Description); err != nil {
-			return fmt.Errorf("scan standard document: %w", err)
-		}
-		fresh.stdDocs[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load standard documents: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(standard_document_id, ''), coalesce(edition_label, ''), coalesce(publication_year, 0), coalesce(revision_date, ''), coalesce(status, ''), coalesce(source_url, ''), coalesce(source_kind, '') FROM as_flowershow_m_standard_editions`, func(rows pgx.Rows) error {
-		var item StandardEdition
-		if err := rows.Scan(&item.ID, &item.StandardDocumentID, &item.EditionLabel, &item.PublicationYear, &item.RevisionDate, &item.Status, &item.SourceURL, &item.SourceKind); err != nil {
-			return fmt.Errorf("scan standard edition: %w", err)
-		}
-		fresh.stdEditions[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load standard editions: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(show_id, ''), coalesce(title, ''), coalesce(document_type, ''), coalesce(publication_date, ''), coalesce(source_url, ''), coalesce(local_path, ''), coalesce(checksum, '') FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
-		var item SourceDocument
-		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.ShowID, &item.Title, &item.DocumentType, &item.PublicationDate, &item.SourceURL, &item.LocalPath, &item.Checksum); err != nil {
-			return fmt.Errorf("scan source document: %w", err)
-		}
-		fresh.srcDocs[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load source documents: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, source_document_id, coalesce(target_type, ''), coalesce(target_id, ''), coalesce(page_from, ''), coalesce(page_to, ''), coalesce(quoted_text, ''), coalesce(extraction_confidence, 0) FROM as_flowershow_m_source_citations`, func(rows pgx.Rows) error {
-		var item SourceCitation
-		if err := rows.Scan(&item.ID, &item.SourceDocumentID, &item.TargetType, &item.TargetID, &item.PageFrom, &item.PageTo, &item.QuotedText, &item.ExtractionConfidence); err != nil {
-			return fmt.Errorf("scan source citation: %w", err)
-		}
-		fresh.srcCitations[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load source citations: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(domain, ''), coalesce(rule_type, ''), coalesce(subject_label, ''), coalesce(body, ''), coalesce(page_ref, '') FROM as_flowershow_m_standard_rules`, func(rows pgx.Rows) error {
-		var item StandardRule
-		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.Domain, &item.RuleType, &item.SubjectLabel, &item.Body, &item.PageRef); err != nil {
-			return fmt.Errorf("scan standard rule: %w", err)
-		}
-		fresh.stdRules[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load standard rules: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, show_class_id, coalesce(base_standard_rule_id, ''), coalesce(override_type, ''), coalesce(body, ''), coalesce(rationale, '') FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
-		var item ClassRuleOverride
-		if err := rows.Scan(&item.ID, &item.ShowClassID, &item.BaseStandardRuleID, &item.OverrideType, &item.Body, &item.Rationale); err != nil {
-			return fmt.Errorf("scan class override: %w", err)
-		}
-		fresh.classOverrides[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load class rule overrides: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(show_id, ''), coalesce(domain, ''), coalesce(title, '') FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
-		var item JudgingRubric
-		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.ShowID, &item.Domain, &item.Title); err != nil {
-			return fmt.Errorf("scan rubric: %w", err)
-		}
-		fresh.rubrics[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load rubrics: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(judging_rubric_id, ''), coalesce(name, ''), coalesce(max_points, 0), coalesce(sort_order, 0) FROM as_flowershow_m_criteria`, func(rows pgx.Rows) error {
-		var item JudgingCriterion
-		if err := rows.Scan(&item.ID, &item.JudgingRubricID, &item.Name, &item.MaxPoints, &item.SortOrder); err != nil {
-			return fmt.Errorf("scan criterion: %w", err)
-		}
-		fresh.criteria[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load criteria: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(entry_id, ''), coalesce(judge_id, ''), coalesce(rubric_id, ''), coalesce(total_score, 0), coalesce(notes, '') FROM as_flowershow_m_scorecards`, func(rows pgx.Rows) error {
-		var item EntryScorecard
-		if err := rows.Scan(&item.ID, &item.EntryID, &item.JudgeID, &item.RubricID, &item.TotalScore, &item.Notes); err != nil {
-			return fmt.Errorf("scan scorecard: %w", err)
-		}
-		fresh.scorecards[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load scorecards: %w", err)
-	}
-
-	if err := loadRows(`SELECT id, coalesce(scorecard_id, ''), coalesce(criterion_id, ''), coalesce(score, 0), coalesce(comment, '') FROM as_flowershow_m_criterion_scores`, func(rows pgx.Rows) error {
-		var item EntryCriterionScore
-		if err := rows.Scan(&item.ID, &item.ScorecardID, &item.CriterionID, &item.Score, &item.Comment); err != nil {
-			return fmt.Errorf("scan criterion score: %w", err)
-		}
-		fresh.critScores[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load criterion scores: %w", err)
-	}
-
-	if err := loadRows(`SELECT object_id, coalesce(object_type, ''), coalesce(slug, ''), coalesce(created_at, NOW()), coalesce(created_by, '') FROM as_flowershow_objects`, func(rows pgx.Rows) error {
-		var item FlowershowObject
-		if err := rows.Scan(&item.ID, &item.ObjectType, &item.Slug, &item.CreatedAt, &item.CreatedBy); err != nil {
-			return fmt.Errorf("scan object: %w", err)
-		}
-		fresh.objects[item.ID] = &item
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load objects: %w", err)
-	}
-
-	if err := loadRows(`SELECT claim_id, coalesce(object_id, ''), coalesce(claim_seq, 0), coalesce(claim_type, ''), coalesce(accepted_at, NOW()), coalesce(accepted_by, ''), coalesce(supersedes_claim_id, ''), payload FROM as_flowershow_claims ORDER BY coalesce(claim_seq, 0) ASC`, func(rows pgx.Rows) error {
-		var item FlowershowClaim
-		var payload []byte
-		if err := rows.Scan(&item.ID, &item.ObjectID, &item.ClaimSeq, &item.ClaimType, &item.AcceptedAt, &item.AcceptedBy, &item.SupersedesClaimID, &payload); err != nil {
-			return fmt.Errorf("scan claim: %w", err)
-		}
-		if len(payload) > 0 {
-			var decoded any
-			if err := json.Unmarshal(payload, &decoded); err != nil {
-				return fmt.Errorf("decode claim payload: %w", err)
-			}
-			item.Payload = decoded
-		}
-		fresh.claims = append(fresh.claims, item)
-		if item.ClaimSeq > fresh.claimSeq {
-			fresh.claimSeq = item.ClaimSeq
-		}
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("load claims: %w", err)
-	}
-
-	if len(fresh.claims) > 0 {
-		replayed, err := replayFlowershowSnapshotFromClaims(fresh.objects, fresh.claims)
-		if err != nil {
-			return nil, fmt.Errorf("replay claims: %w", err)
-		}
-		needsRebuild, err := s.projectionsNeedRebuild(ctx, replayed)
-		if err != nil {
-			return nil, fmt.Errorf("check projection rebuild necessity: %w", err)
-		}
-		if needsRebuild {
-			if err := s.rebuildProjectionTablesFromSnapshot(ctx, replayed); err != nil {
-				return nil, fmt.Errorf("rebuild projections from claims: %w", err)
-			}
-		}
-		return replayed, nil
-	}
-
-	return fresh, nil
-}
-
-func (s *postgresFlowershowStore) persistNewClaims(ctx context.Context, mem *memoryStore, start int) error {
-	return s.persistNewClaimsWithExec(ctx, s.pool, mem, start)
-}
-
-type flowershowSQLExecutor interface {
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-}
-
-func (s *postgresFlowershowStore) persistNewClaimsWithExec(ctx context.Context, exec flowershowSQLExecutor, mem *memoryStore, start int) error {
-	if start < 0 || start > len(mem.claims) {
-		start = len(mem.claims)
-	}
-	seenObjects := make(map[string]struct{})
-	for _, claim := range mem.claims[start:] {
-		if _, ok := seenObjects[claim.ObjectID]; ok {
-			continue
-		}
-		seenObjects[claim.ObjectID] = struct{}{}
-		if object, ok := mem.objects[claim.ObjectID]; ok {
-			if _, err := exec.Exec(ctx, `INSERT INTO as_flowershow_objects (object_id, object_type, slug, created_at, created_by)
-					VALUES ($1,$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`,
-				object.ID, object.ObjectType, object.Slug, object.CreatedAt, object.CreatedBy); err != nil {
-				return fmt.Errorf("persist object %s: %w", object.ID, err)
-			}
-		}
-	}
-	for _, claim := range mem.claims[start:] {
-		payload, err := json.Marshal(claim.Payload)
-		if err != nil {
-			return fmt.Errorf("marshal claim payload: %w", err)
-		}
-		if _, err := exec.Exec(ctx, `INSERT INTO as_flowershow_claims (claim_id, object_id, claim_type, accepted_at, accepted_by, supersedes_claim_id, payload)
-				VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (claim_id) DO NOTHING`,
-			claim.ID, claim.ObjectID, claim.ClaimType, claim.AcceptedAt, claim.AcceptedBy, nullableString(claim.SupersedesClaimID), payload); err != nil {
-			return fmt.Errorf("persist claim %s: %w", claim.ID, err)
-		}
-	}
-	return nil
+	return s.loadSnapshotFromKernelRegistry(ctx)
 }
 
 func (s *postgresFlowershowStore) prepareMutation(ctx context.Context) (*memoryStore, int, error) {
@@ -3199,6 +2839,9 @@ func (s *postgresFlowershowStore) prepareMutation(ctx context.Context) (*memoryS
 }
 
 func (s *postgresFlowershowStore) commitDomainMutation(ctx context.Context, mem *memoryStore, claimStart int) error {
+	if err := s.appendClaimsToKernelRegistry(ctx, mem, claimStart); err != nil {
+		return err
+	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin mutation tx: %w", err)
@@ -3206,10 +2849,6 @@ func (s *postgresFlowershowStore) commitDomainMutation(ctx context.Context, mem 
 	defer func() {
 		_ = tx.Rollback(ctx)
 	}()
-
-	if err := s.persistNewClaimsWithExec(ctx, tx, mem, claimStart); err != nil {
-		return err
-	}
 	if err := s.rebuildProjectionTablesFromSnapshotTx(ctx, tx, mem); err != nil {
 		return err
 	}
