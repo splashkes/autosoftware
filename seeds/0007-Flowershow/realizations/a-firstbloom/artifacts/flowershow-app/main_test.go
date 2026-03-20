@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -3655,6 +3656,7 @@ func TestFlowershowProjectionWritesStayInsideStoreBoundaries(t *testing.T) {
 	allowed := map[string]struct{}{
 		"store.go":              {},
 		"store_invites.go":      {},
+		"store_materializer.go": {},
 		"store_agent_tokens.go": {},
 		"authority.go":          {},
 		"auth_state_store.go":   {},
@@ -3682,6 +3684,58 @@ func TestFlowershowProjectionWritesStayInsideStoreBoundaries(t *testing.T) {
 	}
 	if len(hits) > 0 {
 		t.Fatalf("flowershow domain/runtime writes escaped store boundaries:\n%s", strings.Join(hits, "\n"))
+	}
+}
+
+func TestFlowershowProjectionMaterializerDeclaresAllProjectionTables(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(".", "store.go"))
+	if err != nil {
+		t.Fatalf("read store.go: %v", err)
+	}
+	createRe := regexp.MustCompile(`CREATE TABLE IF NOT EXISTS (as_flowershow_m_[a-z_]+)`)
+	creates := createRe.FindAllStringSubmatch(string(data), -1)
+	schemaTables := make(map[string]struct{}, len(creates))
+	for _, match := range creates {
+		schemaTables[match[1]] = struct{}{}
+	}
+	materializerTables := make(map[string]struct{}, len(flowershowProjectionTables))
+	for _, table := range flowershowProjectionTables {
+		materializerTables[table] = struct{}{}
+	}
+	var missing []string
+	for table := range schemaTables {
+		if _, ok := materializerTables[table]; !ok {
+			missing = append(missing, table)
+		}
+	}
+	var extra []string
+	for table := range materializerTables {
+		if _, ok := schemaTables[table]; !ok {
+			extra = append(extra, table)
+		}
+	}
+	sort.Strings(missing)
+	sort.Strings(extra)
+	if len(missing) > 0 || len(extra) > 0 {
+		t.Fatalf("flowershow projection materializer table list drifted\nmissing: %v\nextra: %v", missing, extra)
+	}
+}
+
+func TestFlowershowDurabilityMatrixProjectionTablesAreKnown(t *testing.T) {
+	matrix := loadCommandDurabilityMatrix(t)
+	known := make(map[string]struct{}, len(flowershowProjectionTables)+1)
+	for _, table := range flowershowProjectionTables {
+		known[table] = struct{}{}
+	}
+	known["runtime_authority_grants"] = struct{}{}
+
+	for _, item := range matrix.Commands {
+		for _, table := range item.ProjectionTables {
+			if _, ok := known[table]; !ok {
+				t.Fatalf("command %q references unknown projection/runtime table %q", item.Command, table)
+			}
+		}
 	}
 }
 

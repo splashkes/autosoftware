@@ -10,6 +10,9 @@ This folder has four distinct validation artifacts:
   Flowershow-only source of truth for published mutating commands, their
   current durability class, their claim types, and whether replay coverage is
   required in CI.
+- The current startup path now includes a claim-backed projection rebuilder:
+  when `as_flowershow_m_*` tables drift or are wiped, the replayed claim
+  snapshot can repopulate them transactionally before reads resume.
 - `README.md` maps the current implementation to the tests that already exist.
 
 ## Current Coverage Posture

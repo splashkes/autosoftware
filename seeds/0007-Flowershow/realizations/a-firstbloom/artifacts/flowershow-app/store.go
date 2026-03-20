@@ -3134,6 +3134,15 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		if err != nil {
 			return nil, fmt.Errorf("replay claims: %w", err)
 		}
+		needsRebuild, err := s.projectionsNeedRebuild(ctx, replayed)
+		if err != nil {
+			return nil, fmt.Errorf("check projection rebuild necessity: %w", err)
+		}
+		if needsRebuild {
+			if err := s.rebuildProjectionTablesFromSnapshot(ctx, replayed); err != nil {
+				return nil, fmt.Errorf("rebuild projections from claims: %w", err)
+			}
+		}
 		return replayed, nil
 	}
 
