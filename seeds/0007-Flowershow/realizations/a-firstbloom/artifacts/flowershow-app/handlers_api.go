@@ -776,11 +776,19 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, doc)
 
 	case "citations.create":
-		var input SourceCitation
+		var input citationCreateInput
 		if !a.decodeAPIJSON(w, r, &input) {
 			return
 		}
-		cite, err := a.store.createSourceCitation(input)
+		cite, err := a.store.createSourceCitation(SourceCitation{
+			SourceDocumentID:     input.SourceDocumentID,
+			TargetType:           input.TargetType,
+			TargetID:             input.TargetID,
+			PageFrom:             input.PageFrom.String(),
+			PageTo:               input.PageTo.String(),
+			QuotedText:           input.QuotedText,
+			ExtractionConfidence: input.ExtractionConfidence,
+		})
 		if err != nil {
 			a.writeAPIError(w, r, http.StatusBadRequest, "citation_create_failed", err.Error(), "Pass source_document_id plus target_type and target_id when creating a citation.", nil)
 			return
@@ -956,6 +964,46 @@ func (a *app) unwrapRuntimeContextEnvelope(w http.ResponseWriter, r *http.Reques
 func commandNameFromPath(path string) string {
 	parts := strings.Split(path, "/")
 	return parts[len(parts)-1]
+}
+
+type citationCreateInput struct {
+	SourceDocumentID     string            `json:"source_document_id"`
+	TargetType           string            `json:"target_type"`
+	TargetID             string            `json:"target_id"`
+	PageFrom             stringOrNumberRef `json:"page_from,omitempty"`
+	PageTo               stringOrNumberRef `json:"page_to,omitempty"`
+	QuotedText           string            `json:"quoted_text,omitempty"`
+	ExtractionConfidence float64           `json:"extraction_confidence,omitempty"`
+}
+
+type stringOrNumberRef string
+
+func (s *stringOrNumberRef) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		*s = ""
+		return nil
+	}
+
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err == nil {
+		*s = stringOrNumberRef(text)
+		return nil
+	}
+
+	var number json.Number
+	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	dec.UseNumber()
+	if err := dec.Decode(&number); err == nil {
+		*s = stringOrNumberRef(number.String())
+		return nil
+	}
+
+	return fmt.Errorf("must be a string or number")
+}
+
+func (s stringOrNumberRef) String() string {
+	return string(s)
 }
 
 func (a *app) apiShowByIdentifier(id string) (*Show, bool) {
