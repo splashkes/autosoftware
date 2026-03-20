@@ -153,6 +153,8 @@ jobs:
           AS_EDGE_TLS_SECRET: ${{ vars.AS_EDGE_TLS_SECRET }}
           AS_RUNTIME_DATABASE_URL: ${{ secrets.AS_RUNTIME_DATABASE_URL }}
           AS_KUBECONFIG_B64: ${{ secrets.AS_KUBECONFIG_B64 }}
+          AS_FLOWERSHOW_AWS_ACCESS_KEY_ID: ${{ secrets.AS_FLOWERSHOW_AWS_ACCESS_KEY_ID }}
+          AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY: ${{ secrets.AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
           : "${AS_NAMESPACE:?Environment variable AS_NAMESPACE is required}"
@@ -165,6 +167,8 @@ jobs:
           : "${AS_EDGE_TLS_SECRET:?Environment variable AS_EDGE_TLS_SECRET is required}"
           : "${AS_RUNTIME_DATABASE_URL:?Environment secret AS_RUNTIME_DATABASE_URL is required}"
           : "${AS_KUBECONFIG_B64:?Environment secret AS_KUBECONFIG_B64 is required}"
+          : "${AS_FLOWERSHOW_AWS_ACCESS_KEY_ID:?Environment secret AS_FLOWERSHOW_AWS_ACCESS_KEY_ID is required}"
+          : "${AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY:?Environment secret AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY is required}"
 
       - name: Set Image Ref
         id: image
@@ -221,6 +225,8 @@ jobs:
           AS_API_HOST: ${{ vars.AS_API_HOST }}
           AS_EDGE_TLS_SECRET: ${{ vars.AS_EDGE_TLS_SECRET }}
           AS_IMAGE: ${{ steps.image.outputs.image_ref }}
+          AS_FLOWERSHOW_AWS_ACCESS_KEY_ID: ${{ secrets.AS_FLOWERSHOW_AWS_ACCESS_KEY_ID }}
+          AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY: ${{ secrets.AS_FLOWERSHOW_AWS_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/rendered"
