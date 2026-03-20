@@ -42,6 +42,7 @@ func (api *RuntimeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/runtime/auth-challenges/{challenge_id}/consume", api.handleConsumeAuthChallenge)
 	mux.HandleFunc("POST /v1/runtime/authority/bundles", api.handleUpsertAuthorityBundle)
 	mux.HandleFunc("POST /v1/runtime/authority/grants", api.handleCreateAuthorityGrant)
+	mux.HandleFunc("POST /v1/runtime/authority/materialize", api.handleMaterializeAuthorityState)
 	mux.HandleFunc("GET /v1/runtime/authority/ledger/principals/{principal_id}", api.handleListAuthorityLedgerByPrincipal)
 	mux.HandleFunc("GET /v1/runtime/authority/effective/principals/{principal_id}", api.handleGetEffectiveAuthorityByPrincipal)
 	mux.HandleFunc("POST /v1/runtime/registry/change-sets", api.handleAppendRegistryChangeSet)
@@ -189,6 +190,11 @@ func (api *RuntimeAPI) handleCreateAuthorityGrant(w http.ResponseWriter, r *http
 		return
 	}
 	item, err := api.Service.CreateAuthorityGrant(r.Context(), input)
+	writeRuntimeResult(w, item, err)
+}
+
+func (api *RuntimeAPI) handleMaterializeAuthorityState(w http.ResponseWriter, r *http.Request) {
+	item, err := api.Service.MaterializeAuthorityState(r.Context())
 	writeRuntimeResult(w, item, err)
 }
 

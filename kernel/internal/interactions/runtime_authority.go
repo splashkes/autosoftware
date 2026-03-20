@@ -2,9 +2,12 @@ package interactions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var authorityGrantStatuses = map[string]struct{}{
@@ -124,11 +127,9 @@ func (s *RuntimeService) GetAuthorityBundle(ctx context.Context, bundleID string
 }
 
 func (s *RuntimeService) CreateAuthorityGrant(ctx context.Context, input CreateAuthorityGrantInput) (AuthorityGrant, error) {
-	pool, err := expectReady(s)
-	if err != nil {
+	if err := s.ensureAuthorityMaterialized(ctx); err != nil {
 		return AuthorityGrant{}, err
 	}
-
 	if strings.TrimSpace(input.GrantID) == "" {
 		input.GrantID = newID("grant")
 	}
@@ -140,6 +141,7 @@ func (s *RuntimeService) CreateAuthorityGrant(ctx context.Context, input CreateA
 
 	var superseded AuthorityGrant
 	if input.SupersedesGrantID != "" {
+		var err error
 		superseded, err = s.getAuthorityGrant(ctx, input.SupersedesGrantID)
 		if err != nil {
 			return AuthorityGrant{}, err
@@ -198,28 +200,61 @@ func (s *RuntimeService) CreateAuthorityGrant(ctx context.Context, input CreateA
 		now := s.nowUTC()
 		effectiveAt = &now
 	}
-
-	row := pool.QueryRow(ctx, `
-		insert into runtime_authority_grants (
-		  grant_id, grantor_principal_id, grantee_principal_id, bundle_id, capabilities_snapshot,
-		  scope_kind, scope_id, delegation_mode, basis, status, effective_at, expires_at,
-		  supersedes_grant_id, reason, evidence_refs, metadata
-		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
-		returning grant_id, grantor_principal_id, grantee_principal_id, bundle_id, capabilities_snapshot,
-		          scope_kind, scope_id, delegation_mode, basis, status, effective_at, expires_at,
-		          supersedes_grant_id, reason, evidence_refs, metadata::text, created_at
-	`, input.GrantID, nullString(input.GrantorPrincipalID), input.GranteePrincipalID, input.BundleID, capabilitiesSnapshot,
-		input.ScopeKind, input.ScopeID, delegationMode, basis, status, nullTimeValue(effectiveAt), nullTimeValue(input.ExpiresAt),
-		nullString(input.SupersedesGrantID), nullString(input.Reason), normalizeStringList(input.EvidenceRefs), jsonBytes(input.Metadata))
-
-	item, err := scanAuthorityGrant(row)
-	return item, wrapErr("create authority grant", err)
+	grant := AuthorityGrant{
+		GrantID:              input.GrantID,
+		GrantorPrincipalID:   strings.TrimSpace(input.GrantorPrincipalID),
+		GranteePrincipalID:   input.GranteePrincipalID,
+		BundleID:             input.BundleID,
+		CapabilitiesSnapshot: capabilitiesSnapshot,
+		ScopeKind:            input.ScopeKind,
+		ScopeID:              input.ScopeID,
+		DelegationMode:       delegationMode,
+		Basis:                basis,
+		Status:               status,
+		EffectiveAt:          effectiveAt,
+		ExpiresAt:            input.ExpiresAt,
+		SupersedesGrantID:    input.SupersedesGrantID,
+		Reason:               strings.TrimSpace(input.Reason),
+		EvidenceRefs:         normalizeStringList(input.EvidenceRefs),
+		Metadata:             input.Metadata,
+		CreatedAt:            s.nowUTC(),
+	}
+	payload, err := s.authorityGrantRegistryPayload(ctx, grant, bundle)
+	if err != nil {
+		return AuthorityGrant{}, err
+	}
+	_, err = s.AppendRegistryChangeSet(ctx, AppendRegistryChangeSetInput{
+		ChangeSetID:    "auth-" + grant.GrantID,
+		Reference:      authorityRegistryReference,
+		SeedID:         authorityRegistrySeedID,
+		RealizationID:  authorityRegistryRealizationID,
+		IdempotencyKey: "auth-" + grant.GrantID,
+		AcceptedBy:     statusOrDefault(strings.TrimSpace(input.GrantorPrincipalID), "system"),
+		Metadata: map[string]interface{}{
+			"domain": "authority",
+		},
+		Rows: []AppendRegistryRowInput{{
+			RowType:  authorityGrantRegistryRowType,
+			ObjectID: grant.GrantID,
+			ClaimID:  grant.GrantID,
+			Payload:  payload,
+		}},
+	})
+	if err != nil {
+		return AuthorityGrant{}, wrapErr("append authority registry change set", err)
+	}
+	if _, err := s.MaterializeAuthorityState(ctx); err != nil {
+		return AuthorityGrant{}, err
+	}
+	return s.getAuthorityGrant(ctx, grant.GrantID)
 }
 
 func (s *RuntimeService) ListAuthorityLedgerByPrincipal(ctx context.Context, principalID string, limit int) ([]AuthorityGrant, error) {
 	pool, err := expectReady(s)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureAuthorityMaterialized(ctx); err != nil {
 		return nil, err
 	}
 
@@ -260,6 +295,9 @@ func (s *RuntimeService) ListAuthorityLedgerByPrincipal(ctx context.Context, pri
 func (s *RuntimeService) GetEffectiveAuthorityByPrincipal(ctx context.Context, principalID string) (PrincipalEffectiveAuthority, error) {
 	pool, err := expectReady(s)
 	if err != nil {
+		return PrincipalEffectiveAuthority{}, err
+	}
+	if err := s.ensureAuthorityMaterialized(ctx); err != nil {
 		return PrincipalEffectiveAuthority{}, err
 	}
 
@@ -365,4 +403,110 @@ func (s *RuntimeService) getAuthorityGrant(ctx context.Context, grantID string) 
 
 	item, err := scanAuthorityGrant(row)
 	return item, wrapErr("get authority grant", err)
+}
+
+func (s *RuntimeService) authorityGrantRegistryPayload(ctx context.Context, grant AuthorityGrant, bundle AuthorityBundle) (map[string]interface{}, error) {
+	payload := authorityGrantRegistryPayload{
+		Grant: grant,
+		Bundle: AuthorityBundle{
+			BundleID:     bundle.BundleID,
+			DisplayName:  bundle.DisplayName,
+			Capabilities: normalizeStringList(bundle.Capabilities),
+			Status:       bundle.Status,
+			Metadata:     bundle.Metadata,
+		},
+	}
+	var err error
+	payload.Grantor, err = s.loadAuthorityPrincipalBinding(ctx, grant.GrantorPrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	payload.Grantee, err = s.loadAuthorityPrincipalBinding(ctx, grant.GranteePrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	return authorityStructToMap(payload)
+}
+
+func (s *RuntimeService) loadAuthorityPrincipalBinding(ctx context.Context, principalID string) (*authorityPrincipalBindingPayload, error) {
+	pool, err := expectReady(s)
+	if err != nil {
+		return nil, err
+	}
+	principalID = strings.TrimSpace(principalID)
+	if principalID == "" {
+		return nil, nil
+	}
+	binding := &authorityPrincipalBindingPayload{
+		PrincipalID: principalID,
+		Profile:     map[string]interface{}{},
+	}
+	var profileText string
+	err = pool.QueryRow(ctx, `
+		select coalesce(display_name, ''), profile::text
+		from runtime_principals
+		where principal_id = $1
+	`, principalID).Scan(&binding.DisplayName, &profileText)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, wrapErr("load authority principal", err)
+	}
+	if err == nil {
+		binding.Profile = parseJSON(profileText)
+		if email := strings.TrimSpace(stringValue(binding.Profile["email"])); email != "" {
+			binding.Email = email
+		}
+	}
+	err = pool.QueryRow(ctx, `
+		select provider_id, provider_subject, profile::text
+		from runtime_auth_identities
+		where principal_id = $1
+		order by last_seen_at desc nulls last, linked_at desc
+		limit 1
+	`, principalID).Scan(&binding.ProviderID, &binding.ProviderSubject, &profileText)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, wrapErr("load authority auth identity", err)
+	}
+	if err == nil {
+		profile := parseJSON(profileText)
+		if len(profile) > 0 {
+			binding.Profile = profile
+		}
+		if email := strings.TrimSpace(stringValue(profile["email"])); email != "" {
+			binding.Email = email
+		}
+	}
+	if binding.Email == "" {
+		_ = pool.QueryRow(ctx, `
+			select value
+			from runtime_principal_identifiers
+			where principal_id = $1 and identifier_type = 'email'
+			order by is_primary desc, is_verified desc, created_at asc
+			limit 1
+		`, principalID).Scan(&binding.Email)
+	}
+	if binding.DisplayName == "" {
+		binding.DisplayName = principalID
+	}
+	return binding, nil
+}
+
+func stringValue(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	default:
+		return ""
+	}
+}
+
+func authorityStructToMap(value any) (map[string]interface{}, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }

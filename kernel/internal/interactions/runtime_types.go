@@ -257,6 +257,13 @@ type PrincipalEffectiveAuthority struct {
 	EffectivePolicies []EffectiveAuthorityCapability `json:"effective_policies"`
 }
 
+type AuthorityMaterializationResult struct {
+	Reference        string `json:"reference"`
+	MaterializedRows int    `json:"materialized_rows"`
+	RegistryRows     int    `json:"registry_rows"`
+	Rebuilt          bool   `json:"rebuilt"`
+}
+
 type Handle struct {
 	HandleID           string                 `json:"handle_id"`
 	Namespace          string                 `json:"namespace"`

@@ -17,6 +17,9 @@ const flowershowRegistryReference = "0007-Flowershow/a-firstbloom"
 type registryBoundary interface {
 	AppendChangeSet(context.Context, registryAppendChangeSetInput) error
 	ListRows(context.Context, registryListRowsInput) ([]registryRowRecord, error)
+	UpsertAuthorityBundle(context.Context, authorityBundleUpsertInput) error
+	CreateAuthorityGrant(context.Context, authorityGrantCreateInput) error
+	MaterializeAuthorityState(context.Context) error
 }
 
 type registryHTTPClient struct {
@@ -63,6 +66,29 @@ type registryListRowsInput struct {
 	RealizationID string
 	AfterRowID    int64
 	Limit         int
+}
+
+type authorityBundleUpsertInput struct {
+	BundleID     string         `json:"bundle_id"`
+	DisplayName  string         `json:"display_name,omitempty"`
+	Capabilities []string       `json:"capabilities"`
+	Status       string         `json:"status,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+}
+
+type authorityGrantCreateInput struct {
+	GrantID            string         `json:"grant_id,omitempty"`
+	GrantorPrincipalID string         `json:"grantor_principal_id,omitempty"`
+	GranteePrincipalID string         `json:"grantee_principal_id,omitempty"`
+	BundleID           string         `json:"bundle_id,omitempty"`
+	ScopeKind          string         `json:"scope_kind,omitempty"`
+	ScopeID            string         `json:"scope_id,omitempty"`
+	DelegationMode     string         `json:"delegation_mode,omitempty"`
+	Basis              string         `json:"basis,omitempty"`
+	Status             string         `json:"status,omitempty"`
+	Reason             string         `json:"reason,omitempty"`
+	EvidenceRefs       []string       `json:"evidence_refs,omitempty"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
 }
 
 func newRegistryHTTPClient(baseURL, internalToken string) (*registryHTTPClient, error) {
@@ -140,4 +166,41 @@ func (c *registryHTTPClient) ListRows(ctx context.Context, input registryListRow
 		return nil, fmt.Errorf("decode registry rows: %w", err)
 	}
 	return rows, nil
+}
+
+func (c *registryHTTPClient) UpsertAuthorityBundle(ctx context.Context, input authorityBundleUpsertInput) error {
+	return c.postJSON(ctx, "/v1/runtime/authority/bundles", input)
+}
+
+func (c *registryHTTPClient) CreateAuthorityGrant(ctx context.Context, input authorityGrantCreateInput) error {
+	return c.postJSON(ctx, "/v1/runtime/authority/grants", input)
+}
+
+func (c *registryHTTPClient) MaterializeAuthorityState(ctx context.Context) error {
+	return c.postJSON(ctx, "/v1/runtime/authority/materialize", map[string]any{})
+}
+
+func (c *registryHTTPClient) postJSON(ctx context.Context, path string, input any) error {
+	body, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create %s request: %w", path, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.internalToken != "" {
+		req.Header.Set("X-AS-Internal-Token", c.internalToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("post %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		payload, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("post %s: status %d: %s", path, resp.StatusCode, strings.TrimSpace(string(payload)))
+	}
+	return nil
 }
