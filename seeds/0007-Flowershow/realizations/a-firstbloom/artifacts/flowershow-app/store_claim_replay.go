@@ -6,6 +6,48 @@ import (
 	"sort"
 )
 
+var replayableFlowershowClaimTypes = map[string]struct{}{
+	"organization.created":           {},
+	"show.created":                   {},
+	"show.updated":                   {},
+	"show_judge.assigned":            {},
+	"person.created":                 {},
+	"person.updated":                 {},
+	"person.organization_linked":     {},
+	"organization.invite_created":    {},
+	"organization.invite_claimed":    {},
+	"schedule.created":               {},
+	"schedule.updated":               {},
+	"division.created":               {},
+	"section.created":                {},
+	"class.created":                  {},
+	"class.updated":                  {},
+	"class.reordered":                {},
+	"entry.created":                  {},
+	"entry.updated":                  {},
+	"entry.moved":                    {},
+	"entry.reassigned":               {},
+	"entry.deleted":                  {},
+	"entry.visibility_set":           {},
+	"entry.placement_set":            {},
+	"show_credit.created":            {},
+	"show_credit.deleted":            {},
+	"media.attached":                 {},
+	"media.deleted":                  {},
+	"taxon.created":                  {},
+	"award.created":                  {},
+	"standard_document.created":      {},
+	"standard_edition.created":       {},
+	"source_document.created":        {},
+	"source_citation.created":        {},
+	"standard_rule.created":          {},
+	"class_rule_override.created":    {},
+	"rubric.created":                 {},
+	"criterion.created":              {},
+	"scorecard.submitted":            {},
+	"show_class.placements_computed": {},
+}
+
 func decodeFlowershowClaimPayload[T any](claim FlowershowClaim) (T, error) {
 	var out T
 	payload, err := json.Marshal(claim.Payload)

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type mockAuthProvider struct {
@@ -98,6 +100,72 @@ func jsonRequest(method, path, body string) *http.Request {
 
 func addServiceToken(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer test-token")
+}
+
+type commandDurabilityMatrix struct {
+	Commands []commandDurabilityEntry `yaml:"commands"`
+}
+
+type commandDurabilityEntry struct {
+	Command          string   `yaml:"command"`
+	DurabilityClass  string   `yaml:"durability_class"`
+	StoreMethod      string   `yaml:"store_method"`
+	ClaimTypes       []string `yaml:"claim_types"`
+	ProjectionTables []string `yaml:"projection_tables"`
+	ReplayCovered    bool     `yaml:"replay_covered"`
+}
+
+func loadCommandDurabilityMatrix(t *testing.T) commandDurabilityMatrix {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "validation", "COMMAND_DURABILITY_MATRIX.yaml"))
+	if err != nil {
+		t.Fatalf("read command durability matrix: %v", err)
+	}
+	var matrix commandDurabilityMatrix
+	if err := yaml.Unmarshal(raw, &matrix); err != nil {
+		t.Fatalf("parse command durability matrix: %v", err)
+	}
+	return matrix
+}
+
+func publishedFlowershowCommands(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "interaction_contract.yaml"))
+	if err != nil {
+		t.Fatalf("read interaction contract: %v", err)
+	}
+	var contract struct {
+		Commands []struct {
+			Name string `yaml:"name"`
+		} `yaml:"commands"`
+	}
+	if err := yaml.Unmarshal(raw, &contract); err != nil {
+		t.Fatalf("parse interaction contract: %v", err)
+	}
+	out := make([]string, 0, len(contract.Commands))
+	for _, item := range contract.Commands {
+		out = append(out, item.Name)
+	}
+	return out
+}
+
+func executeAPICommand[T any](t *testing.T, a *app, command, body string, wantStatus int) T {
+	t.Helper()
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/"+command, body)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	a.handleAPICommand(w, req)
+	if w.Code != wantStatus {
+		t.Fatalf("%s expected %d, got %d body=%s", command, wantStatus, w.Code, w.Body.String())
+	}
+	var out T
+	if wantStatus == http.StatusNoContent || strings.TrimSpace(w.Body.String()) == "" {
+		return out
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("%s decode response: %v body=%s", command, err, w.Body.String())
+	}
+	return out
 }
 
 func addAdminSession(t *testing.T, a *app, req *http.Request) {
@@ -2681,6 +2749,532 @@ func TestReplayFlowershowSnapshotFromClaimsRebuildsCurrentState(t *testing.T) {
 	}
 }
 
+func TestFlowershowCommandDurabilityMatrixCoversPublishedCommands(t *testing.T) {
+	matrix := loadCommandDurabilityMatrix(t)
+	published := publishedFlowershowCommands(t)
+
+	matrixEntries := make(map[string]commandDurabilityEntry, len(matrix.Commands))
+	for _, item := range matrix.Commands {
+		if strings.TrimSpace(item.Command) == "" {
+			t.Fatal("durability matrix contains blank command")
+		}
+		if _, exists := matrixEntries[item.Command]; exists {
+			t.Fatalf("durability matrix contains duplicate command %q", item.Command)
+		}
+		matrixEntries[item.Command] = item
+	}
+
+	for _, command := range published {
+		if _, ok := matrixEntries[command]; !ok {
+			t.Fatalf("published command %q missing from durability matrix", command)
+		}
+	}
+	for command := range matrixEntries {
+		if !containsTestString(published, command) {
+			t.Fatalf("durability matrix contains non-published command %q", command)
+		}
+	}
+}
+
+func TestFlowershowReplayCoveredCommandsUseSupportedClaimTypes(t *testing.T) {
+	matrix := loadCommandDurabilityMatrix(t)
+	for _, item := range matrix.Commands {
+		switch item.DurabilityClass {
+		case "domain_fact_claim_backed_projection":
+			if !item.ReplayCovered {
+				t.Fatalf("domain-fact command %q must be marked replay_covered", item.Command)
+			}
+			if len(item.ClaimTypes) == 0 {
+				t.Fatalf("domain-fact command %q must declare claim types", item.Command)
+			}
+			for _, claimType := range item.ClaimTypes {
+				if _, ok := replayableFlowershowClaimTypes[claimType]; !ok {
+					t.Fatalf("domain-fact command %q declares unsupported replay claim type %q", item.Command, claimType)
+				}
+			}
+		case "pure_compute", "runtime_durable_authority":
+			if item.ReplayCovered {
+				t.Fatalf("non-replay command %q should not be marked replay_covered", item.Command)
+			}
+		default:
+			t.Fatalf("command %q has unknown durability_class %q", item.Command, item.DurabilityClass)
+		}
+	}
+}
+
+func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
+	type ingestionResponse struct {
+		SourceDocument SourceDocument   `json:"source_document"`
+		Citations      []SourceCitation `json:"citations"`
+	}
+	type scenarioState struct {
+		org            Organization
+		entrant        Person
+		reassignedTo   Person
+		judge          Person
+		show           Show
+		schedule       ShowSchedule
+		division       Division
+		section        Section
+		classPrimary   ShowClass
+		classSecondary ShowClass
+		entryKept      Entry
+		entryDeleted   Entry
+		invite         OrganizationInvite
+		media          Media
+		standard       StandardDocument
+		edition        StandardEdition
+		rule           StandardRule
+		override       ClassRuleOverride
+		source         SourceDocument
+		citation       SourceCitation
+		imported       ingestionResponse
+		rubric         JudgingRubric
+		criterion      JudgingCriterion
+		credit         ShowCredit
+		award          AwardDefinition
+		taxon          Taxon
+		scorecard      EntryScorecard
+	}
+
+	a := testApp()
+	matrix := loadCommandDurabilityMatrix(t)
+	state := &scenarioState{}
+
+	executors := map[string]func(*testing.T){
+		"organization.create": func(t *testing.T) {
+			state.org = executeAPICommand[Organization](t, a, "organization.create", `{
+				"name": "Replay Registry Club",
+				"level": "club"
+			}`, http.StatusCreated)
+		},
+		"persons.create": func(t *testing.T) {
+			state.entrant = executeAPICommand[Person](t, a, "persons.create", fmt.Sprintf(`{
+				"first_name": "Alice",
+				"last_name": "Garden",
+				"email": "alice.registry@example.com",
+				"public_display_mode": "full_name",
+				"organization_id": %q,
+				"organization_role": "member"
+			}`, state.org.ID), http.StatusCreated)
+			state.reassignedTo = executeAPICommand[Person](t, a, "persons.create", fmt.Sprintf(`{
+				"first_name": "Bea",
+				"last_name": "Stem",
+				"email": "bea.registry@example.com",
+				"public_display_mode": "initials",
+				"organization_id": %q,
+				"organization_role": "member"
+			}`, state.org.ID), http.StatusCreated)
+			state.judge = executeAPICommand[Person](t, a, "persons.create", fmt.Sprintf(`{
+				"first_name": "Jules",
+				"last_name": "Judge",
+				"email": "judge.registry@example.com",
+				"public_display_mode": "first_name_last_initial",
+				"organization_id": %q,
+				"organization_role": "judge"
+			}`, state.org.ID), http.StatusCreated)
+		},
+		"shows.create": func(t *testing.T) {
+			state.show = executeAPICommand[Show](t, a, "shows.create", fmt.Sprintf(`{
+				"organization_id": %q,
+				"name": "Replay Summer Show",
+				"location": "Hall A",
+				"date": "2026-07-08",
+				"season": "2026"
+			}`, state.org.ID), http.StatusCreated)
+		},
+		"shows.update": func(t *testing.T) {
+			state.show = executeAPICommand[Show](t, a, "shows.update", fmt.Sprintf(`{
+				"id": %q,
+				"organization_id": %q,
+				"name": "Replay Summer Show Updated",
+				"location": "Hall B",
+				"date": "2026-07-08",
+				"season": "2026"
+			}`, state.show.ID, state.org.ID), http.StatusOK)
+		},
+		"clubs.invites.create": func(t *testing.T) {
+			state.invite = executeAPICommand[OrganizationInvite](t, a, "clubs.invites.create", fmt.Sprintf(`{
+				"organization_id": %q,
+				"first_name": "Ivy",
+				"last_name": "Invitee",
+				"email": "ivy.registry@example.com",
+				"organization_role": "member",
+				"permission_roles": ["show_intake_operator"]
+			}`, state.org.ID), http.StatusCreated)
+		},
+		"schedules.upsert": func(t *testing.T) {
+			state.schedule = executeAPICommand[ShowSchedule](t, a, "schedules.upsert", fmt.Sprintf(`{
+				"show_id": %q,
+				"notes": "initial schedule"
+			}`, state.show.ID), http.StatusOK)
+			state.schedule = executeAPICommand[ShowSchedule](t, a, "schedules.upsert", fmt.Sprintf(`{
+				"show_id": %q,
+				"notes": "updated schedule notes"
+			}`, state.show.ID), http.StatusOK)
+		},
+		"divisions.create": func(t *testing.T) {
+			state.division = executeAPICommand[Division](t, a, "divisions.create", fmt.Sprintf(`{
+				"show_schedule_id": %q,
+				"code": "A",
+				"title": "Horticulture",
+				"domain": "horticulture",
+				"sort_order": 1
+			}`, state.schedule.ID), http.StatusCreated)
+		},
+		"sections.create": func(t *testing.T) {
+			state.section = executeAPICommand[Section](t, a, "sections.create", fmt.Sprintf(`{
+				"division_id": %q,
+				"code": "1",
+				"title": "Annuals",
+				"sort_order": 1
+			}`, state.division.ID), http.StatusCreated)
+		},
+		"classes.create": func(t *testing.T) {
+			state.classPrimary = executeAPICommand[ShowClass](t, a, "classes.create", fmt.Sprintf(`{
+				"section_id": %q,
+				"class_number": "29",
+				"sort_order": 1,
+				"title": "Double or semi-double",
+				"domain": "horticulture",
+				"description": "White",
+				"specimen_count": 3
+			}`, state.section.ID), http.StatusCreated)
+			state.classSecondary = executeAPICommand[ShowClass](t, a, "classes.create", fmt.Sprintf(`{
+				"section_id": %q,
+				"class_number": "30",
+				"sort_order": 2,
+				"title": "Double or semi-double",
+				"domain": "horticulture",
+				"description": "Pink",
+				"specimen_count": 3
+			}`, state.section.ID), http.StatusCreated)
+		},
+		"classes.update": func(t *testing.T) {
+			state.classPrimary = executeAPICommand[ShowClass](t, a, "classes.update", fmt.Sprintf(`{
+				"id": %q,
+				"section_id": %q,
+				"class_number": "29",
+				"sort_order": 1,
+				"title": "Double or semi-double",
+				"domain": "horticulture",
+				"description": "White blooms",
+				"specimen_count": 3,
+				"schedule_notes": "Preserve authored wording."
+			}`, state.classPrimary.ID, state.section.ID), http.StatusOK)
+		},
+		"classes.reorder": func(t *testing.T) {
+			state.classPrimary = executeAPICommand[ShowClass](t, a, "classes.reorder", fmt.Sprintf(`{
+				"class_id": %q,
+				"sort_order": 5
+			}`, state.classPrimary.ID), http.StatusOK)
+		},
+		"taxons.create": func(t *testing.T) {
+			state.taxon = executeAPICommand[Taxon](t, a, "taxons.create", `{
+				"taxon_type": "species",
+				"name": "Calendula officinalis",
+				"scientific_name": "Calendula officinalis"
+			}`, http.StatusCreated)
+		},
+		"entries.create": func(t *testing.T) {
+			state.entryKept = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Entry A",
+				"notes": "primary entrant",
+				"taxon_refs": [%q]
+			}`, state.show.ID, state.classPrimary.ID, state.entrant.ID, state.taxon.ID), http.StatusCreated)
+			state.entryDeleted = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Entry B",
+				"notes": "secondary entrant",
+				"taxon_refs": [%q]
+			}`, state.show.ID, state.classPrimary.ID, state.entrant.ID, state.taxon.ID), http.StatusCreated)
+		},
+		"entries.update": func(t *testing.T) {
+			state.entryKept = executeAPICommand[Entry](t, a, "entries.update", fmt.Sprintf(`{
+				"id": %q,
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Entry A Updated",
+				"notes": "updated note",
+				"taxon_refs": [%q]
+			}`, state.entryKept.ID, state.show.ID, state.classPrimary.ID, state.entrant.ID, state.taxon.ID), http.StatusOK)
+		},
+		"judges.assign": func(t *testing.T) {
+			_ = executeAPICommand[ShowJudgeAssignment](t, a, "judges.assign", fmt.Sprintf(`{
+				"show_id": %q,
+				"person_id": %q
+			}`, state.show.ID, state.judge.ID), http.StatusCreated)
+		},
+		"media.attach": func(t *testing.T) {
+			state.media = executeAPICommand[Media](t, a, "media.attach", fmt.Sprintf(`{
+				"entry_id": %q,
+				"media_type": "photo",
+				"url": "https://example.com/flower.jpg",
+				"content_type": "image/jpeg",
+				"file_name": "flower.jpg"
+			}`, state.entryKept.ID), http.StatusCreated)
+		},
+		"media.delete": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "media.delete", fmt.Sprintf(`{
+				"media_id": %q
+			}`, state.media.ID), http.StatusOK)
+		},
+		"standards.create": func(t *testing.T) {
+			state.standard = executeAPICommand[StandardDocument](t, a, "standards.create", fmt.Sprintf(`{
+				"name": "OJES",
+				"issuing_org_id": %q,
+				"domain_scope": "horticulture",
+				"description": "Ontario judging standard"
+			}`, state.org.ID), http.StatusCreated)
+		},
+		"editions.create": func(t *testing.T) {
+			state.edition = executeAPICommand[StandardEdition](t, a, "editions.create", fmt.Sprintf(`{
+				"standard_document_id": %q,
+				"edition_label": "2019",
+				"publication_year": 2019,
+				"revision_date": "2019-01-01",
+				"status": "active",
+				"source_url": "https://example.com/ojes-2019.pdf",
+				"source_kind": "pdf"
+			}`, state.standard.ID), http.StatusCreated)
+		},
+		"rules.create": func(t *testing.T) {
+			state.rule = executeAPICommand[StandardRule](t, a, "rules.create", fmt.Sprintf(`{
+				"standard_edition_id": %q,
+				"domain": "horticulture",
+				"rule_type": "eligibility",
+				"subject_label": "Calendula",
+				"body": "Must be correctly named.",
+				"page_ref": "p.12"
+			}`, state.edition.ID), http.StatusCreated)
+		},
+		"overrides.create": func(t *testing.T) {
+			state.override = executeAPICommand[ClassRuleOverride](t, a, "overrides.create", fmt.Sprintf(`{
+				"show_class_id": %q,
+				"base_standard_rule_id": %q,
+				"override_type": "schedule_override",
+				"body": "White blooms only.",
+				"rationale": "Schedule wording is narrower."
+			}`, state.classPrimary.ID, state.rule.ID), http.StatusCreated)
+		},
+		"sources.create": func(t *testing.T) {
+			state.source = executeAPICommand[SourceDocument](t, a, "sources.create", fmt.Sprintf(`{
+				"organization_id": %q,
+				"show_id": %q,
+				"title": "Replay Schedule PDF",
+				"document_type": "schedule",
+				"publication_date": "2026-06-01",
+				"source_url": "https://example.com/replay-schedule.pdf"
+			}`, state.org.ID, state.show.ID), http.StatusCreated)
+		},
+		"citations.create": func(t *testing.T) {
+			state.citation = executeAPICommand[SourceCitation](t, a, "citations.create", fmt.Sprintf(`{
+				"source_document_id": %q,
+				"target_type": "show_class",
+				"target_id": %q,
+				"page_from": 1,
+				"page_to": 1,
+				"quoted_text": "29 Double or semi-double White blooms",
+				"extraction_confidence": 0.98
+			}`, state.source.ID, state.classPrimary.ID), http.StatusCreated)
+		},
+		"ingestions.import": func(t *testing.T) {
+			state.imported = executeAPICommand[ingestionResponse](t, a, "ingestions.import", fmt.Sprintf(`{
+				"source_document": {
+					"organization_id": %q,
+					"show_id": %q,
+					"title": "Replay Import Packet",
+					"document_type": "schedule",
+					"publication_date": "2026-06-15",
+					"source_url": "https://example.com/replay-import.pdf"
+				},
+				"citations": [{
+					"target_type": "show_class",
+					"target_id": %q,
+					"page_from": "2",
+					"page_to": "2",
+					"quoted_text": "30 Double or semi-double Pink",
+					"extraction_confidence": 0.95
+				}]
+			}`, state.org.ID, state.show.ID, state.classSecondary.ID), http.StatusCreated)
+		},
+		"rubrics.create": func(t *testing.T) {
+			state.rubric = executeAPICommand[JudgingRubric](t, a, "rubrics.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"standard_edition_id": %q,
+				"domain": "horticulture",
+				"title": "Horticulture Judging"
+			}`, state.show.ID, state.edition.ID), http.StatusCreated)
+		},
+		"criteria.create": func(t *testing.T) {
+			state.criterion = executeAPICommand[JudgingCriterion](t, a, "criteria.create", fmt.Sprintf(`{
+				"judging_rubric_id": %q,
+				"name": "Condition",
+				"max_points": 10,
+				"sort_order": 1
+			}`, state.rubric.ID), http.StatusCreated)
+		},
+		"scorecards.submit": func(t *testing.T) {
+			state.scorecard = executeAPICommand[EntryScorecard](t, a, "scorecards.submit", fmt.Sprintf(`{
+				"entry_id": %q,
+				"judge_id": %q,
+				"rubric_id": %q,
+				"notes": "Strong specimen",
+				"scores": [{
+					"criterion_id": %q,
+					"score": 9,
+					"comment": "Excellent condition"
+				}]
+			}`, state.entryKept.ID, state.judge.ID, state.rubric.ID, state.criterion.ID), http.StatusCreated)
+		},
+		"classes.compute_placements": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "classes.compute_placements", fmt.Sprintf(`{
+				"class_id": %q
+			}`, state.classPrimary.ID), http.StatusOK)
+		},
+		"entries.set_placement": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "entries.set_placement", fmt.Sprintf(`{
+				"id": %q,
+				"placement": 1,
+				"points": 6
+			}`, state.entryKept.ID), http.StatusOK)
+		},
+		"entries.set_visibility": func(t *testing.T) {
+			_ = executeAPICommand[map[string]any](t, a, "entries.set_visibility", fmt.Sprintf(`{
+				"id": %q,
+				"suppressed": true
+			}`, state.entryKept.ID), http.StatusOK)
+		},
+		"show_credits.create": func(t *testing.T) {
+			state.credit = executeAPICommand[ShowCredit](t, a, "show_credits.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"display_name": "Dana Photo",
+				"credit_label": "Photographer",
+				"notes": "Volunteer photographer",
+				"sort_order": 1
+			}`, state.show.ID), http.StatusCreated)
+		},
+		"show_credits.delete": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "show_credits.delete", fmt.Sprintf(`{
+				"id": %q
+			}`, state.credit.ID), http.StatusOK)
+		},
+		"entries.reassign_entrant": func(t *testing.T) {
+			state.entryKept = executeAPICommand[Entry](t, a, "entries.reassign_entrant", fmt.Sprintf(`{
+				"id": %q,
+				"person_id": %q
+			}`, state.entryKept.ID, state.reassignedTo.ID), http.StatusOK)
+		},
+		"entries.move": func(t *testing.T) {
+			state.entryKept = executeAPICommand[Entry](t, a, "entries.move", fmt.Sprintf(`{
+				"id": %q,
+				"class_id": %q,
+				"reason": "judge correction"
+			}`, state.entryKept.ID, state.classSecondary.ID), http.StatusOK)
+		},
+		"entries.delete": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "entries.delete", fmt.Sprintf(`{
+				"id": %q
+			}`, state.entryDeleted.ID), http.StatusOK)
+		},
+		"awards.create": func(t *testing.T) {
+			state.award = executeAPICommand[AwardDefinition](t, a, "awards.create", fmt.Sprintf(`{
+				"organization_id": %q,
+				"name": "Top Calendula",
+				"description": "Best calendula entry",
+				"season": "2026",
+				"taxon_filters": [%q],
+				"scoring_rule": "highest_points",
+				"min_entries": 1
+			}`, state.org.ID, state.taxon.ID), http.StatusCreated)
+		},
+	}
+
+	for _, item := range matrix.Commands {
+		if !item.ReplayCovered {
+			continue
+		}
+		executor, ok := executors[item.Command]
+		if !ok {
+			t.Fatalf("replay-covered command %q missing executor", item.Command)
+		}
+		executor(t)
+	}
+
+	mem, ok := a.store.(*memoryStore)
+	if !ok {
+		t.Fatalf("expected memoryStore, got %T", a.store)
+	}
+	replayed, err := replayFlowershowSnapshotFromClaims(mem.objects, mem.claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, ok := replayed.organizationByID(state.org.ID); !ok || got.Name != "Replay Registry Club" {
+		t.Fatalf("replayed organization mismatch: %#v", got)
+	}
+	if got, ok := replayed.showByID(state.show.ID); !ok || got.Location != "Hall B" || got.Name != "Replay Summer Show Updated" {
+		t.Fatalf("replayed show mismatch: %#v", got)
+	}
+	if got, ok := replayed.scheduleByShowID(state.show.ID); !ok || got.Notes != "updated schedule notes" {
+		t.Fatalf("replayed schedule mismatch: %#v", got)
+	}
+	if got, ok := replayed.classByID(state.classPrimary.ID); !ok || got.SortOrder != 5 || got.Description != "White blooms" {
+		t.Fatalf("replayed primary class mismatch: %#v", got)
+	}
+	if got, ok := replayed.entryByID(state.entryKept.ID); !ok || got.ClassID != state.classSecondary.ID || got.PersonID != state.reassignedTo.ID || !got.Suppressed || got.Placement != 1 || got.Points != 6 {
+		t.Fatalf("replayed kept entry mismatch: %#v", got)
+	}
+	if _, ok := replayed.entryByID(state.entryDeleted.ID); ok {
+		t.Fatalf("deleted entry %s should not survive replay", state.entryDeleted.ID)
+	}
+	if got := replayed.mediaByEntry(state.entryKept.ID); len(got) != 0 {
+		t.Fatalf("deleted media should stay deleted, got %#v", got)
+	}
+	if got := replayed.showCreditsByShow(state.show.ID); len(got) != 0 {
+		t.Fatalf("deleted show credit should stay deleted, got %#v", got)
+	}
+	if got := replayed.organizationInvitesByOrganization(state.org.ID); len(got) != 1 || got[0].Email != "ivy.registry@example.com" || got[0].Status != "pending" {
+		t.Fatalf("replayed invite mismatch: %#v", got)
+	}
+	if got, ok := replayed.standardEditionByID(state.edition.ID); !ok || got.StandardDocumentID != state.standard.ID {
+		t.Fatalf("replayed edition mismatch: %#v", got)
+	}
+	if got := replayed.rulesByEdition(state.edition.ID); len(got) == 0 || got[0].ID != state.rule.ID {
+		t.Fatalf("replayed rules mismatch: %#v", got)
+	}
+	if got := replayed.overridesByClass(state.classPrimary.ID); len(got) == 0 || got[0].ID != state.override.ID {
+		t.Fatalf("replayed overrides mismatch: %#v", got)
+	}
+	if got := replayed.citationsByTarget("show_class", state.classPrimary.ID); len(got) == 0 {
+		t.Fatalf("expected replayed citations for primary class, got %#v", got)
+	}
+	if got := replayed.citationsByTarget("show_class", state.classSecondary.ID); len(got) == 0 {
+		t.Fatalf("expected replayed citations for secondary class, got %#v", got)
+	}
+	if got, ok := replayed.rubricByID(state.rubric.ID); !ok || got.Title != "Horticulture Judging" {
+		t.Fatalf("replayed rubric mismatch: %#v", got)
+	}
+	if got := replayed.criteriaByRubric(state.rubric.ID); len(got) != 1 || got[0].ID != state.criterion.ID {
+		t.Fatalf("replayed criteria mismatch: %#v", got)
+	}
+	if got := replayed.scorecardsByEntry(state.entryKept.ID); len(got) == 0 || got[0].ID != state.scorecard.ID {
+		t.Fatalf("replayed scorecards mismatch: %#v", got)
+	}
+	if got, ok := replayed.awardByID(state.award.ID); !ok || got.Name != "Top Calendula" {
+		t.Fatalf("replayed award mismatch: %#v", got)
+	}
+	if got := replayed.judgesByShow(state.show.ID); len(got) != 1 || got[0].PersonID != state.judge.ID {
+		t.Fatalf("replayed judge assignment mismatch: %#v", got)
+	}
+}
+
 func TestMediaUploadAndRender(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -3052,6 +3646,42 @@ func TestFlowershowPostgresStoreMutatorsDoNotWriteOnlyToMemory(t *testing.T) {
 	}
 	if len(hits) > 0 {
 		t.Fatalf("flowershow postgres store still contains memory-only mutator paths:\n%s", strings.Join(hits, "\n"))
+	}
+}
+
+func TestFlowershowProjectionWritesStayInsideStoreBoundaries(t *testing.T) {
+	t.Helper()
+	root := "."
+	allowed := map[string]struct{}{
+		"store.go":              {},
+		"store_invites.go":      {},
+		"store_agent_tokens.go": {},
+		"authority.go":          {},
+		"auth_state_store.go":   {},
+	}
+	writeRE := regexp.MustCompile(`(?i)\b(insert into|update|delete from)\s+(as_flowershow_|runtime_authority_|as_web_sessions)`)
+	files, err := filepath.Glob(filepath.Join(root, "*.go"))
+	if err != nil {
+		t.Fatalf("glob go files: %v", err)
+	}
+	var hits []string
+	for _, path := range files {
+		if _, ok := allowed[filepath.Base(path)]; ok {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for idx, line := range lines {
+			if writeRE.MatchString(line) {
+				hits = append(hits, fmt.Sprintf("%s:%d:%s", path, idx+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+	if len(hits) > 0 {
+		t.Fatalf("flowershow domain/runtime writes escaped store boundaries:\n%s", strings.Join(hits, "\n"))
 	}
 }
 
