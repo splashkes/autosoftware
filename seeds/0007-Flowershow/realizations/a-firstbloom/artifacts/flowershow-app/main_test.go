@@ -1633,6 +1633,45 @@ func TestCommandEndpointsAcceptRuntimeContextEnvelopeWithoutPersistence(t *testi
 	}
 }
 
+func TestCommandEndpointsAcceptFlatBodyWithRuntimeContextSibling(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/shows.create", `{
+		"organization_id":"org_demo1",
+		"name":"Flat Runtime Context Show",
+		"season":"2026",
+		"runtime_context":{
+			"assistant_goal":"author the show shell from a monthly schedule",
+			"source_excerpt":"This should guide composition but never persist."
+		}
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var show Show
+	if err := json.Unmarshal(w.Body.Bytes(), &show); err != nil {
+		t.Fatalf("unmarshal show: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/"+show.ID, nil)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "assistant_goal") || strings.Contains(body, "runtime_context") {
+		t.Fatal("runtime-only context from flat bodies must not be persisted into show projections")
+	}
+}
+
 func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -1648,7 +1687,8 @@ func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
 		t.Fatalf("create source document: %v", err)
 	}
 
-	expectedPages := []string{"1", "2"}
+	expectedPages := []string{"1", "2", "3"}
+	expectedPageEnds := []string{"1", "2", "4"}
 	for i, body := range []string{
 		fmt.Sprintf(`{
 			"source_document_id": %q,
@@ -1673,6 +1713,18 @@ func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
 				"interpretation_note": "Prompt-only note"
 			}
 		}`, doc.ID),
+		fmt.Sprintf(`{
+			"source_document_id": %q,
+			"target_type": "show_class",
+			"target_id": "class_01",
+			"page_from": "3",
+			"page_to": "4",
+			"quoted_text": "Flat body plus runtime context",
+			"extraction_confidence": 0.77,
+			"runtime_context": {
+				"interpretation_note": "Flat-body guidance should be accepted too."
+			}
+		}`, doc.ID),
 	} {
 		req := jsonRequest("POST", "/v1/commands/0007-Flowershow/citations.create", body)
 		addServiceToken(req)
@@ -1685,14 +1737,14 @@ func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 			t.Fatalf("unmarshal citation response: %v", err)
 		}
-		if created.PageFrom != expectedPages[i] || created.PageTo != expectedPages[i] {
-			t.Fatalf("expected page refs %q, got %q/%q", expectedPages[i], created.PageFrom, created.PageTo)
+		if created.PageFrom != expectedPages[i] || created.PageTo != expectedPageEnds[i] {
+			t.Fatalf("expected page refs %q/%q, got %q/%q", expectedPages[i], expectedPageEnds[i], created.PageFrom, created.PageTo)
 		}
 	}
 
 	citations := a.store.citationsByTarget("show_class", "class_01")
-	if len(citations) < 3 {
-		t.Fatalf("expected seeded citation plus two created citations, got %d", len(citations))
+	if len(citations) < 4 {
+		t.Fatalf("expected seeded citation plus three created citations, got %d", len(citations))
 	}
 }
 
