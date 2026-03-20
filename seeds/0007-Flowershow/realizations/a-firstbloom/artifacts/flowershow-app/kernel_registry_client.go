@@ -29,14 +29,14 @@ type registryHTTPClient struct {
 }
 
 type registryAppendChangeSetInput struct {
-	ChangeSetID    string
-	Reference      string
-	SeedID         string
-	RealizationID  string
-	IdempotencyKey string
-	AcceptedBy     string
-	Metadata       map[string]any
-	Rows           []registryAppendRowInput
+	ChangeSetID    string                   `json:"change_set_id"`
+	Reference      string                   `json:"reference"`
+	SeedID         string                   `json:"seed_id,omitempty"`
+	RealizationID  string                   `json:"realization_id,omitempty"`
+	IdempotencyKey string                   `json:"idempotency_key,omitempty"`
+	AcceptedBy     string                   `json:"accepted_by,omitempty"`
+	Metadata       map[string]any           `json:"metadata,omitempty"`
+	Rows           []registryAppendRowInput `json:"rows"`
 }
 
 type registryAppendRowInput struct {
