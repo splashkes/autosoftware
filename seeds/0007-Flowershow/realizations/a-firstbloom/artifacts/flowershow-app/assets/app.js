@@ -381,6 +381,19 @@ function flowershowBindMediaTrigger(button) {
   });
 }
 
+function flowershowSuppressDuplicateAgentWidgets() {
+  const kernelWidgets = document.querySelectorAll('.agent-access-widget[data-agent-widget-source="kernel"]');
+  if (kernelWidgets.length === 0) return;
+  document.querySelectorAll('.agent-access-widget:not([data-agent-widget-source="kernel"])').forEach(function(widget) {
+    const shell = widget.closest('.agent-access-shell');
+    if (shell) {
+      shell.hidden = true;
+      return;
+    }
+    widget.hidden = true;
+  });
+}
+
 function flowershowInit(root) {
   const scope = root || document;
   scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
@@ -397,6 +410,7 @@ function flowershowInit(root) {
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {
     el.textContent = window.location.pathname;
   });
+  flowershowSuppressDuplicateAgentWidgets();
 }
 
 // Auto-remove toasts after 4 seconds
