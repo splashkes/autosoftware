@@ -75,6 +75,13 @@ func newMediaStore() (mediaStore, error) {
 		if err != nil {
 			return nil, err
 		}
+		creds, err := cfg.Credentials.Retrieve(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("s3 media store credentials unavailable for bucket %q in region %q: %w", bucket, region, err)
+		}
+		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
+			return nil, fmt.Errorf("s3 media store credentials unavailable for bucket %q in region %q: incomplete credential set", bucket, region)
+		}
 		client := s3.NewFromConfig(cfg)
 		return &s3MediaStore{
 			bucket:    bucket,
