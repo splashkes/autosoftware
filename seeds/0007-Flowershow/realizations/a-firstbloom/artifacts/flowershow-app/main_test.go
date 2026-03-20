@@ -120,6 +120,30 @@ func multipartUploadRequest(t *testing.T, path string, files map[string]string) 
 	return req
 }
 
+func TestNewMediaStoreFailsFastWhenS3ConfiguredWithoutCredentials(t *testing.T) {
+	t.Setenv("AS_S3_BUCKET", "flowershow-media-test")
+	t.Setenv("AWS_REGION", "us-east-2")
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+	t.Setenv("AWS_SESSION_TOKEN", "")
+	t.Setenv("AWS_PROFILE", "")
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(t.TempDir(), "config"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(t.TempDir(), "credentials"))
+	t.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", "")
+	t.Setenv("AWS_ROLE_ARN", "")
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "")
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", "")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+
+	_, err := newMediaStore()
+	if err == nil {
+		t.Fatal("expected s3 media store credential preflight error")
+	}
+	if !strings.Contains(err.Error(), "s3 media store credentials unavailable") {
+		t.Fatalf("expected credential error, got %v", err)
+	}
+}
+
 func addServiceToken(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer test-token")
 }
