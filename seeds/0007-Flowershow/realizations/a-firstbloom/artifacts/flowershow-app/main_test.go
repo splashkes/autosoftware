@@ -2853,6 +2853,32 @@ func TestFlowershowPostgresStoreMutatorsDoNotWriteOnlyToMemory(t *testing.T) {
 	}
 }
 
+func TestFlowershowMigrationReconcilesLegacyTables(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(".", "store.go"))
+	if err != nil {
+		t.Fatalf("read store.go: %v", err)
+	}
+	createRe := regexp.MustCompile(`CREATE TABLE IF NOT EXISTS (as_flowershow_[a-z_]+)`)
+	alterRe := regexp.MustCompile(`ALTER TABLE (as_flowershow_[a-z_]+)`)
+	creates := createRe.FindAllStringSubmatch(string(data), -1)
+	alters := alterRe.FindAllStringSubmatch(string(data), -1)
+	altered := make(map[string]struct{}, len(alters))
+	for _, match := range alters {
+		altered[match[1]] = struct{}{}
+	}
+	var missing []string
+	for _, match := range creates {
+		table := match[1]
+		if _, ok := altered[table]; !ok {
+			missing = append(missing, table)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("flowershow migrate() must reconcile legacy tables with ALTER TABLE coverage; missing: %s", strings.Join(missing, ", "))
+	}
+}
+
 func containsTestString(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {

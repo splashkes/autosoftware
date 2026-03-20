@@ -2423,6 +2423,244 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_criterion_scores (
   score DOUBLE PRECISION NOT NULL DEFAULT 0,
   comment TEXT NOT NULL DEFAULT ''
 );
+
+ALTER TABLE as_flowershow_objects
+  ADD COLUMN IF NOT EXISTS object_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS slug TEXT,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT 'system';
+
+ALTER TABLE as_flowershow_claims
+  ADD COLUMN IF NOT EXISTS object_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS claim_seq BIGINT,
+  ADD COLUMN IF NOT EXISTS claim_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS accepted_by TEXT NOT NULL DEFAULT 'system',
+  ADD COLUMN IF NOT EXISTS supersedes_claim_id TEXT,
+  ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE as_flowershow_agent_tokens
+  ADD COLUMN IF NOT EXISTS owner_email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS owner_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS token_prefix TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS permission_profile TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS revoked_reason TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_auth_pending
+  ADD COLUMN IF NOT EXISTS flow TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS cognito_session TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_organizations
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'society',
+  ADD COLUMN IF NOT EXISTS parent_id TEXT;
+
+ALTER TABLE as_flowershow_m_shows
+  ADD COLUMN IF NOT EXISTS slug TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS show_date TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS season TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft',
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_show_judges
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS person_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_persons
+  ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS initials TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
+
+ALTER TABLE as_flowershow_m_person_organizations
+  ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';
+
+ALTER TABLE as_flowershow_m_organization_invites
+  ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS organization_role TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS permission_roles TEXT[] NOT NULL DEFAULT '{}'::text[],
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS invited_by_subject TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS invited_by_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS claimed_subject_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS claimed_cognito_sub TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+
+ALTER TABLE as_flowershow_m_schedules
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS source_document_id TEXT,
+  ADD COLUMN IF NOT EXISTS effective_standard_edition_id TEXT,
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_divisions
+  ADD COLUMN IF NOT EXISTS show_schedule_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS code TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS domain TEXT NOT NULL DEFAULT 'horticulture',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE as_flowershow_m_sections
+  ADD COLUMN IF NOT EXISTS division_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS code TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE as_flowershow_m_classes
+  ADD COLUMN IF NOT EXISTS section_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS class_number TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS domain TEXT NOT NULL DEFAULT 'horticulture',
+  ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS specimen_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS unit TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS measurement_rule TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS naming_requirement TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS container_rule TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS eligibility_rule TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS schedule_notes TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS taxon_refs TEXT[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE as_flowershow_m_entries
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS class_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS person_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS placement INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS taxon_refs TEXT[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_show_credits
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS person_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS credit_label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_media
+  ADD COLUMN IF NOT EXISTS entry_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT 'photo',
+  ADD COLUMN IF NOT EXISTS url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS thumbnail_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS storage_key TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS width INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS height INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_taxons
+  ADD COLUMN IF NOT EXISTS scientific_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS parent_id TEXT;
+
+ALTER TABLE as_flowershow_m_awards
+  ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS season TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS taxon_filters TEXT[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS scoring_rule TEXT NOT NULL DEFAULT 'sum',
+  ADD COLUMN IF NOT EXISTS min_entries INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE as_flowershow_m_standard_documents
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS issuing_org_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS domain_scope TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_standard_editions
+  ADD COLUMN IF NOT EXISTS standard_document_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS edition_label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS publication_year INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS revision_date TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'current',
+  ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_source_documents
+  ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS show_id TEXT,
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS publication_date TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS local_path TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS checksum TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_source_citations
+  ADD COLUMN IF NOT EXISTS source_document_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS target_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS target_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS page_from TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS page_to TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS quoted_text TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS extraction_confidence DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+ALTER TABLE as_flowershow_m_standard_rules
+  ADD COLUMN IF NOT EXISTS standard_edition_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS domain TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS rule_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS subject_label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS page_ref TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_class_rule_overrides
+  ADD COLUMN IF NOT EXISTS show_class_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS base_standard_rule_id TEXT,
+  ADD COLUMN IF NOT EXISTS override_type TEXT NOT NULL DEFAULT 'local_only',
+  ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS rationale TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_rubrics
+  ADD COLUMN IF NOT EXISTS standard_edition_id TEXT,
+  ADD COLUMN IF NOT EXISTS show_id TEXT,
+  ADD COLUMN IF NOT EXISTS domain TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_criteria
+  ADD COLUMN IF NOT EXISTS judging_rubric_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS max_points INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE as_flowershow_m_scorecards
+  ADD COLUMN IF NOT EXISTS entry_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS judge_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS rubric_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS total_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE as_flowershow_m_criterion_scores
+  ADD COLUMN IF NOT EXISTS scorecard_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS criterion_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS score DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS comment TEXT NOT NULL DEFAULT '';
 `)
 	if err != nil {
 		return fmt.Errorf("migrate flowershow store: %w", err)
@@ -2583,7 +2821,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return rows.Err()
 	}
 
-	if err := loadRows(`SELECT id, name, level, coalesce(parent_id, '') FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(name, ''), coalesce(level, ''), coalesce(parent_id, '') FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
 		var item Organization
 		if err := rows.Scan(&item.ID, &item.Name, &item.Level, &item.ParentID); err != nil {
 			return fmt.Errorf("scan organization: %w", err)
@@ -2594,7 +2832,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load organizations: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, slug, organization_id, name, location, show_date, season, status, created_at, updated_at FROM as_flowershow_m_shows`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(slug, ''), coalesce(organization_id, ''), coalesce(name, ''), coalesce(location, ''), coalesce(show_date, ''), coalesce(season, ''), coalesce(status, '') , coalesce(created_at, NOW()), coalesce(updated_at, NOW()) FROM as_flowershow_m_shows`, func(rows pgx.Rows) error {
 		var item Show
 		if err := rows.Scan(&item.ID, &item.Slug, &item.OrganizationID, &item.Name, &item.Location, &item.Date, &item.Season, &item.Status, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return fmt.Errorf("scan show: %w", err)
@@ -2605,7 +2843,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load shows: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_id, person_id, assigned_at FROM as_flowershow_m_show_judges`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(person_id, ''), coalesce(assigned_at, NOW()) FROM as_flowershow_m_show_judges`, func(rows pgx.Rows) error {
 		var item ShowJudgeAssignment
 		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.AssignedAt); err != nil {
 			return fmt.Errorf("scan show judge: %w", err)
@@ -2616,7 +2854,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load show judges: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, first_name, last_name, initials, email, public_display_mode FROM as_flowershow_m_persons`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(first_name, ''), coalesce(last_name, ''), coalesce(initials, ''), coalesce(email, ''), coalesce(public_display_mode, '') FROM as_flowershow_m_persons`, func(rows pgx.Rows) error {
 		var item Person
 		if err := rows.Scan(&item.ID, &item.FirstName, &item.LastName, &item.Initials, &item.Email, &item.PublicDisplayMode); err != nil {
 			return fmt.Errorf("scan person: %w", err)
@@ -2627,7 +2865,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load persons: %w", err)
 	}
 
-	if err := loadRows(`SELECT person_id, organization_id, role FROM as_flowershow_m_person_organizations`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT person_id, organization_id, coalesce(role, '') FROM as_flowershow_m_person_organizations`, func(rows pgx.Rows) error {
 		var item PersonOrganization
 		if err := rows.Scan(&item.PersonID, &item.OrganizationID, &item.Role); err != nil {
 			return fmt.Errorf("scan person organization: %w", err)
@@ -2638,7 +2876,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load person organizations: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, organization_id, first_name, last_name, email, organization_role, permission_roles, status, invited_by_subject, invited_by_name, invited_at, claimed_subject_id, claimed_cognito_sub, claimed_at FROM as_flowershow_m_organization_invites`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(first_name, ''), coalesce(last_name, ''), coalesce(email, ''), coalesce(organization_role, ''), coalesce(permission_roles, '{}'::text[]), coalesce(status, 'pending'), coalesce(invited_by_subject, ''), coalesce(invited_by_name, ''), coalesce(invited_at, NOW()), coalesce(claimed_subject_id, ''), coalesce(claimed_cognito_sub, ''), claimed_at FROM as_flowershow_m_organization_invites`, func(rows pgx.Rows) error {
 		item, err := scanOrganizationInvite(rows)
 		if err != nil {
 			return fmt.Errorf("scan organization invite: %w", err)
@@ -2649,7 +2887,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load organization invites: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_id, coalesce(source_document_id, ''), coalesce(effective_standard_edition_id, ''), notes FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, show_id, coalesce(source_document_id, ''), coalesce(effective_standard_edition_id, ''), coalesce(notes, '') FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
 		var item ShowSchedule
 		if err := rows.Scan(&item.ID, &item.ShowID, &item.SourceDocumentID, &item.EffectiveStandardEditionID, &item.Notes); err != nil {
 			return fmt.Errorf("scan schedule: %w", err)
@@ -2660,7 +2898,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load schedules: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_schedule_id, code, title, domain, sort_order FROM as_flowershow_m_divisions`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(show_schedule_id, ''), coalesce(code, ''), coalesce(title, ''), coalesce(domain, ''), coalesce(sort_order, 0) FROM as_flowershow_m_divisions`, func(rows pgx.Rows) error {
 		var item Division
 		if err := rows.Scan(&item.ID, &item.ShowScheduleID, &item.Code, &item.Title, &item.Domain, &item.SortOrder); err != nil {
 			return fmt.Errorf("scan division: %w", err)
@@ -2671,7 +2909,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load divisions: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, division_id, code, title, sort_order FROM as_flowershow_m_sections`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(division_id, ''), coalesce(code, ''), coalesce(title, ''), coalesce(sort_order, 0) FROM as_flowershow_m_sections`, func(rows pgx.Rows) error {
 		var item Section
 		if err := rows.Scan(&item.ID, &item.DivisionID, &item.Code, &item.Title, &item.SortOrder); err != nil {
 			return fmt.Errorf("scan section: %w", err)
@@ -2682,7 +2920,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load sections: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, section_id, class_number, sort_order, title, domain, description, specimen_count, unit, measurement_rule, naming_requirement, container_rule, eligibility_rule, schedule_notes, taxon_refs FROM as_flowershow_m_classes`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(section_id, ''), coalesce(class_number, ''), coalesce(sort_order, 0), coalesce(title, ''), coalesce(domain, ''), coalesce(description, ''), coalesce(specimen_count, 0), coalesce(unit, ''), coalesce(measurement_rule, ''), coalesce(naming_requirement, ''), coalesce(container_rule, ''), coalesce(eligibility_rule, ''), coalesce(schedule_notes, ''), coalesce(taxon_refs, '{}'::text[]) FROM as_flowershow_m_classes`, func(rows pgx.Rows) error {
 		var item ShowClass
 		if err := rows.Scan(&item.ID, &item.SectionID, &item.ClassNumber, &item.SortOrder, &item.Title, &item.Domain, &item.Description, &item.SpecimenCount, &item.Unit, &item.MeasurementRule, &item.NamingRequirement, &item.ContainerRule, &item.EligibilityRule, &item.ScheduleNotes, &item.TaxonRefs); err != nil {
 			return fmt.Errorf("scan class: %w", err)
@@ -2693,7 +2931,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load classes: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at FROM as_flowershow_m_entries`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(class_id, ''), coalesce(person_id, ''), coalesce(name, ''), coalesce(notes, ''), coalesce(suppressed, FALSE), coalesce(placement, 0), coalesce(points, 0), coalesce(taxon_refs, '{}'::text[]), coalesce(created_at, NOW()) FROM as_flowershow_m_entries`, func(rows pgx.Rows) error {
 		var item Entry
 		if err := rows.Scan(&item.ID, &item.ShowID, &item.ClassID, &item.PersonID, &item.Name, &item.Notes, &item.Suppressed, &item.Placement, &item.Points, &item.TaxonRefs, &item.CreatedAt); err != nil {
 			return fmt.Errorf("scan entry: %w", err)
@@ -2704,7 +2942,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load entries: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at FROM as_flowershow_m_show_credits`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(show_id, ''), coalesce(person_id, ''), coalesce(display_name, ''), coalesce(credit_label, ''), coalesce(notes, ''), coalesce(sort_order, 0), coalesce(created_at, NOW()) FROM as_flowershow_m_show_credits`, func(rows pgx.Rows) error {
 		var item ShowCredit
 		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.DisplayName, &item.CreditLabel, &item.Notes, &item.SortOrder, &item.CreatedAt); err != nil {
 			return fmt.Errorf("scan show credit: %w", err)
@@ -2715,7 +2953,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load show credits: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at FROM as_flowershow_m_media`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, entry_id, coalesce(media_type, ''), coalesce(url, ''), coalesce(content_type, ''), coalesce(thumbnail_url, ''), coalesce(file_name, ''), coalesce(storage_key, ''), coalesce(file_size, 0), coalesce(width, 0), coalesce(height, 0), created_at FROM as_flowershow_m_media`, func(rows pgx.Rows) error {
 		var item Media
 		if err := rows.Scan(&item.ID, &item.EntryID, &item.MediaType, &item.URL, &item.ContentType, &item.ThumbnailURL, &item.FileName, &item.StorageKey, &item.FileSize, &item.Width, &item.Height, &item.CreatedAt); err != nil {
 			return fmt.Errorf("scan media: %w", err)
@@ -2726,7 +2964,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load media: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, taxon_type, name, scientific_name, description, coalesce(parent_id, '') FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(taxon_type, ''), coalesce(name, ''), coalesce(scientific_name, ''), coalesce(description, ''), coalesce(parent_id, '') FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
 		var item Taxon
 		if err := rows.Scan(&item.ID, &item.TaxonType, &item.Name, &item.ScientificName, &item.Description, &item.ParentID); err != nil {
 			return fmt.Errorf("scan taxon: %w", err)
@@ -2737,7 +2975,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load taxons: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries FROM as_flowershow_m_awards`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(name, ''), coalesce(description, ''), coalesce(season, ''), coalesce(taxon_filters, '{}'::text[]), coalesce(scoring_rule, ''), coalesce(min_entries, 0) FROM as_flowershow_m_awards`, func(rows pgx.Rows) error {
 		var item AwardDefinition
 		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.Name, &item.Description, &item.Season, &item.TaxonFilters, &item.ScoringRule, &item.MinEntries); err != nil {
 			return fmt.Errorf("scan award: %w", err)
@@ -2748,7 +2986,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load awards: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, name, issuing_org_id, domain_scope, description FROM as_flowershow_m_standard_documents`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(name, ''), coalesce(issuing_org_id, ''), coalesce(domain_scope, ''), coalesce(description, '') FROM as_flowershow_m_standard_documents`, func(rows pgx.Rows) error {
 		var item StandardDocument
 		if err := rows.Scan(&item.ID, &item.Name, &item.IssuingOrg, &item.DomainScope, &item.Description); err != nil {
 			return fmt.Errorf("scan standard document: %w", err)
@@ -2759,7 +2997,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load standard documents: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, standard_document_id, edition_label, publication_year, revision_date, status, source_url, source_kind FROM as_flowershow_m_standard_editions`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(standard_document_id, ''), coalesce(edition_label, ''), coalesce(publication_year, 0), coalesce(revision_date, ''), coalesce(status, ''), coalesce(source_url, ''), coalesce(source_kind, '') FROM as_flowershow_m_standard_editions`, func(rows pgx.Rows) error {
 		var item StandardEdition
 		if err := rows.Scan(&item.ID, &item.StandardDocumentID, &item.EditionLabel, &item.PublicationYear, &item.RevisionDate, &item.Status, &item.SourceURL, &item.SourceKind); err != nil {
 			return fmt.Errorf("scan standard edition: %w", err)
@@ -2770,7 +3008,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load standard editions: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, organization_id, coalesce(show_id, ''), title, document_type, publication_date, source_url, local_path, checksum FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(organization_id, ''), coalesce(show_id, ''), coalesce(title, ''), coalesce(document_type, ''), coalesce(publication_date, ''), coalesce(source_url, ''), coalesce(local_path, ''), coalesce(checksum, '') FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
 		var item SourceDocument
 		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.ShowID, &item.Title, &item.DocumentType, &item.PublicationDate, &item.SourceURL, &item.LocalPath, &item.Checksum); err != nil {
 			return fmt.Errorf("scan source document: %w", err)
@@ -2781,7 +3019,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load source documents: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, source_document_id, target_type, target_id, page_from, page_to, quoted_text, extraction_confidence FROM as_flowershow_m_source_citations`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, source_document_id, coalesce(target_type, ''), coalesce(target_id, ''), coalesce(page_from, ''), coalesce(page_to, ''), coalesce(quoted_text, ''), coalesce(extraction_confidence, 0) FROM as_flowershow_m_source_citations`, func(rows pgx.Rows) error {
 		var item SourceCitation
 		if err := rows.Scan(&item.ID, &item.SourceDocumentID, &item.TargetType, &item.TargetID, &item.PageFrom, &item.PageTo, &item.QuotedText, &item.ExtractionConfidence); err != nil {
 			return fmt.Errorf("scan source citation: %w", err)
@@ -2792,7 +3030,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load source citations: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, standard_edition_id, domain, rule_type, subject_label, body, page_ref FROM as_flowershow_m_standard_rules`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(domain, ''), coalesce(rule_type, ''), coalesce(subject_label, ''), coalesce(body, ''), coalesce(page_ref, '') FROM as_flowershow_m_standard_rules`, func(rows pgx.Rows) error {
 		var item StandardRule
 		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.Domain, &item.RuleType, &item.SubjectLabel, &item.Body, &item.PageRef); err != nil {
 			return fmt.Errorf("scan standard rule: %w", err)
@@ -2803,7 +3041,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load standard rules: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, show_class_id, coalesce(base_standard_rule_id, ''), override_type, body, rationale FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, show_class_id, coalesce(base_standard_rule_id, ''), coalesce(override_type, ''), coalesce(body, ''), coalesce(rationale, '') FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
 		var item ClassRuleOverride
 		if err := rows.Scan(&item.ID, &item.ShowClassID, &item.BaseStandardRuleID, &item.OverrideType, &item.Body, &item.Rationale); err != nil {
 			return fmt.Errorf("scan class override: %w", err)
@@ -2814,7 +3052,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load class rule overrides: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(show_id, ''), domain, title FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(standard_edition_id, ''), coalesce(show_id, ''), coalesce(domain, ''), coalesce(title, '') FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
 		var item JudgingRubric
 		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.ShowID, &item.Domain, &item.Title); err != nil {
 			return fmt.Errorf("scan rubric: %w", err)
@@ -2825,7 +3063,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load rubrics: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, judging_rubric_id, name, max_points, sort_order FROM as_flowershow_m_criteria`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(judging_rubric_id, ''), coalesce(name, ''), coalesce(max_points, 0), coalesce(sort_order, 0) FROM as_flowershow_m_criteria`, func(rows pgx.Rows) error {
 		var item JudgingCriterion
 		if err := rows.Scan(&item.ID, &item.JudgingRubricID, &item.Name, &item.MaxPoints, &item.SortOrder); err != nil {
 			return fmt.Errorf("scan criterion: %w", err)
@@ -2836,7 +3074,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load criteria: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, entry_id, judge_id, rubric_id, total_score, notes FROM as_flowershow_m_scorecards`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(entry_id, ''), coalesce(judge_id, ''), coalesce(rubric_id, ''), coalesce(total_score, 0), coalesce(notes, '') FROM as_flowershow_m_scorecards`, func(rows pgx.Rows) error {
 		var item EntryScorecard
 		if err := rows.Scan(&item.ID, &item.EntryID, &item.JudgeID, &item.RubricID, &item.TotalScore, &item.Notes); err != nil {
 			return fmt.Errorf("scan scorecard: %w", err)
@@ -2847,7 +3085,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load scorecards: %w", err)
 	}
 
-	if err := loadRows(`SELECT id, scorecard_id, criterion_id, score, comment FROM as_flowershow_m_criterion_scores`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT id, coalesce(scorecard_id, ''), coalesce(criterion_id, ''), coalesce(score, 0), coalesce(comment, '') FROM as_flowershow_m_criterion_scores`, func(rows pgx.Rows) error {
 		var item EntryCriterionScore
 		if err := rows.Scan(&item.ID, &item.ScorecardID, &item.CriterionID, &item.Score, &item.Comment); err != nil {
 			return fmt.Errorf("scan criterion score: %w", err)
@@ -2858,7 +3096,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load criterion scores: %w", err)
 	}
 
-	if err := loadRows(`SELECT object_id, object_type, coalesce(slug, ''), created_at, created_by FROM as_flowershow_objects`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT object_id, coalesce(object_type, ''), coalesce(slug, ''), coalesce(created_at, NOW()), coalesce(created_by, '') FROM as_flowershow_objects`, func(rows pgx.Rows) error {
 		var item FlowershowObject
 		if err := rows.Scan(&item.ID, &item.ObjectType, &item.Slug, &item.CreatedAt, &item.CreatedBy); err != nil {
 			return fmt.Errorf("scan object: %w", err)
@@ -2869,7 +3107,7 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 		return nil, fmt.Errorf("load objects: %w", err)
 	}
 
-	if err := loadRows(`SELECT claim_id, object_id, claim_seq, claim_type, accepted_at, accepted_by, coalesce(supersedes_claim_id, ''), payload FROM as_flowershow_claims ORDER BY claim_seq ASC`, func(rows pgx.Rows) error {
+	if err := loadRows(`SELECT claim_id, coalesce(object_id, ''), coalesce(claim_seq, 0), coalesce(claim_type, ''), coalesce(accepted_at, NOW()), coalesce(accepted_by, ''), coalesce(supersedes_claim_id, ''), payload FROM as_flowershow_claims ORDER BY coalesce(claim_seq, 0) ASC`, func(rows pgx.Rows) error {
 		var item FlowershowClaim
 		var payload []byte
 		if err := rows.Scan(&item.ID, &item.ObjectID, &item.ClaimSeq, &item.ClaimType, &item.AcceptedAt, &item.AcceptedBy, &item.SupersedesClaimID, &payload); err != nil {
