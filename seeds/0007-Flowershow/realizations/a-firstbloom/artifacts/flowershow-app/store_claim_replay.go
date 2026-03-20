@@ -10,6 +10,7 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"organization.created":           {},
 	"show.created":                   {},
 	"show.updated":                   {},
+	"show.schedule_reset":            {},
 	"show_judge.assigned":            {},
 	"person.created":                 {},
 	"person.updated":                 {},
@@ -85,6 +86,56 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 				return nil, err
 			}
 			fresh.shows[item.ID] = &item
+		case "show.schedule_reset":
+			payload, err := decodeFlowershowClaimPayload[struct {
+				ScheduleIDs        []string `json:"schedule_ids"`
+				DivisionIDs        []string `json:"division_ids"`
+				SectionIDs         []string `json:"section_ids"`
+				ClassIDs           []string `json:"class_ids"`
+				EntryIDs           []string `json:"entry_ids"`
+				MediaIDs           []string `json:"media_ids"`
+				ScorecardIDs       []string `json:"scorecard_ids"`
+				CriterionScoreIDs  []string `json:"criterion_score_ids"`
+				JudgeAssignmentIDs []string `json:"judge_assignment_ids"`
+				ClassOverrideIDs   []string `json:"class_override_ids"`
+				SourceCitationIDs  []string `json:"source_citation_ids"`
+			}](claim)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range payload.MediaIDs {
+				delete(fresh.media, id)
+			}
+			for _, id := range payload.CriterionScoreIDs {
+				delete(fresh.critScores, id)
+			}
+			for _, id := range payload.ScorecardIDs {
+				delete(fresh.scorecards, id)
+			}
+			for _, id := range payload.EntryIDs {
+				delete(fresh.entries, id)
+			}
+			for _, id := range payload.ClassOverrideIDs {
+				delete(fresh.classOverrides, id)
+			}
+			for _, id := range payload.SourceCitationIDs {
+				delete(fresh.srcCitations, id)
+			}
+			for _, id := range payload.ClassIDs {
+				delete(fresh.classes, id)
+			}
+			for _, id := range payload.SectionIDs {
+				delete(fresh.sections, id)
+			}
+			for _, id := range payload.DivisionIDs {
+				delete(fresh.divisions, id)
+			}
+			for _, id := range payload.ScheduleIDs {
+				delete(fresh.schedules, id)
+			}
+			for _, id := range payload.JudgeAssignmentIDs {
+				delete(fresh.showJudges, id)
+			}
 		case "show_judge.assigned":
 			item, err := decodeFlowershowClaimPayload[ShowJudgeAssignment](claim)
 			if err != nil {

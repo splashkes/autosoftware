@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -41,6 +42,20 @@ func slugify(s string) string {
 		s = strings.ReplaceAll(s, "--", "-")
 	}
 	return strings.Trim(s, "-")
+}
+
+func containsKey(set map[string]struct{}, key string) bool {
+	_, ok := set[key]
+	return ok
+}
+
+func sortedKeys(set map[string]struct{}) []string {
+	out := make([]string, 0, len(set))
+	for key := range set {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func organizationInitials(name string) string {
@@ -118,6 +133,7 @@ type flowershowStore interface {
 	// Shows
 	createShow(ShowInput) (*Show, error)
 	updateShow(id string, input ShowInput) (*Show, error)
+	resetShowSchedule(showID string) error
 	showByID(id string) (*Show, bool)
 	showBySlug(slug string) (*Show, bool)
 	allShows() []*Show
@@ -434,6 +450,141 @@ func (s *memoryStore) updateShow(id string, input ShowInput) (*Show, error) {
 	show.UpdatedAt = time.Now().UTC()
 	s.appendClaim(show.ID, "show", "show.updated", show)
 	return show, nil
+}
+
+func (s *memoryStore) resetShowSchedule(showID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.shows[showID]; !ok {
+		return errors.New("show not found")
+	}
+
+	scheduleIDs := make(map[string]struct{})
+	divisionIDs := make(map[string]struct{})
+	sectionIDs := make(map[string]struct{})
+	classIDs := make(map[string]struct{})
+	entryIDs := make(map[string]struct{})
+	mediaIDs := make(map[string]struct{})
+	scorecardIDs := make(map[string]struct{})
+	criterionScoreIDs := make(map[string]struct{})
+	judgeAssignmentIDs := make(map[string]struct{})
+	classOverrideIDs := make(map[string]struct{})
+	citationIDs := make(map[string]struct{})
+
+	for id, sched := range s.schedules {
+		if sched.ShowID == showID {
+			scheduleIDs[id] = struct{}{}
+		}
+	}
+	for id, division := range s.divisions {
+		if _, ok := scheduleIDs[division.ShowScheduleID]; ok {
+			divisionIDs[id] = struct{}{}
+		}
+	}
+	for id, section := range s.sections {
+		if _, ok := divisionIDs[section.DivisionID]; ok {
+			sectionIDs[id] = struct{}{}
+		}
+	}
+	for id, class := range s.classes {
+		if _, ok := sectionIDs[class.SectionID]; ok {
+			classIDs[id] = struct{}{}
+		}
+	}
+	for id, entry := range s.entries {
+		if entry.ShowID == showID {
+			entryIDs[id] = struct{}{}
+		}
+	}
+	for id, media := range s.media {
+		if _, ok := entryIDs[media.EntryID]; ok {
+			mediaIDs[id] = struct{}{}
+		}
+	}
+	for id, assignment := range s.showJudges {
+		if assignment.ShowID == showID {
+			judgeAssignmentIDs[id] = struct{}{}
+		}
+	}
+	for id, override := range s.classOverrides {
+		if _, ok := classIDs[override.ShowClassID]; ok {
+			classOverrideIDs[id] = struct{}{}
+		}
+	}
+	for id, scorecard := range s.scorecards {
+		if _, ok := entryIDs[scorecard.EntryID]; ok {
+			scorecardIDs[id] = struct{}{}
+		}
+	}
+	for id, score := range s.critScores {
+		if _, ok := scorecardIDs[score.ScorecardID]; ok {
+			criterionScoreIDs[id] = struct{}{}
+		}
+	}
+	for id, citation := range s.srcCitations {
+		switch {
+		case citation.TargetID == showID:
+			citationIDs[id] = struct{}{}
+		case containsKey(scheduleIDs, citation.TargetID):
+			citationIDs[id] = struct{}{}
+		case containsKey(divisionIDs, citation.TargetID):
+			citationIDs[id] = struct{}{}
+		case containsKey(sectionIDs, citation.TargetID):
+			citationIDs[id] = struct{}{}
+		case containsKey(classIDs, citation.TargetID):
+			citationIDs[id] = struct{}{}
+		}
+	}
+
+	for id := range mediaIDs {
+		delete(s.media, id)
+	}
+	for id := range criterionScoreIDs {
+		delete(s.critScores, id)
+	}
+	for id := range scorecardIDs {
+		delete(s.scorecards, id)
+	}
+	for id := range entryIDs {
+		delete(s.entries, id)
+	}
+	for id := range classOverrideIDs {
+		delete(s.classOverrides, id)
+	}
+	for id := range citationIDs {
+		delete(s.srcCitations, id)
+	}
+	for id := range classIDs {
+		delete(s.classes, id)
+	}
+	for id := range sectionIDs {
+		delete(s.sections, id)
+	}
+	for id := range divisionIDs {
+		delete(s.divisions, id)
+	}
+	for id := range scheduleIDs {
+		delete(s.schedules, id)
+	}
+	for id := range judgeAssignmentIDs {
+		delete(s.showJudges, id)
+	}
+
+	s.appendClaim(showID, "show", "show.schedule_reset", map[string]any{
+		"show_id":               showID,
+		"schedule_ids":          sortedKeys(scheduleIDs),
+		"division_ids":          sortedKeys(divisionIDs),
+		"section_ids":           sortedKeys(sectionIDs),
+		"class_ids":             sortedKeys(classIDs),
+		"entry_ids":             sortedKeys(entryIDs),
+		"media_ids":             sortedKeys(mediaIDs),
+		"scorecard_ids":         sortedKeys(scorecardIDs),
+		"criterion_score_ids":   sortedKeys(criterionScoreIDs),
+		"judge_assignment_ids":  sortedKeys(judgeAssignmentIDs),
+		"class_override_ids":    sortedKeys(classOverrideIDs),
+		"source_citation_ids":   sortedKeys(citationIDs),
+	})
+	return nil
 }
 
 func (s *memoryStore) showByID(id string) (*Show, bool) {
@@ -2063,6 +2214,7 @@ type postgresFlowershowStore struct {
 	realizationID string
 	mu            sync.RWMutex
 	mem           *memoryStore // rebuildable read-through cache backed by SQL
+	lastRefreshAt time.Time
 }
 
 func newFlowershowStore(databaseURL, internalAPIURL, internalAPIToken, seedID, realizationID string) (flowershowStore, error) {
@@ -2815,6 +2967,7 @@ func (s *postgresFlowershowStore) refreshCache(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.mem = fresh
+	s.lastRefreshAt = time.Now().UTC()
 	s.mu.Unlock()
 	return nil
 }
@@ -2823,7 +2976,21 @@ func (s *postgresFlowershowStore) Refresh(ctx context.Context) error {
 	if s == nil || s.pool == nil {
 		return nil
 	}
-	return s.refreshCache(ctx)
+	s.mu.RLock()
+	lastRefreshAt := s.lastRefreshAt
+	warmCache := s.mem != nil && (len(s.mem.objects) > 0 || len(s.mem.claims) > 0)
+	s.mu.RUnlock()
+	if !lastRefreshAt.IsZero() && time.Since(lastRefreshAt) < 2*time.Second {
+		return nil
+	}
+	if err := s.refreshCache(ctx); err != nil {
+		if warmCache {
+			log.Printf("flowershow: refresh failed, serving stale cache: %v", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStore, error) {
@@ -2914,6 +3081,18 @@ func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show,
 		return nil, err
 	}
 	return show, nil
+}
+func (s *postgresFlowershowStore) resetShowSchedule(showID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.resetShowSchedule(showID); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) {
 	return s.currentMem().showByID(id)

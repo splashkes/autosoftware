@@ -23,6 +23,23 @@ commands:
     claim_types: [show.updated]
     projection_tables: [as_flowershow_m_shows]
     replay_covered: true
+  - command: shows.reset_schedule
+    durability_class: domain_fact_claim_backed_projection
+    store_method: resetShowSchedule
+    claim_types: [show.schedule_reset]
+    projection_tables:
+      - as_flowershow_m_schedules
+      - as_flowershow_m_divisions
+      - as_flowershow_m_sections
+      - as_flowershow_m_classes
+      - as_flowershow_m_entries
+      - as_flowershow_m_media
+      - as_flowershow_m_scorecards
+      - as_flowershow_m_criterion_scores
+      - as_flowershow_m_show_judges
+      - as_flowershow_m_class_rule_overrides
+      - as_flowershow_m_source_citations
+    replay_covered: true
   - command: clubs.invites.create
     durability_class: domain_fact_claim_backed_projection
     store_method: createOrganizationInvite

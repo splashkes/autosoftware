@@ -16,7 +16,22 @@ test.describe('Flowershow Public', () => {
     await expect(page.locator('text=Horticulture Specimens')).toBeVisible();
     await expect(page.locator('text=Floral Design')).toBeVisible();
     await expect(page.locator('text=Peace')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Metro Rose Society' }).first()).toHaveAttribute(
+      'href',
+      '/clubs/org_demo1',
+    );
     await expectAgentPath(page, '/shows/spring-rose-show-2025');
+  });
+
+  test('club detail page shows members, credits, and show history', async ({ page }) => {
+    await page.goto('/clubs/org_demo1');
+    await expect(page.locator('h1')).toContainText('Metro Rose Society');
+    await expect(page.getByRole('heading', { name: 'Upcoming Shows' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Past Shows' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Top Members' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Show Credits' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Spring Rose Show 2025' }).first()).toBeVisible();
+    await expectAgentPath(page, '/clubs/org_demo1');
   });
 
   test('class browse shows schedule hierarchy', async ({ page }) => {

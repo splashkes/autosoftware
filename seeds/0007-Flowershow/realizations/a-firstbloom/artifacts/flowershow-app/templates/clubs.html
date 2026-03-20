@@ -11,7 +11,7 @@
   {{range .Clubs}}
   <section class="card club-card" id="{{.Org.ID}}">
     <div class="card-body">
-      <h2 class="card-title">{{.Org.Name}}</h2>
+      <h2 class="card-title"><a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a></h2>
       <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent organization context{{end}}</p>
 
       <div class="club-card-columns">
@@ -53,6 +53,9 @@
         {{else}}
         <p class="card-meta">No public exhibitor history yet.</p>
         {{end}}
+      </div>
+      <div class="club-topline">
+        <a href="{{$.BasePath}}/clubs/{{.Org.ID}}" class="btn btn-outline btn-sm">Open Club</a>
       </div>
     </div>
   </section>
