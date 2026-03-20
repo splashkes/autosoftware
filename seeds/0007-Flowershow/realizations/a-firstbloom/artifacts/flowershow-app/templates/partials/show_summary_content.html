@@ -7,8 +7,8 @@
       <p class="hero-sub">{{.Show.Location}} · {{.Show.Date}} · placements update live as judges and operators post results.</p>
     </div>
     <div class="summary-actions">
-      <a href="{{bp}}/shows/{{.Show.Slug}}" class="btn btn-outline">Back To Show</a>
-      <a href="{{bp}}/leaderboard?org={{.Show.OrganizationID}}&season={{.Show.Season}}" class="btn btn-primary">Season Leaderboard</a>
+      <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="btn btn-outline">Back To Show</a>
+      <a href="{{$.BasePath}}/leaderboard?org={{.Show.OrganizationID}}&season={{.Show.Season}}" class="btn btn-primary">Season Leaderboard</a>
     </div>
   </div>
 
@@ -19,7 +19,7 @@
       <div class="winner-media-stage">
         {{if .Media}}
           {{range $i, $media := .Media}}
-          <img src="{{bp}}/media/{{$media.ID}}" alt="{{$media.FileName}}" class="winner-media-frame{{if gt (len $.HeroCards) 0}} cycle{{end}}" style="animation-delay: {{cycleDelay $i}};">
+          <img src="{{$.BasePath}}/media/{{$media.ID}}" alt="{{$media.FileName}}" class="winner-media-frame{{if gt (len $.HeroCards) 0}} cycle{{end}}" style="animation-delay: {{cycleDelay $i}};">
           {{end}}
         {{else}}
         <div class="winner-media-fallback">
@@ -56,9 +56,9 @@
       {{range .ClassRows}}
       <tr>
         <td><strong>{{.Class.ClassNumber}}</strong> {{.Class.Title}}</td>
-        <td>{{if .First}}<a href="{{bp}}/entries/{{.First.Entry.ID}}">{{.First.Entry.Name}}</a>{{if .First.Person}} <span class="card-meta">({{publicPersonLabel .First.Person}})</span>{{end}}{{end}}</td>
-        <td>{{if .Second}}<a href="{{bp}}/entries/{{.Second.Entry.ID}}">{{.Second.Entry.Name}}</a>{{if .Second.Person}} <span class="card-meta">({{publicPersonLabel .Second.Person}})</span>{{end}}{{end}}</td>
-        <td>{{if .Third}}<a href="{{bp}}/entries/{{.Third.Entry.ID}}">{{.Third.Entry.Name}}</a>{{if .Third.Person}} <span class="card-meta">({{publicPersonLabel .Third.Person}})</span>{{end}}{{end}}</td>
+        <td>{{if .First}}<a href="{{$.BasePath}}/entries/{{.First.Entry.ID}}">{{.First.Entry.Name}}</a>{{if .First.Person}} <span class="card-meta">({{publicPersonLabel .First.Person}})</span>{{end}}{{end}}</td>
+        <td>{{if .Second}}<a href="{{$.BasePath}}/entries/{{.Second.Entry.ID}}">{{.Second.Entry.Name}}</a>{{if .Second.Person}} <span class="card-meta">({{publicPersonLabel .Second.Person}})</span>{{end}}{{end}}</td>
+        <td>{{if .Third}}<a href="{{$.BasePath}}/entries/{{.Third.Entry.ID}}">{{.Third.Entry.Name}}</a>{{if .Third.Person}} <span class="card-meta">({{publicPersonLabel .Third.Person}})</span>{{end}}{{end}}</td>
       </tr>
       {{end}}
     </tbody>

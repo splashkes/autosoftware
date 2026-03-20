@@ -221,14 +221,14 @@ func TestPreferredOpenPathForBindingPrefersStablePath(t *testing.T) {
 	}
 }
 
-func TestRewriteMountedHTMLPrefixesAppPathsButKeepsKernelPaths(t *testing.T) {
+func TestRewriteMountedHTMLPrefixesAppPathsAndMountedAPIPaths(t *testing.T) {
 	body := []byte(`<link rel="stylesheet" href="/assets/app.css"><a href="/calendar">Calendar</a><a href="/v1/contracts/0004-event-listings/a-web-mvp">Contract</a><form action="/admin/login"></form><div hx-post="/chat/123"></div><script src="/__sprout-assets/sprout-logo.js"></script>`)
 	got := string(rewriteMountedHTML(body, "/event-listings/", "0004-event-listings/a-web-mvp"))
 
 	wantContains := []string{
 		`href="/event-listings/assets/app.css"`,
 		`href="/event-listings/calendar"`,
-		`href="/v1/contracts/0004-event-listings/a-web-mvp"`,
+		`href="/event-listings/v1/contracts/0004-event-listings/a-web-mvp"`,
 		`action="/event-listings/admin/login"`,
 		`hx-post="/event-listings/chat/123"`,
 		`src="/__sprout-assets/sprout-logo.js"`,
@@ -263,6 +263,33 @@ func TestRewriteMountedHTMLDoesNotDoublePrefixMountedPaths(t *testing.T) {
 	for _, absent := range wantAbsent {
 		if strings.Contains(got, absent) {
 			t.Fatalf("expected rewritten HTML not to contain %q, got %q", absent, got)
+		}
+	}
+}
+
+func TestRewriteMountedHTMLDoesNotDoublePrefixPreviewMountedPaths(t *testing.T) {
+	body := []byte(`<link rel="stylesheet" href="/flowershow/assets/app.css"><a href="/flowershow/clubs#org_demo1">Club</a><script src="/flowershow/assets/app.js"></script>`)
+	got := string(rewriteMountedHTML(body, "/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/", "0007-Flowershow/a-firstbloom"))
+
+	wantContains := []string{
+		`href="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/assets/app.css"`,
+		`href="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/clubs#org_demo1"`,
+		`src="/__runs/exec_0007_Flowershow_a_firstbloom_demo/flowershow/assets/app.js"`,
+	}
+	wantAbsent := []string{
+		`/flowershow/flowershow/assets/app.css`,
+		`/flowershow/flowershow/clubs#org_demo1`,
+		`/flowershow/flowershow/assets/app.js`,
+	}
+
+	for _, want := range wantContains {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected rewritten preview HTML to contain %q, got %q", want, got)
+		}
+	}
+	for _, absent := range wantAbsent {
+		if strings.Contains(got, absent) {
+			t.Fatalf("expected rewritten preview HTML not to contain %q, got %q", absent, got)
 		}
 	}
 }

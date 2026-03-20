@@ -20,7 +20,7 @@
           {{if .UpcomingShows}}
           <ul class="club-show-list">
             {{range .UpcomingShows}}
-            <li><a href="{{bp}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
+            <li><a href="{{$.BasePath}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
             {{end}}
           </ul>
           {{else}}
@@ -33,7 +33,7 @@
           {{if .PastShows}}
           <ul class="club-show-list">
             {{range .PastShows}}
-            <li><a href="{{bp}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
+            <li><a href="{{$.BasePath}}/shows/{{.Slug}}">{{.Name}}</a> <span class="card-meta">{{.Date}}</span></li>
             {{end}}
           </ul>
           {{else}}
@@ -47,7 +47,7 @@
         {{if .TopPeople}}
         <div class="club-top-people-links">
           {{range .TopPeople}}
-          <a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>
+          <a href="{{$.BasePath}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>
           {{end}}
         </div>
         {{else}}

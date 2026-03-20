@@ -41,7 +41,7 @@
               <strong>{{.Entry.Name}}</strong>
               <p class="card-meta">{{if .Class}}{{.Class.ClassNumber}} · {{.Class.Title}}{{end}}{{if .Person}} · {{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
             </div>
-            <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-intake-panel" class="media-add-form media-add-form-inline">
+            <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-intake-panel" class="media-add-form media-add-form-inline">
               <input type="file" id="intake-media-input-{{.Entry.ID}}" name="media" class="visually-hidden" accept="image/jpeg,image/png,image/webp" capture="environment" required>
               <button type="button" class="media-add-button media-add-button-sm" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('intake-media-input-{{.Entry.ID}}').click()">
                 <span class="media-add-plus">+</span>
@@ -144,7 +144,7 @@
             <div class="board-entry-card {{placementClass .Entry.Placement}}">
               <div class="board-entry-thumb">
                 {{with primaryMedia .Media}}
-                <img src="{{bp}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="board-entry-image">
+                <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="board-entry-image">
                 {{else}}
                 <div class="board-entry-placeholder">No photo</div>
                 {{end}}
@@ -180,7 +180,7 @@
   <div class="card">
     <div class="card-body">
       <h3 class="card-title">Show Profile</h3>
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}" hx-post="{{bp}}/admin/shows/{{.Show.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
         <div class="form-group">
           <label>Show Name</label>
           <input type="text" name="name" value="{{.Show.Name}}" class="form-input" required>
@@ -230,7 +230,7 @@
       {{end}}
 
       {{if .AvailableJudges}}
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
         <select name="person_id" class="form-input" required>
           <option value="">Select person...</option>
           {{range .AvailableJudges}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
@@ -257,7 +257,7 @@
           </div>
           <p>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Credit.DisplayName}}{{end}}</p>
           {{if .Credit.Notes}}<p class="card-meta">{{.Credit.Notes}}</p>{{end}}
-          <form method="POST" action="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-post="{{bp}}/admin/credits/{{.Credit.ID}}/delete" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="inline">
+          <form method="POST" action="{{$.BasePath}}/admin/credits/{{.Credit.ID}}/delete" hx-post="{{$.BasePath}}/admin/credits/{{.Credit.ID}}/delete" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="inline">
             <input type="hidden" name="show_id" value="{{$.Show.ID}}">
             <button type="submit" class="btn btn-outline btn-sm">Remove</button>
           </form>
@@ -268,7 +268,7 @@
       <p class="empty-state">No show credits yet.</p>
       {{end}}
 
-      <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
         <div class="form-row">
           <div class="form-group">
             <label>Credit Label</label>
@@ -307,7 +307,7 @@
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">{{if .Schedule}}Schedule Governance{{else}}Create Schedule{{end}}</h3>
-    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
+    <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
       <div class="form-row">
         <div class="form-group">
           <label>Effective Standard Edition</label>
@@ -358,7 +358,7 @@
       </div>
       <details class="add-form" style="margin-top:.5rem;">
         <summary class="btn btn-outline btn-sm">Edit Class</summary>
-        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}" hx-post="{{bp}}/admin/classes/{{.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
+        <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
           <input type="hidden" name="show_id" value="{{$.Show.ID}}">
           <input type="hidden" name="section_id" value="{{.SectionID}}">
           <input type="text" name="class_number" value="{{.ClassNumber}}" class="form-input form-sm" required>
@@ -379,7 +379,7 @@
     {{end}}
     <details class="add-form">
       <summary class="btn btn-outline btn-sm">+ Add Class</summary>
-      <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
         <input type="hidden" name="section_id" value="{{.Section.ID}}">
         <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
         <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1" min="1">
@@ -399,7 +399,7 @@
   {{end}}
   <details class="add-form">
     <summary class="btn btn-outline btn-sm">+ Add Section</summary>
-    <form method="POST" action="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{bp}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
+    <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
       <input type="hidden" name="division_id" value="{{.Division.ID}}">
       <input type="text" name="code" placeholder="Code" class="form-input form-sm">
       <input type="text" name="title" placeholder="Section title" class="form-input" required>
@@ -412,7 +412,7 @@
 
 <details class="add-form">
   <summary class="btn btn-outline btn-sm">+ Add Division</summary>
-  <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
+  <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
     <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
     <input type="text" name="code" placeholder="Code" class="form-input form-sm">
     <input type="text" name="title" placeholder="Division title" class="form-input" required>
@@ -433,7 +433,7 @@
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">Add Entry</h3>
-    <form method="POST" action="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{bp}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-intake-panel" hx-swap="innerHTML" class="form form-compact">
+    <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-intake-panel" hx-swap="innerHTML" class="form form-compact">
       <div class="form-row">
         <div class="form-group">
           <label>Class</label>
@@ -483,7 +483,7 @@
       <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
       <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
       <td>
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline">
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline">
           <input type="hidden" name="suppressed" value="{{if .Entry.Suppressed}}false{{else}}true{{end}}">
           <button type="submit" class="btn btn-outline btn-sm">{{if .Entry.Suppressed}}Restore{{else}}Suppress{{end}}</button>
         </form>
@@ -494,11 +494,11 @@
         {{if .Media}}
         <div class="tag-list">
           {{range .Media}}
-          <a href="{{bp}}/media/{{.ID}}" class="tag" target="_blank">{{.FileName}}</a>
+          <a href="{{$.BasePath}}/media/{{.ID}}" class="tag" target="_blank">{{.FileName}}</a>
           {{end}}
         </div>
         {{end}}
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form" style="margin-top:.5rem;">
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form" style="margin-top:.5rem;">
           <input
             type="file"
             id="media-input-{{.Entry.ID}}"
@@ -511,7 +511,7 @@
             {{if .Media}}
               {{with index .Media 0}}
                 {{if eq .MediaType "photo"}}
-                <img src="{{bp}}/media/{{.ID}}" alt="{{.FileName}}" class="media-add-thumb">
+                <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{.FileName}}" class="media-add-thumb">
                 {{else}}
                 <span class="media-add-plus">+</span>
                 {{end}}
@@ -530,7 +530,7 @@
       <td>
         <details class="add-form">
           <summary class="btn btn-outline btn-sm">Move</summary>
-          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
             <select name="class_id" class="form-input" required>
               {{range $.Classes}}<option value="{{.ID}}" {{if eq .ID $currentEntry.ClassID}}selected{{end}}>{{.ClassNumber}}: {{.Title}}</option>{{end}}
             </select>
@@ -540,7 +540,7 @@
         </details>
         <details class="add-form" style="margin-top:.5rem;">
           <summary class="btn btn-outline btn-sm">Entrant</summary>
-          <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
             <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
             <select id="entrant-select-{{$currentEntry.ID}}" name="person_id" class="form-input" required>
               {{range $.EntrantCandidates}}<option value="{{.Person.ID}}" {{if eq .Person.ID $currentEntry.PersonID}}selected{{end}}>{{.Label}}</option>{{end}}
@@ -548,7 +548,7 @@
             <button type="submit" class="btn btn-primary btn-sm">Change Entrant</button>
           </form>
         </details>
-        <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
           <button type="submit" class="btn btn-outline btn-sm">Delete</button>
         </form>
       </td>
@@ -578,7 +578,7 @@
 {{range .Entries}}
 <div class="winner-row">
   <span class="winner-name">{{.Entry.Name}} {{if .Class}}<span class="card-meta">({{.Class.ClassNumber}})</span>{{end}}</span>
-  <form method="POST" action="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{bp}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-inline">
+  <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-inline">
     <select name="placement" class="form-input form-sm">
       <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
       <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>
@@ -600,7 +600,7 @@
   <div class="card">
     <div class="card-body">
       <h3 class="card-title">Rubrics</h3>
-      <form method="POST" action="{{bp}}/admin/rubrics" hx-post="{{bp}}/admin/rubrics" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/rubrics" hx-post="{{$.BasePath}}/admin/rubrics" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-row">
           <div class="form-group">
@@ -652,7 +652,7 @@
     <div class="card-body">
       <h3 class="card-title">Criteria</h3>
       {{if .RubricViews}}
-      <form method="POST" action="{{bp}}/admin/criteria" hx-post="{{bp}}/admin/criteria" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/criteria" hx-post="{{$.BasePath}}/admin/criteria" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-group">
           <label>Rubric</label>
@@ -687,7 +687,7 @@
   <div class="card-body">
     <h3 class="card-title">Submit Scorecard</h3>
     {{if and .RubricViews .Entries .Judges}}
-    <form method="POST" action="{{bp}}/admin/scorecards" hx-post="{{bp}}/admin/scorecards" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" id="scorecard-form">
+    <form method="POST" action="{{$.BasePath}}/admin/scorecards" hx-post="{{$.BasePath}}/admin/scorecards" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" id="scorecard-form">
       <div class="form-row">
         <div class="form-group">
           <label>Entry</label>
@@ -748,7 +748,7 @@
       {{range .Classes}}
       <div class="winner-row">
         <span class="winner-name">{{.ClassNumber}} — {{.Title}}</span>
-        <form method="POST" action="{{bp}}/admin/classes/{{.ID}}/compute-placements" hx-post="{{bp}}/admin/classes/{{.ID}}/compute-placements" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="inline">
+        <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="inline">
           <button type="submit" class="btn btn-outline btn-sm">Compute Placements</button>
         </form>
       </div>
@@ -766,7 +766,7 @@
   <div class="card">
     <div class="card-body">
       <h3 class="card-title">Standards</h3>
-      <form method="POST" action="{{bp}}/admin/standards" hx-post="{{bp}}/admin/standards" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/standards" hx-post="{{$.BasePath}}/admin/standards" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-group">
           <label>Name</label>
@@ -818,7 +818,7 @@
     <div class="card-body">
       <h3 class="card-title">Standard Editions</h3>
       {{if .Standards}}
-      <form method="POST" action="{{bp}}/admin/editions" hx-post="{{bp}}/admin/editions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/editions" hx-post="{{$.BasePath}}/admin/editions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-group">
           <label>Standard</label>
@@ -870,7 +870,7 @@
   <div class="card">
     <div class="card-body">
       <h3 class="card-title">Source Documents</h3>
-      <form method="POST" action="{{bp}}/admin/sources" hx-post="{{bp}}/admin/sources" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/sources" hx-post="{{$.BasePath}}/admin/sources" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-row">
           <div class="form-group">
@@ -924,7 +924,7 @@
     <div class="card-body">
       <h3 class="card-title">Rules & Overrides</h3>
       {{if .StandardEditions}}
-      <form method="POST" action="{{bp}}/admin/rules" hx-post="{{bp}}/admin/rules" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/rules" hx-post="{{$.BasePath}}/admin/rules" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-group">
           <label>Standard Edition</label>
@@ -968,7 +968,7 @@
       {{end}}
 
       {{if and .ClassRuleViews .StandardEditions}}
-      <form method="POST" action="{{bp}}/admin/overrides" hx-post="{{bp}}/admin/overrides" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/overrides" hx-post="{{$.BasePath}}/admin/overrides" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-row">
           <div class="form-group">
@@ -1012,7 +1012,7 @@
     <div class="card-body">
       <h3 class="card-title">Citations</h3>
       {{if and .Sources .CitationTargets}}
-      <form method="POST" action="{{bp}}/admin/citations" hx-post="{{bp}}/admin/citations" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/citations" hx-post="{{$.BasePath}}/admin/citations" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-row">
           <div class="form-group">
@@ -1053,7 +1053,7 @@
       {{end}}
 
       <h3 class="card-title" style="margin-top:1.5rem;">Ingestion</h3>
-      <form method="POST" action="{{bp}}/admin/ingestions" hx-post="{{bp}}/admin/ingestions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
+      <form method="POST" action="{{$.BasePath}}/admin/ingestions" hx-post="{{$.BasePath}}/admin/ingestions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
         <input type="hidden" name="show_id" value="{{.Show.ID}}">
         <div class="form-group">
           <label>Structured Extraction JSON</label>

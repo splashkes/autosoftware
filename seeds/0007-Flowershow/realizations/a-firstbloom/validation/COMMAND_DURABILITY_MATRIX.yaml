@@ -1,0 +1,229 @@
+commands:
+  - command: organization.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createOrganization
+    claim_types: [organization.created]
+    projection_tables: [as_flowershow_m_organizations]
+    replay_covered: true
+  - command: persons.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createPerson
+    claim_types: [person.created, person.organization_linked]
+    projection_tables: [as_flowershow_m_persons, as_flowershow_m_person_organizations]
+    replay_covered: true
+  - command: shows.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createShow
+    claim_types: [show.created]
+    projection_tables: [as_flowershow_m_shows]
+    replay_covered: true
+  - command: shows.update
+    durability_class: domain_fact_claim_backed_projection
+    store_method: updateShow
+    claim_types: [show.updated]
+    projection_tables: [as_flowershow_m_shows]
+    replay_covered: true
+  - command: clubs.invites.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createOrganizationInvite
+    claim_types: [organization.invite_created]
+    projection_tables: [as_flowershow_m_organization_invites]
+    replay_covered: true
+  - command: schedules.upsert
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createSchedule|updateSchedule
+    claim_types: [schedule.created, schedule.updated]
+    projection_tables: [as_flowershow_m_schedules]
+    replay_covered: true
+  - command: divisions.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createDivision
+    claim_types: [division.created]
+    projection_tables: [as_flowershow_m_divisions]
+    replay_covered: true
+  - command: sections.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createSection
+    claim_types: [section.created]
+    projection_tables: [as_flowershow_m_sections]
+    replay_covered: true
+  - command: classes.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createClass
+    claim_types: [class.created]
+    projection_tables: [as_flowershow_m_classes]
+    replay_covered: true
+  - command: classes.update
+    durability_class: domain_fact_claim_backed_projection
+    store_method: updateClass
+    claim_types: [class.updated]
+    projection_tables: [as_flowershow_m_classes]
+    replay_covered: true
+  - command: classes.reorder
+    durability_class: domain_fact_claim_backed_projection
+    store_method: reorderClass
+    claim_types: [class.reordered]
+    projection_tables: [as_flowershow_m_classes]
+    replay_covered: true
+  - command: taxons.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createTaxon
+    claim_types: [taxon.created]
+    projection_tables: [as_flowershow_m_taxons]
+    replay_covered: true
+  - command: entries.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createEntry
+    claim_types: [entry.created]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.update
+    durability_class: domain_fact_claim_backed_projection
+    store_method: updateEntry
+    claim_types: [entry.updated]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: judges.assign
+    durability_class: domain_fact_claim_backed_projection
+    store_method: assignJudgeToShow
+    claim_types: [show_judge.assigned]
+    projection_tables: [as_flowershow_m_show_judges]
+    replay_covered: true
+  - command: media.attach
+    durability_class: domain_fact_claim_backed_projection
+    store_method: attachMedia
+    claim_types: [media.attached]
+    projection_tables: [as_flowershow_m_media]
+    replay_covered: true
+  - command: media.delete
+    durability_class: domain_fact_claim_backed_projection
+    store_method: deleteMedia
+    claim_types: [media.deleted]
+    projection_tables: [as_flowershow_m_media]
+    replay_covered: true
+  - command: standards.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createStandardDocument
+    claim_types: [standard_document.created]
+    projection_tables: [as_flowershow_m_standard_documents]
+    replay_covered: true
+  - command: editions.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createStandardEdition
+    claim_types: [standard_edition.created]
+    projection_tables: [as_flowershow_m_standard_editions]
+    replay_covered: true
+  - command: rules.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createStandardRule
+    claim_types: [standard_rule.created]
+    projection_tables: [as_flowershow_m_standard_rules]
+    replay_covered: true
+  - command: overrides.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createClassRuleOverride
+    claim_types: [class_rule_override.created]
+    projection_tables: [as_flowershow_m_class_rule_overrides]
+    replay_covered: true
+  - command: sources.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createSourceDocument
+    claim_types: [source_document.created]
+    projection_tables: [as_flowershow_m_source_documents]
+    replay_covered: true
+  - command: citations.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createSourceCitation
+    claim_types: [source_citation.created]
+    projection_tables: [as_flowershow_m_source_citations]
+    replay_covered: true
+  - command: ingestions.import
+    durability_class: domain_fact_claim_backed_projection
+    store_method: importIngestion->createSourceDocument|createSourceCitation
+    claim_types: [source_document.created, source_citation.created]
+    projection_tables: [as_flowershow_m_source_documents, as_flowershow_m_source_citations]
+    replay_covered: true
+  - command: rubrics.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createRubric
+    claim_types: [rubric.created]
+    projection_tables: [as_flowershow_m_rubrics]
+    replay_covered: true
+  - command: criteria.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createCriterion
+    claim_types: [criterion.created]
+    projection_tables: [as_flowershow_m_criteria]
+    replay_covered: true
+  - command: scorecards.submit
+    durability_class: domain_fact_claim_backed_projection
+    store_method: submitScorecard
+    claim_types: [scorecard.submitted]
+    projection_tables: [as_flowershow_m_scorecards, as_flowershow_m_criterion_scores]
+    replay_covered: true
+  - command: classes.compute_placements
+    durability_class: domain_fact_claim_backed_projection
+    store_method: computePlacementsFromScores
+    claim_types: [show_class.placements_computed]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.set_placement
+    durability_class: domain_fact_claim_backed_projection
+    store_method: setPlacement
+    claim_types: [entry.placement_set]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.set_visibility
+    durability_class: domain_fact_claim_backed_projection
+    store_method: setEntrySuppressed
+    claim_types: [entry.visibility_set]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: show_credits.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createShowCredit
+    claim_types: [show_credit.created]
+    projection_tables: [as_flowershow_m_show_credits]
+    replay_covered: true
+  - command: show_credits.delete
+    durability_class: domain_fact_claim_backed_projection
+    store_method: deleteShowCredit
+    claim_types: [show_credit.deleted]
+    projection_tables: [as_flowershow_m_show_credits]
+    replay_covered: true
+  - command: entries.reassign_entrant
+    durability_class: domain_fact_claim_backed_projection
+    store_method: reassignEntry
+    claim_types: [entry.reassigned]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.move
+    durability_class: domain_fact_claim_backed_projection
+    store_method: moveEntry
+    claim_types: [entry.moved]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.delete
+    durability_class: domain_fact_claim_backed_projection
+    store_method: deleteEntry
+    claim_types: [entry.deleted]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: awards.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createAward
+    claim_types: [award.created]
+    projection_tables: [as_flowershow_m_awards]
+    replay_covered: true
+  - command: awards.compute
+    durability_class: pure_compute
+    store_method: computeAward
+    claim_types: []
+    projection_tables: []
+    replay_covered: false
+  - command: roles.assign
+    durability_class: runtime_durable_authority
+    store_method: runtimeAuthorityResolver.AssignRole
+    claim_types: []
+    projection_tables: [runtime_authority_grants]
+    replay_covered: false

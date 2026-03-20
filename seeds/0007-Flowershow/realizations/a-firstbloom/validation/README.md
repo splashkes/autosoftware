@@ -1,11 +1,15 @@
 # Validation Evidence
 
-This folder has three distinct validation artifacts:
+This folder has four distinct validation artifacts:
 
 - [`ACCEPTANCE_CHECKLIST.md`](./ACCEPTANCE_CHECKLIST.md) combines the seed
   acceptance criteria with the agent/API parity work that just landed.
 - [`API_AND_PLAYWRIGHT_PLAN.md`](./API_AND_PLAYWRIGHT_PLAN.md) lays out the
   next pass for comprehensive contract, API, and browser coverage.
+- [`COMMAND_DURABILITY_MATRIX.yaml`](./COMMAND_DURABILITY_MATRIX.yaml) is the
+  Flowershow-only source of truth for published mutating commands, their
+  current durability class, their claim types, and whether replay coverage is
+  required in CI.
 - `README.md` maps the current implementation to the tests that already exist.
 
 ## Current Coverage Posture

@@ -44,7 +44,7 @@
         {{end}}
       </div>
       <div class="show-actions account-actions issued-token-actions">
-        <a href="{{bp}}/account?section=access#agent-tokens" class="btn btn-primary">Done</a>
+        <a href="{{$.BasePath}}/account?section=access#agent-tokens" class="btn btn-primary">Done</a>
       </div>
     </div>
   </section>
@@ -54,7 +54,7 @@
     <div>
       <h1>Your Profile</h1>
     </div>
-    <form method="POST" action="{{bp}}/admin/logout">
+    <form method="POST" action="{{$.BasePath}}/admin/logout">
       <button type="submit" class="btn btn-outline">Sign Out</button>
     </form>
   </div>
@@ -71,7 +71,7 @@
         {{if .User.Name}}<p class="card-meta">{{.User.Name}}</p>{{end}}
         <nav class="account-section-nav">
           {{range .Sections}}
-          <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
           {{end}}
         </nav>
       </div>
@@ -106,7 +106,7 @@
                 <strong>{{.Name}}</strong>
                 <div class="card-meta">{{.RoleLabel}} · {{.Level}}</div>
               </div>
-              {{if .AdminHref}}<a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
+              {{if .AdminHref}}<a href="{{$.BasePath}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
             </div>
             {{end}}
           </div>
@@ -130,7 +130,7 @@
             <div class="card-body">
               <div class="login-step-kicker">Profile</div>
               <h2 class="card-title">Edit Profile</h2>
-              <form method="POST" action="{{bp}}/account/profile" class="form account-profile-form">
+              <form method="POST" action="{{$.BasePath}}/account/profile" class="form account-profile-form">
                 <div class="form-row">
                   <div class="form-group">
                     <label for="profile_first_name">First Name</label>
@@ -185,7 +185,7 @@
         </div>
         <div class="card-grid">
           {{range .Shows}}
-          <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
+          <a class="card show-card" href="{{$.BasePath}}/shows/{{.Slug}}">
             <div class="card-body">
               <h3 class="card-title">{{.Name}}</h3>
               <p class="card-meta">{{.Date}} · {{.Location}}</p>
@@ -206,7 +206,7 @@
       </section>
       <div class="card-grid">
         {{range .Shows}}
-        <a class="card show-card" href="{{bp}}/shows/{{.Slug}}">
+        <a class="card show-card" href="{{$.BasePath}}/shows/{{.Slug}}">
           <div class="card-body">
             <h3 class="card-title">{{.Name}}</h3>
             <p class="card-meta">{{.Date}} · {{.Location}}</p>
@@ -229,7 +229,7 @@
                 <strong>{{.Name}}</strong>
                 <div class="card-meta">{{.RoleLabel}} · {{.Level}}</div>
               </div>
-              {{if .AdminHref}}<a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
+              {{if .AdminHref}}<a href="{{$.BasePath}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
             </div>
             {{end}}
           </div>
@@ -250,8 +250,8 @@
             {{range .Entries}}
             <div class="account-role-item account-entry-item">
               <div>
-                <strong><a href="{{bp}}{{.EntryHref}}">{{.EntryName}}</a></strong>
-                <div class="card-meta">{{if .ShowHref}}<a href="{{bp}}{{.ShowHref}}">{{.ShowName}}</a>{{else}}{{.ShowName}}{{end}}{{if .ClassLabel}} · {{.ClassLabel}}{{end}}</div>
+                <strong><a href="{{$.BasePath}}{{.EntryHref}}">{{.EntryName}}</a></strong>
+                <div class="card-meta">{{if .ShowHref}}<a href="{{$.BasePath}}{{.ShowHref}}">{{.ShowName}}</a>{{else}}{{.ShowName}}{{end}}{{if .ClassLabel}} · {{.ClassLabel}}{{end}}</div>
                 <div class="card-meta">{{.CreatedLabel}}{{if .Placement}} · {{.Placement}}{{end}}{{if .PointsLabel}} · {{.PointsLabel}}{{end}}{{if .Suppressed}} · Suppressed{{end}}</div>
               </div>
             </div>
@@ -303,7 +303,7 @@
                     </div>
                   </details>
                   {{if eq .StatusLabel "Active"}}
-                  <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
+                  <form method="POST" action="{{$.BasePath}}/account/agent-tokens/{{.ID}}/revoke">
                     <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
                   </form>
                   {{end}}
@@ -320,7 +320,7 @@
             <div class="card-body">
               <div class="login-step-kicker">Generate Token</div>
               <h3 class="card-title">Issue A New Agent / API Access Token</h3>
-              <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
+              <form action="{{$.BasePath}}/account/agent-tokens" method="POST" class="form account-token-form">
                 <div class="form-group">
                   <label for="token_label">Token Label</label>
                   <input id="token_label" name="label" class="form-input" maxlength="80" placeholder="Example: March schedule structuring agent" required>
@@ -401,7 +401,7 @@
                       <strong>{{.Name}}</strong>
                       <div class="card-meta">{{.Level}}</div>
                     </div>
-                    <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+                    <a href="{{$.BasePath}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
                   </div>
                   {{end}}
                 </div>

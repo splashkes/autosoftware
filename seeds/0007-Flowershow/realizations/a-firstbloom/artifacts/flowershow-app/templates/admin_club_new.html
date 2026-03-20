@@ -24,7 +24,7 @@
     <div class="account-main">
       <section class="card">
         <div class="card-body">
-          <form method="POST" action="{{bp}}/admin/clubs" class="form">
+          <form method="POST" action="{{$.BasePath}}/admin/clubs" class="form">
             <div id="club-details" class="form-group">
               <label for="club_name">Club Name</label>
               <input id="club_name" name="name" class="form-input" required>
@@ -62,7 +62,7 @@
             </div>
 
             <div class="show-actions">
-              <a href="{{bp}}/admin" class="btn btn-outline">Cancel</a>
+              <a href="{{$.BasePath}}/admin" class="btn btn-outline">Cancel</a>
               <button type="submit" class="btn btn-primary">Create Club</button>
             </div>
           </form>

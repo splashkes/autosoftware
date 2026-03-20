@@ -303,8 +303,16 @@ type agentAccessLink struct {
 	Href  string
 }
 
+func requestBasePath(r *http.Request) string {
+	if r != nil {
+		if forwarded := strings.TrimSuffix(strings.TrimSpace(r.Header.Get("X-Forwarded-Prefix")), "/"); forwarded != "" {
+			return forwarded
+		}
+	}
+	return globalBasePath
+}
+
 var templateFuncMap = template.FuncMap{
-	"bp":           func() string { return globalBasePath },
 	"assetVersion": func() string { return assetVersion },
 	"githubSourceURL": func(path string) string {
 		path = strings.TrimSpace(path)
@@ -704,6 +712,7 @@ func (a *app) withChrome(r *http.Request, data any) map[string]any {
 	if r != nil {
 		user, ok = a.currentUser(r)
 	}
+	out["BasePath"] = requestBasePath(r)
 	out["NavSignedIn"] = ok
 	out["NavUserLabel"] = ""
 	out["NavUserHref"] = "/account"

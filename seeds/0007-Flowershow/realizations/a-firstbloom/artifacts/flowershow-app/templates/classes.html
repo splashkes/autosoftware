@@ -8,7 +8,7 @@
 
 <section class="card admin-search-shell">
   <div class="card-body">
-    <form method="GET" action="{{bp}}/classes" class="form admin-search-form">
+    <form method="GET" action="{{$.BasePath}}/classes" class="form admin-search-form">
       <input type="search" name="q" value="{{.Query}}" class="form-input" placeholder="Filter classes by number, keyword, show, or club">
       <button type="submit" class="btn btn-primary">Filter</button>
     </form>
@@ -25,9 +25,9 @@
   </div>
   <div class="class-grid">
     {{range .Items}}
-    <a href="{{bp}}/shows/{{.Show.Slug}}/classes/{{.Class.ID}}" class="card show-card-rich is-compact class-card-rich">
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes/{{.Class.ID}}" class="card show-card-rich is-compact class-card-rich">
       <div class="show-card-media">
-        <div class="show-visual-frame is-active theme-{{.Featured.Theme}}" {{if .Featured.MediaPath}}style="background-image:url('{{bp}}{{.Featured.MediaPath}}');"{{end}}>
+        <div class="show-visual-frame is-active theme-{{.Featured.Theme}}" {{if .Featured.MediaPath}}style="background-image:url('{{$.BasePath}}{{.Featured.MediaPath}}');"{{end}}>
           <span>{{.Featured.Label}}</span>
         </div>
       </div>
