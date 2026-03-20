@@ -38,6 +38,9 @@ func (s *RuntimeService) MaterializeAuthorityState(ctx context.Context) (Authori
 	if err != nil {
 		return AuthorityMaterializationResult{}, err
 	}
+	if err := s.migrateLegacyAuthorityGrantsToRegistry(ctx); err != nil {
+		return AuthorityMaterializationResult{}, err
+	}
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return AuthorityMaterializationResult{}, wrapErr("begin authority materialization tx", err)
@@ -51,6 +54,75 @@ func (s *RuntimeService) MaterializeAuthorityState(ctx context.Context) (Authori
 		return AuthorityMaterializationResult{}, wrapErr("commit authority materialization", err)
 	}
 	return result, nil
+}
+
+func (s *RuntimeService) migrateLegacyAuthorityGrantsToRegistry(ctx context.Context) error {
+	pool, err := expectReady(s)
+	if err != nil {
+		return err
+	}
+	var registryCount int
+	if err := pool.QueryRow(ctx, `
+		select count(*)
+		from runtime_registry_rows
+		where reference = $1 and seed_id = $2 and realization_id = $3 and row_type = $4
+	`, authorityRegistryReference, authorityRegistrySeedID, authorityRegistryRealizationID, authorityGrantRegistryRowType).Scan(&registryCount); err != nil {
+		return wrapErr("count legacy authority registry rows", err)
+	}
+	if registryCount > 0 {
+		return nil
+	}
+	rows, err := pool.Query(ctx, `
+		select grant_id, grantor_principal_id, grantee_principal_id, bundle_id, capabilities_snapshot,
+		       scope_kind, scope_id, delegation_mode, basis, status, effective_at, expires_at,
+		       supersedes_grant_id, reason, evidence_refs, metadata::text, created_at
+		from runtime_authority_grants
+		order by created_at asc, grant_id asc
+	`)
+	if err != nil {
+		return wrapErr("load legacy authority grants", err)
+	}
+	defer rows.Close()
+
+	appendInput := AppendRegistryChangeSetInput{
+		ChangeSetID:    "authority-legacy-migration",
+		Reference:      authorityRegistryReference,
+		SeedID:         authorityRegistrySeedID,
+		RealizationID:  authorityRegistryRealizationID,
+		IdempotencyKey: "authority-legacy-migration",
+		AcceptedBy:     "authority-legacy-migration",
+		Metadata: map[string]interface{}{
+			"source": "runtime_authority_grants",
+		},
+	}
+	for rows.Next() {
+		grant, err := scanAuthorityGrant(rows)
+		if err != nil {
+			return wrapErr("scan legacy authority grant", err)
+		}
+		bundle, err := s.GetAuthorityBundle(ctx, grant.BundleID)
+		if err != nil {
+			return wrapErr("load legacy authority bundle", err)
+		}
+		payload, err := s.authorityGrantRegistryPayload(ctx, grant, bundle)
+		if err != nil {
+			return err
+		}
+		appendInput.Rows = append(appendInput.Rows, AppendRegistryRowInput{
+			RowType:  authorityGrantRegistryRowType,
+			ObjectID: grant.GrantID,
+			ClaimID:  grant.GrantID,
+			Payload:  payload,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return wrapErr("iterate legacy authority grants", err)
+	}
+	if len(appendInput.Rows) == 0 {
+		return nil
+	}
+	_, err = s.AppendRegistryChangeSet(ctx, appendInput)
+	return wrapErr("append legacy authority grants to registry", err)
 }
 
 func (s *RuntimeService) ensureAuthorityMaterialized(ctx context.Context) error {
@@ -212,9 +284,9 @@ func (s *RuntimeService) materializeAuthorityGrantPayload(ctx context.Context, t
 		    evidence_refs = excluded.evidence_refs,
 		    metadata = excluded.metadata,
 		    created_at = excluded.created_at
-	`, grant.GrantID, nullString(grant.GrantorPrincipalID), grant.GranteePrincipalID, grant.BundleID, normalizeStringList(grant.CapabilitiesSnapshot),
+	`, grant.GrantID, nullString(grant.GrantorPrincipalID), grant.GranteePrincipalID, grant.BundleID, normalizedStringArray(grant.CapabilitiesSnapshot),
 		grant.ScopeKind, grant.ScopeID, grant.DelegationMode, grant.Basis, grant.Status, nullTimeValue(grant.EffectiveAt),
-		nullTimeValue(grant.ExpiresAt), nullString(grant.SupersedesGrantID), nullString(grant.Reason), normalizeStringList(grant.EvidenceRefs),
+		nullTimeValue(grant.ExpiresAt), nullString(grant.SupersedesGrantID), nullString(grant.Reason), normalizedStringArray(grant.EvidenceRefs),
 		jsonBytes(grant.Metadata), createdAt); err != nil {
 		return wrapErr("materialize authority grant", err)
 	}
@@ -229,9 +301,9 @@ func upsertAuthorityBundleMaterialized(ctx context.Context, tx pgx.Tx, bundle Au
 	if bundleID == "" {
 		return nil
 	}
-	capabilities := normalizeStringList(bundle.Capabilities)
+	capabilities := normalizedStringArray(bundle.Capabilities)
 	if len(capabilities) == 0 {
-		capabilities = normalizeStringList(grant.CapabilitiesSnapshot)
+		capabilities = normalizedStringArray(grant.CapabilitiesSnapshot)
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into runtime_authority_bundles (
@@ -248,6 +320,14 @@ func upsertAuthorityBundleMaterialized(ctx context.Context, tx pgx.Tx, bundle Au
 		return wrapErr("materialize authority bundle", err)
 	}
 	return nil
+}
+
+func normalizedStringArray(values []string) []string {
+	normalized := normalizeStringList(values)
+	if len(normalized) == 0 {
+		return []string{}
+	}
+	return normalized
 }
 
 func upsertAuthorityPrincipalBinding(ctx context.Context, tx pgx.Tx, binding *authorityPrincipalBindingPayload, principalID string) error {
