@@ -879,7 +879,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   background: var(--gray-50);
   color: var(--gray-900);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: .95rem;
+  font-size: .82rem;
   line-height: 1.4;
 }
 .issued-token-input:focus { outline: 2px solid rgba(64, 145, 108, .28); outline-offset: 2px; }

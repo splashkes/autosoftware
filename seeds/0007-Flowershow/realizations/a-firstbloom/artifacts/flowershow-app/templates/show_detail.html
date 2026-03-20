@@ -42,12 +42,12 @@
     <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
     {{range .Sections}}
     <div class="schedule-section">
-      <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+      <h4>{{.Section.Title}}</h4>
       <div class="class-list">
         {{range .Classes}}
         <a href="{{bp}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="class-item">
           <span class="class-number">{{.ClassNumber}}</span>
-          <span class="class-title">{{.Title}}</span>
+          <span class="class-title">{{.Title}}{{if .Description}} <span class="card-meta">· {{.Description}}</span>{{end}}</span>
           {{if .SpecimenCount}}<span class="class-specimens">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
         </a>
         {{end}}
@@ -71,7 +71,7 @@
       <tr class="{{placementClass .Entry.Placement}}">
         <td><a href="{{bp}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
         <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
-        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{.Person.Initials}}</a>{{end}}</td>
+        <td>{{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>
       </tr>

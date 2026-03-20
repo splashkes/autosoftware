@@ -33,7 +33,7 @@
       </div>
       <div class="winner-mag-body">
         <h3>{{.Entry.Name}}</h3>
-        <p class="winner-mag-meta">{{if .Person}}Entrant {{.Person.Initials}}{{end}}{{if .Entry.Points}} · {{.Entry.Points}} pts{{end}}</p>
+        <p class="winner-mag-meta">{{if .Person}}Entrant {{publicPersonLabel .Person}}{{end}}{{if .Entry.Points}} · {{.Entry.Points}} pts{{end}}</p>
       </div>
     </article>
     {{end}}
@@ -56,9 +56,9 @@
       {{range .ClassRows}}
       <tr>
         <td><strong>{{.Class.ClassNumber}}</strong> {{.Class.Title}}</td>
-        <td>{{if .First}}<a href="{{bp}}/entries/{{.First.Entry.ID}}">{{.First.Entry.Name}}</a>{{if .First.Person}} <span class="card-meta">({{.First.Person.Initials}})</span>{{end}}{{end}}</td>
-        <td>{{if .Second}}<a href="{{bp}}/entries/{{.Second.Entry.ID}}">{{.Second.Entry.Name}}</a>{{if .Second.Person}} <span class="card-meta">({{.Second.Person.Initials}})</span>{{end}}{{end}}</td>
-        <td>{{if .Third}}<a href="{{bp}}/entries/{{.Third.Entry.ID}}">{{.Third.Entry.Name}}</a>{{if .Third.Person}} <span class="card-meta">({{.Third.Person.Initials}})</span>{{end}}{{end}}</td>
+        <td>{{if .First}}<a href="{{bp}}/entries/{{.First.Entry.ID}}">{{.First.Entry.Name}}</a>{{if .First.Person}} <span class="card-meta">({{publicPersonLabel .First.Person}})</span>{{end}}{{end}}</td>
+        <td>{{if .Second}}<a href="{{bp}}/entries/{{.Second.Entry.ID}}">{{.Second.Entry.Name}}</a>{{if .Second.Person}} <span class="card-meta">({{publicPersonLabel .Second.Person}})</span>{{end}}{{end}}</td>
+        <td>{{if .Third}}<a href="{{bp}}/entries/{{.Third.Entry.ID}}">{{.Third.Entry.Name}}</a>{{if .Third.Person}} <span class="card-meta">({{publicPersonLabel .Third.Person}})</span>{{end}}{{end}}</td>
       </tr>
       {{end}}
     </tbody>

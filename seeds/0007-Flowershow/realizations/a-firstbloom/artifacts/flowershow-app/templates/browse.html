@@ -71,7 +71,7 @@
         <p class="card-meta">{{.Show.Name}} · {{.Show.Date}}</p>
         {{if .Class}}<p class="card-meta">Class {{.Class.ClassNumber}} · {{.Class.Title}}</p>{{end}}
         <div class="entry-meta">
-          {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{.Person.Initials}}</a>{{end}}
+          {{if .Person}}<a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>{{end}}
           {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
           {{range .MatchedTaxons}}<a href="{{bp}}/taxonomy/{{.ID}}" class="badge badge-muted">{{.Name}}</a>{{end}}
         </div>

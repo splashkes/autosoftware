@@ -20,7 +20,7 @@
         <p class="card-meta">It expires {{.IssuedAgentToken.ExpiresLabel}} and currently grants {{.IssuedAgentToken.PermissionProfile}}.</p>
       </div>
       <div class="alert alert-warning issued-token-alert">
-        Be careful: anyone with this token can use the permissions below until it expires or you revoke it.
+        Anyone with this token can use these permissions until it expires or is revoked.
       </div>
       <div class="issued-token-token-group">
         <label for="issued_agent_token">Token</label>
@@ -69,7 +69,6 @@
         <div class="login-step-kicker">Profile Navigation</div>
         <h2 class="card-title">{{if .User.Email}}{{.User.Email}}{{else}}Signed-In User{{end}}</h2>
         {{if .User.Name}}<p class="card-meta">{{.User.Name}}</p>{{end}}
-        {{if .IsAdmin}}<p class="card-meta"><a href="{{bp}}/admin">Open Admin Workspace</a></p>{{end}}
         <nav class="account-section-nav">
           {{range .Sections}}
           <a href="{{bp}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
@@ -127,6 +126,53 @@
             </div>
           </details>
           {{end}}
+          <section class="card account-profile-editor-card">
+            <div class="card-body">
+              <div class="login-step-kicker">Profile</div>
+              <h2 class="card-title">Edit Profile</h2>
+              <form method="POST" action="{{bp}}/account/profile" class="form account-profile-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="profile_first_name">First Name</label>
+                    <input id="profile_first_name" name="first_name" class="form-input" value="{{.Profile.FirstName}}" autocomplete="given-name">
+                  </div>
+                  <div class="form-group">
+                    <label for="profile_last_name">Last Name</label>
+                    <input id="profile_last_name" name="last_name" class="form-input" value="{{.Profile.LastName}}" autocomplete="family-name">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="profile_email">Email</label>
+                  <input id="profile_email" name="email" type="email" class="form-input" value="{{.Profile.Email}}" autocomplete="email">
+                </div>
+                <fieldset class="account-token-profile-picker">
+                  <legend>Public Name Display</legend>
+                  <label class="account-token-profile {{if eq .Profile.PublicDisplayMode "initials"}}selected{{end}}">
+                    <input type="radio" name="public_display_mode" value="initials" {{if eq .Profile.PublicDisplayMode "initials"}}checked{{end}}>
+                    <div>
+                      <strong>Show initials</strong>
+                      <p class="card-meta">Public pages use {{.Profile.InitialsSample}}.</p>
+                    </div>
+                  </label>
+                  <label class="account-token-profile {{if eq .Profile.PublicDisplayMode "first_name_last_initial"}}selected{{end}}">
+                    <input type="radio" name="public_display_mode" value="first_name_last_initial" {{if eq .Profile.PublicDisplayMode "first_name_last_initial"}}checked{{end}}>
+                    <div>
+                      <strong>Show first name and last initial</strong>
+                      <p class="card-meta">Public pages use {{.Profile.FirstNameLastInitialSample}}.</p>
+                    </div>
+                  </label>
+                  <label class="account-token-profile {{if eq .Profile.PublicDisplayMode "full_name"}}selected{{end}}">
+                    <input type="radio" name="public_display_mode" value="full_name" {{if eq .Profile.PublicDisplayMode "full_name"}}checked{{end}}>
+                    <div>
+                      <strong>Show full name</strong>
+                      <p class="card-meta">Public pages use {{.Profile.FullNameSample}}.</p>
+                    </div>
+                  </label>
+                </fieldset>
+                <button type="submit" class="btn btn-primary">Save Profile</button>
+              </form>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -189,6 +235,30 @@
           </div>
           {{else}}
           <p class="card-meta">No clubs are linked to this profile yet.</p>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+
+      {{if eq .ActiveSection "entries"}}
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Entries</div>
+          <h2 class="card-title">Your Entry History</h2>
+          {{if .Entries}}
+          <div class="account-role-list">
+            {{range .Entries}}
+            <div class="account-role-item account-entry-item">
+              <div>
+                <strong><a href="{{bp}}{{.EntryHref}}">{{.EntryName}}</a></strong>
+                <div class="card-meta">{{if .ShowHref}}<a href="{{bp}}{{.ShowHref}}">{{.ShowName}}</a>{{else}}{{.ShowName}}{{end}}{{if .ClassLabel}} · {{.ClassLabel}}{{end}}</div>
+                <div class="card-meta">{{.CreatedLabel}}{{if .Placement}} · {{.Placement}}{{end}}{{if .PointsLabel}} · {{.PointsLabel}}{{end}}{{if .Suppressed}} · Suppressed{{end}}</div>
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="card-meta">No entries are linked to this account yet.</p>
           {{end}}
         </div>
       </section>

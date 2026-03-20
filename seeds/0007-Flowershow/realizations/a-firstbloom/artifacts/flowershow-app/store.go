@@ -43,6 +43,70 @@ func slugify(s string) string {
 	return strings.Trim(s, "-")
 }
 
+func organizationInitials(name string) string {
+	words := strings.Fields(strings.TrimSpace(name))
+	initials := make([]rune, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+		runes := []rune(word)
+		if len(runes) == 0 {
+			continue
+		}
+		initials = append(initials, runes[0])
+	}
+	if len(initials) == 0 {
+		return "show"
+	}
+	return strings.ToLower(string(initials))
+}
+
+func showSlugForInput(org *Organization, input ShowInput) string {
+	dateDigits := strings.NewReplacer("-", "", "/", "", " ", "").Replace(strings.TrimSpace(input.Date))
+	datePart := ""
+	if len(dateDigits) >= 8 {
+		datePart = dateDigits[:4] + "-" + dateDigits[4:8]
+	} else if strings.TrimSpace(input.Season) != "" {
+		datePart = strings.TrimSpace(input.Season)
+	}
+	base := "show"
+	if org != nil {
+		base = organizationInitials(org.Name)
+	}
+	if datePart == "" {
+		return base
+	}
+	return base + datePart
+}
+
+func uniqueShowSlug(existing map[string]*Show, preferred, currentID string) string {
+	preferred = slugify(preferred)
+	if preferred == "" {
+		preferred = "show"
+	}
+	candidate := preferred
+	seq := 2
+	for {
+		conflict := false
+		for _, show := range existing {
+			if show == nil || show.ID == currentID {
+				continue
+			}
+			if show.Slug == candidate {
+				conflict = true
+				break
+			}
+		}
+		if !conflict {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s-%d", preferred, seq)
+		seq++
+	}
+}
+
 // --- Store interface ---
 
 type flowershowStore interface {
@@ -322,9 +386,10 @@ func (s *memoryStore) createShow(input ShowInput) (*Show, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
+	org, _ := s.organizations[strings.TrimSpace(input.OrganizationID)]
 	show := &Show{
 		ID:             newID("show"),
-		Slug:           slugify(input.Name),
+		Slug:           uniqueShowSlug(s.shows, showSlugForInput(org, input), ""),
 		OrganizationID: input.OrganizationID,
 		Name:           input.Name,
 		Location:       input.Location,
@@ -353,6 +418,14 @@ func (s *memoryStore) updateShow(id string, input ShowInput) (*Show, error) {
 	if input.OrganizationID != "" {
 		show.OrganizationID = input.OrganizationID
 	}
+	org, _ := s.organizations[strings.TrimSpace(show.OrganizationID)]
+	show.Slug = uniqueShowSlug(s.shows, showSlugForInput(org, ShowInput{
+		OrganizationID: show.OrganizationID,
+		Name:           show.Name,
+		Location:       show.Location,
+		Date:           show.Date,
+		Season:         show.Season,
+	}), show.ID)
 	show.UpdatedAt = time.Now().UTC()
 	s.appendClaim(show.ID, "show", "show.updated", show)
 	return show, nil
@@ -430,12 +503,24 @@ func (s *memoryStore) judgesByShow(showID string) []*ShowJudgeAssignment {
 func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	initials := ""
+	if len([]rune(strings.TrimSpace(input.FirstName))) > 0 {
+		initials += string([]rune(strings.TrimSpace(input.FirstName))[:1])
+	}
+	if len([]rune(strings.TrimSpace(input.LastName))) > 0 {
+		initials += string([]rune(strings.TrimSpace(input.LastName))[:1])
+	}
+	publicDisplayMode := strings.TrimSpace(input.PublicDisplayMode)
+	if publicDisplayMode == "" {
+		publicDisplayMode = "initials"
+	}
 	p := &Person{
-		ID:        newID("person"),
-		FirstName: input.FirstName,
-		LastName:  input.LastName,
-		Initials:  string([]rune(input.FirstName)[:1]) + string([]rune(input.LastName)[:1]),
-		Email:     input.Email,
+		ID:                newID("person"),
+		FirstName:         input.FirstName,
+		LastName:          input.LastName,
+		Initials:          initials,
+		Email:             input.Email,
+		PublicDisplayMode: publicDisplayMode,
 	}
 	s.persons[p.ID] = p
 	s.appendClaim(p.ID, "person", "person.created", p)
@@ -465,6 +550,9 @@ func (s *memoryStore) updatePerson(id string, input PersonInput) (*Person, error
 	p.FirstName = input.FirstName
 	p.LastName = input.LastName
 	p.Email = input.Email
+	if strings.TrimSpace(input.PublicDisplayMode) != "" {
+		p.PublicDisplayMode = strings.TrimSpace(input.PublicDisplayMode)
+	}
 	if len(input.FirstName) > 0 && len(input.LastName) > 0 {
 		p.Initials = string([]rune(input.FirstName)[:1]) + string([]rune(input.LastName)[:1])
 	}
@@ -1723,9 +1811,9 @@ func (s *memoryStore) seedDemoData() {
 
 	// Persons
 	persons := []Person{
-		{ID: "person_01", FirstName: "Margaret", LastName: "Chen", Initials: "MC"},
-		{ID: "person_02", FirstName: "Robert", LastName: "Williams", Initials: "RW"},
-		{ID: "person_03", FirstName: "Susan", LastName: "Park", Initials: "SP"},
+		{ID: "person_01", FirstName: "Margaret", LastName: "Chen", Initials: "MC", PublicDisplayMode: "initials"},
+		{ID: "person_02", FirstName: "Robert", LastName: "Williams", Initials: "RW", PublicDisplayMode: "initials"},
+		{ID: "person_03", FirstName: "Susan", LastName: "Park", Initials: "SP", PublicDisplayMode: "initials"},
 	}
 	for i := range persons {
 		s.persons[persons[i].ID] = &persons[i]
@@ -1990,6 +2078,10 @@ func newFlowershowStore(databaseURL string) (flowershowStore, error) {
 		pool.Close()
 		return nil, err
 	}
+	if err := store.hydratePersons(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -2087,8 +2179,12 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   initials TEXT NOT NULL DEFAULT '',
-  email TEXT NOT NULL DEFAULT ''
+  email TEXT NOT NULL DEFAULT '',
+  public_display_mode TEXT NOT NULL DEFAULT 'initials'
 );
+
+ALTER TABLE as_flowershow_m_persons
+  ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_person_organizations (
   person_id TEXT NOT NULL,
@@ -2328,8 +2424,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
 	}
 	for _, p := range mem.persons {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
-			p.ID, p.FirstName, p.LastName, p.Initials, p.Email)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+			p.ID, p.FirstName, p.LastName, p.Initials, p.Email, p.PublicDisplayMode)
 	}
 	for _, po := range mem.personOrgs {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
@@ -2406,6 +2502,56 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 	return nil
 }
 
+func (s *postgresFlowershowStore) hydratePersons(ctx context.Context) error {
+	rows, err := s.pool.Query(ctx, `SELECT id, first_name, last_name, initials, email, public_display_mode FROM as_flowershow_m_persons`)
+	if err != nil {
+		return fmt.Errorf("load persons: %w", err)
+	}
+	defer rows.Close()
+
+	persons := make(map[string]*Person)
+	for rows.Next() {
+		var p Person
+		if err := rows.Scan(&p.ID, &p.FirstName, &p.LastName, &p.Initials, &p.Email, &p.PublicDisplayMode); err != nil {
+			return fmt.Errorf("scan person: %w", err)
+		}
+		person := p
+		persons[p.ID] = &person
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate persons: %w", err)
+	}
+
+	linkRows, err := s.pool.Query(ctx, `SELECT person_id, organization_id, role FROM as_flowershow_m_person_organizations`)
+	if err != nil {
+		return fmt.Errorf("load person organizations: %w", err)
+	}
+	defer linkRows.Close()
+
+	personOrgs := make(map[string]*PersonOrganization)
+	for linkRows.Next() {
+		var link PersonOrganization
+		if err := linkRows.Scan(&link.PersonID, &link.OrganizationID, &link.Role); err != nil {
+			return fmt.Errorf("scan person organization: %w", err)
+		}
+		item := link
+		personOrgs[item.PersonID+"|"+item.OrganizationID+"|"+item.Role] = &item
+	}
+	if err := linkRows.Err(); err != nil {
+		return fmt.Errorf("iterate person organizations: %w", err)
+	}
+
+	s.mem.mu.Lock()
+	for id, person := range persons {
+		s.mem.persons[id] = person
+	}
+	for key, link := range personOrgs {
+		s.mem.personOrgs[key] = link
+	}
+	s.mem.mu.Unlock()
+	return nil
+}
+
 // For now, the Postgres store delegates to the memory store for all operations.
 // A full Postgres implementation would replace each method with SQL queries.
 // This allows the app to start with Postgres (migrated schema) while using
@@ -2436,15 +2582,67 @@ func (s *postgresFlowershowStore) judgesByShow(showID string) []*ShowJudgeAssign
 	return s.mem.judgesByShow(showID)
 }
 func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) {
-	return s.mem.createPerson(input)
+	person, err := s.mem.createPerson(input)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		person.ID, person.FirstName, person.LastName, person.Initials, person.Email, person.PublicDisplayMode)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(input.OrganizationID) != "" {
+		role := strings.TrimSpace(input.OrganizationRole)
+		if role == "" {
+			role = "member"
+		}
+		_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role)
+			VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+			person.ID, strings.TrimSpace(input.OrganizationID), role)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return person, nil
 }
 func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*Person, error) {
-	return s.mem.updatePerson(id, input)
+	person, err := s.mem.updatePerson(id, input)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_persons
+		SET first_name = $2, last_name = $3, initials = $4, email = $5, public_display_mode = $6
+		WHERE id = $1`,
+		person.ID, person.FirstName, person.LastName, person.Initials, person.Email, person.PublicDisplayMode)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("person not found")
+	}
+	return person, nil
 }
 func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.mem.personByID(id) }
 func (s *postgresFlowershowStore) allPersons() []*Person                { return s.mem.allPersons() }
 func (s *postgresFlowershowStore) linkPersonOrganization(link PersonOrganization) (*PersonOrganization, error) {
-	return s.mem.linkPersonOrganization(link)
+	item, err := s.mem.linkPersonOrganization(link)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role)
+		VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+		item.PersonID, item.OrganizationID, item.Role)
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) personOrganizationsByPerson(personID string) []*PersonOrganization {
 	return s.mem.personOrganizationsByPerson(personID)

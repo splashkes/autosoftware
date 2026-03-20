@@ -34,6 +34,8 @@ type accountData struct {
 	AccountPermissions []accountPermissionView
 	ManagedClubs       []managedClubView
 	ClubMemberships    []accountClubMembershipView
+	Entries            []accountEntryView
+	Profile            accountProfileEditorView
 	CurrentSeason      string
 	CurrentSeasonPoints float64
 	CurrentSeasonEntries int
@@ -94,6 +96,31 @@ type accountClubMembershipView struct {
 	Level     string
 	RoleLabel string
 	AdminHref string
+}
+
+type accountEntryView struct {
+	EntryID     string
+	ShowName    string
+	ShowHref    string
+	ClassLabel  string
+	EntryName   string
+	EntryHref   string
+	PointsLabel string
+	Placement   string
+	CreatedLabel string
+	Suppressed  bool
+}
+
+type accountProfileEditorView struct {
+	PersonID             string
+	FirstName            string
+	LastName             string
+	Email                string
+	PublicDisplayMode    string
+	InitialsSample       string
+	FirstNameLastInitialSample string
+	FullNameSample       string
+	HasStoredProfile     bool
 }
 
 func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +241,9 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 
 	currentSeason, seasonPoints, seasonEntries := a.accountSeasonStats(user)
 	clubMemberships := a.clubMembershipsForUser(user)
+	profile := a.accountProfileForUser(user)
+	entries := a.accountEntriesForUser(user)
+	sections := accountSections(section, a.userIsAdmin(user))
 
 	return accountData{
 		Title:              "Your Profile",
@@ -221,7 +251,7 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 		User:               &user,
 		IsAdmin:            a.userIsAdmin(user),
 		ActiveSection:      section,
-		Sections:           accountSections(section),
+		Sections:           sections,
 		Notice:             notice,
 		Roles:              roles,
 		Shows:              a.store.allShows(),
@@ -233,10 +263,144 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 		AccountPermissions: accountPermissions,
 		ManagedClubs:       a.managedClubsForUser(user),
 		ClubMemberships:    clubMemberships,
+		Entries:            entries,
+		Profile:            profile,
 		CurrentSeason:      currentSeason,
 		CurrentSeasonPoints: seasonPoints,
 		CurrentSeasonEntries: seasonEntries,
 	}
+}
+
+func (a *app) accountProfileForUser(user UserIdentity) accountProfileEditorView {
+	profile := accountProfileEditorView{
+		Email:             user.Email,
+		PublicDisplayMode: "initials",
+	}
+	if person, ok := a.store.personByEmail(user.Email); ok && person != nil {
+		profile.PersonID = person.ID
+		profile.FirstName = person.FirstName
+		profile.LastName = person.LastName
+		profile.Email = person.Email
+		profile.HasStoredProfile = true
+		if strings.TrimSpace(person.PublicDisplayMode) != "" {
+			profile.PublicDisplayMode = person.PublicDisplayMode
+		}
+	} else if strings.TrimSpace(user.Name) != "" {
+		parts := strings.Fields(user.Name)
+		if len(parts) > 0 {
+			profile.FirstName = parts[0]
+		}
+		if len(parts) > 1 {
+			profile.LastName = strings.Join(parts[1:], " ")
+		}
+	}
+	profile.InitialsSample = sampleInitials(profile.FirstName, profile.LastName)
+	profile.FirstNameLastInitialSample = sampleFirstNameLastInitial(profile.FirstName, profile.LastName)
+	fullName := strings.TrimSpace(profile.FirstName + " " + profile.LastName)
+	if fullName == "" {
+		fullName = "Your full name"
+	}
+	profile.FullNameSample = fullName
+	return profile
+}
+
+func sampleInitials(firstName, lastName string) string {
+	firstRunes := []rune(strings.TrimSpace(firstName))
+	lastRunes := []rune(strings.TrimSpace(lastName))
+	initials := ""
+	if len(firstRunes) > 0 {
+		initials += string(firstRunes[:1])
+	}
+	if len(lastRunes) > 0 {
+		initials += string(lastRunes[:1])
+	}
+	if initials == "" {
+		initials = "AB"
+	}
+	return strings.ToUpper(initials)
+}
+
+func publicPersonLabel(person *Person) string {
+	if person == nil {
+		return ""
+	}
+	switch strings.TrimSpace(person.PublicDisplayMode) {
+	case "full_name":
+		if full := strings.TrimSpace(person.FirstName + " " + person.LastName); full != "" {
+			return full
+		}
+	case "first_name_last_initial":
+		if label := sampleFirstNameLastInitial(person.FirstName, person.LastName); label != "" {
+			return label
+		}
+	}
+	return person.Initials
+}
+
+func sampleFirstNameLastInitial(firstName, lastName string) string {
+	firstName = strings.TrimSpace(firstName)
+	lastRunes := []rune(strings.TrimSpace(lastName))
+	switch {
+	case firstName != "" && len(lastRunes) > 0:
+		return firstName + " " + strings.ToUpper(string(lastRunes[:1])) + "."
+	case firstName != "":
+		return firstName
+	default:
+		return "Alex B."
+	}
+}
+
+func placementLabelText(placement int) string {
+	switch placement {
+	case 1:
+		return "1st"
+	case 2:
+		return "2nd"
+	case 3:
+		return "3rd"
+	default:
+		return ""
+	}
+}
+
+func (a *app) accountEntriesForUser(user UserIdentity) []accountEntryView {
+	person, ok := a.store.personByEmail(user.Email)
+	if !ok || person == nil {
+		return nil
+	}
+	out := make([]accountEntryView, 0)
+	for _, entry := range a.store.entriesByPerson(person.ID) {
+		show, _ := a.store.showByID(entry.ShowID)
+		class, _ := a.store.classByID(entry.ClassID)
+		view := accountEntryView{
+			EntryID:      entry.ID,
+			EntryName:    entry.Name,
+			EntryHref:    "/entries/" + entry.ID,
+			Suppressed:   entry.Suppressed,
+			CreatedLabel: entry.CreatedAt.Local().Format("2006-01-02"),
+		}
+		if show != nil {
+			view.ShowName = show.Name
+			view.ShowHref = "/shows/" + show.Slug
+		}
+		if class != nil {
+			view.ClassLabel = strings.TrimSpace(class.ClassNumber + " · " + class.Title)
+		}
+		if entry.Points > 0 {
+			view.PointsLabel = strconv.FormatFloat(entry.Points, 'f', -1, 64) + " pts"
+		}
+		if entry.Placement > 0 {
+			view.Placement = placementLabelText(entry.Placement)
+		}
+		out = append(out, view)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedLabel == out[j].CreatedLabel {
+			return out[i].EntryName < out[j].EntryName
+		}
+		return out[i].CreatedLabel > out[j].CreatedLabel
+	})
+	return out
 }
 
 func (a *app) managedClubsForUser(user UserIdentity) []managedClubView {
@@ -316,7 +480,7 @@ func (a *app) accountSeasonStats(user UserIdentity) (string, float64, int) {
 
 func accountSection(raw string) string {
 	switch strings.TrimSpace(raw) {
-	case "shows", "clubs", "access":
+	case "shows", "clubs", "entries", "access":
 		return strings.TrimSpace(raw)
 	case "tokens":
 		return "access"
@@ -325,13 +489,18 @@ func accountSection(raw string) string {
 	}
 }
 
-func accountSections(active string) []accountSectionView {
-	return []accountSectionView{
+func accountSections(active string, isAdmin bool) []accountSectionView {
+	items := []accountSectionView{
 		{ID: "overview", Label: "Overview", Href: "/account?section=overview", Current: active == "overview"},
 		{ID: "shows", Label: "Shows", Href: "/account?section=shows", Current: active == "shows"},
 		{ID: "clubs", Label: "Clubs", Href: "/account?section=clubs", Current: active == "clubs"},
+		{ID: "entries", Label: "Entries", Href: "/account?section=entries", Current: active == "entries"},
 		{ID: "access", Label: "Access Tokens", Href: "/account?section=access#agent-tokens", Current: active == "access"},
 	}
+	if isAdmin {
+		items = append(items, accountSectionView{ID: "admin", Label: "Admin Workspace", Href: "/admin", Current: false})
+	}
+	return items
 }
 
 func permissionViewsForKeys(keys []string) []accountPermissionView {
@@ -399,6 +568,58 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		Message: "Agent token issued.",
 		Kind:    "info",
 	}, issued, selectedProfile, expiryDays))
+}
+
+func (a *app) handleAccountProfileUpdate(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.currentUser(r)
+	if !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.render(w, r, "account.html", a.buildAccountData(*user, "overview", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		return
+	}
+	firstName := strings.TrimSpace(r.FormValue("first_name"))
+	lastName := strings.TrimSpace(r.FormValue("last_name"))
+	email := strings.TrimSpace(r.FormValue("email"))
+	if email == "" {
+		email = user.Email
+	}
+	displayMode := strings.TrimSpace(r.FormValue("public_display_mode"))
+	switch displayMode {
+	case "full_name", "first_name_last_initial":
+	default:
+		displayMode = "initials"
+	}
+	input := PersonInput{
+		FirstName:         firstName,
+		LastName:          lastName,
+		Email:             email,
+		PublicDisplayMode: displayMode,
+	}
+	person, found := a.store.personByEmail(user.Email)
+	if found && person != nil {
+		if _, err := a.store.updatePerson(person.ID, input); err != nil {
+			a.render(w, r, "account.html", a.buildAccountData(*user, "overview", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+			return
+		}
+	} else {
+		if _, err := a.store.createPerson(input); err != nil {
+			a.render(w, r, "account.html", a.buildAccountData(*user, "overview", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+			return
+		}
+	}
+	updatedUser := *user
+	updatedUser.Email = email
+	if full := strings.TrimSpace(firstName + " " + lastName); full != "" {
+		updatedUser.Name = full
+	}
+	if err := a.setUserSession(w, r, updatedUser); err != nil {
+		a.render(w, r, "account.html", a.buildAccountData(*user, "overview", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		return
+	}
+	http.Redirect(w, r, "/account?section=overview&notice=profile_updated", http.StatusSeeOther)
 }
 
 func (a *app) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request) {
@@ -769,7 +990,7 @@ func (a *app) handlePersonDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "person_detail.html", personDetailData{
-		Title:       "History — " + person.Initials,
+		Title:       "History — " + publicPersonLabel(person),
 		CurrentPath: "/people/" + personID,
 		Person:      person,
 		Entries:     entries,

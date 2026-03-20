@@ -47,7 +47,7 @@
         {{if .TopPeople}}
         <div class="club-top-people-links">
           {{range .TopPeople}}
-          <a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{.Person.Initials}}</a>
+          <a href="{{bp}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>
           {{end}}
         </div>
         {{else}}
