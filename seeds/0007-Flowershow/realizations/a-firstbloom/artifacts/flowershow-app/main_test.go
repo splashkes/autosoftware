@@ -742,7 +742,7 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 		t.Fatalf("expected 200, got %d", accountW.Code)
 	}
 	body := accountW.Body.String()
-	if !strings.Contains(body, "Tokens / API") {
+	if !strings.Contains(body, "Access Tokens") {
 		t.Fatal("account page missing token navigation")
 	}
 	if strings.Contains(body, "Generate Agent Token") {
@@ -758,8 +758,8 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 	if adminW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", adminW.Code)
 	}
-	if !strings.Contains(adminW.Body.String(), "/account?section=tokens#agent-tokens") {
-		t.Fatal("admin dashboard should link to the shared account token manager")
+	if strings.Contains(adminW.Body.String(), "Agent / API Access Tokens") {
+		t.Fatal("admin dashboard should no longer show a dedicated token-manager callout")
 	}
 }
 
@@ -2595,7 +2595,7 @@ func TestClubAdminPageAllowsOrganizationScopedAdmin(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Invite Someone To Join This Club") {
+	if !strings.Contains(body, "Send Invite") {
 		t.Fatal("club admin page missing invite form")
 	}
 	if !strings.Contains(body, "Spring Rose Show 2025") {
@@ -2677,6 +2677,26 @@ func TestClubInviteCommandCreatesInvite(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"show_intake_operator"`) {
 		t.Fatal("invite command response missing permission role")
+	}
+}
+
+func TestOrganizationCreateCommandCreatesOrganization(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/organization.create", a.handleAPICommand)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/organization.create", `{
+		"name": "Uxbridge Horticultural Society",
+		"level": "society"
+	}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"name":"Uxbridge Horticultural Society"`) {
+		t.Fatal("organization create response missing organization name")
 	}
 }
 

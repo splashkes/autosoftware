@@ -33,6 +33,10 @@ type accountData struct {
 	IssuedAgentToken   *issuedAgentTokenView
 	AccountPermissions []accountPermissionView
 	ManagedClubs       []managedClubView
+	ClubMemberships    []accountClubMembershipView
+	CurrentSeason      string
+	CurrentSeasonPoints float64
+	CurrentSeasonEntries int
 }
 
 type accountSectionView struct {
@@ -78,9 +82,17 @@ type issuedAgentTokenView struct {
 }
 
 type managedClubView struct {
-	ID       string
-	Name     string
-	Level    string
+	ID        string
+	Name      string
+	Level     string
+	AdminHref string
+}
+
+type accountClubMembershipView struct {
+	ID        string
+	Name      string
+	Level     string
+	RoleLabel string
 	AdminHref string
 }
 
@@ -200,6 +212,9 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 		}
 	}
 
+	currentSeason, seasonPoints, seasonEntries := a.accountSeasonStats(user)
+	clubMemberships := a.clubMembershipsForUser(user)
+
 	return accountData{
 		Title:              "Your Profile",
 		CurrentPath:        "/account",
@@ -217,6 +232,10 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 		IssuedAgentToken:   issuedView,
 		AccountPermissions: accountPermissions,
 		ManagedClubs:       a.managedClubsForUser(user),
+		ClubMemberships:    clubMemberships,
+		CurrentSeason:      currentSeason,
+		CurrentSeasonPoints: seasonPoints,
+		CurrentSeasonEntries: seasonEntries,
 	}
 }
 
@@ -242,10 +261,65 @@ func (a *app) managedClubsForUser(user UserIdentity) []managedClubView {
 	return items
 }
 
+func (a *app) clubMembershipsForUser(user UserIdentity) []accountClubMembershipView {
+	person, ok := a.store.personByEmail(user.Email)
+	if !ok || person == nil {
+		return nil
+	}
+	items := make([]accountClubMembershipView, 0)
+	for _, link := range a.store.personOrganizationsByPerson(person.ID) {
+		if link == nil {
+			continue
+		}
+		org, ok := a.store.organizationByID(link.OrganizationID)
+		if !ok || org == nil {
+			continue
+		}
+		view := accountClubMembershipView{
+			ID:        org.ID,
+			Name:      org.Name,
+			Level:     org.Level,
+			RoleLabel: strings.Title(strings.TrimSpace(link.Role)),
+		}
+		if a.userHasCapability(context.Background(), user, "organization.manage", authorityScope{Kind: "organization", ID: org.ID}) {
+			view.AdminHref = "/admin/clubs/" + org.ID
+		}
+		items = append(items, view)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Name == items[j].Name {
+			return items[i].RoleLabel < items[j].RoleLabel
+		}
+		return items[i].Name < items[j].Name
+	})
+	return items
+}
+
+func (a *app) accountSeasonStats(user UserIdentity) (string, float64, int) {
+	person, ok := a.store.personByEmail(user.Email)
+	if !ok || person == nil {
+		return time.Now().Format("2006"), 0, 0
+	}
+	season := time.Now().Format("2006")
+	var points float64
+	var entries int
+	for _, entry := range a.store.entriesByPerson(person.ID) {
+		show, ok := a.store.showByID(entry.ShowID)
+		if !ok || show == nil || strings.TrimSpace(show.Season) != season {
+			continue
+		}
+		entries++
+		points += entry.Points
+	}
+	return season, points, entries
+}
+
 func accountSection(raw string) string {
 	switch strings.TrimSpace(raw) {
-	case "shows", "access", "tokens":
+	case "shows", "clubs", "access":
 		return strings.TrimSpace(raw)
+	case "tokens":
+		return "access"
 	default:
 		return "overview"
 	}
@@ -255,8 +329,8 @@ func accountSections(active string) []accountSectionView {
 	return []accountSectionView{
 		{ID: "overview", Label: "Overview", Href: "/account?section=overview", Current: active == "overview"},
 		{ID: "shows", Label: "Shows", Href: "/account?section=shows", Current: active == "shows"},
-		{ID: "access", Label: "Access", Href: "/account?section=access", Current: active == "access"},
-		{ID: "tokens", Label: "Tokens / API", Href: "/account?section=tokens#agent-tokens", Current: active == "tokens"},
+		{ID: "clubs", Label: "Clubs", Href: "/account?section=clubs", Current: active == "clubs"},
+		{ID: "access", Label: "Access Tokens", Href: "/account?section=access#agent-tokens", Current: active == "access"},
 	}
 }
 
@@ -294,18 +368,18 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
 		return
 	}
 	selectedProfile := strings.TrimSpace(r.FormValue("permission_profile"))
 	profile, ok := a.agentTokenProfileForUser(*user, selectedProfile)
 	if !ok {
-		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: "Choose one of the available permission profiles for this account.", Kind: "error"}, nil, selectedProfile, 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{Message: "Choose one of the available permission profiles for this account.", Kind: "error"}, nil, selectedProfile, 14))
 		return
 	}
 	expiryDays, err := strconv.Atoi(strings.TrimSpace(r.FormValue("expires_in_days")))
 	if err != nil {
-		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: "Enter a valid expiry in days between 1 and 60.", Kind: "error"}, nil, selectedProfile, 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{Message: "Enter a valid expiry in days between 1 and 60.", Kind: "error"}, nil, selectedProfile, 14))
 		return
 	}
 	issued, err := a.store.issueAgentToken(AgentTokenIssueInput{
@@ -318,10 +392,10 @@ func (a *app) handleAccountTokenCreate(w http.ResponseWriter, r *http.Request) {
 		ExpiresInDays:     expiryDays,
 	})
 	if err != nil {
-		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, selectedProfile, expiryDays))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{Message: err.Error(), Kind: "error"}, nil, selectedProfile, expiryDays))
 		return
 	}
-	a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{
+	a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{
 		Message: "Agent token issued.",
 		Kind:    "info",
 	}, issued, selectedProfile, expiryDays))
@@ -335,10 +409,10 @@ func (a *app) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenID := r.PathValue("tokenID")
 	if _, err := a.store.revokeAgentToken(tokenID, user.CognitoSub); err != nil {
-		a.render(w, r, "account.html", a.buildAccountData(*user, "tokens", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
+		a.render(w, r, "account.html", a.buildAccountData(*user, "access", accountNotice{Message: err.Error(), Kind: "error"}, nil, "", 14))
 		return
 	}
-	http.Redirect(w, r, "/account?notice=agent_token_revoked#agent-tokens", http.StatusSeeOther)
+	http.Redirect(w, r, "/account?section=access&notice=agent_token_revoked#agent-tokens", http.StatusSeeOther)
 }
 
 func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -347,12 +421,19 @@ func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	upcoming, past := a.homeShowCards(time.Now())
+	totalEntries := 0
+	for _, show := range a.store.allShows() {
+		totalEntries += len(a.store.entriesByShow(show.ID))
+	}
 	a.render(w, r, "home.html", homeData{
 		Title:         "Flowershow",
 		CurrentPath:   "/",
 		UpcomingShows: upcoming,
 		PastShows:     past,
 		Clubs:         a.clubCards(time.Now()),
+		TotalShows:    len(a.store.allShows()),
+		TotalEntries:  totalEntries,
+		TotalMembers:  len(a.store.allPersons()),
 	})
 }
 
@@ -365,10 +446,12 @@ func (a *app) handleClubs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleClassesIndex(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	a.render(w, r, "classes.html", classesIndexData{
 		Title:       "Classes",
 		CurrentPath: "/classes",
-		Domains:     a.classesIndexDomains(),
+		Query:       query,
+		Domains:     a.classesIndexDomains(query),
 	})
 }
 

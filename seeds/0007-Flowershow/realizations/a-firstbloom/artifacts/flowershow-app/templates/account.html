@@ -26,13 +26,13 @@
         <label for="issued_agent_token">Token</label>
         <div class="issued-token-field-row">
           <input id="issued_agent_token" class="issued-token-input" type="text" readonly value="{{.IssuedAgentToken.Secret}}" size="{{len .IssuedAgentToken.Secret}}" style="width:min(100%, {{len .IssuedAgentToken.Secret}}ch);" data-issued-agent-token spellcheck="false" autocomplete="off">
-        <button type="button" class="btn btn-secondary btn-sm issued-token-copy-button" data-copy-target="#issued_agent_token" data-copy-feedback="Copied">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M9 9h10v12H9z" fill="none" stroke="currentColor" stroke-width="1.8"/>
-            <path d="M5 3h10v12H5z" fill="none" stroke="currentColor" stroke-width="1.8"/>
-          </svg>
-          <span data-copy-label>Copy Token</span>
-        </button>
+          <button type="button" class="btn btn-secondary btn-sm issued-token-copy-button" data-copy-target="#issued_agent_token" data-copy-feedback="Copied">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M9 9h10v12H9z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M5 3h10v12H5z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span data-copy-label>Copy Token</span>
+          </button>
         </div>
       </div>
       <div class="account-permission-list compact">
@@ -44,7 +44,7 @@
         {{end}}
       </div>
       <div class="show-actions account-actions issued-token-actions">
-        <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-primary">Done</a>
+        <a href="{{bp}}/account?section=access#agent-tokens" class="btn btn-primary">Done</a>
       </div>
     </div>
   </section>
@@ -53,7 +53,6 @@
   <div class="section-header account-page-header">
     <div>
       <h1>Your Profile</h1>
-      <p class="section-desc">This is your flowershow profile shell. Keep the default view focused on participation and only move into deeper operational or API tools when needed.</p>
     </div>
     <form method="POST" action="{{bp}}/admin/logout">
       <button type="submit" class="btn btn-outline">Sign Out</button>
@@ -86,18 +85,47 @@
           <div class="login-step-kicker">Overview</div>
           <h2 class="card-title">Profile Summary</h2>
           <p class="card-meta">Signed in as {{if .User.Email}}{{.User.Email}}{{else}}a flowershow user{{end}}.</p>
-          <p class="card-meta">Cognito subject: {{.User.CognitoSub}}</p>
-          {{if .Roles}}
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-number">{{printf "%.0f" .CurrentSeasonPoints}}</span>
+              <span class="stat-label">{{.CurrentSeason}} points</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">{{.CurrentSeasonEntries}}</span>
+              <span class="stat-label">{{.CurrentSeason}} entries</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">{{len .ClubMemberships}}</span>
+              <span class="stat-label">clubs</span>
+            </div>
+          </div>
+          {{if .ClubMemberships}}
           <div class="account-role-list">
-            {{range .Roles}}
+            {{range .ClubMemberships}}
             <div class="account-role-item">
-              <span class="badge badge-green">{{.RoleLabel}}</span>
-              <span class="card-meta">{{.ScopeLabel}}</span>
+              <div>
+                <strong>{{.Name}}</strong>
+                <div class="card-meta">{{.RoleLabel}} · {{.Level}}</div>
+              </div>
+              {{if .AdminHref}}<a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
             </div>
             {{end}}
           </div>
           {{else}}
-          <p class="card-meta">No elevated roles are attached yet. You can still browse public show history from this account.</p>
+          <p class="card-meta">No club memberships are linked to this email yet.</p>
+          {{end}}
+          {{if .Roles}}
+          <details class="account-collapsible">
+            <summary>Elevated access</summary>
+            <div class="account-role-list">
+              {{range .Roles}}
+              <div class="account-role-item">
+                <span class="badge badge-green">{{.RoleLabel}}</span>
+                <span class="card-meta">{{.ScopeLabel}}</span>
+              </div>
+              {{end}}
+            </div>
+          </details>
           {{end}}
         </div>
       </section>
@@ -120,27 +148,6 @@
           {{end}}
         </div>
       </section>
-
-      {{if .ManagedClubs}}
-      <section class="card">
-        <div class="card-body">
-          <div class="login-step-kicker">Club Admin</div>
-          <h2 class="card-title">Club Workspaces</h2>
-          <p class="card-meta">These clubs currently grant this account organization-scoped administration access.</p>
-          <div class="account-role-list">
-            {{range .ManagedClubs}}
-            <div class="account-role-item">
-              <div>
-                <strong>{{.Name}}</strong>
-                <div class="card-meta">{{.Level}}</div>
-              </div>
-              <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
-            </div>
-            {{end}}
-          </div>
-        </div>
-      </section>
-      {{end}}
       {{end}}
 
       {{if eq .ActiveSection "shows"}}
@@ -163,54 +170,31 @@
       </div>
       {{end}}
 
-      {{if eq .ActiveSection "access"}}
+      {{if eq .ActiveSection "clubs"}}
       <section class="card">
         <div class="card-body">
-          <div class="login-step-kicker">Access</div>
-          <h2 class="card-title">Roles And Advanced Delegation</h2>
-          <p class="card-meta">Keep day-to-day profile use light. Expand these details only when you need to understand advanced operational access.</p>
-          {{if .Roles}}
+          <div class="login-step-kicker">Clubs</div>
+          <h2 class="card-title">Club Memberships</h2>
+          {{if .ClubMemberships}}
           <div class="account-role-list">
-            {{range .Roles}}
+            {{range .ClubMemberships}}
             <div class="account-role-item">
-              <span class="badge badge-green">{{.RoleLabel}}</span>
-              <span class="card-meta">{{.ScopeLabel}}</span>
+              <div>
+                <strong>{{.Name}}</strong>
+                <div class="card-meta">{{.RoleLabel}} · {{.Level}}</div>
+              </div>
+              {{if .AdminHref}}<a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>{{end}}
             </div>
             {{end}}
           </div>
-          {{end}}
-          <details class="account-collapsible">
-            <summary>Delegable permissions</summary>
-            <div class="account-permission-list">
-              {{range .AccountPermissions}}
-              <div class="account-permission-item">
-                <strong>{{.Label}}</strong>
-                <span class="card-meta">{{.Description}}</span>
-              </div>
-              {{end}}
-            </div>
-          </details>
-          {{if .ManagedClubs}}
-          <details class="account-collapsible">
-            <summary>Club workspaces</summary>
-            <div class="account-role-list">
-              {{range .ManagedClubs}}
-              <div class="account-role-item">
-                <div>
-                  <strong>{{.Name}}</strong>
-                  <div class="card-meta">{{.Level}}</div>
-                </div>
-                <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
-              </div>
-              {{end}}
-            </div>
-          </details>
+          {{else}}
+          <p class="card-meta">No clubs are linked to this profile yet.</p>
           {{end}}
         </div>
       </section>
       {{end}}
 
-      {{if eq .ActiveSection "tokens"}}
+      {{if eq .ActiveSection "access"}}
       <section class="card account-token-manager-card" id="agent-tokens">
         <div class="card-body">
           <div class="section-header">
@@ -221,12 +205,52 @@
             </div>
           </div>
 
-          <div class="card-grid account-token-grid">
-            <section class="card">
-              <div class="card-body">
-                <div class="login-step-kicker">Generate Token</div>
-                <h3 class="card-title">Issue A New Agent / API Access Token</h3>
-                <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
+          <section class="card">
+            <div class="card-body">
+              <div class="login-step-kicker">Active Tokens</div>
+              <h3 class="card-title">Issued Agent / API Access Tokens</h3>
+              {{if .AgentTokens}}
+              <div class="account-token-list">
+                {{range .AgentTokens}}
+                <div class="account-token-item">
+                  <div class="account-token-meta">
+                    <div>
+                      <strong>{{.Label}}</strong>
+                      <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
+                    </div>
+                    <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
+                  </div>
+                  <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
+                  <details class="account-collapsible compact">
+                    <summary>Granted permissions</summary>
+                    <div class="account-permission-list compact">
+                      {{range .Permissions}}
+                      <div class="account-permission-item">
+                        <strong>{{.Label}}</strong>
+                        <span class="card-meta">{{.Description}}</span>
+                      </div>
+                      {{end}}
+                    </div>
+                  </details>
+                  {{if eq .StatusLabel "Active"}}
+                  <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
+                    <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
+                  </form>
+                  {{end}}
+                </div>
+                {{end}}
+              </div>
+              {{else}}
+              <p class="card-meta">No agent tokens have been issued from this account yet.</p>
+              {{end}}
+            </div>
+          </section>
+
+          <section class="card account-token-generator-section">
+            <div class="card-body">
+              <div class="login-step-kicker">Generate Token</div>
+              <h3 class="card-title">Issue A New Agent / API Access Token</h3>
+              <form action="{{bp}}/account/agent-tokens" method="POST" class="form account-token-form">
                 <div class="form-group">
                   <label for="token_label">Token Label</label>
                   <input id="token_label" name="label" class="form-input" maxlength="80" placeholder="Example: March schedule structuring agent" required>
@@ -266,51 +290,55 @@
                   Be careful: the token can do exactly what its selected permission profile allows until it expires or you revoke it.
                 </div>
                 <button type="submit" class="btn btn-primary">Generate Agent Token</button>
-                </form>
-              </div>
-            </section>
+              </form>
+            </div>
+          </section>
 
-            <section class="card">
-              <div class="card-body">
-                <div class="login-step-kicker">Active Tokens</div>
-                <h3 class="card-title">Issued Agent / API Access Tokens</h3>
-                {{if .AgentTokens}}
-                <div class="account-token-list">
-                  {{range .AgentTokens}}
-                  <div class="account-token-item">
-                    <div class="account-token-meta">
-                      <div>
-                        <strong>{{.Label}}</strong>
-                        <p class="card-meta"><code>{{.TokenPrefix}}</code> · {{.PermissionProfile}}</p>
-                      </div>
-                      <span class="badge {{if eq .StatusLabel "Active"}}badge-green{{else}}badge-gray{{end}}">{{.StatusLabel}}</span>
-                    </div>
-                    <p class="card-meta">Created {{.CreatedLabel}} · Expires {{.ExpiresLabel}} · Last used {{.LastUsedLabel}}</p>
-                    <details class="account-collapsible compact">
-                      <summary>Granted permissions</summary>
-                      <div class="account-permission-list compact">
-                        {{range .Permissions}}
-                        <div class="account-permission-item">
-                          <strong>{{.Label}}</strong>
-                          <span class="card-meta">{{.Description}}</span>
-                        </div>
-                        {{end}}
-                      </div>
-                    </details>
-                    {{if eq .StatusLabel "Active"}}
-                    <form method="POST" action="{{bp}}/account/agent-tokens/{{.ID}}/revoke">
-                      <button type="submit" class="btn btn-outline btn-sm">Revoke Token</button>
-                    </form>
-                    {{end}}
+          <section class="card">
+            <div class="card-body">
+              <div class="login-step-kicker">Access</div>
+              <h2 class="card-title">Roles And Advanced Delegation</h2>
+              {{if .Roles}}
+              <div class="account-role-list">
+                {{range .Roles}}
+                <div class="account-role-item">
+                  <span class="badge badge-green">{{.RoleLabel}}</span>
+                  <span class="card-meta">{{.ScopeLabel}}</span>
+                </div>
+                {{end}}
+              </div>
+              {{else}}
+              <p class="card-meta">No elevated roles are attached yet. You can still browse public show history from this account.</p>
+              {{end}}
+              <details class="account-collapsible">
+                <summary>Delegable permissions</summary>
+                <div class="account-permission-list">
+                  {{range .AccountPermissions}}
+                  <div class="account-permission-item">
+                    <strong>{{.Label}}</strong>
+                    <span class="card-meta">{{.Description}}</span>
                   </div>
                   {{end}}
                 </div>
-                {{else}}
-                <p class="card-meta">No agent tokens have been issued from this account yet.</p>
-                {{end}}
-              </div>
-            </section>
-          </div>
+              </details>
+              {{if .ManagedClubs}}
+              <details class="account-collapsible">
+                <summary>Club workspaces</summary>
+                <div class="account-role-list">
+                  {{range .ManagedClubs}}
+                  <div class="account-role-item">
+                    <div>
+                      <strong>{{.Name}}</strong>
+                      <div class="card-meta">{{.Level}}</div>
+                    </div>
+                    <a href="{{bp}}{{.AdminHref}}" class="btn btn-outline btn-sm">Open Club Admin</a>
+                  </div>
+                  {{end}}
+                </div>
+              </details>
+              {{end}}
+            </div>
+          </section>
         </div>
       </section>
       {{end}}

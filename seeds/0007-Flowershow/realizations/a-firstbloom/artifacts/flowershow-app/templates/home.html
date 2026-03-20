@@ -7,20 +7,21 @@
     <div class="show-actions">
       <a href="{{bp}}/browse" class="btn btn-primary">Browse Entries</a>
       <a href="{{bp}}/clubs" class="btn btn-outline">View Clubs</a>
+      <a href="{{bp}}/admin/clubs/new" class="btn btn-outline">+ Add Your Club</a>
     </div>
   </div>
   <div class="hero-card-grid">
     <div class="hero-stat-card">
-      <strong>{{len .UpcomingShows}}</strong>
-      <span>upcoming shows</span>
+      <strong>{{.TotalShows}}</strong>
+      <span>total shows</span>
     </div>
     <div class="hero-stat-card">
-      <strong>{{len .Clubs}}</strong>
-      <span>active clubs</span>
+      <strong>{{.TotalEntries}}</strong>
+      <span>total entries</span>
     </div>
     <div class="hero-stat-card">
-      <strong>{{len .PastShows}}</strong>
-      <span>past shows</span>
+      <strong>{{.TotalMembers}}</strong>
+      <span>total members</span>
     </div>
   </div>
 </div>

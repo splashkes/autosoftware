@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,15 @@ type adminDashboardData struct {
 	Orgs        []*Organization
 	Awards      []*AwardDefinition
 	Rubrics     []*JudgingRubric
+	SearchQuery string
+	SearchHits  []adminSearchHit
+}
+
+type adminSearchHit struct {
+	TypeLabel string
+	Title     string
+	Meta      string
+	Href      string
 }
 
 type clubAdminData struct {
@@ -39,6 +50,7 @@ type clubAdminData struct {
 	Members           []clubMemberView
 	Invites           []organizationInviteView
 	InviteRoleOptions []inviteRoleOptionView
+	Notice            string
 }
 
 type clubMemberView struct {
@@ -64,12 +76,21 @@ type inviteRoleOptionView struct {
 	Description string
 }
 
+type adminClubCreateData struct {
+	Title        string
+	CurrentPath  string
+	Organizations []*Organization
+	ClubLevels   []string
+	DefaultLevel string
+}
+
 func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	orgs := a.store.allOrganizations()
 	var awards []*AwardDefinition
 	for _, org := range orgs {
 		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
 	}
+	searchQuery := strings.TrimSpace(r.URL.Query().Get("q"))
 	a.render(w, r, "admin_dashboard.html", adminDashboardData{
 		Title:       "Admin Dashboard",
 		CurrentPath: "/admin",
@@ -78,6 +99,8 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		Orgs:        orgs,
 		Awards:      awards,
 		Rubrics:     a.store.allRubrics(),
+		SearchQuery: searchQuery,
+		SearchHits:  a.adminSearchHits(searchQuery),
 	})
 }
 
@@ -90,7 +113,7 @@ func clubAdminSections(organizationID, active string) []accountSectionView {
 }
 
 func organizationInviteRoleOptions() []inviteRoleOptionView {
-	roles := []string{"organization_admin", "show_intake_operator", "show_judge_support", "judge", "entrant"}
+	roles := []string{"organization_admin", "show_intake_operator", "show_judge_support", "photographer", "judge", "entrant"}
 	out := make([]inviteRoleOptionView, 0, len(roles))
 	for _, role := range roles {
 		def, ok := flowershowAuthorityBundles[role]
@@ -106,7 +129,82 @@ func organizationInviteRoleOptions() []inviteRoleOptionView {
 	return out
 }
 
-func (a *app) clubAdminData(organizationID, activeSection string, user *UserIdentity) (clubAdminData, error) {
+func organizationLevelOptions() []string {
+	return []string{"society", "district", "region", "province", "country", "global"}
+}
+
+func (a *app) adminSearchHits(query string) []adminSearchHit {
+	query = strings.TrimSpace(strings.ToLower(query))
+	if query == "" {
+		return nil
+	}
+
+	var hits []adminSearchHit
+	addHit := func(kind, title, meta, href string) {
+		title = strings.TrimSpace(title)
+		meta = strings.TrimSpace(meta)
+		if title == "" || href == "" {
+			return
+		}
+		hits = append(hits, adminSearchHit{
+			TypeLabel: kind,
+			Title:     title,
+			Meta:      meta,
+			Href:      href,
+		})
+	}
+
+	for _, show := range a.store.allShows() {
+		if show == nil {
+			continue
+		}
+		blob := strings.ToLower(strings.Join([]string{show.Name, show.Location, show.Season, show.Date}, " "))
+		if strings.Contains(blob, query) {
+			addHit("Show", show.Name, strings.TrimSpace(show.Date+" · "+show.Location), "/admin/shows/"+show.ID)
+		}
+		for _, cls := range a.store.classesByShowID(show.ID) {
+			if cls == nil {
+				continue
+			}
+			blob = strings.ToLower(strings.Join([]string{cls.ClassNumber, cls.Title, cls.Description, show.Name}, " "))
+			if strings.Contains(blob, query) {
+				addHit("Class", strings.TrimSpace(cls.ClassNumber+" · "+cls.Title), show.Name, "/shows/"+show.Slug+"/classes/"+cls.ID)
+			}
+		}
+	}
+	for _, org := range a.store.allOrganizations() {
+		if org == nil {
+			continue
+		}
+		blob := strings.ToLower(strings.Join([]string{org.Name, org.Level}, " "))
+		if strings.Contains(blob, query) {
+			addHit("Club", org.Name, org.Level, "/admin/clubs/"+org.ID)
+		}
+	}
+	for _, person := range a.store.allPersons() {
+		if person == nil {
+			continue
+		}
+		fullName := strings.TrimSpace(person.FirstName + " " + person.LastName)
+		blob := strings.ToLower(strings.Join([]string{fullName, person.Email}, " "))
+		if strings.Contains(blob, query) {
+			meta := person.Email
+			if meta == "" {
+				meta = "Person profile"
+			}
+			addHit("Person", fullName, meta, "/people/"+person.ID)
+		}
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].TypeLabel == hits[j].TypeLabel {
+			return hits[i].Title < hits[j].Title
+		}
+		return hits[i].TypeLabel < hits[j].TypeLabel
+	})
+	return hits
+}
+
+func (a *app) clubAdminData(organizationID, activeSection string, user *UserIdentity, notice string) (clubAdminData, error) {
 	org, ok := a.store.organizationByID(organizationID)
 	if !ok {
 		return clubAdminData{}, fmt.Errorf("organization not found")
@@ -121,6 +219,7 @@ func (a *app) clubAdminData(organizationID, activeSection string, user *UserIden
 		ActiveSection:     activeSection,
 		Sections:          clubAdminSections(org.ID, activeSection),
 		InviteRoleOptions: organizationInviteRoleOptions(),
+		Notice:            strings.TrimSpace(notice),
 	}
 
 	for _, show := range a.store.allShows() {
@@ -210,7 +309,7 @@ func (a *app) handleAdminClubDetail(w http.ResponseWriter, r *http.Request) {
 	if activeSection != "invites" {
 		activeSection = "overview"
 	}
-	data, err := a.clubAdminData(r.PathValue("organizationID"), activeSection, user)
+	data, err := a.clubAdminData(r.PathValue("organizationID"), activeSection, user, r.URL.Query().Get("notice"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -247,7 +346,100 @@ func (a *app) handleAdminClubInviteCreate(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/admin/clubs/"+orgID+"?section=invites#club-invites", http.StatusSeeOther)
+	fullName := strings.TrimSpace(strings.Join([]string{r.FormValue("first_name"), r.FormValue("last_name")}, " "))
+	if fullName == "" {
+		fullName = strings.TrimSpace(r.FormValue("email"))
+	}
+	notice := "Invite sent to " + fullName
+	if email := strings.TrimSpace(r.FormValue("email")); email != "" {
+		notice += " · " + email
+	}
+	http.Redirect(w, r, "/admin/clubs/"+orgID+"?section=invites&notice="+url.QueryEscape(notice)+"#club-invites", http.StatusSeeOther)
+}
+
+func (a *app) handleAdminClubNew(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "admin_club_new.html", adminClubCreateData{
+		Title:         "New Club",
+		CurrentPath:   "/admin/clubs/new",
+		Organizations: a.store.allOrganizations(),
+		ClubLevels:    organizationLevelOptions(),
+		DefaultLevel:  "society",
+	})
+}
+
+func (a *app) handleAdminClubCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	user, _ := a.currentUser(r)
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "club name is required", http.StatusBadRequest)
+		return
+	}
+	level := strings.TrimSpace(r.FormValue("level"))
+	if level == "" {
+		level = "society"
+	}
+	org, err := a.store.createOrganization(Organization{
+		Name:     name,
+		Level:    level,
+		ParentID: strings.TrimSpace(r.FormValue("parent_id")),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	firstName := strings.TrimSpace(r.FormValue("admin_first_name"))
+	lastName := strings.TrimSpace(r.FormValue("admin_last_name"))
+	email := strings.TrimSpace(r.FormValue("admin_email"))
+	if email != "" {
+		_, err = a.store.createPerson(PersonInput{
+			FirstName:        firstName,
+			LastName:         lastName,
+			Email:            email,
+			OrganizationID:   org.ID,
+			OrganizationRole: "admin",
+		})
+		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "exists") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, err = a.store.createOrganizationInvite(OrganizationInviteInput{
+			OrganizationID:   org.ID,
+			FirstName:        firstName,
+			LastName:         lastName,
+			Email:            email,
+			OrganizationRole: "admin",
+			PermissionRoles:  []string{"organization_admin"},
+			InvitedBySubject: func() string { if user != nil { return user.SubjectID }; return "" }(),
+			InvitedByName: func() string {
+				if user == nil {
+					return ""
+				}
+				if strings.TrimSpace(user.Name) != "" {
+					return user.Name
+				}
+				return user.Email
+			}(),
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	notice := "Club created"
+	if email != "" {
+		fullName := strings.TrimSpace(strings.Join([]string{firstName, lastName}, " "))
+		if fullName == "" {
+			fullName = email
+		}
+		notice = "Club created. Invite sent to " + fullName + " · " + email
+	}
+	http.Redirect(w, r, "/admin/clubs/"+org.ID+"?notice="+url.QueryEscape(notice), http.StatusSeeOther)
 }
 
 // --- Show CRUD ---
@@ -783,7 +975,7 @@ func (a *app) handleAdminShowCreditDelete(w http.ResponseWriter, r *http.Request
 
 func (a *app) handleAdminPersons(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "admin_persons.html", adminPersonsData{
-		Title:       "Manage Persons",
+		Title:       "People",
 		CurrentPath: "/admin/persons",
 		Persons:     a.store.allPersons(),
 		Orgs:        a.store.allOrganizations(),

@@ -668,7 +668,7 @@ body {
 .breadcrumb a:hover { text-decoration: underline; }
 
 /* Buttons */
-.btn { display: inline-block; padding: .5rem 1.25rem; border-radius: var(--radius); font-size: .9rem; font-weight: 500; cursor: pointer; text-decoration: none; border: none; transition: all .2s; }
+.btn { display: inline-block; padding: .5rem 1.25rem; border-radius: var(--radius); font-size: .9rem; font-weight: 500; cursor: pointer; text-decoration: none; border: none; transition: all .2s; white-space: nowrap; }
 .btn-primary { background: var(--green); color: white; }
 .btn-primary:hover { background: var(--green-light); }
 .btn-secondary { background: var(--pink-pale); color: var(--gray-900); border: 1px solid var(--pink-light); }
@@ -784,8 +784,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   color: white;
 }
 .account-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.account-token-grid { grid-template-columns: minmax(320px, 1.1fr) minmax(320px, .9fr); align-items: start; }
 .account-token-manager-card > .card-body { display: grid; gap: 1.25rem; }
+.account-token-generator-section { margin-top: .25rem; }
 .issued-token-shell,
 .issued-token-notice,
 .account-token-success-card { max-width: 760px; margin-inline: auto; }
@@ -909,6 +909,19 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   justify-items: end;
   gap: .35rem;
 }
+.club-invite-collapsible > summary,
+.club-special-roles > summary {
+  font-weight: 700;
+}
+.club-special-roles {
+  margin: 1rem 0 1.15rem;
+}
+.club-special-roles fieldset {
+  margin-top: .9rem;
+}
+.club-special-roles legend {
+  display: none;
+}
 
 /* Alert */
 .alert { padding: .75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; }
@@ -919,6 +932,35 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 /* Admin */
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .admin-header h1 { color: var(--green); }
+.admin-search-shell { margin-bottom: 1.25rem; }
+.admin-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .75rem;
+}
+.admin-search-results {
+  display: grid;
+  gap: .75rem;
+  margin-top: 1rem;
+}
+.admin-search-result {
+  text-decoration: none;
+  color: inherit;
+}
+.admin-action-card {
+  border-style: dashed;
+  background: linear-gradient(135deg, rgba(216, 243, 220, .45), rgba(253, 248, 225, .72));
+}
+.admin-subsection {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--gray-200);
+}
+.form-grid-two {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 
 /* Stats */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
@@ -1070,11 +1112,12 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .workflow-panel-grid { grid-template-columns: 1fr; }
   .workflow-lane-wide { grid-column: auto; }
   .board-entry-card { grid-template-columns: 72px 1fr; }
-  .account-token-grid { grid-template-columns: 1fr; }
   .issued-token-field-row { flex-direction: column; align-items: stretch; }
   .issued-token-copy-button { justify-content: center; }
   .issued-token-copy-button { width: 100%; justify-content: center; }
   .form-row { grid-template-columns: 1fr; }
+  .form-grid-two,
+  .admin-search-form { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
   .winner-row { flex-direction: column; align-items: flex-start; }
   .tabs { overflow-x: auto; }

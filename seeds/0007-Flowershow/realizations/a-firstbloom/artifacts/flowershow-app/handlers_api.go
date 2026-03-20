@@ -38,12 +38,16 @@ func (a *app) handleAPIAccount(w http.ResponseWriter, r *http.Request) {
 	}, token))
 }
 
+func (a *app) handleAPIOrganizationsDirectory(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, a.store.allOrganizations())
+}
+
 func (a *app) handleAPIClubWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !a.authorizeAPICapability(w, r, "organization.manage", "Use a signed-in club admin session, a Bearer service token, or an account-issued agent token with club-management access.") {
 		return
 	}
 	user, _ := a.currentUser(r)
-	data, err := a.clubAdminData(r.PathValue("id"), "overview", user)
+	data, err := a.clubAdminData(r.PathValue("id"), "overview", user, "")
 	if err != nil {
 		a.writeAPIError(w, r, http.StatusNotFound, "organization_not_found", "Club workspace not found.", "Use a stable organization id from a club or show projection.", nil)
 		return
@@ -303,6 +307,30 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch command {
+	case "organization.create":
+		var input OrganizationInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		if strings.TrimSpace(input.Name) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "organization_create_failed", "name is required", "Provide at least a stable organization name. Level defaults to society when omitted.", []apiFieldError{{Field: "name", Message: "required"}})
+			return
+		}
+		level := strings.TrimSpace(input.Level)
+		if level == "" {
+			level = "society"
+		}
+		org, err := a.store.createOrganization(Organization{
+			Name:     strings.TrimSpace(input.Name),
+			Level:    level,
+			ParentID: strings.TrimSpace(input.ParentID),
+		})
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "organization_create_failed", err.Error(), "Provide name and optional level or parent_id using the organization.create schema from the contract.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, org)
+
 	case "shows.create":
 		var input ShowInput
 		if !a.decodeAPIJSON(w, r, &input) {

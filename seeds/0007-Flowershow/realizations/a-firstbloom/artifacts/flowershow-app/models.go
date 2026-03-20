@@ -11,6 +11,12 @@ type Organization struct {
 	ParentID string `json:"parent_id,omitempty"`
 }
 
+type OrganizationInput struct {
+	Name     string `json:"name"`
+	Level    string `json:"level"`
+	ParentID string `json:"parent_id,omitempty"`
+}
+
 type Show struct {
 	ID             string    `json:"id"`
 	Slug           string    `json:"slug"`
