@@ -1413,6 +1413,17 @@ func (app *App) objectInstanceDetail(seedID, kind, objectID string) (*ObjectInst
 }
 
 func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error) {
+	objectSummaries, err := app.registry.Objects(seedID, "", "")
+	if err != nil {
+		return nil, err
+	}
+	knownKinds := make([]string, 0, len(objectSummaries))
+	for _, item := range objectSummaries {
+		if kind := strings.TrimSpace(item.Kind); kind != "" {
+			knownKinds = append(knownKinds, kind)
+		}
+	}
+
 	rows, err := app.registry.AllRows(seedID)
 	if err != nil {
 		return nil, err
@@ -1463,6 +1474,8 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 	for objectID, acc := range index.instances {
 		if acc.Kind == "" {
 			acc.Kind = "unknown"
+		} else {
+			acc.Kind = canonicalInstanceKind(acc.Kind, knownKinds)
 		}
 		index.kindByObjectID[objectID] = acc.Kind
 	}
@@ -1595,6 +1608,67 @@ func inferInstanceKind(row RegistryRow) string {
 		}
 	}
 	return ""
+}
+
+func canonicalInstanceKind(kind string, knownKinds []string) string {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return ""
+	}
+	for _, known := range knownKinds {
+		if strings.TrimSpace(known) == kind {
+			return kind
+		}
+	}
+
+	candidateTokens := kindTokens(kind)
+	if len(candidateTokens) == 0 {
+		return kind
+	}
+
+	matches := make([]string, 0, len(knownKinds))
+	for _, known := range knownKinds {
+		known = strings.TrimSpace(known)
+		if known == "" {
+			continue
+		}
+		if tokenSubset(candidateTokens, kindTokens(known)) {
+			matches = append(matches, known)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return kind
+}
+
+func kindTokens(value string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
+func tokenSubset(left, right []string) bool {
+	if len(left) == 0 || len(right) == 0 || len(left) > len(right) {
+		return false
+	}
+	set := make(map[string]struct{}, len(right))
+	for _, item := range right {
+		set[item] = struct{}{}
+	}
+	for _, item := range left {
+		if _, ok := set[item]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func claimTypeForRow(row RegistryRow) string {

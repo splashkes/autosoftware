@@ -565,6 +565,20 @@ func TestNormalizeRegistryBaseURL(t *testing.T) {
 	}
 }
 
+func TestCanonicalInstanceKindUsesCatalogKindsWithoutOvermatching(t *testing.T) {
+	knownKinds := []string{"show_class", "award_definition", "organization"}
+
+	if got := canonicalInstanceKind("class", knownKinds); got != "show_class" {
+		t.Fatalf("canonicalInstanceKind(class) = %q, want %q", got, "show_class")
+	}
+	if got := canonicalInstanceKind("award", knownKinds); got != "award_definition" {
+		t.Fatalf("canonicalInstanceKind(award) = %q, want %q", got, "award_definition")
+	}
+	if got := canonicalInstanceKind("organization_invite", knownKinds); got != "organization_invite" {
+		t.Fatalf("canonicalInstanceKind(organization_invite) = %q, want unchanged", got)
+	}
+}
+
 func TestHealthzReturnsOK(t *testing.T) {
 	mock := newMockRegistry()
 	defer mock.Close()
