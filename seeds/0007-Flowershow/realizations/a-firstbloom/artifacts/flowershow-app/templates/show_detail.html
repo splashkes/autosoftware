@@ -40,7 +40,7 @@
   <h2>Schedule</h2>
   {{range .Divisions}}
   <div class="schedule-division">
-    <h3>{{divisionDisplay .Division}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+    <h3>{{divisionDisplay .Division}}{{with divisionDomainLabel .Division}} <span class="badge badge-muted">{{.}}</span>{{end}}</h3>
     {{range .Sections}}
     <div class="schedule-section">
       <h4>{{.Section.Title}}</h4>

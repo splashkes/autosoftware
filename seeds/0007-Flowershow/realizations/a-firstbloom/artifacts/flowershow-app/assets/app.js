@@ -387,10 +387,10 @@ function flowershowSuppressDuplicateAgentWidgets() {
   document.querySelectorAll('.agent-access-widget:not([data-agent-widget-source="kernel"])').forEach(function(widget) {
     const shell = widget.closest('.agent-access-shell');
     if (shell) {
-      shell.hidden = true;
+      shell.remove();
       return;
     }
-    widget.hidden = true;
+    widget.remove();
   });
 }
 

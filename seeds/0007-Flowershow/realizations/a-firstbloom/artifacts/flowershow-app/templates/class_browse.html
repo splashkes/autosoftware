@@ -7,7 +7,7 @@
 
 {{range .Divisions}}
 <section class="section">
-  <h2>{{divisionDisplay .Division}} <span class="badge badge-muted">{{.Division.Domain}}</span></h2>
+  <h2>{{divisionDisplay .Division}}{{with divisionDomainLabel .Division}} <span class="badge badge-muted">{{.}}</span>{{end}}</h2>
   {{range .Sections}}
   <div class="schedule-section">
     <h3>{{.Section.Title}}</h3>
