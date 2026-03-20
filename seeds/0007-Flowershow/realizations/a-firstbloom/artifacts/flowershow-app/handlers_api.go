@@ -43,7 +43,7 @@ func (a *app) handleAPIClubWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := a.currentUser(r)
-	data, err := a.clubAdminData(r.PathValue("id"), "overview", user)
+	data, err := a.clubAdminData(r.PathValue("id"), "overview", user, "")
 	if err != nil {
 		a.writeAPIError(w, r, http.StatusNotFound, "organization_not_found", "Club workspace not found.", "Use a stable organization id from a club or show projection.", nil)
 		return

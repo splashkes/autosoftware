@@ -126,6 +126,8 @@ func main() {
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
 	mux.HandleFunc("GET /admin/roles", a.requireAdmin(a.handleRoleManagement))
 	mux.HandleFunc("POST /admin/roles", a.requireAdmin(a.handleRoleAssign))
+	mux.HandleFunc("GET /admin/clubs/new", a.requireAdmin(a.handleAdminClubNew))
+	mux.HandleFunc("POST /admin/clubs", a.requireAdmin(a.handleAdminClubCreate))
 	mux.HandleFunc("GET /admin/clubs/{organizationID}", a.requireCapabilityPage("organization.manage", a.handleAdminClubDetail))
 	mux.HandleFunc("POST /admin/clubs/{organizationID}/invites", a.requireCapabilityPage("organization.invites.manage", a.handleAdminClubInviteCreate))
 

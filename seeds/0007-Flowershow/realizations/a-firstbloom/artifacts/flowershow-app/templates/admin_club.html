@@ -6,15 +6,11 @@
       <h1>{{.Organization.Name}}</h1>
       <p class="section-desc">Manage this club’s invite workflow, current membership context, and linked shows from one reusable organization workspace.</p>
     </div>
-    <div class="show-actions">
-      <a href="{{bp}}/account?section=access" class="btn btn-outline">Back To Profile</a>
-      {{if .CurrentUser}}
-      <form method="POST" action="{{bp}}/admin/logout">
-        <button type="submit" class="btn btn-outline">Sign Out</button>
-      </form>
-      {{end}}
-    </div>
   </div>
+
+  {{if .Notice}}
+  <div class="alert alert-info">{{.Notice}}</div>
+  {{end}}
 
   <section class="account-layout">
     <aside class="card account-sidebar">
@@ -56,47 +52,50 @@
       <section class="card" id="club-invites">
         <div class="card-body">
           <div class="login-step-kicker">Invites</div>
-          <h2 class="card-title">Invite Someone To Join This Club</h2>
-          <p class="card-meta">Enter the person’s name and email, pick their club role label, then choose any organization-scoped permissions they should automatically receive after signing in with that email.</p>
-          <div class="alert alert-info">This pass records the invite and grants the selected club-scoped permissions after the invited person signs in with the same email address.</div>
-          <form method="POST" action="{{bp}}/admin/clubs/{{.OrganizationID}}/invites" class="form account-token-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="invite_first_name">First Name</label>
-                <input id="invite_first_name" name="first_name" class="form-input" required>
-              </div>
-              <div class="form-group">
-                <label for="invite_last_name">Last Name</label>
-                <input id="invite_last_name" name="last_name" class="form-input" required>
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="invite_email">Email</label>
-              <input id="invite_email" name="email" type="email" class="form-input" required>
-            </div>
-            <div class="form-group">
-              <label for="organization_role">Club Role Label</label>
-              <select id="organization_role" name="organization_role" class="form-input">
-                <option value="member">Member</option>
-                <option value="executive">Executive</option>
-                <option value="judge">Judge</option>
-                <option value="guest">Guest</option>
-              </select>
-            </div>
-            <fieldset class="account-token-profile-picker">
-              <legend>Organization-Scoped Permission Bundles</legend>
-              {{range .InviteRoleOptions}}
-              <label class="account-token-profile">
-                <input type="checkbox" name="permission_roles" value="{{.Role}}">
-                <div>
-                  <strong>{{.Label}}</strong>
-                  <p class="card-meta">{{.Description}}</p>
+          <details class="account-collapsible club-invite-collapsible" {{if eq .ActiveSection "invites"}}open{{end}}>
+            <summary>Invite</summary>
+            <form method="POST" action="{{bp}}/admin/clubs/{{.OrganizationID}}/invites" class="form account-token-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="invite_first_name">First Name</label>
+                  <input id="invite_first_name" name="first_name" class="form-input" required>
                 </div>
-              </label>
-              {{end}}
-            </fieldset>
-            <button type="submit" class="btn btn-primary">Create Club Invite</button>
-          </form>
+                <div class="form-group">
+                  <label for="invite_last_name">Last Name</label>
+                  <input id="invite_last_name" name="last_name" class="form-input">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="invite_email">Email</label>
+                <input id="invite_email" name="email" type="email" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label for="organization_role">Club Role</label>
+                <select id="organization_role" name="organization_role" class="form-input">
+                  <option value="member">Member</option>
+                  <option value="executive">Executive</option>
+                  <option value="judge">Judge</option>
+                  <option value="guest">Guest</option>
+                </select>
+              </div>
+              <details class="account-collapsible compact club-special-roles">
+                <summary>Special roles</summary>
+                <fieldset class="account-token-profile-picker">
+                  <legend>Special roles</legend>
+                  {{range .InviteRoleOptions}}
+                  <label class="account-token-profile">
+                    <input type="checkbox" name="permission_roles" value="{{.Role}}">
+                    <div>
+                      <strong>{{.Label}}</strong>
+                      <p class="card-meta">{{.Description}}</p>
+                    </div>
+                  </label>
+                  {{end}}
+                </fieldset>
+              </details>
+              <button type="submit" class="btn btn-primary">Send Invite</button>
+            </form>
+          </details>
         </div>
       </section>
 

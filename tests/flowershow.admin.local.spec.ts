@@ -22,10 +22,9 @@ test.describe('Flowershow Admin Local', () => {
     request,
   }) => {
     await loginLocalAdmin(page);
-    await page.goto('/admin');
-    await page.getByRole('link', { name: 'Agent / API Access Tokens' }).click();
+    await page.goto('/account?section=access');
 
-    await expect(page).toHaveURL(/\/account\?section=tokens#agent-tokens$/);
+    await expect(page).toHaveURL(/\/account\?section=access$/);
     await expect(page.locator('body')).toContainText('Agent / API access tokens');
 
     await page.fill('#token_label', uniqueName('Playwright Operator Token'));
@@ -222,17 +221,19 @@ test.describe('Flowershow Admin Local', () => {
 
     await page.goto('/admin/clubs/org_demo1');
     await expect(page.locator('h1')).toContainText('Metro Rose Society');
-    await expect(page.locator('body')).toContainText('Invite Someone To Join This Club');
+    await page.locator('summary:has-text("Invite")').click();
 
     await page.fill('#invite_first_name', 'Taylor');
     await page.fill('#invite_last_name', 'Grant');
     await page.fill('#invite_email', `taylor+${Date.now()}@example.com`);
+    await page.locator('summary:has-text("Special roles")').click();
     await page
       .locator('label.account-token-profile:has-text("Club Admin") input[type="checkbox"]')
       .check();
-    await page.getByRole('button', { name: 'Create Club Invite' }).click();
+    await page.getByRole('button', { name: 'Send Invite' }).click();
 
-    await expect(page).toHaveURL(/\/admin\/clubs\/org_demo1\?section=invites#club-invites$/);
+    await expect(page).toHaveURL(/\/admin\/clubs\/org_demo1\?section=invites(?:&notice=.*)?#club-invites$/);
+    await expect(page.locator('body')).toContainText('Invite sent to Taylor Grant');
     await expect(page.locator('body')).toContainText('Taylor Grant');
 
     await page.goto('/admin');

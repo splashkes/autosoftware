@@ -93,6 +93,9 @@ type homeData struct {
 	UpcomingShows []*homeShowCard
 	PastShows     []*homeShowCard
 	Clubs         []*clubCardView
+	TotalShows    int
+	TotalEntries  int
+	TotalMembers  int
 }
 
 type clubsData struct {
@@ -102,9 +105,10 @@ type clubsData struct {
 }
 
 type publicClassCard struct {
-	Show  *Show
-	Org   *Organization
-	Class *ShowClass
+	Show     *Show
+	Org      *Organization
+	Class    *ShowClass
+	Featured showVisualFrame
 }
 
 type classesDomainView struct {
@@ -116,6 +120,7 @@ type classesDomainView struct {
 type classesIndexData struct {
 	Title       string
 	CurrentPath string
+	Query       string
 	Domains     []*classesDomainView
 }
 
@@ -456,11 +461,54 @@ func (a *app) topPeopleForOrganization(orgID string, limit int) []*clubTopPerson
 	return out
 }
 
-func (a *app) classesIndexDomains() []*classesDomainView {
+func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
+	themes := []string{"rose", "fern", "gold"}
+	idx := 0
+	for _, entry := range a.publicEntriesByShow(show.ID) {
+		if entry.ClassID != classID {
+			continue
+		}
+		frame := showVisualFrame{
+			Label: entry.Name,
+			Theme: themes[idx%len(themes)],
+		}
+		media := a.store.mediaByEntry(entry.ID)
+		if len(media) > 0 {
+			frame.MediaPath = "/media/" + media[0].ID
+		}
+		return frame
+	}
+	frames := a.showVisualFrames(show)
+	if len(frames) > 0 {
+		return frames[0]
+	}
+	return showVisualFrame{Label: "Class highlights", Theme: "rose"}
+}
+
+func (a *app) classesIndexDomains(query string) []*classesDomainView {
+	query = strings.ToLower(strings.TrimSpace(query))
 	domains := map[string]*classesDomainView{}
 	for _, show := range a.store.allShows() {
 		org, _ := a.store.organizationByID(show.OrganizationID)
 		for _, class := range a.store.classesByShowID(show.ID) {
+			haystack := strings.ToLower(strings.Join([]string{
+				class.ClassNumber,
+				class.Title,
+				class.Description,
+				class.Domain,
+				show.Name,
+				show.Location,
+				show.Date,
+				func() string {
+					if org == nil {
+						return ""
+					}
+					return org.Name
+				}(),
+			}, " "))
+			if query != "" && !strings.Contains(haystack, query) {
+				continue
+			}
 			key := class.Domain
 			if key == "" {
 				key = "other"
@@ -474,9 +522,10 @@ func (a *app) classesIndexDomains() []*classesDomainView {
 				domains[key] = view
 			}
 			view.Items = append(view.Items, &publicClassCard{
-				Show:  show,
-				Org:   org,
-				Class: class,
+				Show:     show,
+				Org:      org,
+				Class:    class,
+				Featured: a.classVisualFrame(show, class.ID),
 			})
 		}
 	}

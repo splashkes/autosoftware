@@ -742,7 +742,7 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 		t.Fatalf("expected 200, got %d", accountW.Code)
 	}
 	body := accountW.Body.String()
-	if !strings.Contains(body, "Tokens / API") {
+	if !strings.Contains(body, "Access Tokens") {
 		t.Fatal("account page missing token navigation")
 	}
 	if strings.Contains(body, "Generate Agent Token") {
@@ -758,8 +758,8 @@ func TestAccountPageShowsTokenManagerAndAdminDashboardLinksToIt(t *testing.T) {
 	if adminW.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", adminW.Code)
 	}
-	if !strings.Contains(adminW.Body.String(), "/account?section=tokens#agent-tokens") {
-		t.Fatal("admin dashboard should link to the shared account token manager")
+	if strings.Contains(adminW.Body.String(), "Agent / API Access Tokens") {
+		t.Fatal("admin dashboard should no longer show a dedicated token-manager callout")
 	}
 }
 
@@ -2595,7 +2595,7 @@ func TestClubAdminPageAllowsOrganizationScopedAdmin(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Invite Someone To Join This Club") {
+	if !strings.Contains(body, "Send Invite") {
 		t.Fatal("club admin page missing invite form")
 	}
 	if !strings.Contains(body, "Spring Rose Show 2025") {

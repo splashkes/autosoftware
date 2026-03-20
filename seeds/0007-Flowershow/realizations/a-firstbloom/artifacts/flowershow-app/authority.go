@@ -149,6 +149,17 @@ var flowershowAuthorityBundles = map[string]authorityBundleDef{
 			"judges.manage",
 		},
 	},
+	"photographer": {
+		BundleID:    "flowershow_photographer",
+		DisplayName: "Photographer",
+		Role:        "photographer",
+		Capabilities: []string{
+			"account.read",
+			"shows.workspace.read",
+			"entries.private.read",
+			"media.manage",
+		},
+	},
 	"entrant": {
 		BundleID:    "flowershow_entrant",
 		DisplayName: "Flowershow Entrant",

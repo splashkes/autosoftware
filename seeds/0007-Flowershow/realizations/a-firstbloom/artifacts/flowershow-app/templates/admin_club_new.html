@@ -1,0 +1,83 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Clubs</div>
+      <h1>Create Club</h1>
+      <p class="section-desc">Create the club, define its place in the organization tree, and invite the first administrator in one pass.</p>
+    </div>
+  </div>
+
+  <section class="account-layout">
+    <aside class="card account-sidebar">
+      <div class="card-body">
+        <div class="login-step-kicker">Workflow</div>
+        <h2 class="card-title">New Club</h2>
+        <p class="card-meta">Set up the club and its first admin without bouncing into separate tools.</p>
+        <nav class="account-section-nav">
+          <a href="#club-details" class="account-section-link is-current">Club details</a>
+          <a href="#club-first-admin" class="account-section-link">First admin</a>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="account-main">
+      <section class="card">
+        <div class="card-body">
+          <form method="POST" action="{{bp}}/admin/clubs" class="form">
+            <div id="club-details" class="form-grid-two">
+              <div class="form-group">
+                <label for="club_name">Club Name</label>
+                <input id="club_name" name="name" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label for="club_level">Level</label>
+                <select id="club_level" name="level" class="form-input">
+                  {{range .ClubLevels}}
+                  <option value="{{.}}" {{if eq . $.DefaultLevel}}selected{{end}}>{{.}}</option>
+                  {{end}}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="club_parent_id">Parent Organization</label>
+              <select id="club_parent_id" name="parent_id" class="form-input">
+                <option value="">No parent organization</option>
+                {{range .Organizations}}
+                <option value="{{.ID}}">{{.Name}} · {{.Level}}</option>
+                {{end}}
+              </select>
+            </div>
+
+            <div id="club-first-admin" class="admin-subsection">
+              <div class="login-step-kicker">First Admin</div>
+              <h2 class="card-title">Invite The Initial Club Administrator</h2>
+              <p class="card-meta">This creates the first membership record immediately and issues an admin invite to the same email.</p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="admin_first_name">First Name</label>
+                  <input id="admin_first_name" name="admin_first_name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                  <label for="admin_last_name">Last Name</label>
+                  <input id="admin_last_name" name="admin_last_name" class="form-input" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="admin_email">Email</label>
+                <input id="admin_email" name="admin_email" type="email" class="form-input" required>
+              </div>
+            </div>
+
+            <div class="show-actions">
+              <a href="{{bp}}/admin" class="btn btn-outline">Cancel</a>
+              <button type="submit" class="btn btn-primary">Create Club</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </section>
+</section>
+{{end}}

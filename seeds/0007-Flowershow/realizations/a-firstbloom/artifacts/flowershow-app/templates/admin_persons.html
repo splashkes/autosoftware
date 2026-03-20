@@ -1,31 +1,20 @@
 {{define "content"}}
 <div class="breadcrumb">
-  <a href="{{bp}}/admin">Admin</a> &rsaquo; <span>Persons</span>
+  <a href="{{bp}}/admin">Admin</a> &rsaquo; <span>People</span>
 </div>
 
-<h1>Manage Persons</h1>
+<h1>People</h1>
 
-<section class="section">
-  <h2>Add Person</h2>
-  <form method="POST" action="{{bp}}/admin/persons" class="form form-inline">
-    <input type="text" name="first_name" placeholder="First name" class="form-input" required>
-    <input type="text" name="last_name" placeholder="Last name" class="form-input" required>
-    <input type="email" name="email" placeholder="Email (optional)" class="form-input">
-    <select name="organization_id" class="form-input">
-      <option value="">No club link</option>
-      {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
-    <select name="organization_role" class="form-input">
-      <option value="member">member</option>
-      <option value="guest">guest</option>
-      <option value="officer">officer</option>
-    </select>
-    <button type="submit" class="btn btn-primary btn-sm">Add</button>
-  </form>
+<section class="card">
+  <div class="card-body">
+    <div class="login-step-kicker">Directory</div>
+    <h2 class="card-title">People Are Added Through Clubs, Invites, And Show Intake</h2>
+    <p class="card-meta">Use the admin dashboard search when you need to find one person quickly. This directory stays focused on lookup and verification.</p>
+  </div>
 </section>
 
 <section class="section">
-  <h2>All Persons</h2>
+  <h2>All People</h2>
   {{if .Persons}}
   <table class="table">
     <thead><tr><th>ID</th><th>Name</th><th>Initials</th><th>Email</th></tr></thead>
@@ -41,7 +30,7 @@
     </tbody>
   </table>
   {{else}}
-  <p class="empty-state">No persons yet.</p>
+  <p class="empty-state">No people yet.</p>
   {{end}}
 </section>
 {{end}}

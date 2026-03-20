@@ -1,13 +1,38 @@
 {{define "content"}}
 <div class="admin-header">
   <h1>Admin Dashboard</h1>
-  <div class="show-actions">
-    <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-outline btn-sm">Agent / API Access Tokens</a>
-    <form method="POST" action="{{bp}}/admin/logout" class="inline">
-      <button type="submit" class="btn btn-outline btn-sm">Logout</button>
-    </form>
-  </div>
 </div>
+
+<section class="card admin-search-shell">
+  <div class="card-body">
+    <div class="login-step-kicker">Search</div>
+    <h2 class="card-title">Find Shows, Clubs, Classes, And People</h2>
+    <form method="GET" action="{{bp}}/admin" class="form admin-search-form">
+      <input type="search" name="q" value="{{.SearchQuery}}" class="form-input" placeholder="Search shows, clubs, classes, or people">
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+    {{if .SearchQuery}}
+    <div class="admin-search-results">
+      <div class="card-meta">Results for “{{.SearchQuery}}”</div>
+      {{if .SearchHits}}
+      <div class="account-role-list">
+        {{range .SearchHits}}
+        <a href="{{bp}}{{.Href}}" class="account-role-item admin-search-result">
+          <div>
+            <span class="badge badge-green">{{.TypeLabel}}</span>
+            <strong>{{.Title}}</strong>
+            {{if .Meta}}<div class="card-meta">{{.Meta}}</div>{{end}}
+          </div>
+        </a>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="card-meta">No results matched that search.</p>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</section>
 
 <div class="stats-grid">
   <div class="stat-card">
@@ -15,22 +40,27 @@
     <span class="stat-label">Shows</span>
   </div>
   <div class="stat-card">
-    <span class="stat-number">{{len .Persons}}</span>
-    <span class="stat-label">Persons</span>
+    <span class="stat-number">{{len .Orgs}}</span>
+    <span class="stat-label">Clubs</span>
   </div>
   <div class="stat-card">
-    <span class="stat-number">{{len .Awards}}</span>
-    <span class="stat-label">Awards</span>
+    <span class="stat-number">{{len .Persons}}</span>
+    <span class="stat-label">People</span>
   </div>
 </div>
 
 <section class="section">
   <div class="section-header">
     <h2>Shows</h2>
-    <a href="{{bp}}/admin/shows/new" class="btn btn-primary btn-sm">New Show</a>
   </div>
-  {{if .Shows}}
   <div class="card-grid">
+    <a href="{{bp}}/admin/shows/new" class="card show-card admin-action-card">
+      <div class="card-body">
+        <div class="login-step-kicker">Create</div>
+        <h3 class="card-title">New Show</h3>
+        <p class="card-meta">Start a show and move directly into schedule and intake setup.</p>
+      </div>
+    </a>
     {{range .Shows}}
     <a href="{{bp}}/admin/shows/{{.ID}}" class="card show-card">
       <div class="card-body">
@@ -41,17 +71,6 @@
     </a>
     {{end}}
   </div>
-  {{else}}
-  <p class="empty-state">No shows. Create one to get started.</p>
-  {{end}}
-</section>
-
-<section class="section">
-  <div class="section-header">
-    <h2>Persons</h2>
-  </div>
-  <a href="{{bp}}/admin/persons" class="btn btn-outline btn-sm">Manage Persons</a>
-  <a href="{{bp}}/admin/roles" class="btn btn-outline btn-sm">Manage Roles</a>
 </section>
 
 <section class="section">
@@ -59,6 +78,13 @@
     <h2>Clubs</h2>
   </div>
   <div class="card-grid">
+    <a href="{{bp}}/admin/clubs/new" class="card show-card admin-action-card">
+      <div class="card-body">
+        <div class="login-step-kicker">Create</div>
+        <h3 class="card-title">New Club</h3>
+        <p class="card-meta">Create a club and invite its first administrator in one pass.</p>
+      </div>
+    </a>
     {{range .Orgs}}
     <a href="{{bp}}/admin/clubs/{{.ID}}" class="card show-card">
       <div class="card-body">
@@ -72,11 +98,10 @@
 
 <section class="section">
   <div class="section-header">
-    <div>
-      <h2>Agent / API Access Tokens</h2>
-      <p class="section-desc">Agent tokens are managed from the signed-in account page so there is only one issuance and revocation surface.</p>
-    </div>
-    <a href="{{bp}}/account?section=tokens#agent-tokens" class="btn btn-primary btn-sm">Open Shared Token Manager</a>
+    <h2>People</h2>
+  </div>
+  <div class="show-actions">
+    <a href="{{bp}}/admin/persons" class="btn btn-outline">Manage People</a>
   </div>
 </section>
 {{end}}
