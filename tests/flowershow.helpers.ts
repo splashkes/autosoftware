@@ -58,7 +58,7 @@ export async function loginLocalAdmin(page: Page) {
   expect(response.ok()).toBeTruthy();
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.locator('h1')).toContainText('Admin Dashboard');
+  await expect(page.locator('h1')).toContainText('Admin Workspace');
 }
 
 export async function loginLocalViewer(page: Page) {
@@ -130,7 +130,7 @@ export async function expectSignedInLanding(page: Page) {
   const heading = page.locator('h1');
   await expect(heading).toBeVisible();
   const text = (await heading.textContent()) || '';
-  expect(['Your Profile', 'Admin Dashboard']).toContain(text.trim());
+  expect(['Your Profile', 'Admin Workspace']).toContain(text.trim());
 }
 
 export async function openAgentAccess(page: Page) {
