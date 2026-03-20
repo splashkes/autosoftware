@@ -333,6 +333,16 @@ example guidance about how to interpret a cited schedule or which standard
 should be treated as authoritative. That runtime context must not be stored as
 canonical show truth unless it is converted into explicit structured records or
 citations.
+
+Current command-body rule for this realization:
+
+- callers may send a flat JSON object containing the command fields
+- callers may send `{ "input": { ... }, "runtime_context": { ... } }`
+- callers may also send flat command fields with `runtime_context` as a sibling
+  top-level property
+
+In all three cases, `runtime_context` is runtime-only guidance and must not be
+persisted into canonical show data.
 Describes compositions:
 - type (crescent design, etc)
 - title

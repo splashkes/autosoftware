@@ -260,7 +260,7 @@ commands:
       - code: unauthorized
         summary: Caller did not satisfy the required auth mode for this command.
   - name: shows.create
-    summary: Create a new flower show.
+    summary: Create a new flower show. Accepts flat JSON command fields, or an input/runtime_context envelope when an agent wants to include runtime-only authoring guidance.
     path: /v1/commands/0007-Flowershow/shows.create
     object_kinds:
       - show
@@ -735,7 +735,7 @@ commands:
     projection: shows.workspace
     consistency: read_your_writes
   - name: citations.create
-    summary: Create a source citation for a target record.
+    summary: Create a source citation for a target record. Accepts flat JSON command fields, or an input/runtime_context envelope when an agent wants to include runtime-only interpretation notes.
     path: /v1/commands/0007-Flowershow/citations.create
     object_kinds:
       - show_class

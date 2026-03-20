@@ -930,7 +930,16 @@ func (a *app) unwrapRuntimeContextEnvelope(w http.ResponseWriter, r *http.Reques
 
 	inputRaw, wrapped := envelope["input"]
 	if !wrapped {
-		return trimmed, true
+		if _, ok := envelope["runtime_context"]; !ok {
+			return trimmed, true
+		}
+		delete(envelope, "runtime_context")
+		payload, err := json.Marshal(envelope)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON matching the command schema.", "Check the contract schema, property names, and JSON syntax before retrying.", nil)
+			return nil, false
+		}
+		return payload, true
 	}
 
 	for key := range envelope {
