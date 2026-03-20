@@ -1394,6 +1394,7 @@ type instanceAccumulator struct {
 type seedInstanceIndex struct {
 	instances      map[string]*instanceAccumulator
 	kindByObjectID map[string]string
+	knownKinds     []string
 }
 
 func (app *App) objectInstancesForKind(seedID, kind string) ([]ObjectInstanceSummary, error) {
@@ -1413,6 +1414,17 @@ func (app *App) objectInstanceDetail(seedID, kind, objectID string) (*ObjectInst
 }
 
 func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error) {
+	objectSummaries, err := app.registry.Objects(seedID, "", "")
+	if err != nil {
+		return nil, err
+	}
+	knownKinds := make([]string, 0, len(objectSummaries))
+	for _, item := range objectSummaries {
+		if kind := strings.TrimSpace(item.Kind); kind != "" {
+			knownKinds = append(knownKinds, kind)
+		}
+	}
+
 	rows, err := app.registry.AllRows(seedID)
 	if err != nil {
 		return nil, err
@@ -1421,6 +1433,7 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 	index := &seedInstanceIndex{
 		instances:      make(map[string]*instanceAccumulator),
 		kindByObjectID: make(map[string]string),
+		knownKinds:     knownKinds,
 	}
 
 	for _, row := range rows {
@@ -1463,6 +1476,8 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 	for objectID, acc := range index.instances {
 		if acc.Kind == "" {
 			acc.Kind = "unknown"
+		} else {
+			acc.Kind = canonicalInstanceKind(acc.Kind, knownKinds)
 		}
 		index.kindByObjectID[objectID] = acc.Kind
 	}
@@ -1471,7 +1486,7 @@ func (app *App) buildSeedInstanceIndex(seedID string) (*seedInstanceIndex, error
 }
 
 func (idx *seedInstanceIndex) summariesForKind(kind string) []ObjectInstanceSummary {
-	kind = strings.TrimSpace(kind)
+	kind = idx.canonicalKind(kind)
 	out := make([]ObjectInstanceSummary, 0)
 	for _, acc := range idx.instances {
 		if acc.Kind != kind {
@@ -1492,6 +1507,7 @@ func (idx *seedInstanceIndex) summariesForKind(kind string) []ObjectInstanceSumm
 }
 
 func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceDetailView, error) {
+	kind = idx.canonicalKind(kind)
 	acc, ok := idx.instances[strings.TrimSpace(objectID)]
 	if !ok {
 		return nil, errors.New("instance not found")
@@ -1524,6 +1540,10 @@ func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceD
 		RelatedInstances:   related,
 		InstanceDefinition: browseObjectPath(acc.SeedID, acc.Kind),
 	}, nil
+}
+
+func (idx *seedInstanceIndex) canonicalKind(kind string) string {
+	return canonicalInstanceKind(kind, idx.knownKinds)
 }
 
 func (idx *seedInstanceIndex) summaryFor(acc *instanceAccumulator) ObjectInstanceSummary {
@@ -1595,6 +1615,67 @@ func inferInstanceKind(row RegistryRow) string {
 		}
 	}
 	return ""
+}
+
+func canonicalInstanceKind(kind string, knownKinds []string) string {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return ""
+	}
+	for _, known := range knownKinds {
+		if strings.TrimSpace(known) == kind {
+			return kind
+		}
+	}
+
+	candidateTokens := kindTokens(kind)
+	if len(candidateTokens) == 0 {
+		return kind
+	}
+
+	matches := make([]string, 0, len(knownKinds))
+	for _, known := range knownKinds {
+		known = strings.TrimSpace(known)
+		if known == "" {
+			continue
+		}
+		if tokenSubset(candidateTokens, kindTokens(known)) {
+			matches = append(matches, known)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return kind
+}
+
+func kindTokens(value string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
+func tokenSubset(left, right []string) bool {
+	if len(left) == 0 || len(right) == 0 || len(left) > len(right) {
+		return false
+	}
+	set := make(map[string]struct{}, len(right))
+	for _, item := range right {
+		set[item] = struct{}{}
+	}
+	for _, item := range left {
+		if _, ok := set[item]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func claimTypeForRow(row RegistryRow) string {
@@ -2126,6 +2207,10 @@ func (app *App) handleObjectInstanceDetail(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		app.renderError(w, http.StatusNotFound, "Object instance not found.")
 		log.Printf("instance detail error for %s/%s/%s: %v", seedID, kind, objectID, err)
+		return
+	}
+	if canonicalKind := strings.TrimSpace(item.Summary.Kind); canonicalKind != "" && canonicalKind != strings.TrimSpace(kind) {
+		http.Redirect(w, r, browseObjectInstancePath(seedID, canonicalKind, objectID), http.StatusFound)
 		return
 	}
 
