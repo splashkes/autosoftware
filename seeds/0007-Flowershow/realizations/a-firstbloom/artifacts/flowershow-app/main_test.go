@@ -1874,6 +1874,52 @@ func TestPublicClubsIncludeOrganizationsWithoutShows(t *testing.T) {
 	}
 }
 
+func TestClubDetailPageShowsClubContext(t *testing.T) {
+	a := testApp()
+	if _, err := a.store.createShowCredit(ShowCreditInput{
+		ShowID:      "show_spring2025",
+		PersonID:    "person_01",
+		CreditLabel: "Host",
+		SortOrder:   1,
+	}); err != nil {
+		t.Fatalf("create show credit: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /clubs/{organizationID}", a.handleClubDetail)
+
+	req := httptest.NewRequest("GET", "/clubs/org_demo1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, expected := range []string{"Metro Rose Society", "Upcoming Shows", "Past Shows", "Top Members", "Show Credits"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("club detail page missing %q", expected)
+		}
+	}
+	if !strings.Contains(body, `/shows/spring-rose-show-2025`) {
+		t.Fatal("club detail page should link to club shows")
+	}
+}
+
+func TestShowDetailLinksOrganizationToClubPage(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `href="/clubs/org_demo1"`) {
+		t.Fatal("show detail should link organization name to its club page")
+	}
+}
+
 func TestPrivateByIDProjectionsRespectAuthModes(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -2814,13 +2860,19 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 		reassignedTo   Person
 		judge          Person
 		show           Show
+		resetShow      Show
 		schedule       ShowSchedule
+		resetSchedule  ShowSchedule
 		division       Division
+		resetDivision  Division
 		section        Section
+		resetSection   Section
 		classPrimary   ShowClass
 		classSecondary ShowClass
+		resetClass     ShowClass
 		entryKept      Entry
 		entryDeleted   Entry
+		resetEntry     Entry
 		invite         OrganizationInvite
 		media          Media
 		standard       StandardDocument
@@ -2893,6 +2945,48 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"date": "2026-07-08",
 				"season": "2026"
 			}`, state.show.ID, state.org.ID), http.StatusOK)
+		},
+		"shows.reset_schedule": func(t *testing.T) {
+			state.resetShow = executeAPICommand[Show](t, a, "shows.create", fmt.Sprintf(`{
+				"organization_id": %q,
+				"name": "Replay Reset Show",
+				"location": "Hall Reset",
+				"date": "2026-09-09",
+				"season": "2026"
+			}`, state.org.ID), http.StatusCreated)
+			state.resetSchedule = executeAPICommand[ShowSchedule](t, a, "schedules.upsert", fmt.Sprintf(`{
+				"show_id": %q,
+				"notes": "reset me"
+			}`, state.resetShow.ID), http.StatusOK)
+			state.resetDivision = executeAPICommand[Division](t, a, "divisions.create", fmt.Sprintf(`{
+				"show_schedule_id": %q,
+				"code": "R",
+				"title": "Reset Division",
+				"domain": "horticulture",
+				"sort_order": 1
+			}`, state.resetSchedule.ID), http.StatusCreated)
+			state.resetSection = executeAPICommand[Section](t, a, "sections.create", fmt.Sprintf(`{
+				"division_id": %q,
+				"code": "R1",
+				"title": "Reset Section",
+				"sort_order": 1
+			}`, state.resetDivision.ID), http.StatusCreated)
+			state.resetClass = executeAPICommand[ShowClass](t, a, "classes.create", fmt.Sprintf(`{
+				"section_id": %q,
+				"class_number": "999",
+				"sort_order": 1,
+				"title": "Reset Class",
+				"domain": "horticulture"
+			}`, state.resetSection.ID), http.StatusCreated)
+			state.resetEntry = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Reset Entry"
+			}`, state.resetShow.ID, state.resetClass.ID, state.entrant.ID), http.StatusCreated)
+			_ = executeAPICommand[map[string]string](t, a, "shows.reset_schedule", fmt.Sprintf(`{
+				"show_id": %q
+			}`, state.resetShow.ID), http.StatusOK)
 		},
 		"clubs.invites.create": func(t *testing.T) {
 			state.invite = executeAPICommand[OrganizationInvite](t, a, "clubs.invites.create", fmt.Sprintf(`{
@@ -3223,17 +3317,29 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 	if got, ok := replayed.showByID(state.show.ID); !ok || got.Location != "Hall B" || got.Name != "Replay Summer Show Updated" {
 		t.Fatalf("replayed show mismatch: %#v", got)
 	}
+	if got, ok := replayed.showByID(state.resetShow.ID); !ok || got.Name != "Replay Reset Show" {
+		t.Fatalf("replayed reset target show mismatch: %#v", got)
+	}
 	if got, ok := replayed.scheduleByShowID(state.show.ID); !ok || got.Notes != "updated schedule notes" {
 		t.Fatalf("replayed schedule mismatch: %#v", got)
 	}
+	if got, ok := replayed.scheduleByShowID(state.resetShow.ID); ok {
+		t.Fatalf("reset show should not retain schedule after replay: %#v", got)
+	}
 	if got, ok := replayed.classByID(state.classPrimary.ID); !ok || got.SortOrder != 5 || got.Description != "White blooms" {
 		t.Fatalf("replayed primary class mismatch: %#v", got)
+	}
+	if _, ok := replayed.classByID(state.resetClass.ID); ok {
+		t.Fatalf("reset show class %s should not survive replay", state.resetClass.ID)
 	}
 	if got, ok := replayed.entryByID(state.entryKept.ID); !ok || got.ClassID != state.classSecondary.ID || got.PersonID != state.reassignedTo.ID || !got.Suppressed || got.Placement != 1 || got.Points != 6 {
 		t.Fatalf("replayed kept entry mismatch: %#v", got)
 	}
 	if _, ok := replayed.entryByID(state.entryDeleted.ID); ok {
 		t.Fatalf("deleted entry %s should not survive replay", state.entryDeleted.ID)
+	}
+	if _, ok := replayed.entryByID(state.resetEntry.ID); ok {
+		t.Fatalf("reset show entry %s should not survive replay", state.resetEntry.ID)
 	}
 	if got := replayed.mediaByEntry(state.entryKept.ID); len(got) != 0 {
 		t.Fatalf("deleted media should stay deleted, got %#v", got)
@@ -3621,6 +3727,78 @@ func TestOrganizationCreateCommandCreatesOrganization(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"name":"Uxbridge Horticultural Society"`) {
 		t.Fatal("organization create response missing organization name")
+	}
+}
+
+func TestShowResetScheduleCommandClearsHierarchy(t *testing.T) {
+	a := testApp()
+	show, err := a.store.createShow(ShowInput{
+		OrganizationID: "org_demo1",
+		Name:           "Resettable Show",
+		Location:       "Club Hall",
+		Date:           "2026-09-09",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	schedule, err := a.store.createSchedule(ShowSchedule{ShowID: show.ID, Notes: "import scratch"})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	division, err := a.store.createDivision(DivisionInput{
+		ShowScheduleID: schedule.ID,
+		Title:          "Horticulture",
+		Domain:         "horticulture",
+		SortOrder:      1,
+	})
+	if err != nil {
+		t.Fatalf("create division: %v", err)
+	}
+	section, err := a.store.createSection(SectionInput{
+		DivisionID: division.ID,
+		Title:      "Annuals",
+		SortOrder:  1,
+	})
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+	class, err := a.store.createClass(ShowClassInput{
+		SectionID:   section.ID,
+		ClassNumber: "1",
+		SortOrder:   1,
+		Title:       "Calendula",
+		Domain:      "horticulture",
+	})
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+	if _, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  class.ID,
+		PersonID: "person_01",
+		Name:     "Autumn Gold",
+	}); err != nil {
+		t.Fatalf("create entry: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.reset_schedule", a.handleAPICommand)
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/shows.reset_schedule", `{"show_id":"`+show.ID+`"}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := a.store.scheduleByShowID(show.ID); ok {
+		t.Fatal("schedule should be removed by reset")
+	}
+	if got := a.store.classesByShowID(show.ID); len(got) != 0 {
+		t.Fatalf("expected no classes after reset, got %d", len(got))
+	}
+	if got := a.store.entriesByShow(show.ID); len(got) != 0 {
+		t.Fatalf("expected no entries after reset, got %d", len(got))
 	}
 }
 

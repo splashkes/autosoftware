@@ -17,27 +17,27 @@ type accountRoleView struct {
 }
 
 type accountData struct {
-	Title              string
-	CurrentPath        string
-	User               *UserIdentity
-	IsAdmin            bool
-	ActiveSection      string
-	Sections           []accountSectionView
-	Notice             accountNotice
-	Roles              []accountRoleView
-	Shows              []*Show
-	AgentTokens        []accountAgentTokenView
-	TokenProfiles      []accountTokenProfileView
-	SelectedProfileID  string
-	DefaultExpiryDays  int
-	IssuedAgentToken   *issuedAgentTokenView
-	AccountPermissions []accountPermissionView
-	ManagedClubs       []managedClubView
-	ClubMemberships    []accountClubMembershipView
-	Entries            []accountEntryView
-	Profile            accountProfileEditorView
-	CurrentSeason      string
-	CurrentSeasonPoints float64
+	Title                string
+	CurrentPath          string
+	User                 *UserIdentity
+	IsAdmin              bool
+	ActiveSection        string
+	Sections             []accountSectionView
+	Notice               accountNotice
+	Roles                []accountRoleView
+	Shows                []*Show
+	AgentTokens          []accountAgentTokenView
+	TokenProfiles        []accountTokenProfileView
+	SelectedProfileID    string
+	DefaultExpiryDays    int
+	IssuedAgentToken     *issuedAgentTokenView
+	AccountPermissions   []accountPermissionView
+	ManagedClubs         []managedClubView
+	ClubMemberships      []accountClubMembershipView
+	Entries              []accountEntryView
+	Profile              accountProfileEditorView
+	CurrentSeason        string
+	CurrentSeasonPoints  float64
 	CurrentSeasonEntries int
 }
 
@@ -99,28 +99,28 @@ type accountClubMembershipView struct {
 }
 
 type accountEntryView struct {
-	EntryID     string
-	ShowName    string
-	ShowHref    string
-	ClassLabel  string
-	EntryName   string
-	EntryHref   string
-	PointsLabel string
-	Placement   string
+	EntryID      string
+	ShowName     string
+	ShowHref     string
+	ClassLabel   string
+	EntryName    string
+	EntryHref    string
+	PointsLabel  string
+	Placement    string
 	CreatedLabel string
-	Suppressed  bool
+	Suppressed   bool
 }
 
 type accountProfileEditorView struct {
-	PersonID             string
-	FirstName            string
-	LastName             string
-	Email                string
-	PublicDisplayMode    string
-	InitialsSample       string
+	PersonID                   string
+	FirstName                  string
+	LastName                   string
+	Email                      string
+	PublicDisplayMode          string
+	InitialsSample             string
 	FirstNameLastInitialSample string
-	FullNameSample       string
-	HasStoredProfile     bool
+	FullNameSample             string
+	HasStoredProfile           bool
 }
 
 func (a *app) handleAccount(w http.ResponseWriter, r *http.Request) {
@@ -246,27 +246,27 @@ func (a *app) buildAccountData(user UserIdentity, section string, notice account
 	sections := accountSections(section, a.userIsAdmin(user))
 
 	return accountData{
-		Title:              "Your Profile",
-		CurrentPath:        "/account",
-		User:               &user,
-		IsAdmin:            a.userIsAdmin(user),
-		ActiveSection:      section,
-		Sections:           sections,
-		Notice:             notice,
-		Roles:              roles,
-		Shows:              a.store.allShows(),
-		AgentTokens:        tokenViews,
-		TokenProfiles:      profileViews,
-		SelectedProfileID:  selectedProfile,
-		DefaultExpiryDays:  defaultExpiryDays,
-		IssuedAgentToken:   issuedView,
-		AccountPermissions: accountPermissions,
-		ManagedClubs:       a.managedClubsForUser(user),
-		ClubMemberships:    clubMemberships,
-		Entries:            entries,
-		Profile:            profile,
-		CurrentSeason:      currentSeason,
-		CurrentSeasonPoints: seasonPoints,
+		Title:                "Your Profile",
+		CurrentPath:          "/account",
+		User:                 &user,
+		IsAdmin:              a.userIsAdmin(user),
+		ActiveSection:        section,
+		Sections:             sections,
+		Notice:               notice,
+		Roles:                roles,
+		Shows:                a.store.allShows(),
+		AgentTokens:          tokenViews,
+		TokenProfiles:        profileViews,
+		SelectedProfileID:    selectedProfile,
+		DefaultExpiryDays:    defaultExpiryDays,
+		IssuedAgentToken:     issuedView,
+		AccountPermissions:   accountPermissions,
+		ManagedClubs:         a.managedClubsForUser(user),
+		ClubMemberships:      clubMemberships,
+		Entries:              entries,
+		Profile:              profile,
+		CurrentSeason:        currentSeason,
+		CurrentSeasonPoints:  seasonPoints,
 		CurrentSeasonEntries: seasonEntries,
 	}
 }
@@ -664,6 +664,15 @@ func (a *app) handleClubs(w http.ResponseWriter, r *http.Request) {
 		CurrentPath: "/clubs",
 		Clubs:       a.clubCards(time.Now()),
 	})
+}
+
+func (a *app) handleClubDetail(w http.ResponseWriter, r *http.Request) {
+	data, ok := a.clubDetailData(strings.TrimSpace(r.PathValue("organizationID")), time.Now())
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	a.render(w, r, "club_detail.html", data)
 }
 
 func (a *app) handleClassesIndex(w http.ResponseWriter, r *http.Request) {

@@ -6,7 +6,7 @@
 <div class="show-header">
   <h1>{{.Show.Name}}</h1>
   <p class="show-meta">
-    {{if .Org}}{{.Org.Name}} &middot; {{end}}
+    {{if .Org}}<a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a> &middot; {{end}}
     {{.Show.Location}} &middot; {{.Show.Date}}
     {{statusBadge .Show.Status}}
   </p>

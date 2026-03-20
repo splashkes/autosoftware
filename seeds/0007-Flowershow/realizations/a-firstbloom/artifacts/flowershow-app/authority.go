@@ -927,6 +927,8 @@ func (a *app) commandScopesFromPayload(command string, body []byte) []authorityS
 	switch command {
 	case "shows.create", "awards.create":
 		add("organization", stringValue(payload["organization_id"]))
+	case "shows.reset_schedule":
+		a.expandShowScopes(&scopes, stringValue(payload["show_id"]))
 	case "schedules.upsert", "judges.assign", "entries.create", "show_credits.create":
 		a.expandShowScopes(&scopes, stringValue(payload["show_id"]))
 	case "divisions.create":

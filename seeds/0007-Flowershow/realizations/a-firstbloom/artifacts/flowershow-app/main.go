@@ -99,6 +99,7 @@ func main() {
 	// Public pages
 	mux.HandleFunc("GET /", a.handleHome)
 	mux.HandleFunc("GET /clubs", a.handleClubs)
+	mux.HandleFunc("GET /clubs/{organizationID}", a.handleClubDetail)
 	mux.HandleFunc("GET /classes", a.handleClassesIndex)
 	mux.HandleFunc("GET /account", a.requireSignedInPage(a.handleAccount))
 	mux.HandleFunc("GET /profile", a.requireSignedInPage(a.handleAccount))
@@ -214,6 +215,7 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/organization.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.update", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.reset_schedule", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/clubs.invites.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/judges.assign", a.handleAPICommand)
@@ -657,6 +659,7 @@ func parseTemplates() map[string]*template.Template {
 	pages := []string{
 		"templates/home.html",
 		"templates/clubs.html",
+		"templates/club_detail.html",
 		"templates/classes.html",
 		"templates/show_detail.html",
 		"templates/show_summary.html",
@@ -846,6 +849,7 @@ func (a *app) storeRefreshMiddleware(next http.Handler) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 		if err := refresher.Refresh(ctx); err != nil {
+			log.Printf("flowershow store refresh failed for %s: %v", r.URL.Path, err)
 			http.Error(w, "Store refresh failed.", http.StatusServiceUnavailable)
 			return
 		}

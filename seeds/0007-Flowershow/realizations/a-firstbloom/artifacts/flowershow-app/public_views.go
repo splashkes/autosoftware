@@ -104,6 +104,35 @@ type clubsData struct {
 	Clubs       []*clubCardView
 }
 
+type publicClubMemberView struct {
+	Person      *Person
+	Role        string
+	EntryCount  int
+	TotalPoints float64
+}
+
+type clubCreditView struct {
+	Credit      *ShowCredit
+	Person      *Person
+	Show        *Show
+	DisplayName string
+}
+
+type clubDetailData struct {
+	Title         string
+	CurrentPath   string
+	Org           *Organization
+	Parent        *Organization
+	UpcomingShows []*homeShowCard
+	PastShows     []*homeShowCard
+	TopMembers    []*clubTopPerson
+	Members       []*publicClubMemberView
+	Credits       []*clubCreditView
+	TotalShows    int
+	TotalEntries  int
+	TotalMembers  int
+}
+
 type publicClassCard struct {
 	Show     *Show
 	Org      *Organization
@@ -412,6 +441,94 @@ func (a *app) clubCards(now time.Time) []*clubCardView {
 	}
 	sort.Slice(cards, func(i, j int) bool { return cards[i].Org.Name < cards[j].Org.Name })
 	return cards
+}
+
+func (a *app) clubDetailData(organizationID string, now time.Time) (clubDetailData, bool) {
+	org, ok := a.store.organizationByID(organizationID)
+	if !ok {
+		return clubDetailData{}, false
+	}
+	today := dateOnly(now)
+	data := clubDetailData{
+		Title:       org.Name,
+		CurrentPath: "/clubs/" + org.ID,
+		Org:         org,
+		TopMembers:  a.topPeopleForOrganization(org.ID, 8),
+	}
+	if org.ParentID != "" {
+		data.Parent, _ = a.store.organizationByID(org.ParentID)
+	}
+
+	memberStats := map[string]*publicClubMemberView{}
+	for _, person := range a.store.allPersons() {
+		for _, link := range a.store.personOrganizationsByPerson(person.ID) {
+			if link.OrganizationID != org.ID {
+				continue
+			}
+			memberStats[person.ID] = &publicClubMemberView{
+				Person: person,
+				Role:   link.Role,
+			}
+			break
+		}
+	}
+
+	for _, show := range a.store.allShows() {
+		if show.OrganizationID != org.ID {
+			continue
+		}
+		data.TotalShows++
+		card := a.homeShowCard(show, today)
+		showDate, ok := parseShowDate(show.Date)
+		if ok && showDate.Before(today) {
+			data.PastShows = append(data.PastShows, card)
+		} else {
+			data.UpcomingShows = append(data.UpcomingShows, card)
+		}
+		for _, entry := range a.publicEntriesByShow(show.ID) {
+			data.TotalEntries++
+			if item := memberStats[entry.PersonID]; item != nil {
+				item.EntryCount++
+				item.TotalPoints += entry.Points
+			}
+		}
+		for _, credit := range a.store.showCreditsByShow(show.ID) {
+			person, _ := a.store.personByID(credit.PersonID)
+			displayName := strings.TrimSpace(credit.DisplayName)
+			if displayName == "" && person != nil {
+				displayName = publicPersonLabel(person)
+			}
+			if displayName == "" {
+				displayName = "TBD"
+			}
+			data.Credits = append(data.Credits, &clubCreditView{
+				Credit:      credit,
+				Person:      person,
+				Show:        show,
+				DisplayName: displayName,
+			})
+		}
+	}
+
+	for _, item := range memberStats {
+		data.Members = append(data.Members, item)
+	}
+	data.TotalMembers = len(data.Members)
+	sort.Slice(data.UpcomingShows, func(i, j int) bool { return data.UpcomingShows[i].Show.Date < data.UpcomingShows[j].Show.Date })
+	sort.Slice(data.PastShows, func(i, j int) bool { return data.PastShows[i].Show.Date > data.PastShows[j].Show.Date })
+	sort.Slice(data.Members, func(i, j int) bool {
+		if data.Members[i].TotalPoints == data.Members[j].TotalPoints {
+			return publicPersonLabel(data.Members[i].Person) < publicPersonLabel(data.Members[j].Person)
+		}
+		return data.Members[i].TotalPoints > data.Members[j].TotalPoints
+	})
+	sort.Slice(data.Credits, func(i, j int) bool {
+		if data.Credits[i].Show.Date == data.Credits[j].Show.Date {
+			return data.Credits[i].Credit.SortOrder < data.Credits[j].Credit.SortOrder
+		}
+		return data.Credits[i].Show.Date > data.Credits[j].Show.Date
+	})
+	return data, true
 }
 
 func (a *app) topPeopleForOrganization(orgID string, limit int) []*clubTopPerson {

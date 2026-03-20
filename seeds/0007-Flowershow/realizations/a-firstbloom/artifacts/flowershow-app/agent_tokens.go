@@ -242,6 +242,7 @@ var commandCapabilityMap = map[string]string{
 	"organization.create":        "organization.manage",
 	"shows.create":               "shows.manage",
 	"shows.update":               "shows.manage",
+	"shows.reset_schedule":       "schedule.manage",
 	"clubs.invites.create":       "organization.invites.manage",
 	"schedules.upsert":           "schedule.manage",
 	"divisions.create":           "schedule.manage",

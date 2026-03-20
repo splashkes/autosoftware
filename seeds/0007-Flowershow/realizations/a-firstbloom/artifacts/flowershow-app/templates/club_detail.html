@@ -1,0 +1,157 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="{{$.BasePath}}/">Home</a> &rsaquo; <a href="{{$.BasePath}}/clubs">Clubs</a> &rsaquo; <span>{{.Org.Name}}</span>
+</div>
+
+<section class="club-hero">
+  <div class="club-hero-copy">
+    <p class="workflow-kicker">Club Profile</p>
+    <h1>{{.Org.Name}}</h1>
+    <p class="section-desc">
+      {{if .Parent}}Part of <a href="{{$.BasePath}}/clubs/{{.Parent.ID}}">{{.Parent.Name}}</a>. {{end}}
+      Follow this club’s upcoming shows, past results, contributors, and public credits.
+    </p>
+  </div>
+  <div class="stats-grid">
+    <div class="hero-stat-card">
+      <strong>{{.TotalShows}}</strong>
+      <span>Total shows</span>
+    </div>
+    <div class="hero-stat-card">
+      <strong>{{.TotalEntries}}</strong>
+      <span>Public entries</span>
+    </div>
+    <div class="hero-stat-card">
+      <strong>{{.TotalMembers}}</strong>
+      <span>Members</span>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Upcoming Shows</h2>
+      <p class="section-desc">What this club has scheduled next.</p>
+    </div>
+  </div>
+  {{if .UpcomingShows}}
+  <div class="show-card-stack">
+    {{range .UpcomingShows}}
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
+      <div class="show-card-media" data-show-rotator>
+        {{range $index, $frame := .Featured}}
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{$.BasePath}}{{$frame.MediaPath}}');"{{end}}>
+          <span>{{$frame.Label}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="card-body show-card-body">
+        <div class="show-card-meta-line">
+          <span class="badge badge-muted">{{.RelativeLabel}}</span>
+          <span class="badge badge-muted">{{.SeasonLabel}}</span>
+        </div>
+        <h3 class="card-title">{{.Show.Name}}</h3>
+        <p class="card-meta">{{.Show.Location}} · {{.Show.Date}}</p>
+        <p class="card-meta">{{.ClassCount}} classes · {{.EntryCount}} public entries</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No upcoming shows yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Top Members</h2>
+      <p class="section-desc">Members and exhibitors with the strongest current public history in this club.</p>
+    </div>
+  </div>
+  {{if .Members}}
+  <div class="card">
+    <div class="card-body">
+      <table class="table">
+        <thead>
+          <tr><th>Member</th><th>Role</th><th>Entries</th><th>Points</th></tr>
+        </thead>
+        <tbody>
+          {{range .Members}}
+          <tr>
+            <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
+            <td>{{.Role}}</td>
+            <td>{{.EntryCount}}</td>
+            <td>{{printf "%.1f" .TotalPoints}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {{else}}
+  <p class="empty-state">No club members are public yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Show Credits</h2>
+      <p class="section-desc">Recent credited roles across this club’s shows.</p>
+    </div>
+  </div>
+  {{if .Credits}}
+  <div class="card-grid">
+    {{range .Credits}}
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">{{.Credit.CreditLabel}}</h3>
+        <p><strong>{{.DisplayName}}</strong></p>
+        <p class="card-meta"><a href="{{$.BasePath}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> · {{.Show.Date}}</p>
+        {{if .Credit.Notes}}<p class="card-meta">{{.Credit.Notes}}</p>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No public show credits yet.</p>
+  {{end}}
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <h2>Past Shows</h2>
+      <p class="section-desc">Completed shows stay available for browsing and reference.</p>
+    </div>
+  </div>
+  {{if .PastShows}}
+  <div class="show-card-stack">
+    {{range .PastShows}}
+    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
+      <div class="show-card-media" data-show-rotator>
+        {{range $index, $frame := .Featured}}
+        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{$.BasePath}}{{$frame.MediaPath}}');"{{end}}>
+          <span>{{$frame.Label}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div class="card-body show-card-body">
+        <div class="show-card-meta-line">
+          <span class="badge badge-muted">{{.RelativeLabel}}</span>
+          <span class="badge badge-muted">{{.SeasonLabel}}</span>
+        </div>
+        <h3 class="card-title">{{.Show.Name}}</h3>
+        <p class="card-meta">{{.Show.Location}} · {{.Show.Date}}</p>
+        <p class="card-meta">{{.ClassCount}} classes · {{.EntryCount}} public entries</p>
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No past shows yet.</p>
+  {{end}}
+</section>
+{{end}}

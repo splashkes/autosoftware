@@ -72,7 +72,7 @@
   {{if .Clubs}}
   <div class="card-grid club-card-grid">
     {{range .Clubs}}
-    <a href="{{$.BasePath}}/clubs#{{.Org.ID}}" class="card club-card">
+    <a href="{{$.BasePath}}/clubs/{{.Org.ID}}" class="card club-card">
       <div class="card-body">
         <h3 class="card-title">{{.Org.Name}}</h3>
         <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent club context{{end}}</p>

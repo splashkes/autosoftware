@@ -306,6 +306,31 @@ commands:
       - activity_events
     projection: shows.detail
     consistency: read_your_writes
+  - name: shows.reset_schedule
+    summary: Clear a show's schedule hierarchy and related entries so an import can restart cleanly on the same show.
+    path: /v1/commands/0007-Flowershow/shows.reset_schedule
+    object_kinds:
+      - show
+      - show_class
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#11-interface-and-agent-access
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+    error_codes:
+      - code: invalid_json
+        summary: Request body did not match the declared JSON schema.
+      - code: show_reset_schedule_failed
+        summary: Reset failed because the show id was invalid or the existing hierarchy could not be cleared.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
   - name: schedules.upsert
     summary: Create or update the schedule governance record for a show.
     path: /v1/commands/0007-Flowershow/schedules.upsert

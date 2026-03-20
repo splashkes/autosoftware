@@ -264,6 +264,25 @@ body {
   text-decoration: none;
 }
 .club-show-list a:hover { text-decoration: underline; }
+.club-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, .85fr);
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1.5rem;
+}
+.club-hero-copy {
+  padding: 1.5rem;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(216, 243, 220, .72), transparent 30%),
+    linear-gradient(135deg, white, rgba(253, 248, 225, .92));
+  box-shadow: var(--shadow);
+}
+.club-hero-copy h1 {
+  color: var(--green);
+  margin-bottom: .35rem;
+}
 .club-topline {
   margin-top: 1rem;
   display: grid;
@@ -313,6 +332,12 @@ body {
 .show-header { margin-bottom: 1.5rem; }
 .show-header h1 { color: var(--green); }
 .show-meta { color: var(--gray-500); margin: .5rem 0; }
+.club-hero-copy a,
+.show-meta a,
+.card-meta a { color: var(--green); text-decoration: none; }
+.club-hero-copy a:hover,
+.show-meta a:hover,
+.card-meta a:hover { text-decoration: underline; }
 .show-actions { display: flex; gap: .5rem; margin-top: .75rem; }
 
 .event-workspace-intro {
@@ -1100,6 +1125,7 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .hero h1 { font-size: 1.75rem; }
   .card-grid { grid-template-columns: 1fr; }
   .hero-home,
+  .club-hero,
   .show-card-rich,
   .show-card-rich.is-compact,
   .account-layout { grid-template-columns: 1fr; }

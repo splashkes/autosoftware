@@ -358,6 +358,26 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, show)
 
+	case "shows.reset_schedule":
+		var req struct {
+			ShowID string `json:"show_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ShowID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_reset_schedule_failed", "show_id is required", "Pass a stable show_id from organizations.directory, shows.create, or a show projection before resetting its schedule hierarchy.", []apiFieldError{{Field: "show_id", Message: "required stable show id"}})
+			return
+		}
+		if err := a.store.resetShowSchedule(req.ShowID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_reset_schedule_failed", err.Error(), "Use this command to clear a show's schedule hierarchy and entries before retrying an import into the same show.", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":  "ok",
+			"show_id": strings.TrimSpace(req.ShowID),
+		})
+
 	case "clubs.invites.create":
 		var input OrganizationInviteInput
 		if !a.decodeAPIJSON(w, r, &input) {
