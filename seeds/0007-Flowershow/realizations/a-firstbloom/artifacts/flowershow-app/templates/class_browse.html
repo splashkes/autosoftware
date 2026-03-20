@@ -10,14 +10,14 @@
   <h2>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h2>
   {{range .Sections}}
   <div class="schedule-section">
-    <h3>Section {{.Section.Code}}: {{.Section.Title}}</h3>
+    <h3>{{.Section.Title}}</h3>
     <div class="class-grid">
       {{range .Classes}}
       <a href="{{bp}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="card class-card">
         <div class="card-body">
           <span class="class-number">{{.ClassNumber}}</span>
           <h4 class="card-title">{{.Title}}</h4>
-          <p class="card-meta">{{.Description}}</p>
+          {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
           {{if .SpecimenCount}}<p class="card-meta">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</p>{{end}}
         </div>
       </a>
@@ -28,4 +28,3 @@
 </section>
 {{end}}
 {{end}}
-

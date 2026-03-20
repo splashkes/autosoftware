@@ -1575,6 +1575,22 @@ func TestScheduleUpsertCommandCreatesSchedule(t *testing.T) {
 	}
 }
 
+func TestCreateShowUsesOrganizationDateSlug(t *testing.T) {
+	a := testApp()
+	show, err := a.store.createShow(ShowInput{
+		OrganizationID: "org_demo1",
+		Name:           "June 10 Meeting And Show",
+		Date:           "2026-06-10",
+		Season:         "2026",
+	})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	if show.Slug != "mrs2026-0610" {
+		t.Fatalf("expected org/date slug, got %q", show.Slug)
+	}
+}
+
 func TestCommandEndpointsAcceptRuntimeContextEnvelopeWithoutPersistence(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -2324,8 +2340,8 @@ func TestStoreMemoryBasics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if show.Slug != "test-show" {
-		t.Fatalf("expected slug test-show, got %s", show.Slug)
+	if show.Slug != "mrs2025" {
+		t.Fatalf("expected slug mrs2025, got %s", show.Slug)
 	}
 
 	// Create entry

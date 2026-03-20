@@ -43,6 +43,70 @@ func slugify(s string) string {
 	return strings.Trim(s, "-")
 }
 
+func organizationInitials(name string) string {
+	words := strings.Fields(strings.TrimSpace(name))
+	initials := make([]rune, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+		runes := []rune(word)
+		if len(runes) == 0 {
+			continue
+		}
+		initials = append(initials, runes[0])
+	}
+	if len(initials) == 0 {
+		return "show"
+	}
+	return strings.ToLower(string(initials))
+}
+
+func showSlugForInput(org *Organization, input ShowInput) string {
+	dateDigits := strings.NewReplacer("-", "", "/", "", " ", "").Replace(strings.TrimSpace(input.Date))
+	datePart := ""
+	if len(dateDigits) >= 8 {
+		datePart = dateDigits[:4] + "-" + dateDigits[4:8]
+	} else if strings.TrimSpace(input.Season) != "" {
+		datePart = strings.TrimSpace(input.Season)
+	}
+	base := "show"
+	if org != nil {
+		base = organizationInitials(org.Name)
+	}
+	if datePart == "" {
+		return base
+	}
+	return base + datePart
+}
+
+func uniqueShowSlug(existing map[string]*Show, preferred, currentID string) string {
+	preferred = slugify(preferred)
+	if preferred == "" {
+		preferred = "show"
+	}
+	candidate := preferred
+	seq := 2
+	for {
+		conflict := false
+		for _, show := range existing {
+			if show == nil || show.ID == currentID {
+				continue
+			}
+			if show.Slug == candidate {
+				conflict = true
+				break
+			}
+		}
+		if !conflict {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s-%d", preferred, seq)
+		seq++
+	}
+}
+
 // --- Store interface ---
 
 type flowershowStore interface {
@@ -322,9 +386,10 @@ func (s *memoryStore) createShow(input ShowInput) (*Show, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
+	org, _ := s.organizations[strings.TrimSpace(input.OrganizationID)]
 	show := &Show{
 		ID:             newID("show"),
-		Slug:           slugify(input.Name),
+		Slug:           uniqueShowSlug(s.shows, showSlugForInput(org, input), ""),
 		OrganizationID: input.OrganizationID,
 		Name:           input.Name,
 		Location:       input.Location,
@@ -353,6 +418,14 @@ func (s *memoryStore) updateShow(id string, input ShowInput) (*Show, error) {
 	if input.OrganizationID != "" {
 		show.OrganizationID = input.OrganizationID
 	}
+	org, _ := s.organizations[strings.TrimSpace(show.OrganizationID)]
+	show.Slug = uniqueShowSlug(s.shows, showSlugForInput(org, ShowInput{
+		OrganizationID: show.OrganizationID,
+		Name:           show.Name,
+		Location:       show.Location,
+		Date:           show.Date,
+		Season:         show.Season,
+	}), show.ID)
 	show.UpdatedAt = time.Now().UTC()
 	s.appendClaim(show.ID, "show", "show.updated", show)
 	return show, nil
