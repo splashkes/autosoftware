@@ -1696,6 +1696,32 @@ func TestCitationsCreateAcceptsNumericPageRefs(t *testing.T) {
 	}
 }
 
+func TestPublicClubsIncludeOrganizationsWithoutShows(t *testing.T) {
+	a := testApp()
+	if _, err := a.store.createOrganization(Organization{
+		Name:  "Uxbridge Horticultural Society",
+		Level: "society",
+	}); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", a.handleHome)
+	mux.HandleFunc("GET /clubs", a.handleClubs)
+
+	for _, path := range []string{"/", "/clubs"} {
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s expected 200, got %d", path, w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Uxbridge Horticultural Society") {
+			t.Fatalf("%s should list newly created organizations even before shows exist", path)
+		}
+	}
+}
+
 func TestPrivateByIDProjectionsRespectAuthModes(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -2798,6 +2824,32 @@ func TestOrganizationCreateCommandCreatesOrganization(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"name":"Uxbridge Horticultural Society"`) {
 		t.Fatal("organization create response missing organization name")
+	}
+}
+
+func TestFlowershowPostgresStoreMutatorsDoNotWriteOnlyToMemory(t *testing.T) {
+	t.Helper()
+	root := "."
+	re := regexp.MustCompile(`s\.mem\.(create|update|reorder|move|reassign|delete|set|attach|submit|assign|claim|link)\(`)
+	files := []string{
+		filepath.Join(root, "store.go"),
+		filepath.Join(root, "store_invites.go"),
+	}
+	var hits []string
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for idx, line := range lines {
+			if re.MatchString(line) {
+				hits = append(hits, fmt.Sprintf("%s:%d:%s", path, idx+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+	if len(hits) > 0 {
+		t.Fatalf("flowershow postgres store still contains memory-only mutator paths:\n%s", strings.Join(hits, "\n"))
 	}
 }
 
