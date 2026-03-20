@@ -135,11 +135,12 @@ type clubDetailData struct {
 }
 
 type publicClassCard struct {
-	Show      *Show
-	Org       *Organization
-	Class     *ShowClass
-	Featured  showVisualFrame
-	ShowCount int
+	Show       *Show
+	Org        *Organization
+	Class      *ShowClass
+	Featured   showVisualFrame
+	ShowCount  int
+	EntryCount int
 }
 
 type classesDomainView struct {
@@ -611,12 +612,22 @@ func (a *app) topPeopleForOrganization(orgID string, limit int) []*clubTopPerson
 func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
 	themes := []string{"rose", "fern", "gold"}
 	idx := 0
+	class, _ := a.store.classByID(classID)
+	classLabel := "Class highlights"
+	if class != nil {
+		switch {
+		case strings.TrimSpace(class.Description) != "":
+			classLabel = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Description)
+		case strings.TrimSpace(class.Title) != "":
+			classLabel = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Title)
+		}
+	}
 	for _, entry := range a.publicEntriesByShow(show.ID) {
 		if entry.ClassID != classID {
 			continue
 		}
 		frame := showVisualFrame{
-			Label: entry.Name,
+			Label: classLabel,
 			Theme: themes[idx%len(themes)],
 		}
 		media := a.store.mediaByEntry(entry.ID)
@@ -638,7 +649,15 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 	cardIndex := map[string]*publicClassCard{}
 	for _, show := range a.store.allShows() {
 		org, _ := a.store.organizationByID(show.OrganizationID)
+		publicEntries := a.publicEntriesByShow(show.ID)
+		classEntryCounts := map[string]int{}
+		for _, entry := range publicEntries {
+			classEntryCounts[entry.ClassID]++
+		}
 		for _, class := range a.store.classesByShowID(show.ID) {
+			if classEntryCounts[class.ID] == 0 {
+				continue
+			}
 			haystack := strings.ToLower(strings.Join([]string{
 				class.ClassNumber,
 				class.Title,
@@ -677,13 +696,15 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 			}, "|")
 			card := cardIndex[cardKey]
 			frame := a.classVisualFrame(show, class.ID)
+			entryCount := classEntryCounts[class.ID]
 			if card == nil {
 				card = &publicClassCard{
-					Show:      show,
-					Org:       org,
-					Class:     class,
-					Featured:  frame,
-					ShowCount: 1,
+					Show:       show,
+					Org:        org,
+					Class:      class,
+					Featured:   frame,
+					ShowCount:  1,
+					EntryCount: entryCount,
 				}
 				cardIndex[cardKey] = card
 				view.Items = append(view.Items, card)
@@ -692,11 +713,16 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 			card.ShowCount++
 			currentHasImage := strings.TrimSpace(card.Featured.MediaPath) != ""
 			nextHasImage := strings.TrimSpace(frame.MediaPath) != ""
-			if (!currentHasImage && nextHasImage) || show.Date > card.Show.Date {
+			currentEntryCount := card.EntryCount
+			if entryCount > card.EntryCount {
+				card.EntryCount = entryCount
+			}
+			if (!currentHasImage && nextHasImage) || show.Date > card.Show.Date || (show.Date == card.Show.Date && entryCount > currentEntryCount) {
 				card.Show = show
 				card.Org = org
 				card.Class = class
 				card.Featured = frame
+				card.EntryCount = entryCount
 			}
 		}
 	}

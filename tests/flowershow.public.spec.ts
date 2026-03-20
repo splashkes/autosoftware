@@ -51,6 +51,7 @@ test.describe('Flowershow Public', () => {
     await expect(page.locator('h1')).toContainText('Classes');
     await expect(page.locator('text=Hybrid Tea Roses')).toBeVisible();
     await expect(page.locator('text=One Hybrid Tea Bloom')).toBeVisible();
+    await expect(page.locator('.class-card').first()).toContainText('specimen');
   });
 
   test('entry detail shows initials only (privacy)', async ({ page }) => {
@@ -88,8 +89,19 @@ test.describe('Flowershow Public', () => {
 
     await page.goto('/shows/spring-rose-show-2025/classes/class_01');
     await expect(page).toHaveURL(/\/shows\/spring-rose-show-2025\/classes\/class_01$/);
+    await expect(page.locator('.detail-list dt')).toContainText(['Presentation']);
+    await expect(page.locator('.detail-list')).toContainText('1 specimen');
     await expect(page.locator('.entry-thumb-grid')).toBeVisible();
     await expect(page.locator('img.entry-row-thumb').first()).toBeVisible();
+    await expect(page.locator('.class-rules')).toContainText('Use the provided green bottles');
+  });
+
+  test('global classes index only shows classes with public entries', async ({ page }) => {
+    await page.goto('/classes');
+    await expect(page.locator('h1')).toContainText('Classes');
+    await expect(page.locator('text=Amelia White Peony')).toHaveCount(0);
+    await expect(page.locator('text=Peace')).toHaveCount(0);
+    await expect(page.locator('.class-card-rich').first()).toContainText('entries');
   });
 
   test('taxonomy browse and taxon detail show related entries', async ({ page }) => {

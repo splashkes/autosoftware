@@ -68,7 +68,7 @@
       </div>
       <div class="card-body show-card-body">
         <h3 class="card-title"><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></h3>
-        <p class="card-meta">{{.Show.Name}} · {{.Show.Date}}</p>
+        <p class="card-meta">{{.Show.Name}}{{if .Show.Date}} · {{.Show.Date}}{{end}}</p>
         {{if .Class}}<p class="card-meta">Class {{.Class.ClassNumber}} · {{.Class.Title}}</p>{{end}}
         <div class="entry-meta">
           {{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}" class="badge badge-green">{{publicPersonLabel .Person}}</a>{{end}}
