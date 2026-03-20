@@ -590,6 +590,21 @@ commands:
       - activity_events
     projection: admin.dashboard
     consistency: read_your_writes
+  - name: persons.update
+    summary: Update an existing person record, including judge details.
+    path: /v1/commands/0007-Flowershow/persons.update
+    object_kinds:
+      - person
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: admin.dashboard
+    consistency: read_your_writes
   - name: awards.create
     summary: Define a new award for an organization.
     path: /v1/commands/0007-Flowershow/awards.create
@@ -653,6 +668,33 @@ commands:
       - activity_events
     projection: entries.detail
     consistency: read_your_writes
+  - name: media.upload
+    summary: Upload one or more image or video files directly onto an entry.
+    path: /v1/commands/0007-Flowershow/entries/{entryID}/media.upload
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - uploads
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+    error_codes:
+      - code: invalid_multipart
+        summary: Request body was not valid multipart/form-data.
+      - code: media_entry_missing
+        summary: The path did not reference a stable existing entry id.
+      - code: media_upload_failed
+        summary: The binary file could not be stored or validated.
+      - code: media_attach_failed
+        summary: Stored file metadata could not be attached to the entry.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
   - name: media.delete
     summary: Delete media metadata from an entry record.
     path: /v1/commands/0007-Flowershow/media.delete

@@ -99,6 +99,27 @@ func jsonRequest(method, path, body string) *http.Request {
 	return req
 }
 
+func multipartUploadRequest(t *testing.T, path string, files map[string]string) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for filename, contents := range files {
+		part, err := writer.CreateFormFile("media", filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write([]byte(contents)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", path, &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
+}
+
 func addServiceToken(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer test-token")
 }
@@ -2022,6 +2043,7 @@ func TestServiceTokenParityCommandChain(t *testing.T) {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/judges.assign", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.attach", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries/{entryID}/media.upload", a.handleAPIMediaUpload)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/media.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/entries/{id}", a.handleAPIEntryDetail)
@@ -2155,6 +2177,26 @@ func TestServiceTokenParityCommandChain(t *testing.T) {
 		t.Fatalf("unmarshal media: %v", err)
 	}
 
+	req = multipartUploadRequest(t, "/v1/commands/0007-Flowershow/entries/"+entry.ID+"/media.upload", map[string]string{
+		"entry-upload.jpg": "uploaded entry bytes",
+	})
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("media upload: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var uploadResp struct {
+		EntryID string  `json:"entry_id"`
+		Media   []Media `json:"media"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &uploadResp); err != nil {
+		t.Fatalf("unmarshal upload response: %v", err)
+	}
+	if uploadResp.EntryID != entry.ID || len(uploadResp.Media) != 1 {
+		t.Fatalf("unexpected upload response: %#v", uploadResp)
+	}
+
 	req = jsonRequest("POST", "/v1/commands/0007-Flowershow/media.delete", `{
 		"media_id":"`+media.ID+`"
 	}`)
@@ -2208,6 +2250,39 @@ func TestServiceTokenParityCommandChain(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for suppressed service-token entry, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), uploadResp.Media[0].ID) {
+		t.Fatal("entry detail should include uploaded media metadata")
+	}
+}
+
+func TestAPIMediaUploadRequiresMultipartAndExistingEntry(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries/{entryID}/media.upload", a.handleAPIMediaUpload)
+
+	req := jsonRequest("POST", "/v1/commands/0007-Flowershow/entries/entry_01/media.upload", `{"bad":"shape"}`)
+	addServiceToken(req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid multipart request, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"code":"invalid_multipart"`) {
+		t.Fatalf("expected invalid_multipart error, got %s", w.Body.String())
+	}
+
+	req = multipartUploadRequest(t, "/v1/commands/0007-Flowershow/entries/entry_missing/media.upload", map[string]string{
+		"missing.jpg": "missing entry bytes",
+	})
+	addServiceToken(req)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing entry, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"code":"media_entry_missing"`) {
+		t.Fatalf("expected media_entry_missing error, got %s", w.Body.String())
 	}
 }
 
@@ -2873,8 +2948,10 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 		entryKept      Entry
 		entryDeleted   Entry
 		resetEntry     Entry
+		uploadEntry    Entry
 		invite         OrganizationInvite
 		media          Media
+		uploadedMedia  Media
 		standard       StandardDocument
 		edition        StandardEdition
 		rule           StandardRule
@@ -2926,6 +3003,15 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"organization_id": %q,
 				"organization_role": "judge"
 			}`, state.org.ID), http.StatusCreated)
+		},
+		"persons.update": func(t *testing.T) {
+			state.judge = executeAPICommand[Person](t, a, "persons.update", fmt.Sprintf(`{
+				"id": %q,
+				"first_name": "Jules",
+				"last_name": "Judge Updated",
+				"email": "judge-updated.registry@example.com",
+				"public_display_mode": "full_name"
+			}`, state.judge.ID), http.StatusOK)
 		},
 		"shows.create": func(t *testing.T) {
 			state.show = executeAPICommand[Show](t, a, "shows.create", fmt.Sprintf(`{
@@ -3114,6 +3200,34 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"content_type": "image/jpeg",
 				"file_name": "flower.jpg"
 			}`, state.entryKept.ID), http.StatusCreated)
+		},
+		"media.upload": func(t *testing.T) {
+			state.uploadEntry = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Upload Entry"
+			}`, state.show.ID, state.classSecondary.ID, state.entrant.ID), http.StatusCreated)
+			req := multipartUploadRequest(t, "/v1/commands/0007-Flowershow/entries/"+state.uploadEntry.ID+"/media.upload", map[string]string{
+				"replay-upload.jpg": "replay upload bytes",
+			})
+			addServiceToken(req)
+			req.SetPathValue("entryID", state.uploadEntry.ID)
+			w := httptest.NewRecorder()
+			a.handleAPIMediaUpload(w, req)
+			if w.Code != http.StatusCreated {
+				t.Fatalf("media upload: expected 201, got %d: %s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Media []Media `json:"media"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal media upload response: %v", err)
+			}
+			if len(resp.Media) != 1 {
+				t.Fatalf("expected one uploaded media item, got %#v", resp)
+			}
+			state.uploadedMedia = resp.Media[0]
 		},
 		"media.delete": func(t *testing.T) {
 			_ = executeAPICommand[map[string]string](t, a, "media.delete", fmt.Sprintf(`{
@@ -3314,6 +3428,9 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 	if got, ok := replayed.organizationByID(state.org.ID); !ok || got.Name != "Replay Registry Club" {
 		t.Fatalf("replayed organization mismatch: %#v", got)
 	}
+	if got, ok := replayed.personByID(state.judge.ID); !ok || got.LastName != "Judge Updated" || got.Email != "judge-updated.registry@example.com" {
+		t.Fatalf("replayed judge/person mismatch: %#v", got)
+	}
 	if got, ok := replayed.showByID(state.show.ID); !ok || got.Location != "Hall B" || got.Name != "Replay Summer Show Updated" {
 		t.Fatalf("replayed show mismatch: %#v", got)
 	}
@@ -3343,6 +3460,9 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 	}
 	if got := replayed.mediaByEntry(state.entryKept.ID); len(got) != 0 {
 		t.Fatalf("deleted media should stay deleted, got %#v", got)
+	}
+	if got := replayed.mediaByEntry(state.uploadEntry.ID); len(got) != 1 || got[0].ID != state.uploadedMedia.ID {
+		t.Fatalf("uploaded media mismatch after replay: %#v", got)
 	}
 	if got := replayed.showCreditsByShow(state.show.ID); len(got) != 0 {
 		t.Fatalf("deleted show credit should stay deleted, got %#v", got)

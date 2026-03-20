@@ -300,6 +300,49 @@ func (a *app) handleAPIAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 // --- Commands ---
 
+func (a *app) handleAPIMediaUpload(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.authorizeCommandRequest(w, r, "media.upload"); !ok {
+		return
+	}
+	entryID := strings.TrimSpace(r.PathValue("entryID"))
+	if entryID == "" {
+		a.writeAPIError(w, r, http.StatusBadRequest, "media_entry_missing", "entry_id is required.", "Use a stable entry id in the upload path, for example /v1/commands/0007-Flowershow/entries/{entry_id}/media.upload.", []apiFieldError{{Field: "entry_id", Message: "required stable entry id"}})
+		return
+	}
+	if _, ok := a.store.entryByID(entryID); !ok {
+		a.writeAPIError(w, r, http.StatusBadRequest, "media_entry_missing", "entry_id must reference an existing entry.", "Use a stable entry id from an entry list or workspace projection before uploading media.", []apiFieldError{{Field: "entry_id", Message: "must reference an existing entry"}})
+		return
+	}
+	if err := r.ParseMultipartForm(maxFormMemory); err != nil {
+		a.writeAPIError(w, r, http.StatusBadRequest, "invalid_multipart", err.Error(), "Submit multipart/form-data with one or more files in the media field.", nil)
+		return
+	}
+	headers := r.MultipartForm.File["media"]
+	if len(headers) == 0 {
+		a.writeAPIError(w, r, http.StatusBadRequest, "media_upload_failed", "at least one media file is required", "Submit multipart/form-data with the files attached under the media field.", []apiFieldError{{Field: "media", Message: "attach one or more files"}})
+		return
+	}
+	uploaded := make([]*Media, 0, len(headers))
+	for _, header := range headers {
+		media, err := a.media.Store(r.Context(), entryID, header)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_upload_failed", err.Error(), "Upload jpg, png, gif, webp, mp4, mov, or similar supported files. HEIC/HEIF is currently rejected.", nil)
+			return
+		}
+		record, err := a.store.attachMedia(*media)
+		if err != nil {
+			_ = a.media.Delete(r.Context(), media)
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_attach_failed", err.Error(), "Ensure the entry exists and retry the upload.", nil)
+			return
+		}
+		uploaded = append(uploaded, record)
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"entry_id": entryID,
+		"media":    uploaded,
+	})
+}
+
 func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 	command := commandNameFromPath(r.URL.Path)
 	if _, ok := a.authorizeCommandRequest(w, r, command); !ok {
@@ -644,6 +687,25 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, person)
+
+	case "persons.update":
+		var req struct {
+			ID string `json:"id"`
+			PersonInput
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "person_update_failed", "id is required", "Pass a stable person id from persons.create, an entry projection, or a people/club workspace response before updating judge or exhibitor details.", []apiFieldError{{Field: "id", Message: "required stable person id"}})
+			return
+		}
+		person, err := a.store.updatePerson(req.ID, req.PersonInput)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "person_update_failed", err.Error(), "Pass id plus the person fields to update, including first_name, last_name, email, and public_display_mode as needed.", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, person)
 
 	case "awards.create":
 		var input AwardInput

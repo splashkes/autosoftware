@@ -973,8 +973,21 @@ func (a *app) authorizeCommandRequest(w http.ResponseWriter, r *http.Request, co
 	}
 	body, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(body))
+	scopes := a.commandScopesFromPayload(command, body)
+	for _, scope := range a.authorityScopesForRequest(r) {
+		exists := false
+		for _, existing := range scopes {
+			if existing.Kind == scope.Kind && existing.ID == scope.ID {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			scopes = append(scopes, scope)
+		}
+	}
 	user, ok := a.currentUser(r)
-	if ok && a.userHasCapability(r.Context(), *user, requiredCapabilityForCommand(command), a.commandScopesFromPayload(command, body)...) {
+	if ok && a.userHasCapability(r.Context(), *user, requiredCapabilityForCommand(command), scopes...) {
 		return body, true
 	}
 	if token, ok := a.currentAgentToken(r); ok {
