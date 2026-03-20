@@ -10,7 +10,7 @@
 <p class="class-description">{{.Class.Description}}</p>
 
 <div class="class-meta">
-  {{if .Division}}<span class="badge badge-muted">Division {{.Division.Code}}: {{.Division.Title}}</span>{{end}}
+  {{if .Division}}<span class="badge badge-muted">{{divisionDisplay .Division}}</span>{{end}}
   {{if .Section}}<span class="badge badge-muted">Section {{.Section.Code}}: {{.Section.Title}}</span>{{end}}
   <span class="badge badge-muted">{{.Class.Domain}}</span>
   {{if .Class.SpecimenCount}}<span class="badge badge-green">{{.Class.SpecimenCount}} specimen{{if gt .Class.SpecimenCount 1}}s{{end}}</span>{{end}}
@@ -19,6 +19,22 @@
 <section class="section">
   <h2>Entries</h2>
   {{if .Entries}}
+  {{if .HasMedia}}
+  <div class="entry-thumb-grid">
+    {{range .Entries}}
+    {{if .LeadMedia}}
+    <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-thumb-card {{placementClass .Entry.Placement}}">
+      <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-thumb-image">
+      <div class="entry-thumb-copy">
+        <strong>{{.Entry.Name}}</strong>
+        <span>{{if .Person}}{{publicPersonLabel .Person}}{{end}}</span>
+        {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
+      </div>
+    </a>
+    {{end}}
+    {{end}}
+  </div>
+  {{end}}
   <table class="table">
     <thead>
       <tr><th>Entry</th><th>Entrant</th><th>Placement</th><th>Points</th></tr>
@@ -26,7 +42,18 @@
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
-        <td><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td>
+          <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-row-link">
+            {{if .LeadMedia}}
+            <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-row-thumb">
+            {{else}}
+            <span class="entry-row-thumb entry-row-thumb-placeholder">No image</span>
+            {{end}}
+            <span class="entry-row-copy">
+              <strong>{{.Entry.Name}}</strong>
+            </span>
+          </a>
+        </td>
         <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
         <td>{{.Entry.Points}}</td>

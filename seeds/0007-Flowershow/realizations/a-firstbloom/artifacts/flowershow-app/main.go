@@ -356,6 +356,24 @@ var templateFuncMap = template.FuncMap{
 			return ""
 		}
 	},
+	"divisionDisplay": func(d *Division) string {
+		if d == nil {
+			return ""
+		}
+		title := strings.TrimSpace(d.Title)
+		lowerTitle := strings.ToLower(title)
+		if strings.HasPrefix(lowerTitle, "division ") {
+			return title
+		}
+		code := strings.TrimSpace(d.Code)
+		if code == "" {
+			return title
+		}
+		if title == "" {
+			return "Division " + code
+		}
+		return "Division " + code + " · " + title
+	},
 	"initials": func(p *Person) string {
 		if p == nil {
 			return ""

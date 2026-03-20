@@ -116,6 +116,10 @@
 }
 
 @media (max-width: 640px) {
+  .agent-access-widget {
+    margin: 0 6vw;
+  }
+
   .agent-access-tabs {
     gap: 0.45rem;
   }

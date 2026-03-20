@@ -13,6 +13,7 @@
   <div class="show-actions">
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary">Live Winners</a>
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
+    {{if .Org}}<a href="{{$.BasePath}}/clubs/{{.Org.ID}}" class="btn btn-outline">Open Club</a>{{end}}
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
   </div>
 </div>
@@ -39,16 +40,16 @@
   <h2>Schedule</h2>
   {{range .Divisions}}
   <div class="schedule-division">
-    <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+    <h3>{{divisionDisplay .Division}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
     {{range .Sections}}
     <div class="schedule-section">
       <h4>{{.Section.Title}}</h4>
       <div class="class-list">
-        {{range .Classes}}
-        <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="class-item">
-          <span class="class-number">{{.ClassNumber}}</span>
-          <span class="class-title">{{.Title}}{{if .Description}} <span class="card-meta">· {{.Description}}</span>{{end}}</span>
-          {{if .SpecimenCount}}<span class="class-specimens">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+        {{range .ClassCards}}
+        <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.Class.ID}}" class="class-item">
+          <span class="class-number">{{.Class.ClassNumber}}</span>
+          <span class="class-title">{{.Class.Title}}{{if .Class.Description}} <span class="card-meta">· {{.Class.Description}}</span>{{end}}</span>
+          <span class="class-specimens">{{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}}</span>
         </a>
         {{end}}
       </div>
@@ -69,7 +70,19 @@
     <tbody>
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
-        <td><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></td>
+        <td>
+          <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-row-link">
+            {{if .LeadMedia}}
+            <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-row-thumb">
+            {{else}}
+            <span class="entry-row-thumb entry-row-thumb-placeholder">No image</span>
+            {{end}}
+            <span class="entry-row-copy">
+              <strong>{{.Entry.Name}}</strong>
+              {{if gt .Entry.Placement 0}}<span class="entry-row-placement">{{placementLabel .Entry.Placement}}</span>{{end}}
+            </span>
+          </a>
+        </td>
         <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
         <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
