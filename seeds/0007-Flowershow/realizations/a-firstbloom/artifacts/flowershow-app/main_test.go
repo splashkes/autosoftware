@@ -3650,6 +3650,37 @@ func TestFlowershowPostgresStoreMutatorsDoNotWriteOnlyToMemory(t *testing.T) {
 	}
 }
 
+func TestFlowershowPostgresStoreMutatorsDoNotWriteProjectionTablesDirectly(t *testing.T) {
+	t.Helper()
+	checks := []struct {
+		path  string
+		after string
+	}{
+		{path: filepath.Join(".", "store.go"), after: "func (s *postgresFlowershowStore) createOrganization("},
+		{path: filepath.Join(".", "store_invites.go"), after: "func (s *postgresFlowershowStore) createOrganizationInvite("},
+	}
+	re := regexp.MustCompile("(?i)exec\\(ctx,\\s*`(?:insert into|update|delete from)\\s+as_flowershow_m_")
+	var hits []string
+	for _, item := range checks {
+		data, err := os.ReadFile(item.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", item.path, err)
+		}
+		contents := string(data)
+		start := strings.Index(contents, item.after)
+		if start < 0 {
+			t.Fatalf("anchor %q missing in %s", item.after, item.path)
+		}
+		subset := contents[start:]
+		if re.MatchString(subset) {
+			hits = append(hits, item.path)
+		}
+	}
+	if len(hits) > 0 {
+		t.Fatalf("flowershow postgres mutators still write projection tables directly: %s", strings.Join(hits, ", "))
+	}
+}
+
 func TestFlowershowProjectionWritesStayInsideStoreBoundaries(t *testing.T) {
 	t.Helper()
 	root := "."
