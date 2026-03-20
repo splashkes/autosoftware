@@ -182,31 +182,17 @@ func (s *postgresFlowershowStore) createOrganizationInvite(input OrganizationInv
 	if s == nil || s.pool == nil {
 		return nil, errors.New("store unavailable")
 	}
-	input = validateOrganizationInviteInput(input)
-	if input.OrganizationID == "" {
-		return nil, errors.New("organization_id is required")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if input.Email == "" {
-		return nil, errors.New("email is required")
+	item, err := mem.createOrganizationInvite(input)
+	if err != nil {
+		return nil, err
 	}
-	if _, ok := s.organizationByID(input.OrganizationID); !ok {
-		return nil, errors.New("organization not found")
-	}
-
-	item := &OrganizationInvite{
-		ID:               newID("orginvite"),
-		OrganizationID:   input.OrganizationID,
-		FirstName:        input.FirstName,
-		LastName:         input.LastName,
-		Email:            input.Email,
-		OrganizationRole: input.OrganizationRole,
-		PermissionRoles:  append([]string(nil), input.PermissionRoles...),
-		Status:           "pending",
-		InvitedBySubject: input.InvitedBySubject,
-		InvitedByName:    input.InvitedByName,
-		InvitedAt:        time.Now().UTC(),
-	}
-	_, err := s.pool.Exec(context.Background(), `
+	_, err = s.pool.Exec(ctx, `
 		insert into as_flowershow_m_organization_invites (
 		  id, organization_id, first_name, last_name, email, organization_role,
 		  permission_roles, status, invited_by_subject, invited_by_name, invited_at,
@@ -220,7 +206,10 @@ func (s *postgresFlowershowStore) createOrganizationInvite(input OrganizationInv
 	if err != nil {
 		return nil, err
 	}
-	return cloneOrganizationInvite(item), nil
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 
 func (s *postgresFlowershowStore) organizationInvitesByOrganization(organizationID string) []*OrganizationInvite {
@@ -261,67 +250,34 @@ func (s *postgresFlowershowStore) claimOrganizationInvites(email, subjectID, cog
 	if normalizedEmail == "" || subjectID == "" {
 		return nil, nil
 	}
-
-	rows, err := s.pool.Query(context.Background(), `
-		select id, organization_id, first_name, last_name, email, organization_role,
-		       permission_roles, status, invited_by_subject, invited_by_name, invited_at,
-		       claimed_subject_id, claimed_cognito_sub, claimed_at
-		from as_flowershow_m_organization_invites
-		where lower(email) = $1 and status = 'pending'
-		order by invited_at asc, id asc
-	`, normalizedEmail)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	pending := make([]*OrganizationInvite, 0)
-	for rows.Next() {
-		item, err := scanOrganizationInvite(rows)
-		if err != nil {
-			return nil, err
-		}
-		pending = append(pending, item)
-	}
-	if err := rows.Err(); err != nil {
+	claimed, err := mem.claimOrganizationInvites(email, subjectID, cognitoSub, assignRole)
+	if err != nil {
 		return nil, err
 	}
-
-	claimed := make([]*OrganizationInvite, 0, len(pending))
-	for _, item := range pending {
-		for _, role := range item.PermissionRoles {
-			if assignRole != nil {
-				if err := assignRole(UserRoleInput{
-					SubjectID:      subjectID,
-					CognitoSub:     cognitoSub,
-					OrganizationID: item.OrganizationID,
-					Role:           role,
-				}); err != nil {
-					return claimed, err
-				}
-			}
-		}
-		claimedAt := time.Now().UTC()
-		_, err := s.pool.Exec(context.Background(), `
+	for _, item := range claimed {
+		if _, err := s.pool.Exec(ctx, `
 			update as_flowershow_m_organization_invites
 			set status = 'accepted',
 			    claimed_subject_id = $2,
 			    claimed_cognito_sub = $3,
 			    claimed_at = $4
-			where id = $1 and status = 'pending'
-		`, item.ID, subjectID, cognitoSub, claimedAt)
-		if err != nil {
+			where id = $1
+		`, item.ID, item.ClaimedSubjectID, item.ClaimedCognitoSub, item.ClaimedAt); err != nil {
 			return claimed, err
 		}
-		item.Status = "accepted"
-		item.ClaimedSubjectID = subjectID
-		item.ClaimedCognitoSub = cognitoSub
-		item.ClaimedAt = claimedAt
-		claimed = append(claimed, item)
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return claimed, err
 	}
 	return claimed, nil
 }
 
 func (s *postgresFlowershowStore) personByEmail(email string) (*Person, bool) {
-	return s.mem.personByEmail(email)
+	return s.currentMem().personByEmail(email)
 }

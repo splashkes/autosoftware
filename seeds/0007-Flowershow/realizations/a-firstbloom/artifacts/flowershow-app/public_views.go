@@ -405,9 +405,6 @@ func (a *app) clubCards(now time.Time) []*clubCardView {
 				card.UpcomingShows = append(card.UpcomingShows, show)
 			}
 		}
-		if len(card.UpcomingShows) == 0 && len(card.PastShows) == 0 {
-			continue
-		}
 		sort.Slice(card.UpcomingShows, func(i, j int) bool { return card.UpcomingShows[i].Date < card.UpcomingShows[j].Date })
 		sort.Slice(card.PastShows, func(i, j int) bool { return card.PastShows[i].Date > card.PastShows[j].Date })
 		card.TopPeople = a.topPeopleForOrganization(org.ID, 3)

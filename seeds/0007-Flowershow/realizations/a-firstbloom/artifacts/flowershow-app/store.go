@@ -293,6 +293,12 @@ type memoryStore struct {
 }
 
 func newMemoryStore() *memoryStore {
+	s := newEmptyMemoryStore()
+	s.seedDemoData()
+	return s
+}
+
+func newEmptyMemoryStore() *memoryStore {
 	s := &memoryStore{
 		organizations:  make(map[string]*Organization),
 		shows:          make(map[string]*Show),
@@ -323,7 +329,6 @@ func newMemoryStore() *memoryStore {
 		agentTokenHash: make(map[string]string),
 		objects:        make(map[string]*FlowershowObject),
 	}
-	s.seedDemoData()
 	return s
 }
 
@@ -1623,6 +1628,7 @@ func (s *memoryStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, er
 		c.ID = newID("crit")
 	}
 	s.criteria[c.ID] = &c
+	s.appendClaim(c.ID, "criterion", "criterion.created", c)
 	return &c, nil
 }
 
@@ -1730,6 +1736,10 @@ func (s *memoryStore) computePlacementsFromScores(classID string) error {
 			es.entry.Points = pointsMap[placement]
 		}
 	}
+	s.appendClaim(classID, "show_class", "show_class.placements_computed", map[string]any{
+		"class_id": classID,
+		"scored":   len(scored),
+	})
 	return nil
 }
 
@@ -2048,7 +2058,8 @@ func (s *memoryStore) seedDemoData() {
 
 type postgresFlowershowStore struct {
 	pool *pgxpool.Pool
-	mem  *memoryStore // fallback for non-migrated methods
+	mu   sync.RWMutex
+	mem  *memoryStore // rebuildable read-through cache backed by SQL
 }
 
 func newFlowershowStore(databaseURL string) (flowershowStore, error) {
@@ -2069,7 +2080,7 @@ func newFlowershowStore(databaseURL string) (flowershowStore, error) {
 		return nil, fmt.Errorf("ping flowershow database: %w", err)
 	}
 
-	store := &postgresFlowershowStore{pool: pool, mem: newMemoryStore()}
+	store := &postgresFlowershowStore{pool: pool, mem: newEmptyMemoryStore()}
 	if err := store.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -2078,7 +2089,7 @@ func newFlowershowStore(databaseURL string) (flowershowStore, error) {
 		pool.Close()
 		return nil, err
 	}
-	if err := store.hydratePersons(ctx); err != nil {
+	if err := store.refreshCache(ctx); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -2284,6 +2295,21 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_show_credits (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS as_flowershow_m_media (
+  id TEXT PRIMARY KEY,
+  entry_id TEXT NOT NULL,
+  media_type TEXT NOT NULL DEFAULT 'photo',
+  url TEXT NOT NULL DEFAULT '',
+  content_type TEXT NOT NULL DEFAULT '',
+  thumbnail_url TEXT NOT NULL DEFAULT '',
+  file_name TEXT NOT NULL DEFAULT '',
+  storage_key TEXT NOT NULL DEFAULT '',
+  file_size BIGINT NOT NULL DEFAULT 0,
+  width INTEGER NOT NULL DEFAULT 0,
+  height INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS as_flowershow_m_taxons (
   id TEXT PRIMARY KEY,
   taxon_type TEXT NOT NULL,
@@ -2459,6 +2485,11 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
 			credit.ID, credit.ShowID, credit.PersonID, credit.DisplayName, credit.CreditLabel, credit.Notes, credit.SortOrder, credit.CreatedAt)
 	}
+	for _, media := range mem.media {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
+			media.ID, media.EntryID, media.MediaType, media.URL, media.ContentType, media.ThumbnailURL, media.FileName, media.StorageKey, media.FileSize, media.Width, media.Height, media.CreatedAt)
+	}
 	for _, t := range mem.taxons {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
 			t.ID, t.TaxonType, t.Name, t.ScientificName, t.Description, t.ParentID)
@@ -2499,95 +2530,524 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criteria (id, judging_rubric_id, name, max_points, sort_order) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
 			c.ID, c.JudgingRubricID, c.Name, c.MaxPoints, c.SortOrder)
 	}
+	for _, object := range mem.objects {
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_objects (object_id, object_type, slug, created_at, created_by) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+			object.ID, object.ObjectType, object.Slug, object.CreatedAt, object.CreatedBy)
+	}
+	for _, claim := range mem.claims {
+		payload, _ := json.Marshal(claim.Payload)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_claims (claim_id, object_id, claim_type, accepted_at, accepted_by, supersedes_claim_id, payload) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+			claim.ID, claim.ObjectID, claim.ClaimType, claim.AcceptedAt, claim.AcceptedBy, nullableString(claim.SupersedesClaimID), payload)
+	}
 	return nil
 }
 
-func (s *postgresFlowershowStore) hydratePersons(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `SELECT id, first_name, last_name, initials, email, public_display_mode FROM as_flowershow_m_persons`)
-	if err != nil {
-		return fmt.Errorf("load persons: %w", err)
-	}
-	defer rows.Close()
+func (s *postgresFlowershowStore) currentMem() *memoryStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mem
+}
 
-	persons := make(map[string]*Person)
-	for rows.Next() {
-		var p Person
-		if err := rows.Scan(&p.ID, &p.FirstName, &p.LastName, &p.Initials, &p.Email, &p.PublicDisplayMode); err != nil {
+func (s *postgresFlowershowStore) refreshCache(ctx context.Context) error {
+	fresh, err := s.loadSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.mem = fresh
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *postgresFlowershowStore) Refresh(ctx context.Context) error {
+	if s == nil || s.pool == nil {
+		return nil
+	}
+	return s.refreshCache(ctx)
+}
+
+func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStore, error) {
+	fresh := newEmptyMemoryStore()
+
+	loadRows := func(query string, scan func(pgx.Rows) error) error {
+		rows, err := s.pool.Query(ctx, query)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			if err := scan(rows); err != nil {
+				return err
+			}
+		}
+		return rows.Err()
+	}
+
+	if err := loadRows(`SELECT id, name, level, parent_id FROM as_flowershow_m_organizations`, func(rows pgx.Rows) error {
+		var item Organization
+		if err := rows.Scan(&item.ID, &item.Name, &item.Level, &item.ParentID); err != nil {
+			return fmt.Errorf("scan organization: %w", err)
+		}
+		fresh.organizations[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load organizations: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, slug, organization_id, name, location, show_date, season, status, created_at, updated_at FROM as_flowershow_m_shows`, func(rows pgx.Rows) error {
+		var item Show
+		if err := rows.Scan(&item.ID, &item.Slug, &item.OrganizationID, &item.Name, &item.Location, &item.Date, &item.Season, &item.Status, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return fmt.Errorf("scan show: %w", err)
+		}
+		fresh.shows[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load shows: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, show_id, person_id, assigned_at FROM as_flowershow_m_show_judges`, func(rows pgx.Rows) error {
+		var item ShowJudgeAssignment
+		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.AssignedAt); err != nil {
+			return fmt.Errorf("scan show judge: %w", err)
+		}
+		fresh.showJudges[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load show judges: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, first_name, last_name, initials, email, public_display_mode FROM as_flowershow_m_persons`, func(rows pgx.Rows) error {
+		var item Person
+		if err := rows.Scan(&item.ID, &item.FirstName, &item.LastName, &item.Initials, &item.Email, &item.PublicDisplayMode); err != nil {
 			return fmt.Errorf("scan person: %w", err)
 		}
-		person := p
-		persons[p.ID] = &person
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate persons: %w", err)
+		fresh.persons[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load persons: %w", err)
 	}
 
-	linkRows, err := s.pool.Query(ctx, `SELECT person_id, organization_id, role FROM as_flowershow_m_person_organizations`)
-	if err != nil {
-		return fmt.Errorf("load person organizations: %w", err)
-	}
-	defer linkRows.Close()
-
-	personOrgs := make(map[string]*PersonOrganization)
-	for linkRows.Next() {
-		var link PersonOrganization
-		if err := linkRows.Scan(&link.PersonID, &link.OrganizationID, &link.Role); err != nil {
+	if err := loadRows(`SELECT person_id, organization_id, role FROM as_flowershow_m_person_organizations`, func(rows pgx.Rows) error {
+		var item PersonOrganization
+		if err := rows.Scan(&item.PersonID, &item.OrganizationID, &item.Role); err != nil {
 			return fmt.Errorf("scan person organization: %w", err)
 		}
-		item := link
-		personOrgs[item.PersonID+"|"+item.OrganizationID+"|"+item.Role] = &item
-	}
-	if err := linkRows.Err(); err != nil {
-		return fmt.Errorf("iterate person organizations: %w", err)
+		fresh.personOrgs[item.PersonID+"|"+item.OrganizationID+"|"+item.Role] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load person organizations: %w", err)
 	}
 
-	s.mem.mu.Lock()
-	for id, person := range persons {
-		s.mem.persons[id] = person
+	if err := loadRows(`SELECT id, organization_id, first_name, last_name, email, organization_role, permission_roles, status, invited_by_subject, invited_by_name, invited_at, claimed_subject_id, claimed_cognito_sub, claimed_at FROM as_flowershow_m_organization_invites`, func(rows pgx.Rows) error {
+		item, err := scanOrganizationInvite(rows)
+		if err != nil {
+			return fmt.Errorf("scan organization invite: %w", err)
+		}
+		fresh.orgInvites[item.ID] = item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load organization invites: %w", err)
 	}
-	for key, link := range personOrgs {
-		s.mem.personOrgs[key] = link
+
+	if err := loadRows(`SELECT id, show_id, source_document_id, effective_standard_edition_id, notes FROM as_flowershow_m_schedules`, func(rows pgx.Rows) error {
+		var item ShowSchedule
+		if err := rows.Scan(&item.ID, &item.ShowID, &item.SourceDocumentID, &item.EffectiveStandardEditionID, &item.Notes); err != nil {
+			return fmt.Errorf("scan schedule: %w", err)
+		}
+		fresh.schedules[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load schedules: %w", err)
 	}
-	s.mem.mu.Unlock()
+
+	if err := loadRows(`SELECT id, show_schedule_id, code, title, domain, sort_order FROM as_flowershow_m_divisions`, func(rows pgx.Rows) error {
+		var item Division
+		if err := rows.Scan(&item.ID, &item.ShowScheduleID, &item.Code, &item.Title, &item.Domain, &item.SortOrder); err != nil {
+			return fmt.Errorf("scan division: %w", err)
+		}
+		fresh.divisions[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load divisions: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, division_id, code, title, sort_order FROM as_flowershow_m_sections`, func(rows pgx.Rows) error {
+		var item Section
+		if err := rows.Scan(&item.ID, &item.DivisionID, &item.Code, &item.Title, &item.SortOrder); err != nil {
+			return fmt.Errorf("scan section: %w", err)
+		}
+		fresh.sections[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load sections: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, section_id, class_number, sort_order, title, domain, description, specimen_count, unit, measurement_rule, naming_requirement, container_rule, eligibility_rule, schedule_notes, taxon_refs FROM as_flowershow_m_classes`, func(rows pgx.Rows) error {
+		var item ShowClass
+		if err := rows.Scan(&item.ID, &item.SectionID, &item.ClassNumber, &item.SortOrder, &item.Title, &item.Domain, &item.Description, &item.SpecimenCount, &item.Unit, &item.MeasurementRule, &item.NamingRequirement, &item.ContainerRule, &item.EligibilityRule, &item.ScheduleNotes, &item.TaxonRefs); err != nil {
+			return fmt.Errorf("scan class: %w", err)
+		}
+		fresh.classes[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load classes: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at FROM as_flowershow_m_entries`, func(rows pgx.Rows) error {
+		var item Entry
+		if err := rows.Scan(&item.ID, &item.ShowID, &item.ClassID, &item.PersonID, &item.Name, &item.Notes, &item.Suppressed, &item.Placement, &item.Points, &item.TaxonRefs, &item.CreatedAt); err != nil {
+			return fmt.Errorf("scan entry: %w", err)
+		}
+		fresh.entries[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load entries: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at FROM as_flowershow_m_show_credits`, func(rows pgx.Rows) error {
+		var item ShowCredit
+		if err := rows.Scan(&item.ID, &item.ShowID, &item.PersonID, &item.DisplayName, &item.CreditLabel, &item.Notes, &item.SortOrder, &item.CreatedAt); err != nil {
+			return fmt.Errorf("scan show credit: %w", err)
+		}
+		fresh.showCredits[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load show credits: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at FROM as_flowershow_m_media`, func(rows pgx.Rows) error {
+		var item Media
+		if err := rows.Scan(&item.ID, &item.EntryID, &item.MediaType, &item.URL, &item.ContentType, &item.ThumbnailURL, &item.FileName, &item.StorageKey, &item.FileSize, &item.Width, &item.Height, &item.CreatedAt); err != nil {
+			return fmt.Errorf("scan media: %w", err)
+		}
+		fresh.media[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load media: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, taxon_type, name, scientific_name, description, parent_id FROM as_flowershow_m_taxons`, func(rows pgx.Rows) error {
+		var item Taxon
+		if err := rows.Scan(&item.ID, &item.TaxonType, &item.Name, &item.ScientificName, &item.Description, &item.ParentID); err != nil {
+			return fmt.Errorf("scan taxon: %w", err)
+		}
+		fresh.taxons[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load taxons: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries FROM as_flowershow_m_awards`, func(rows pgx.Rows) error {
+		var item AwardDefinition
+		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.Name, &item.Description, &item.Season, &item.TaxonFilters, &item.ScoringRule, &item.MinEntries); err != nil {
+			return fmt.Errorf("scan award: %w", err)
+		}
+		fresh.awards[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load awards: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, name, issuing_org_id, domain_scope, description FROM as_flowershow_m_standard_documents`, func(rows pgx.Rows) error {
+		var item StandardDocument
+		if err := rows.Scan(&item.ID, &item.Name, &item.IssuingOrg, &item.DomainScope, &item.Description); err != nil {
+			return fmt.Errorf("scan standard document: %w", err)
+		}
+		fresh.stdDocs[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load standard documents: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, standard_document_id, edition_label, publication_year, revision_date, status, source_url, source_kind FROM as_flowershow_m_standard_editions`, func(rows pgx.Rows) error {
+		var item StandardEdition
+		if err := rows.Scan(&item.ID, &item.StandardDocumentID, &item.EditionLabel, &item.PublicationYear, &item.RevisionDate, &item.Status, &item.SourceURL, &item.SourceKind); err != nil {
+			return fmt.Errorf("scan standard edition: %w", err)
+		}
+		fresh.stdEditions[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load standard editions: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, organization_id, show_id, title, document_type, publication_date, source_url, local_path, checksum FROM as_flowershow_m_source_documents`, func(rows pgx.Rows) error {
+		var item SourceDocument
+		if err := rows.Scan(&item.ID, &item.OrganizationID, &item.ShowID, &item.Title, &item.DocumentType, &item.PublicationDate, &item.SourceURL, &item.LocalPath, &item.Checksum); err != nil {
+			return fmt.Errorf("scan source document: %w", err)
+		}
+		fresh.srcDocs[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load source documents: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, source_document_id, target_type, target_id, page_from, page_to, quoted_text, extraction_confidence FROM as_flowershow_m_source_citations`, func(rows pgx.Rows) error {
+		var item SourceCitation
+		if err := rows.Scan(&item.ID, &item.SourceDocumentID, &item.TargetType, &item.TargetID, &item.PageFrom, &item.PageTo, &item.QuotedText, &item.ExtractionConfidence); err != nil {
+			return fmt.Errorf("scan source citation: %w", err)
+		}
+		fresh.srcCitations[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load source citations: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, standard_edition_id, domain, rule_type, subject_label, body, page_ref FROM as_flowershow_m_standard_rules`, func(rows pgx.Rows) error {
+		var item StandardRule
+		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.Domain, &item.RuleType, &item.SubjectLabel, &item.Body, &item.PageRef); err != nil {
+			return fmt.Errorf("scan standard rule: %w", err)
+		}
+		fresh.stdRules[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load standard rules: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, show_class_id, base_standard_rule_id, override_type, body, rationale FROM as_flowershow_m_class_rule_overrides`, func(rows pgx.Rows) error {
+		var item ClassRuleOverride
+		if err := rows.Scan(&item.ID, &item.ShowClassID, &item.BaseStandardRuleID, &item.OverrideType, &item.Body, &item.Rationale); err != nil {
+			return fmt.Errorf("scan class override: %w", err)
+		}
+		fresh.classOverrides[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load class rule overrides: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, standard_edition_id, show_id, domain, title FROM as_flowershow_m_rubrics`, func(rows pgx.Rows) error {
+		var item JudgingRubric
+		if err := rows.Scan(&item.ID, &item.StandardEditionID, &item.ShowID, &item.Domain, &item.Title); err != nil {
+			return fmt.Errorf("scan rubric: %w", err)
+		}
+		fresh.rubrics[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load rubrics: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, judging_rubric_id, name, max_points, sort_order FROM as_flowershow_m_criteria`, func(rows pgx.Rows) error {
+		var item JudgingCriterion
+		if err := rows.Scan(&item.ID, &item.JudgingRubricID, &item.Name, &item.MaxPoints, &item.SortOrder); err != nil {
+			return fmt.Errorf("scan criterion: %w", err)
+		}
+		fresh.criteria[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load criteria: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, entry_id, judge_id, rubric_id, total_score, notes FROM as_flowershow_m_scorecards`, func(rows pgx.Rows) error {
+		var item EntryScorecard
+		if err := rows.Scan(&item.ID, &item.EntryID, &item.JudgeID, &item.RubricID, &item.TotalScore, &item.Notes); err != nil {
+			return fmt.Errorf("scan scorecard: %w", err)
+		}
+		fresh.scorecards[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load scorecards: %w", err)
+	}
+
+	if err := loadRows(`SELECT id, scorecard_id, criterion_id, score, comment FROM as_flowershow_m_criterion_scores`, func(rows pgx.Rows) error {
+		var item EntryCriterionScore
+		if err := rows.Scan(&item.ID, &item.ScorecardID, &item.CriterionID, &item.Score, &item.Comment); err != nil {
+			return fmt.Errorf("scan criterion score: %w", err)
+		}
+		fresh.critScores[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load criterion scores: %w", err)
+	}
+
+	if err := loadRows(`SELECT object_id, object_type, slug, created_at, created_by FROM as_flowershow_objects`, func(rows pgx.Rows) error {
+		var item FlowershowObject
+		if err := rows.Scan(&item.ID, &item.ObjectType, &item.Slug, &item.CreatedAt, &item.CreatedBy); err != nil {
+			return fmt.Errorf("scan object: %w", err)
+		}
+		fresh.objects[item.ID] = &item
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load objects: %w", err)
+	}
+
+	if err := loadRows(`SELECT claim_id, object_id, claim_seq, claim_type, accepted_at, accepted_by, coalesce(supersedes_claim_id, ''), payload FROM as_flowershow_claims ORDER BY claim_seq ASC`, func(rows pgx.Rows) error {
+		var item FlowershowClaim
+		var payload []byte
+		if err := rows.Scan(&item.ID, &item.ObjectID, &item.ClaimSeq, &item.ClaimType, &item.AcceptedAt, &item.AcceptedBy, &item.SupersedesClaimID, &payload); err != nil {
+			return fmt.Errorf("scan claim: %w", err)
+		}
+		if len(payload) > 0 {
+			var decoded any
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				return fmt.Errorf("decode claim payload: %w", err)
+			}
+			item.Payload = decoded
+		}
+		fresh.claims = append(fresh.claims, item)
+		if item.ClaimSeq > fresh.claimSeq {
+			fresh.claimSeq = item.ClaimSeq
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("load claims: %w", err)
+	}
+
+	return fresh, nil
+}
+
+func (s *postgresFlowershowStore) persistNewClaims(ctx context.Context, mem *memoryStore, start int) error {
+	if start < 0 || start > len(mem.claims) {
+		start = len(mem.claims)
+	}
+	seenObjects := make(map[string]struct{})
+	for _, claim := range mem.claims[start:] {
+		if _, ok := seenObjects[claim.ObjectID]; ok {
+			continue
+		}
+		seenObjects[claim.ObjectID] = struct{}{}
+		if object, ok := mem.objects[claim.ObjectID]; ok {
+			if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_objects (object_id, object_type, slug, created_at, created_by)
+				VALUES ($1,$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`,
+				object.ID, object.ObjectType, object.Slug, object.CreatedAt, object.CreatedBy); err != nil {
+				return fmt.Errorf("persist object %s: %w", object.ID, err)
+			}
+		}
+	}
+	for _, claim := range mem.claims[start:] {
+		payload, err := json.Marshal(claim.Payload)
+		if err != nil {
+			return fmt.Errorf("marshal claim payload: %w", err)
+		}
+		if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_claims (claim_id, object_id, claim_type, accepted_at, accepted_by, supersedes_claim_id, payload)
+			VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (claim_id) DO NOTHING`,
+			claim.ID, claim.ObjectID, claim.ClaimType, claim.AcceptedAt, claim.AcceptedBy, nullableString(claim.SupersedesClaimID), payload); err != nil {
+			return fmt.Errorf("persist claim %s: %w", claim.ID, err)
+		}
+	}
 	return nil
 }
 
-// For now, the Postgres store delegates to the memory store for all operations.
-// A full Postgres implementation would replace each method with SQL queries.
-// This allows the app to start with Postgres (migrated schema) while using
-// the memory store pattern for development speed.
+func (s *postgresFlowershowStore) prepareMutation(ctx context.Context) (*memoryStore, int, error) {
+	if err := s.refreshCache(ctx); err != nil {
+		return nil, 0, err
+	}
+	mem := s.currentMem()
+	return mem, len(mem.claims), nil
+}
 
 func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organization, error) {
-	return s.mem.createOrganization(o)
-}
-func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) {
-	return s.mem.organizationByID(id)
-}
-func (s *postgresFlowershowStore) allOrganizations() []*Organization { return s.mem.allOrganizations() }
-func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) {
-	return s.mem.createShow(input)
-}
-func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show, error) {
-	return s.mem.updateShow(id, input)
-}
-func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) { return s.mem.showByID(id) }
-func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) {
-	return s.mem.showBySlug(slug)
-}
-func (s *postgresFlowershowStore) allShows() []*Show { return s.mem.allShows() }
-func (s *postgresFlowershowStore) assignJudgeToShow(showID, personID string) (*ShowJudgeAssignment, error) {
-	return s.mem.assignJudgeToShow(showID, personID)
-}
-func (s *postgresFlowershowStore) judgesByShow(showID string) []*ShowJudgeAssignment {
-	return s.mem.judgesByShow(showID)
-}
-func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) {
-	person, err := s.mem.createPerson(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return nil, err
 	}
+	org, err := mem.createOrganization(o)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_organizations (id, name, level, parent_id)
+		VALUES ($1,$2,$3,$4)`,
+		org.ID, org.Name, org.Level, org.ParentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return org, nil
+}
+func (s *postgresFlowershowStore) organizationByID(id string) (*Organization, bool) {
+	return s.currentMem().organizationByID(id)
+}
+func (s *postgresFlowershowStore) allOrganizations() []*Organization { return s.currentMem().allOrganizations() }
+func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	show, err := mem.createShow(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_shows (id, slug, organization_id, name, location, show_date, season, status, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return show, nil
+}
+func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	show, err := mem.updateShow(id, input)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_shows
+		SET slug = $2, organization_id = $3, name = $4, location = $5, show_date = $6, season = $7, status = $8, updated_at = $9
+		WHERE id = $1`,
+		show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("show not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return show, nil
+}
+func (s *postgresFlowershowStore) showByID(id string) (*Show, bool) { return s.currentMem().showByID(id) }
+func (s *postgresFlowershowStore) showBySlug(slug string) (*Show, bool) {
+	return s.currentMem().showBySlug(slug)
+}
+func (s *postgresFlowershowStore) allShows() []*Show { return s.currentMem().allShows() }
+func (s *postgresFlowershowStore) assignJudgeToShow(showID, personID string) (*ShowJudgeAssignment, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.assignJudgeToShow(showID, personID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_judges (id, show_id, person_id, assigned_at) VALUES ($1,$2,$3,$4)`,
+		item.ID, item.ShowID, item.PersonID, item.AssignedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+func (s *postgresFlowershowStore) judgesByShow(showID string) []*ShowJudgeAssignment {
+	return s.currentMem().judgesByShow(showID)
+}
+func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	person, err := mem.createPerson(input)
+	if err != nil {
+		return nil, err
+	}
 	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode)
 		VALUES ($1,$2,$3,$4,$5,$6)`,
 		person.ID, person.FirstName, person.LastName, person.Initials, person.Email, person.PublicDisplayMode)
@@ -2606,15 +3066,22 @@ func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, erro
 			return nil, err
 		}
 	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
 	return person, nil
 }
 func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*Person, error) {
-	person, err := s.mem.updatePerson(id, input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	person, err := mem.updatePerson(id, input)
+	if err != nil {
+		return nil, err
+	}
 	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_persons
 		SET first_name = $2, last_name = $3, initials = $4, email = $5, public_display_mode = $6
 		WHERE id = $1`,
@@ -2625,214 +3092,785 @@ func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*P
 	if tag.RowsAffected() == 0 {
 		return nil, errors.New("person not found")
 	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
 	return person, nil
 }
-func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.mem.personByID(id) }
-func (s *postgresFlowershowStore) allPersons() []*Person                { return s.mem.allPersons() }
+func (s *postgresFlowershowStore) personByID(id string) (*Person, bool) { return s.currentMem().personByID(id) }
+func (s *postgresFlowershowStore) allPersons() []*Person                { return s.currentMem().allPersons() }
 func (s *postgresFlowershowStore) linkPersonOrganization(link PersonOrganization) (*PersonOrganization, error) {
-	item, err := s.mem.linkPersonOrganization(link)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	item, err := mem.linkPersonOrganization(link)
+	if err != nil {
+		return nil, err
+	}
 	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role)
 		VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
 		item.PersonID, item.OrganizationID, item.Role)
 	if err != nil {
 		return nil, err
 	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
 	return item, nil
 }
 func (s *postgresFlowershowStore) personOrganizationsByPerson(personID string) []*PersonOrganization {
-	return s.mem.personOrganizationsByPerson(personID)
+	return s.currentMem().personOrganizationsByPerson(personID)
 }
 func (s *postgresFlowershowStore) lookupPersonsForShow(showID, query string) []*PersonOrganization {
-	return s.mem.lookupPersonsForShow(showID, query)
+	return s.currentMem().lookupPersonsForShow(showID, query)
 }
 func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSchedule, error) {
-	return s.mem.createSchedule(sched)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createSchedule(sched)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_schedules (id, show_id, source_document_id, effective_standard_edition_id, notes)
+		VALUES ($1,$2,$3,$4,$5)`,
+		item.ID, item.ShowID, nullableString(item.SourceDocumentID), nullableString(item.EffectiveStandardEditionID), item.Notes)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) updateSchedule(showID string, input ShowSchedule) (*ShowSchedule, error) {
-	return s.mem.updateSchedule(showID, input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.updateSchedule(showID, input)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_schedules
+		SET source_document_id = $2, effective_standard_edition_id = $3, notes = $4
+		WHERE show_id = $1`,
+		showID, nullableString(item.SourceDocumentID), nullableString(item.EffectiveStandardEditionID), item.Notes)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("schedule not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) scheduleByShowID(showID string) (*ShowSchedule, bool) {
-	return s.mem.scheduleByShowID(showID)
+	return s.currentMem().scheduleByShowID(showID)
 }
 func (s *postgresFlowershowStore) createDivision(input DivisionInput) (*Division, error) {
-	return s.mem.createDivision(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createDivision(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_divisions (id, show_schedule_id, code, title, domain, sort_order)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		item.ID, item.ShowScheduleID, item.Code, item.Title, item.Domain, item.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) divisionsBySchedule(scheduleID string) []*Division {
-	return s.mem.divisionsBySchedule(scheduleID)
+	return s.currentMem().divisionsBySchedule(scheduleID)
 }
 func (s *postgresFlowershowStore) divisionByID(id string) (*Division, bool) {
-	return s.mem.divisionByID(id)
+	return s.currentMem().divisionByID(id)
 }
 func (s *postgresFlowershowStore) createSection(input SectionInput) (*Section, error) {
-	return s.mem.createSection(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createSection(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_sections (id, division_id, code, title, sort_order)
+		VALUES ($1,$2,$3,$4,$5)`,
+		item.ID, item.DivisionID, item.Code, item.Title, item.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) sectionsByDivision(divisionID string) []*Section {
-	return s.mem.sectionsByDivision(divisionID)
+	return s.currentMem().sectionsByDivision(divisionID)
 }
 func (s *postgresFlowershowStore) sectionByID(id string) (*Section, bool) {
-	return s.mem.sectionByID(id)
+	return s.currentMem().sectionByID(id)
 }
 func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass, error) {
-	return s.mem.createClass(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createClass(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, sort_order, title, domain, description, specimen_count, unit, measurement_rule, naming_requirement, container_rule, eligibility_rule, schedule_notes, taxon_refs)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+		item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, item.TaxonRefs)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (*ShowClass, error) {
-	return s.mem.updateClass(id, input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.updateClass(id, input)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_classes
+		SET section_id = $2, class_number = $3, sort_order = $4, title = $5, domain = $6, description = $7, specimen_count = $8, unit = $9, measurement_rule = $10, naming_requirement = $11, container_rule = $12, eligibility_rule = $13, schedule_notes = $14, taxon_refs = $15
+		WHERE id = $1`,
+		item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, item.TaxonRefs)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("class not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) reorderClass(id string, sortOrder int) (*ShowClass, error) {
-	return s.mem.reorderClass(id, sortOrder)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.reorderClass(id, sortOrder)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_classes SET sort_order = $2 WHERE id = $1`, item.ID, item.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("class not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) classesBySection(sectionID string) []*ShowClass {
-	return s.mem.classesBySection(sectionID)
+	return s.currentMem().classesBySection(sectionID)
 }
-func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) { return s.mem.classByID(id) }
+func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) { return s.currentMem().classByID(id) }
 func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass {
-	return s.mem.classesByShowID(showID)
+	return s.currentMem().classesByShowID(showID)
 }
 func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) {
-	return s.mem.createEntry(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createEntry(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, item.TaxonRefs, item.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Entry, error) {
-	return s.mem.updateEntry(id, input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.updateEntry(id, input)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries
+		SET show_id = $2, class_id = $3, person_id = $4, name = $5, notes = $6, taxon_refs = $7
+		WHERE id = $1`,
+		item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.TaxonRefs)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("entry not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) moveEntry(entryID, classID, reason string) (*Entry, error) {
-	return s.mem.moveEntry(entryID, classID, reason)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.moveEntry(entryID, classID, reason)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET class_id = $2 WHERE id = $1`, item.ID, item.ClassID)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("entry not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) reassignEntry(entryID, personID string) (*Entry, error) {
-	return s.mem.reassignEntry(entryID, personID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.reassignEntry(entryID, personID)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET person_id = $2 WHERE id = $1`, item.ID, item.PersonID)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errors.New("entry not found")
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
-func (s *postgresFlowershowStore) deleteEntry(entryID string) error { return s.mem.deleteEntry(entryID) }
+func (s *postgresFlowershowStore) deleteEntry(entryID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.deleteEntry(entryID); err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_entries WHERE id = $1`, entryID); err != nil {
+		return err
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
+}
 func (s *postgresFlowershowStore) setEntrySuppressed(entryID string, suppressed bool) error {
-	return s.mem.setEntrySuppressed(entryID, suppressed)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.setEntrySuppressed(entryID, suppressed); err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET suppressed = $2 WHERE id = $1`, entryID, suppressed); err != nil {
+		return err
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error {
-	return s.mem.setPlacement(entryID, placement, points)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.setPlacement(entryID, placement, points); err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET placement = $2, points = $3 WHERE id = $1`, entryID, placement, points); err != nil {
+		return err
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
 }
-func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) { return s.mem.entryByID(id) }
+func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) { return s.currentMem().entryByID(id) }
 func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry {
-	return s.mem.entriesByShow(showID)
+	return s.currentMem().entriesByShow(showID)
 }
 func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry {
-	return s.mem.entriesByClass(classID)
+	return s.currentMem().entriesByClass(classID)
 }
 func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry {
-	return s.mem.entriesByPerson(personID)
+	return s.currentMem().entriesByPerson(personID)
 }
 func (s *postgresFlowershowStore) createShowCredit(input ShowCreditInput) (*ShowCredit, error) {
-	return s.mem.createShowCredit(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createShowCredit(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		item.ID, item.ShowID, item.PersonID, item.DisplayName, item.CreditLabel, item.Notes, item.SortOrder, item.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) showCreditByID(id string) (*ShowCredit, bool) {
-	return s.mem.showCreditByID(id)
+	return s.currentMem().showCreditByID(id)
 }
-func (s *postgresFlowershowStore) deleteShowCredit(id string) error { return s.mem.deleteShowCredit(id) }
+func (s *postgresFlowershowStore) deleteShowCredit(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.deleteShowCredit(id); err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_show_credits WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
+}
 func (s *postgresFlowershowStore) showCreditsByShow(showID string) []*ShowCredit {
-	return s.mem.showCreditsByShow(showID)
+	return s.currentMem().showCreditsByShow(showID)
 }
-func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) { return s.mem.attachMedia(m) }
+func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.attachMedia(m)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		item.ID, item.EntryID, item.MediaType, item.URL, item.ContentType, item.ThumbnailURL, item.FileName, item.StorageKey, item.FileSize, item.Width, item.Height, item.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
 func (s *postgresFlowershowStore) mediaByEntry(entryID string) []*Media {
-	return s.mem.mediaByEntry(entryID)
+	return s.currentMem().mediaByEntry(entryID)
 }
-func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) { return s.mem.mediaByID(id) }
-func (s *postgresFlowershowStore) deleteMedia(id string) error        { return s.mem.deleteMedia(id) }
+func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) { return s.currentMem().mediaByID(id) }
+func (s *postgresFlowershowStore) deleteMedia(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.deleteMedia(id); err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_media WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
+}
 func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) {
-	return s.mem.createTaxon(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createTaxon(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		item.ID, item.TaxonType, item.Name, item.ScientificName, item.Description, nullableString(item.ParentID))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
-func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) { return s.mem.taxonByID(id) }
-func (s *postgresFlowershowStore) allTaxons() []*Taxon                { return s.mem.allTaxons() }
+func (s *postgresFlowershowStore) taxonByID(id string) (*Taxon, bool) { return s.currentMem().taxonByID(id) }
+func (s *postgresFlowershowStore) allTaxons() []*Taxon                { return s.currentMem().allTaxons() }
 func (s *postgresFlowershowStore) taxonsByType(taxonType string) []*Taxon {
-	return s.mem.taxonsByType(taxonType)
+	return s.currentMem().taxonsByType(taxonType)
 }
 func (s *postgresFlowershowStore) createAward(input AwardInput) (*AwardDefinition, error) {
-	return s.mem.createAward(input)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createAward(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		item.ID, item.OrganizationID, item.Name, item.Description, item.Season, item.TaxonFilters, item.ScoringRule, item.MinEntries)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) awardByID(id string) (*AwardDefinition, bool) {
-	return s.mem.awardByID(id)
+	return s.currentMem().awardByID(id)
 }
 func (s *postgresFlowershowStore) awardsByOrganization(orgID string) []*AwardDefinition {
-	return s.mem.awardsByOrganization(orgID)
+	return s.currentMem().awardsByOrganization(orgID)
 }
 func (s *postgresFlowershowStore) computeAward(awardID string) ([]AwardResult, error) {
-	return s.mem.computeAward(awardID)
+	return s.currentMem().computeAward(awardID)
 }
 func (s *postgresFlowershowStore) createStandardDocument(doc StandardDocument) (*StandardDocument, error) {
-	return s.mem.createStandardDocument(doc)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createStandardDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_documents (id, name, issuing_org_id, domain_scope, description)
+		VALUES ($1,$2,$3,$4,$5)`,
+		item.ID, item.Name, item.IssuingOrg, item.DomainScope, item.Description)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) allStandardDocuments() []*StandardDocument {
-	return s.mem.allStandardDocuments()
+	return s.currentMem().allStandardDocuments()
 }
 func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*StandardEdition, error) {
-	return s.mem.createStandardEdition(ed)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createStandardEdition(ed)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_editions (id, standard_document_id, edition_label, publication_year, revision_date, status, source_url, source_kind)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		item.ID, item.StandardDocumentID, item.EditionLabel, item.PublicationYear, item.RevisionDate, item.Status, item.SourceURL, item.SourceKind)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) standardEditionByID(id string) (*StandardEdition, bool) {
-	return s.mem.standardEditionByID(id)
+	return s.currentMem().standardEditionByID(id)
 }
 func (s *postgresFlowershowStore) allStandardEditions() []*StandardEdition {
-	return s.mem.allStandardEditions()
+	return s.currentMem().allStandardEditions()
 }
 func (s *postgresFlowershowStore) editionsByStandard(standardDocID string) []*StandardEdition {
-	return s.mem.editionsByStandard(standardDocID)
+	return s.currentMem().editionsByStandard(standardDocID)
 }
 func (s *postgresFlowershowStore) createSourceDocument(doc SourceDocument) (*SourceDocument, error) {
-	return s.mem.createSourceDocument(doc)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createSourceDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_documents (id, organization_id, show_id, title, document_type, publication_date, source_url, local_path, checksum)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		item.ID, item.OrganizationID, nullableString(item.ShowID), item.Title, item.DocumentType, item.PublicationDate, item.SourceURL, item.LocalPath, item.Checksum)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) allSourceDocuments() []*SourceDocument {
-	return s.mem.allSourceDocuments()
+	return s.currentMem().allSourceDocuments()
 }
 func (s *postgresFlowershowStore) createSourceCitation(cite SourceCitation) (*SourceCitation, error) {
-	return s.mem.createSourceCitation(cite)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createSourceCitation(cite)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_citations (id, source_document_id, target_type, target_id, page_from, page_to, quoted_text, extraction_confidence)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		item.ID, item.SourceDocumentID, item.TargetType, item.TargetID, item.PageFrom, item.PageTo, item.QuotedText, item.ExtractionConfidence)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) citationsByTarget(targetType, targetID string) []*SourceCitation {
-	return s.mem.citationsByTarget(targetType, targetID)
+	return s.currentMem().citationsByTarget(targetType, targetID)
 }
 func (s *postgresFlowershowStore) createStandardRule(rule StandardRule) (*StandardRule, error) {
-	return s.mem.createStandardRule(rule)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createStandardRule(rule)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_rules (id, standard_edition_id, domain, rule_type, subject_label, body, page_ref)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		item.ID, item.StandardEditionID, item.Domain, item.RuleType, item.SubjectLabel, item.Body, item.PageRef)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) rulesByEdition(editionID string) []*StandardRule {
-	return s.mem.rulesByEdition(editionID)
+	return s.currentMem().rulesByEdition(editionID)
 }
 func (s *postgresFlowershowStore) createClassRuleOverride(override ClassRuleOverride) (*ClassRuleOverride, error) {
-	return s.mem.createClassRuleOverride(override)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createClassRuleOverride(override)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_class_rule_overrides (id, show_class_id, base_standard_rule_id, override_type, body, rationale)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		item.ID, item.ShowClassID, nullableString(item.BaseStandardRuleID), item.OverrideType, item.Body, item.Rationale)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) overridesByClass(classID string) []*ClassRuleOverride {
-	return s.mem.overridesByClass(classID)
+	return s.currentMem().overridesByClass(classID)
 }
 func (s *postgresFlowershowStore) effectiveRulesForClass(classID string, editionID string) []effectiveRule {
-	return s.mem.effectiveRulesForClass(classID, editionID)
+	return s.currentMem().effectiveRulesForClass(classID, editionID)
 }
 func (s *postgresFlowershowStore) createRubric(r JudgingRubric) (*JudgingRubric, error) {
-	return s.mem.createRubric(r)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createRubric(r)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_rubrics (id, standard_edition_id, show_id, domain, title)
+		VALUES ($1,$2,$3,$4,$5)`,
+		item.ID, nullableString(item.StandardEditionID), nullableString(item.ShowID), item.Domain, item.Title)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) rubricByID(id string) (*JudgingRubric, bool) {
-	return s.mem.rubricByID(id)
+	return s.currentMem().rubricByID(id)
 }
-func (s *postgresFlowershowStore) allRubrics() []*JudgingRubric { return s.mem.allRubrics() }
+func (s *postgresFlowershowStore) allRubrics() []*JudgingRubric { return s.currentMem().allRubrics() }
 func (s *postgresFlowershowStore) createCriterion(c JudgingCriterion) (*JudgingCriterion, error) {
-	return s.mem.createCriterion(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createCriterion(c)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criteria (id, judging_rubric_id, name, max_points, sort_order)
+		VALUES ($1,$2,$3,$4,$5)`,
+		item.ID, item.JudgingRubricID, item.Name, item.MaxPoints, item.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) criteriaByRubric(rubricID string) []*JudgingCriterion {
-	return s.mem.criteriaByRubric(rubricID)
+	return s.currentMem().criteriaByRubric(rubricID)
 }
 func (s *postgresFlowershowStore) submitScorecard(sc EntryScorecard, scores []EntryCriterionScore) (*EntryScorecard, error) {
-	return s.mem.submitScorecard(sc, scores)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.submitScorecard(sc, scores)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_scorecards (id, entry_id, judge_id, rubric_id, total_score, notes)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		item.ID, item.EntryID, item.JudgeID, item.RubricID, item.TotalScore, item.Notes)
+	if err != nil {
+		return nil, err
+	}
+	for _, score := range mem.criterionScoresByScorecard(item.ID) {
+		if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criterion_scores (id, scorecard_id, criterion_id, score, comment)
+			VALUES ($1,$2,$3,$4,$5)`,
+			score.ID, score.ScorecardID, score.CriterionID, score.Score, score.Comment); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 func (s *postgresFlowershowStore) scorecardsByEntry(entryID string) []*EntryScorecard {
-	return s.mem.scorecardsByEntry(entryID)
+	return s.currentMem().scorecardsByEntry(entryID)
 }
 func (s *postgresFlowershowStore) criterionScoresByScorecard(scorecardID string) []*EntryCriterionScore {
-	return s.mem.criterionScoresByScorecard(scorecardID)
+	return s.currentMem().criterionScoresByScorecard(scorecardID)
 }
 func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) error {
-	return s.mem.computePlacementsFromScores(classID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.computePlacementsFromScores(classID); err != nil {
+		return err
+	}
+	for _, entry := range mem.entriesByClass(classID) {
+		if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET placement = $2, points = $3 WHERE id = $1`,
+			entry.ID, entry.Placement, entry.Points); err != nil {
+			return err
+		}
+	}
+	return s.persistNewClaims(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry {
-	return s.mem.leaderboard(orgID, season)
+	return s.currentMem().leaderboard(orgID, season)
 }
 func (s *postgresFlowershowStore) ledgerByObjectID(objectID string) ([]FlowershowClaim, error) {
-	return s.mem.ledgerByObjectID(objectID)
+	return s.currentMem().ledgerByObjectID(objectID)
 }
 
 // Ensure compile-time check

@@ -80,6 +80,15 @@ Covers:
 - browse retention without over-promoting niche nav items
 - stronger public exhibitor-profile navigation
 
+### 16-registry-first-durability-and-no-authority-in-memory-plan.md
+Covers:
+- no authoritative mutable state in memory
+- registry-first storage for accepted domain facts
+- runtime durable state versus disposable projections
+- CI and acceptance gates against memory-only mutators
+- restart-survival and replay/rebuild testing
+- Flowershow emergency durability repair and lost-data recovery
+
 ---
 
 ## Cross-Cutting Principles

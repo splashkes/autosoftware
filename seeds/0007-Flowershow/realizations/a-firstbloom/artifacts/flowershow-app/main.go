@@ -40,6 +40,10 @@ type app struct {
 	allowTestAuth bool
 }
 
+type refreshingStore interface {
+	Refresh(context.Context) error
+}
+
 func main() {
 	addr := envOrDefault("AS_ADDR", "127.0.0.1:8097")
 	store, err := newFlowershowStore(envOrDefault("AS_RUNTIME_DATABASE_URL", ""))
@@ -240,6 +244,8 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
+	handler := requestLog(a.storeRefreshMiddleware(mux))
+
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
 		if err := os.MkdirAll(filepath.Dir(addr), 0755); err != nil {
 			log.Fatal(err)
@@ -260,14 +266,14 @@ func main() {
 			os.Exit(0)
 		}()
 		log.Printf("flowershow listening on unix:%s", addr)
-		if err := http.Serve(ln, requestLog(mux)); err != nil && !errors.Is(err, net.ErrClosed) {
+		if err := http.Serve(ln, handler); err != nil && !errors.Is(err, net.ErrClosed) {
 			log.Fatal(err)
 		}
 		return
 	}
 
 	log.Printf("flowershow listening on http://%s", addr)
-	if err := http.ListenAndServe(addr, requestLog(mux)); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -808,6 +814,26 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func requestLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *app) storeRefreshMiddleware(next http.Handler) http.Handler {
+	refresher, ok := a.store.(refreshingStore)
+	if !ok {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/assets/") || r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if err := refresher.Refresh(ctx); err != nil {
+			http.Error(w, "Store refresh failed.", http.StatusServiceUnavailable)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
