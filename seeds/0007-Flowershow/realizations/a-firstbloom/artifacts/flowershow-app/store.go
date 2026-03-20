@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -3150,6 +3151,14 @@ func (s *postgresFlowershowStore) loadSnapshot(ctx context.Context) (*memoryStor
 }
 
 func (s *postgresFlowershowStore) persistNewClaims(ctx context.Context, mem *memoryStore, start int) error {
+	return s.persistNewClaimsWithExec(ctx, s.pool, mem, start)
+}
+
+type flowershowSQLExecutor interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func (s *postgresFlowershowStore) persistNewClaimsWithExec(ctx context.Context, exec flowershowSQLExecutor, mem *memoryStore, start int) error {
 	if start < 0 || start > len(mem.claims) {
 		start = len(mem.claims)
 	}
@@ -3160,8 +3169,8 @@ func (s *postgresFlowershowStore) persistNewClaims(ctx context.Context, mem *mem
 		}
 		seenObjects[claim.ObjectID] = struct{}{}
 		if object, ok := mem.objects[claim.ObjectID]; ok {
-			if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_objects (object_id, object_type, slug, created_at, created_by)
-				VALUES ($1,$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`,
+			if _, err := exec.Exec(ctx, `INSERT INTO as_flowershow_objects (object_id, object_type, slug, created_at, created_by)
+					VALUES ($1,$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`,
 				object.ID, object.ObjectType, object.Slug, object.CreatedAt, object.CreatedBy); err != nil {
 				return fmt.Errorf("persist object %s: %w", object.ID, err)
 			}
@@ -3172,8 +3181,8 @@ func (s *postgresFlowershowStore) persistNewClaims(ctx context.Context, mem *mem
 		if err != nil {
 			return fmt.Errorf("marshal claim payload: %w", err)
 		}
-		if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_claims (claim_id, object_id, claim_type, accepted_at, accepted_by, supersedes_claim_id, payload)
-			VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (claim_id) DO NOTHING`,
+		if _, err := exec.Exec(ctx, `INSERT INTO as_flowershow_claims (claim_id, object_id, claim_type, accepted_at, accepted_by, supersedes_claim_id, payload)
+				VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (claim_id) DO NOTHING`,
 			claim.ID, claim.ObjectID, claim.ClaimType, claim.AcceptedAt, claim.AcceptedBy, nullableString(claim.SupersedesClaimID), payload); err != nil {
 			return fmt.Errorf("persist claim %s: %w", claim.ID, err)
 		}
@@ -3189,6 +3198,30 @@ func (s *postgresFlowershowStore) prepareMutation(ctx context.Context) (*memoryS
 	return mem, len(mem.claims), nil
 }
 
+func (s *postgresFlowershowStore) commitDomainMutation(ctx context.Context, mem *memoryStore, claimStart int) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin mutation tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if err := s.persistNewClaimsWithExec(ctx, tx, mem, claimStart); err != nil {
+		return err
+	}
+	if err := s.rebuildProjectionTablesFromSnapshotTx(ctx, tx, mem); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit mutation tx: %w", err)
+	}
+	s.mu.Lock()
+	s.mem = mem
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organization, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3200,13 +3233,7 @@ func (s *postgresFlowershowStore) createOrganization(o Organization) (*Organizat
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_organizations (id, name, level, parent_id)
-		VALUES ($1,$2,$3,$4)`,
-		org.ID, org.Name, org.Level, org.ParentID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return org, nil
@@ -3228,13 +3255,7 @@ func (s *postgresFlowershowStore) createShow(input ShowInput) (*Show, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_shows (id, slug, organization_id, name, location, show_date, season, status, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return show, nil
@@ -3250,17 +3271,7 @@ func (s *postgresFlowershowStore) updateShow(id string, input ShowInput) (*Show,
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_shows
-		SET slug = $2, organization_id = $3, name = $4, location = $5, show_date = $6, season = $7, status = $8, updated_at = $9
-		WHERE id = $1`,
-		show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("show not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return show, nil
@@ -3283,12 +3294,7 @@ func (s *postgresFlowershowStore) assignJudgeToShow(showID, personID string) (*S
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_judges (id, show_id, person_id, assigned_at) VALUES ($1,$2,$3,$4)`,
-		item.ID, item.ShowID, item.PersonID, item.AssignedAt)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3307,25 +3313,7 @@ func (s *postgresFlowershowStore) createPerson(input PersonInput) (*Person, erro
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		person.ID, person.FirstName, person.LastName, person.Initials, person.Email, person.PublicDisplayMode)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(input.OrganizationID) != "" {
-		role := strings.TrimSpace(input.OrganizationRole)
-		if role == "" {
-			role = "member"
-		}
-		_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role)
-			VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-			person.ID, strings.TrimSpace(input.OrganizationID), role)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return person, nil
@@ -3341,17 +3329,7 @@ func (s *postgresFlowershowStore) updatePerson(id string, input PersonInput) (*P
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_persons
-		SET first_name = $2, last_name = $3, initials = $4, email = $5, public_display_mode = $6
-		WHERE id = $1`,
-		person.ID, person.FirstName, person.LastName, person.Initials, person.Email, person.PublicDisplayMode)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("person not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return person, nil
@@ -3371,13 +3349,7 @@ func (s *postgresFlowershowStore) linkPersonOrganization(link PersonOrganization
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role)
-		VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-		item.PersonID, item.OrganizationID, item.Role)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3399,13 +3371,7 @@ func (s *postgresFlowershowStore) createSchedule(sched ShowSchedule) (*ShowSched
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_schedules (id, show_id, source_document_id, effective_standard_edition_id, notes)
-		VALUES ($1,$2,$3,$4,$5)`,
-		item.ID, item.ShowID, nullableString(item.SourceDocumentID), nullableString(item.EffectiveStandardEditionID), item.Notes)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3421,17 +3387,7 @@ func (s *postgresFlowershowStore) updateSchedule(showID string, input ShowSchedu
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_schedules
-		SET source_document_id = $2, effective_standard_edition_id = $3, notes = $4
-		WHERE show_id = $1`,
-		showID, nullableString(item.SourceDocumentID), nullableString(item.EffectiveStandardEditionID), item.Notes)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("schedule not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3450,13 +3406,7 @@ func (s *postgresFlowershowStore) createDivision(input DivisionInput) (*Division
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_divisions (id, show_schedule_id, code, title, domain, sort_order)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		item.ID, item.ShowScheduleID, item.Code, item.Title, item.Domain, item.SortOrder)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3478,13 +3428,7 @@ func (s *postgresFlowershowStore) createSection(input SectionInput) (*Section, e
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_sections (id, division_id, code, title, sort_order)
-		VALUES ($1,$2,$3,$4,$5)`,
-		item.ID, item.DivisionID, item.Code, item.Title, item.SortOrder)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3506,13 +3450,7 @@ func (s *postgresFlowershowStore) createClass(input ShowClassInput) (*ShowClass,
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, sort_order, title, domain, description, specimen_count, unit, measurement_rule, naming_requirement, container_rule, eligibility_rule, schedule_notes, taxon_refs)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-		item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, item.TaxonRefs)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3528,17 +3466,7 @@ func (s *postgresFlowershowStore) updateClass(id string, input ShowClassInput) (
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_classes
-		SET section_id = $2, class_number = $3, sort_order = $4, title = $5, domain = $6, description = $7, specimen_count = $8, unit = $9, measurement_rule = $10, naming_requirement = $11, container_rule = $12, eligibility_rule = $13, schedule_notes = $14, taxon_refs = $15
-		WHERE id = $1`,
-		item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, item.TaxonRefs)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("class not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3554,14 +3482,7 @@ func (s *postgresFlowershowStore) reorderClass(id string, sortOrder int) (*ShowC
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_classes SET sort_order = $2 WHERE id = $1`, item.ID, item.SortOrder)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("class not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3586,13 +3507,7 @@ func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) 
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-		item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, item.TaxonRefs, item.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3608,17 +3523,7 @@ func (s *postgresFlowershowStore) updateEntry(id string, input EntryInput) (*Ent
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries
-		SET show_id = $2, class_id = $3, person_id = $4, name = $5, notes = $6, taxon_refs = $7
-		WHERE id = $1`,
-		item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.TaxonRefs)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("entry not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3634,14 +3539,7 @@ func (s *postgresFlowershowStore) moveEntry(entryID, classID, reason string) (*E
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET class_id = $2 WHERE id = $1`, item.ID, item.ClassID)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("entry not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3657,14 +3555,7 @@ func (s *postgresFlowershowStore) reassignEntry(entryID, personID string) (*Entr
 	if err != nil {
 		return nil, err
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET person_id = $2 WHERE id = $1`, item.ID, item.PersonID)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, errors.New("entry not found")
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3679,10 +3570,7 @@ func (s *postgresFlowershowStore) deleteEntry(entryID string) error {
 	if err := mem.deleteEntry(entryID); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_entries WHERE id = $1`, entryID); err != nil {
-		return err
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) setEntrySuppressed(entryID string, suppressed bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -3694,10 +3582,7 @@ func (s *postgresFlowershowStore) setEntrySuppressed(entryID string, suppressed 
 	if err := mem.setEntrySuppressed(entryID, suppressed); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET suppressed = $2 WHERE id = $1`, entryID, suppressed); err != nil {
-		return err
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, points float64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -3709,10 +3594,7 @@ func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, po
 	if err := mem.setPlacement(entryID, placement, points); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET placement = $2, points = $3 WHERE id = $1`, entryID, placement, points); err != nil {
-		return err
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) {
 	return s.currentMem().entryByID(id)
@@ -3737,13 +3619,7 @@ func (s *postgresFlowershowStore) createShowCredit(input ShowCreditInput) (*Show
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		item.ID, item.ShowID, item.PersonID, item.DisplayName, item.CreditLabel, item.Notes, item.SortOrder, item.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3761,10 +3637,7 @@ func (s *postgresFlowershowStore) deleteShowCredit(id string) error {
 	if err := mem.deleteShowCredit(id); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_show_credits WHERE id = $1`, id); err != nil {
-		return err
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) showCreditsByShow(showID string) []*ShowCredit {
 	return s.currentMem().showCreditsByShow(showID)
@@ -3780,13 +3653,7 @@ func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		item.ID, item.EntryID, item.MediaType, item.URL, item.ContentType, item.ThumbnailURL, item.FileName, item.StorageKey, item.FileSize, item.Width, item.Height, item.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3807,10 +3674,7 @@ func (s *postgresFlowershowStore) deleteMedia(id string) error {
 	if err := mem.deleteMedia(id); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM as_flowershow_m_media WHERE id = $1`, id); err != nil {
-		return err
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -3823,13 +3687,7 @@ func (s *postgresFlowershowStore) createTaxon(input TaxonInput) (*Taxon, error) 
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		item.ID, item.TaxonType, item.Name, item.ScientificName, item.Description, nullableString(item.ParentID))
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3852,13 +3710,7 @@ func (s *postgresFlowershowStore) createAward(input AwardInput) (*AwardDefinitio
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		item.ID, item.OrganizationID, item.Name, item.Description, item.Season, item.TaxonFilters, item.ScoringRule, item.MinEntries)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3883,13 +3735,7 @@ func (s *postgresFlowershowStore) createStandardDocument(doc StandardDocument) (
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_documents (id, name, issuing_org_id, domain_scope, description)
-		VALUES ($1,$2,$3,$4,$5)`,
-		item.ID, item.Name, item.IssuingOrg, item.DomainScope, item.Description)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3908,13 +3754,7 @@ func (s *postgresFlowershowStore) createStandardEdition(ed StandardEdition) (*St
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_editions (id, standard_document_id, edition_label, publication_year, revision_date, status, source_url, source_kind)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		item.ID, item.StandardDocumentID, item.EditionLabel, item.PublicationYear, item.RevisionDate, item.Status, item.SourceURL, item.SourceKind)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3939,13 +3779,7 @@ func (s *postgresFlowershowStore) createSourceDocument(doc SourceDocument) (*Sou
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_documents (id, organization_id, show_id, title, document_type, publication_date, source_url, local_path, checksum)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		item.ID, item.OrganizationID, nullableString(item.ShowID), item.Title, item.DocumentType, item.PublicationDate, item.SourceURL, item.LocalPath, item.Checksum)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3964,13 +3798,7 @@ func (s *postgresFlowershowStore) createSourceCitation(cite SourceCitation) (*So
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_source_citations (id, source_document_id, target_type, target_id, page_from, page_to, quoted_text, extraction_confidence)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		item.ID, item.SourceDocumentID, item.TargetType, item.TargetID, item.PageFrom, item.PageTo, item.QuotedText, item.ExtractionConfidence)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -3989,13 +3817,7 @@ func (s *postgresFlowershowStore) createStandardRule(rule StandardRule) (*Standa
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_rules (id, standard_edition_id, domain, rule_type, subject_label, body, page_ref)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		item.ID, item.StandardEditionID, item.Domain, item.RuleType, item.SubjectLabel, item.Body, item.PageRef)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -4014,13 +3836,7 @@ func (s *postgresFlowershowStore) createClassRuleOverride(override ClassRuleOver
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_class_rule_overrides (id, show_class_id, base_standard_rule_id, override_type, body, rationale)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		item.ID, item.ShowClassID, nullableString(item.BaseStandardRuleID), item.OverrideType, item.Body, item.Rationale)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -4042,13 +3858,7 @@ func (s *postgresFlowershowStore) createRubric(r JudgingRubric) (*JudgingRubric,
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_rubrics (id, standard_edition_id, show_id, domain, title)
-		VALUES ($1,$2,$3,$4,$5)`,
-		item.ID, nullableString(item.StandardEditionID), nullableString(item.ShowID), item.Domain, item.Title)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -4068,13 +3878,7 @@ func (s *postgresFlowershowStore) createCriterion(c JudgingCriterion) (*JudgingC
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criteria (id, judging_rubric_id, name, max_points, sort_order)
-		VALUES ($1,$2,$3,$4,$5)`,
-		item.ID, item.JudgingRubricID, item.Name, item.MaxPoints, item.SortOrder)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -4093,20 +3897,7 @@ func (s *postgresFlowershowStore) submitScorecard(sc EntryScorecard, scores []En
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_scorecards (id, entry_id, judge_id, rubric_id, total_score, notes)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		item.ID, item.EntryID, item.JudgeID, item.RubricID, item.TotalScore, item.Notes)
-	if err != nil {
-		return nil, err
-	}
-	for _, score := range mem.criterionScoresByScorecard(item.ID) {
-		if _, err := s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_criterion_scores (id, scorecard_id, criterion_id, score, comment)
-			VALUES ($1,$2,$3,$4,$5)`,
-			score.ID, score.ScorecardID, score.CriterionID, score.Score, score.Comment); err != nil {
-			return nil, err
-		}
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -4127,13 +3918,7 @@ func (s *postgresFlowershowStore) computePlacementsFromScores(classID string) er
 	if err := mem.computePlacementsFromScores(classID); err != nil {
 		return err
 	}
-	for _, entry := range mem.entriesByClass(classID) {
-		if _, err := s.pool.Exec(ctx, `UPDATE as_flowershow_m_entries SET placement = $2, points = $3 WHERE id = $1`,
-			entry.ID, entry.Placement, entry.Points); err != nil {
-			return err
-		}
-	}
-	return s.persistNewClaims(ctx, mem, claimStart)
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) leaderboard(orgID, season string) []LeaderboardEntry {
 	return s.currentMem().leaderboard(orgID, season)

@@ -192,21 +192,7 @@ func (s *postgresFlowershowStore) createOrganizationInvite(input OrganizationInv
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.pool.Exec(ctx, `
-		insert into as_flowershow_m_organization_invites (
-		  id, organization_id, first_name, last_name, email, organization_role,
-		  permission_roles, status, invited_by_subject, invited_by_name, invited_at,
-		  claimed_subject_id, claimed_cognito_sub, claimed_at
-		)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'','',null)
-	`,
-		item.ID, item.OrganizationID, item.FirstName, item.LastName, item.Email, item.OrganizationRole,
-		item.PermissionRoles, item.Status, item.InvitedBySubject, item.InvitedByName, item.InvitedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return nil, err
 	}
 	return item, nil
@@ -236,19 +222,7 @@ func (s *postgresFlowershowStore) claimOrganizationInvites(email, subjectID, cog
 	if err != nil {
 		return nil, err
 	}
-	for _, item := range claimed {
-		if _, err := s.pool.Exec(ctx, `
-			update as_flowershow_m_organization_invites
-			set status = 'accepted',
-			    claimed_subject_id = $2,
-			    claimed_cognito_sub = $3,
-			    claimed_at = $4
-			where id = $1
-		`, item.ID, item.ClaimedSubjectID, item.ClaimedCognitoSub, item.ClaimedAt); err != nil {
-			return claimed, err
-		}
-	}
-	if err := s.persistNewClaims(ctx, mem, claimStart); err != nil {
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
 		return claimed, err
 	}
 	return claimed, nil

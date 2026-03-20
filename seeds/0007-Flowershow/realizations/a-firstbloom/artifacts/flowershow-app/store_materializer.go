@@ -79,6 +79,13 @@ func sortedMapKeys[T any](items map[string]*T) []string {
 	return keys
 }
 
+func stringSliceOrEmpty(items []string) []string {
+	if items == nil {
+		return []string{}
+	}
+	return items
+}
+
 func (s *postgresFlowershowStore) projectionCounts(ctx context.Context) (map[string]int, error) {
 	counts := make(map[string]int, len(flowershowProjectionTables))
 	for _, table := range flowershowProjectionTables {
@@ -117,6 +124,16 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshot(ctx contex
 		_ = tx.Rollback(ctx)
 	}()
 
+	if err := s.rebuildProjectionTablesFromSnapshotTx(ctx, tx, mem); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit projection rebuild tx: %w", err)
+	}
+	return nil
+}
+
+func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx context.Context, tx pgx.Tx, mem *memoryStore) error {
 	if _, err := tx.Exec(ctx, "TRUNCATE "+strings.Join(flowershowProjectionTables, ", ")); err != nil {
 		return fmt.Errorf("truncate flowershow projections: %w", err)
 	}
@@ -168,7 +185,7 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshot(ctx contex
 			claimedAt = item.ClaimedAt
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_organization_invites (id, organization_id, first_name, last_name, email, organization_role, permission_roles, status, invited_by_subject, invited_by_name, invited_at, claimed_subject_id, claimed_cognito_sub, claimed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-			item.ID, item.OrganizationID, item.FirstName, item.LastName, item.Email, item.OrganizationRole, item.PermissionRoles, item.Status, item.InvitedBySubject, item.InvitedByName, item.InvitedAt, item.ClaimedSubjectID, item.ClaimedCognitoSub, claimedAt); err != nil {
+			item.ID, item.OrganizationID, item.FirstName, item.LastName, item.Email, item.OrganizationRole, stringSliceOrEmpty(item.PermissionRoles), item.Status, item.InvitedBySubject, item.InvitedByName, item.InvitedAt, item.ClaimedSubjectID, item.ClaimedCognitoSub, claimedAt); err != nil {
 			return fmt.Errorf("insert organization invite projection %s: %w", item.ID, err)
 		}
 	}
@@ -196,14 +213,14 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshot(ctx contex
 	for _, id := range sortedMapKeys(mem.classes) {
 		item := mem.classes[id]
 		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_classes (id, section_id, class_number, sort_order, title, domain, description, specimen_count, unit, measurement_rule, naming_requirement, container_rule, eligibility_rule, schedule_notes, taxon_refs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-			item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, item.TaxonRefs); err != nil {
+			item.ID, item.SectionID, item.ClassNumber, item.SortOrder, item.Title, item.Domain, item.Description, item.SpecimenCount, item.Unit, item.MeasurementRule, item.NamingRequirement, item.ContainerRule, item.EligibilityRule, item.ScheduleNotes, stringSliceOrEmpty(item.TaxonRefs)); err != nil {
 			return fmt.Errorf("insert class projection %s: %w", item.ID, err)
 		}
 	}
 	for _, id := range sortedMapKeys(mem.entries) {
 		item := mem.entries[id]
 		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-			item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, item.TaxonRefs, item.CreatedAt); err != nil {
+			item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
 			return fmt.Errorf("insert entry projection %s: %w", item.ID, err)
 		}
 	}
@@ -231,7 +248,7 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshot(ctx contex
 	for _, id := range sortedMapKeys(mem.awards) {
 		item := mem.awards[id]
 		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-			item.ID, item.OrganizationID, item.Name, item.Description, item.Season, item.TaxonFilters, item.ScoringRule, item.MinEntries); err != nil {
+			item.ID, item.OrganizationID, item.Name, item.Description, item.Season, stringSliceOrEmpty(item.TaxonFilters), item.ScoringRule, item.MinEntries); err != nil {
 			return fmt.Errorf("insert award projection %s: %w", item.ID, err)
 		}
 	}
@@ -306,8 +323,5 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshot(ctx contex
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit projection rebuild tx: %w", err)
-	}
 	return nil
 }
