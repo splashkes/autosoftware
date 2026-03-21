@@ -85,6 +85,7 @@
     <thead>
       <tr>
         <th>Instance</th>
+        <th>Current Fields</th>
         <th>Latest Claim</th>
         <th>Accepted</th>
         <th>Links</th>
@@ -97,6 +98,26 @@
           <a href="{{.InstancePath}}"><strong>{{.Label}}</strong></a><br>
           <code>{{.ObjectID}}</code>
           {{if .Slug}}<div class="summary">slug: {{.Slug}}</div>{{end}}
+        </td>
+        <td>
+          {{if .PreviewFields}}
+          <div class="field-stack">
+            {{range .PreviewFields}}
+            <div class="field-inline">
+              <span class="field-inline-label">{{.Label}}</span>
+              {{if .Path}}
+              <a href="{{.Path}}"><code>{{.Value}}</code></a>
+              {{else if .IsCode}}
+              <code>{{.Value}}</code>
+              {{else}}
+              <span>{{.Value}}</span>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <span class="summary">No top-level fields available</span>
+          {{end}}
         </td>
         <td>
           {{if .LatestClaimType}}{{.LatestClaimType}}{{else}}object.create{{end}}
@@ -248,7 +269,10 @@
 {{if hasDataLayout $o.DataLayout}}
 <div class="detail-section">
   <h3>Raw Data Layout</h3>
-  <pre class="shape-block">{{layoutShape $o.DataLayout}}</pre>
+  <details class="raw-details">
+    <summary>Inspect raw data layout JSON</summary>
+    <pre class="shape-block">{{layoutShape $o.DataLayout}}</pre>
+  </details>
 </div>
 {{end}}
 {{end}}

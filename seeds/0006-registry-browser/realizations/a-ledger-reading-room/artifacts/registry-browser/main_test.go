@@ -579,6 +579,30 @@ func TestCanonicalInstanceKindUsesCatalogKindsWithoutOvermatching(t *testing.T) 
 	}
 }
 
+func TestBuildFieldViewsLinksRelatedIDs(t *testing.T) {
+	fields := buildFieldViews(map[string]any{
+		"title":     "Hello World",
+		"edited_by": "actor-1",
+		"count":     3,
+		"payload": map[string]any{
+			"ignored": true,
+		},
+	}, map[string]string{"actor-1": "actor"}, "note-1", "0001-notepad")
+
+	if len(fields) != 3 {
+		t.Fatalf("buildFieldViews returned %d fields, want 3", len(fields))
+	}
+	if fields[0].Label != "Title" || fields[0].Value != "Hello World" {
+		t.Fatalf("unexpected first field: %#v", fields[0])
+	}
+	if fields[1].Label != "Count" || fields[1].Value != "3" {
+		t.Fatalf("unexpected second field: %#v", fields[1])
+	}
+	if fields[2].Path != "/objects/0001-notepad/actor/instances/actor-1" || fields[2].Kind != "actor" {
+		t.Fatalf("expected related instance link, got %#v", fields[2])
+	}
+}
+
 func TestHealthzReturnsOK(t *testing.T) {
 	mock := newMockRegistry()
 	defer mock.Close()
@@ -1169,6 +1193,9 @@ func TestObjectDetailPage(t *testing.T) {
 	if !strings.Contains(body, "Raw Instances") || !strings.Contains(body, "note-1") || !strings.Contains(body, "/objects/0001-notepad/shared_note/instances/note-1") {
 		t.Error("object detail missing raw instance browsing")
 	}
+	if !strings.Contains(body, "Current Fields") || !strings.Contains(body, "Edited By") {
+		t.Error("object detail missing friendly instance field preview")
+	}
 }
 
 func TestObjectDetailNotFound(t *testing.T) {
@@ -1209,6 +1236,9 @@ func TestObjectInstanceDetailPage(t *testing.T) {
 	}
 	if !strings.Contains(body, "/objects/0001-notepad/actor/instances/actor-1") {
 		t.Error("instance detail missing related instance link")
+	}
+	if !strings.Contains(body, "Current Fields") || !strings.Contains(body, "Inspect latest accepted claim JSON") {
+		t.Error("instance detail missing friendly field summary with raw JSON disclosure")
 	}
 }
 

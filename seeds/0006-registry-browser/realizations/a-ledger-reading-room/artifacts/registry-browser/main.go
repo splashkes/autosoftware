@@ -294,6 +294,16 @@ type RelatedInstanceLink struct {
 	Path     string
 }
 
+type FieldValueView struct {
+	Key    string
+	Label  string
+	Value  string
+	Path   string
+	Kind   string
+	IsCode bool
+	IsLong bool
+}
+
 type ObjectInstanceSummary struct {
 	SeedID            string
 	Kind              string
@@ -309,6 +319,7 @@ type ObjectInstanceSummary struct {
 	ObjectPath        string
 	InstancePath      string
 	LatestPayloadJSON string
+	PreviewFields     []FieldValueView
 }
 
 type ClaimRowView struct {
@@ -318,6 +329,7 @@ type ClaimRowView struct {
 	AcceptedAt       time.Time
 	PayloadJSON      string
 	RelatedInstances []RelatedInstanceLink
+	Fields           []FieldValueView
 }
 
 type ObjectInstanceDetailView struct {
@@ -327,6 +339,8 @@ type ObjectInstanceDetailView struct {
 	ClaimRows          []ClaimRowView
 	RelatedInstances   []RelatedInstanceLink
 	InstanceDefinition string
+	IdentityFields     []FieldValueView
+	CurrentFields      []FieldValueView
 }
 
 type SchemaObjectUse struct {
@@ -1529,16 +1543,22 @@ func (idx *seedInstanceIndex) detailFor(kind, objectID string) (*ObjectInstanceD
 			AcceptedAt:       row.AcceptedAt,
 			PayloadJSON:      prettyJSON(row.Payload),
 			RelatedInstances: claimRelated,
+			Fields:           buildFieldViews(displayPayload(row.Payload), idx.kindByObjectID, acc.ObjectID, acc.SeedID, "id"),
 		})
 	}
 
+	createPayload := payloadForRow(acc.CreateRow)
+	latestPayload := payloadForRow(latestClaimRow(acc))
+
 	return &ObjectInstanceDetailView{
 		Summary:            summary,
-		ObjectPayloadJSON:  prettyJSON(payloadForRow(acc.CreateRow)),
-		LatestClaimJSON:    prettyJSON(payloadForRow(latestClaimRow(acc))),
+		ObjectPayloadJSON:  prettyJSON(createPayload),
+		LatestClaimJSON:    prettyJSON(latestPayload),
 		ClaimRows:          claimViews,
 		RelatedInstances:   related,
 		InstanceDefinition: browseObjectPath(acc.SeedID, acc.Kind),
+		IdentityFields:     buildFieldViews(createPayload, idx.kindByObjectID, acc.ObjectID, acc.SeedID),
+		CurrentFields:      buildFieldViews(displayPayload(latestPayload), idx.kindByObjectID, acc.ObjectID, acc.SeedID, "id"),
 	}, nil
 }
 
@@ -1584,8 +1604,10 @@ func (idx *seedInstanceIndex) summaryFor(acc *instanceAccumulator) ObjectInstanc
 		summary.LatestClaimType = claimTypeForRow(*latestClaim)
 		summary.LatestAcceptedAt = latestClaim.AcceptedAt
 		summary.LatestPayloadJSON = prettyJSON(latestPayload)
+		summary.PreviewFields = previewFieldViews(displayPayload(latestPayload), idx.kindByObjectID, acc.ObjectID, acc.SeedID, 4, "id", "slug", "handle")
 	} else {
 		summary.LatestPayloadJSON = prettyJSON(createPayload)
+		summary.PreviewFields = previewFieldViews(createPayload, idx.kindByObjectID, acc.ObjectID, acc.SeedID, 4, "id", "object_type", "objectType")
 	}
 	return summary
 }
@@ -1713,6 +1735,16 @@ func displayLabel(payload map[string]any) string {
 	return ""
 }
 
+func displayPayload(payload map[string]any) map[string]any {
+	if payload == nil {
+		return map[string]any{}
+	}
+	if nested, ok := payload["payload"].(map[string]any); ok && len(nested) > 0 {
+		return nested
+	}
+	return payload
+}
+
 func prettyJSON(value any) string {
 	if value == nil {
 		return "{}"
@@ -1725,6 +1757,190 @@ func prettyJSON(value any) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+func previewFieldViews(payload map[string]any, kindByObjectID map[string]string, selfID, seedID string, limit int, skipKeys ...string) []FieldValueView {
+	fields := buildFieldViews(payload, kindByObjectID, selfID, seedID, skipKeys...)
+	if limit <= 0 || len(fields) <= limit {
+		return fields
+	}
+	return fields[:limit]
+}
+
+func buildFieldViews(payload map[string]any, kindByObjectID map[string]string, selfID, seedID string, skipKeys ...string) []FieldValueView {
+	if len(payload) == 0 {
+		return nil
+	}
+	skip := make(map[string]struct{}, len(skipKeys))
+	for _, key := range skipKeys {
+		skip[key] = struct{}{}
+	}
+
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		if _, ok := skip[key]; ok {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left := fieldSortRank(keys[i])
+		right := fieldSortRank(keys[j])
+		if left != right {
+			return left < right
+		}
+		return keys[i] < keys[j]
+	})
+
+	out := make([]FieldValueView, 0, len(keys))
+	for _, key := range keys {
+		view, ok := buildFieldValueView(key, payload[key], kindByObjectID, selfID, seedID)
+		if ok {
+			out = append(out, view)
+		}
+	}
+	return out
+}
+
+func buildFieldValueView(key string, value any, kindByObjectID map[string]string, selfID, seedID string) (FieldValueView, bool) {
+	text, ok := formatFieldValue(value)
+	if !ok || text == "" {
+		return FieldValueView{}, false
+	}
+	view := FieldValueView{
+		Key:    key,
+		Label:  humanizeFieldKey(key),
+		Value:  text,
+		IsCode: shouldRenderFieldAsCode(key, text),
+		IsLong: len(text) > 80 || strings.Contains(text, "\n"),
+	}
+	if related, ok := relatedFieldLink(value, kindByObjectID, selfID, seedID); ok {
+		view.Path = related.Path
+		view.Kind = related.Kind
+		view.IsCode = true
+	}
+	return view, true
+}
+
+func formatFieldValue(value any) (string, bool) {
+	switch typed := value.(type) {
+	case nil:
+		return "", false
+	case string:
+		text := strings.TrimSpace(typed)
+		return text, text != ""
+	case bool:
+		if typed {
+			return "true", true
+		}
+		return "false", true
+	case int, int8, int16, int32, int64:
+		return fmt.Sprintf("%d", typed), true
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", typed), true
+	case float32:
+		return fmt.Sprintf("%g", typed), true
+	case float64:
+		return fmt.Sprintf("%g", typed), true
+	case []string:
+		return strings.Join(typed, ", "), len(typed) > 0
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			part, ok := formatFieldValue(item)
+			if !ok || part == "" {
+				return "", false
+			}
+			parts = append(parts, part)
+		}
+		return strings.Join(parts, ", "), len(parts) > 0
+	default:
+		return "", false
+	}
+}
+
+func relatedFieldLink(value any, kindByObjectID map[string]string, selfID, seedID string) (RelatedInstanceLink, bool) {
+	id, ok := value.(string)
+	if !ok {
+		return RelatedInstanceLink{}, false
+	}
+	id = strings.TrimSpace(id)
+	if id == "" || id == selfID {
+		return RelatedInstanceLink{}, false
+	}
+	kind, ok := kindByObjectID[id]
+	if !ok || strings.TrimSpace(kind) == "" {
+		return RelatedInstanceLink{}, false
+	}
+	return RelatedInstanceLink{
+		ObjectID: id,
+		Kind:     kind,
+		Path:     browseObjectInstancePath(seedID, kind, id),
+	}, true
+}
+
+func humanizeFieldKey(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	acronyms := map[string]string{
+		"id":  "ID",
+		"ids": "IDs",
+		"api": "API",
+		"url": "URL",
+	}
+	parts := strings.FieldsFunc(key, func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
+	})
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		lower := strings.ToLower(part)
+		if acronym, ok := acronyms[lower]; ok {
+			parts[i] = acronym
+			continue
+		}
+		runes := []rune(lower)
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+	return strings.Join(parts, " ")
+}
+
+func shouldRenderFieldAsCode(key, value string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	return key == "id" ||
+		strings.HasSuffix(key, "_id") ||
+		strings.HasSuffix(key, "_ids") ||
+		strings.Contains(key, "slug") ||
+		strings.Contains(key, "handle") ||
+		strings.Contains(key, "claim") ||
+		(strings.Contains(value, "_") && !strings.Contains(value, " "))
+}
+
+func fieldSortRank(key string) int {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "name", "title", "label", "display_name", "displayname":
+		return 0
+	case "description", "summary", "status":
+		return 1
+	case "date", "publication_date", "season", "domain":
+		return 2
+	case "code", "class_number", "sort_order", "specimen_count", "unit":
+		return 3
+	case "organization_id", "show_id", "section_id", "division_id", "schedule_id", "show_schedule_id", "source_document_id", "parent_id":
+		return 4
+	case "slug", "handle", "email":
+		return 5
+	case "notes":
+		return 6
+	case "id":
+		return 8
+	default:
+		return 7
+	}
 }
 
 func detectRelatedInstances(value any, kindByObjectID map[string]string, selfID, seedID string) []RelatedInstanceLink {
