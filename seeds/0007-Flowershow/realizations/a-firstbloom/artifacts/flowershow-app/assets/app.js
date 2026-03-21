@@ -1,5 +1,13 @@
 // Flowershow — minimal JS (HTMX handles most interactivity)
 
+function flowershowActivateShowAdminTab(shell, name) {
+  if (!shell || !name) return;
+  shell.dataset.showAdminActiveTab = name;
+  shell.querySelectorAll('[data-show-admin-nav]').forEach(function(group) {
+    group.classList.toggle('is-active', group.dataset.showAdminNav === name);
+  });
+}
+
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -11,6 +19,9 @@ function showTab(name) {
         el.getAttribute('onclick')?.includes(name)) {
       el.classList.add('active');
     }
+  });
+  document.querySelectorAll('[data-show-admin-shell]').forEach(function(shell) {
+    flowershowActivateShowAdminTab(shell, name);
   });
 }
 
@@ -372,6 +383,12 @@ function flowershowBindLightbox(lightbox) {
   });
 }
 
+function flowershowBindShowAdminShell(shell) {
+  if (!shell) return;
+  const activeTab = shell.dataset.showAdminActiveTab || 'setup';
+  flowershowActivateShowAdminTab(shell, activeTab);
+}
+
 function flowershowBindMediaTrigger(button) {
   if (!button || button.dataset.bound === 'true') return;
   button.dataset.bound = 'true';
@@ -405,6 +422,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-nav-shell]').forEach(flowershowBindNav);
   scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
   scope.querySelectorAll('[data-media-lightbox]').forEach(flowershowBindLightbox);
+  scope.querySelectorAll('[data-show-admin-shell]').forEach(flowershowBindShowAdminShell);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

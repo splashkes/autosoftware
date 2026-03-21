@@ -1,14 +1,14 @@
 {{define "admin_setup_panel"}}
-<div class="workflow-panel-grid">
-  <section class="workflow-lane">
-    <div class="workflow-lane-header">
+<div class="admin-show-stack">
+  <section class="admin-show-section" id="show-basics">
+    <div class="admin-show-section-header">
       <h3>Setup basics</h3>
       <p>Keep the show profile, assigned judges, and public-facing credits accurate before and during the event.</p>
     </div>
     {{template "admin_info_panel" .}}
   </section>
-  <section class="workflow-lane">
-    <div class="workflow-lane-header">
+  <section class="admin-show-section" id="show-schedule">
+    <div class="admin-show-section-header">
       <h3>Schedule and class order</h3>
       <p>Use the same workspace to create divisions, sections, and classes, then tighten the ordering before intake begins.</p>
     </div>
@@ -18,16 +18,16 @@
 {{end}}
 
 {{define "admin_intake_panel"}}
-<div class="workflow-panel-grid">
-  <section class="workflow-lane workflow-lane-wide">
-    <div class="workflow-lane-header">
+<div class="admin-show-stack">
+  <section class="admin-show-section" id="intake-add-entry">
+    <div class="admin-show-section-header">
       <h3>Rapid intake</h3>
       <p>Start from the class, link the entrant from host-club members or guests, and keep moving even if photos come later.</p>
     </div>
     {{template "admin_entry_intake_form" .}}
   </section>
-  <section class="workflow-lane">
-    <div class="workflow-lane-header">
+  <section class="admin-show-section" id="intake-photo-queue">
+    <div class="admin-show-section-header">
       <h3>Needs photos</h3>
       <p>These entries are in the show but still need media. Another operator can complete them later.</p>
     </div>
@@ -57,8 +57,8 @@
       </div>
     </div>
   </section>
-  <section class="workflow-lane">
-    <div class="workflow-lane-header">
+  <section class="admin-show-section" id="intake-recent">
+    <div class="admin-show-section-header">
       <h3>Recent intake</h3>
       <p>The newest entries stay visible here so operators can confirm names, classes, and photo follow-up.</p>
     </div>
@@ -88,16 +88,16 @@
 {{end}}
 
 {{define "admin_floor_panel"}}
-<div class="workflow-panel-grid">
-  <section class="workflow-lane workflow-lane-wide">
-    <div class="workflow-lane-header">
+<div class="admin-show-stack">
+  <section class="admin-show-section" id="floor-corrections">
+    <div class="admin-show-section-header">
       <h3>Floor corrections</h3>
       <p>Use this lane when judges correct classes, when entrant assignments need fixing, or when mistaken entries must be removed.</p>
     </div>
     {{template "admin_entry_floor_table" .}}
   </section>
-  <section class="workflow-lane">
-    <div class="workflow-lane-header">
+  <section class="admin-show-section" id="floor-placements">
+    <div class="admin-show-section-header">
       <h3>Placement control</h3>
       <p>Set placements quickly without leaving the live operator workspace.</p>
     </div>
@@ -107,77 +107,84 @@
 {{end}}
 
 {{define "admin_board_panel"}}
-<div class="workflow-lane-header">
-  <h3>Full show board</h3>
-  <p>All classes and entries in one place, with thumbnail and workflow status cues for missing photos, placements, and suppression.</p>
-</div>
-<div class="board-summary-grid">
-  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.TotalEntries}}</span><span class="board-summary-label">entries</span></div>
-  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.ClassesWithEntries}}</span><span class="board-summary-label">classes with entries</span></div>
-  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.MissingPhotos}}</span><span class="board-summary-label">needing photos</span></div>
-  <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.PlacedEntries}}</span><span class="board-summary-label">placed</span></div>
-</div>
-{{if .BoardDivisions}}
-<div class="board-division-stack">
-  {{range .BoardDivisions}}
-  <section class="board-division">
-    <div class="board-division-header">
-      <h3>Division {{.Division.Code}}: {{.Division.Title}}</h3>
-      <span class="badge badge-muted">{{.Division.Domain}}</span>
+<div class="admin-show-stack">
+  <section class="admin-show-section" id="board-summary">
+    <div class="admin-show-section-header">
+      <h3>Full show board</h3>
+      <p>All classes and entries in one place, with thumbnail and workflow status cues for missing photos, placements, and suppression.</p>
     </div>
-    {{range .Sections}}
-    <div class="board-section">
-      <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
-      <div class="board-class-grid">
-        {{range .Classes}}
-        <article class="board-class-card">
-          <header class="board-class-header">
-            <div>
-              <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
-              <p class="card-meta">{{.EntryCount}} entries · {{.MissingPhotoCount}} needing photos · {{.PlacedCount}} placed</p>
-            </div>
-          </header>
-          {{if .Entries}}
-          <div class="board-entry-grid">
-            {{range .Entries}}
-            {{$entry := .}}
-            <div class="board-entry-card {{placementClass .Entry.Placement}}">
-              <div class="board-entry-thumb">
-                {{with primaryMedia .Media}}
-                <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="board-entry-image">
-                {{else}}
-                <div class="board-entry-placeholder">No photo</div>
+    <div class="board-summary-grid">
+      <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.TotalEntries}}</span><span class="board-summary-label">entries</span></div>
+      <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.ClassesWithEntries}}</span><span class="board-summary-label">classes with entries</span></div>
+      <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.MissingPhotos}}</span><span class="board-summary-label">needing photos</span></div>
+      <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.PlacedEntries}}</span><span class="board-summary-label">placed</span></div>
+    </div>
+  </section>
+
+  <section class="admin-show-section" id="board-grid">
+    {{if .BoardDivisions}}
+    <div class="board-division-stack">
+      {{range .BoardDivisions}}
+      <section class="board-division">
+        <div class="board-division-header">
+          <h3>Division {{.Division.Code}}: {{.Division.Title}}</h3>
+          <span class="badge badge-muted">{{.Division.Domain}}</span>
+        </div>
+        {{range .Sections}}
+        <div class="board-section">
+          <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+          <div class="board-class-grid">
+            {{range .Classes}}
+            <article class="board-class-card">
+              <header class="board-class-header">
+                <div>
+                  <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
+                  <p class="card-meta">{{.EntryCount}} entries · {{.MissingPhotoCount}} needing photos · {{.PlacedCount}} placed</p>
+                </div>
+              </header>
+              {{if .Entries}}
+              <div class="board-entry-grid">
+                {{range .Entries}}
+                {{$entry := .}}
+                <div class="board-entry-card {{placementClass .Entry.Placement}}">
+                  <div class="board-entry-thumb">
+                    {{with primaryMedia .Media}}
+                    <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="board-entry-image">
+                    {{else}}
+                    <div class="board-entry-placeholder">No photo</div>
+                    {{end}}
+                  </div>
+                  <div class="board-entry-body">
+                    <strong>{{.Entry.Name}}</strong>
+                    <p class="card-meta">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
+                    <div class="tag-list">
+                      {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+                    </div>
+                  </div>
+                </div>
                 {{end}}
               </div>
-              <div class="board-entry-body">
-                <strong>{{.Entry.Name}}</strong>
-                <p class="card-meta">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
-                <div class="tag-list">
-                  {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
-                </div>
-              </div>
-            </div>
+              {{else}}
+              <p class="empty-state">No entries in this class yet.</p>
+              {{end}}
+            </article>
             {{end}}
           </div>
-          {{else}}
-          <p class="empty-state">No entries in this class yet.</p>
-          {{end}}
-        </article>
+        </div>
         {{end}}
-      </div>
+      </section>
+      {{end}}
     </div>
+    {{else}}
+    <p class="empty-state">Create a schedule to view the board.</p>
     {{end}}
   </section>
-  {{end}}
 </div>
-{{else}}
-<p class="empty-state">Create a schedule to view the board.</p>
-{{end}}
 {{end}}
 
 {{define "admin_info_panel"}}
-<div class="card-grid">
-  <div class="card">
+<div class="admin-show-stack">
+  <div class="card admin-show-card" id="show-profile">
     <div class="card-body">
       <h3 class="card-title">Show Profile</h3>
       <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
@@ -212,7 +219,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card admin-show-card" id="show-judges">
     <div class="card-body">
       <h3 class="card-title">Judges</h3>
       <p class="card-meta">Only assigned judges can submit scorecards for this show.</p>
@@ -230,20 +237,23 @@
       {{end}}
 
       {{if .AvailableJudges}}
-      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-inline" style="margin-top:1rem;">
-        <select name="person_id" class="form-input" required>
-          <option value="">Select person...</option>
-          {{range .AvailableJudges}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
-        </select>
-        <button type="submit" class="btn btn-primary btn-sm">Assign Judge</button>
-      </form>
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Assign judge</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/judges" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <select name="person_id" class="form-input" required>
+            <option value="">Select person...</option>
+            {{range .AvailableJudges}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm">Assign Judge</button>
+        </form>
+      </details>
       {{else}}
       <p class="card-meta">All current people are already assigned as judges for this show.</p>
       {{end}}
     </div>
   </div>
 
-  <div class="card">
+  <div class="card admin-show-card" id="show-credits">
     <div class="card-body">
       <h3 class="card-title">Show Credits</h3>
       <p class="card-meta">Credits are display labels on the show page, not permission roles.</p>
@@ -268,165 +278,176 @@
       <p class="empty-state">No show credits yet.</p>
       {{end}}
 
-      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Credit Label</label>
-            <input type="text" name="credit_label" class="form-input" placeholder="Host" required>
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Add credit</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/credits" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Credit Label</label>
+              <input type="text" name="credit_label" class="form-input" placeholder="Host" required>
+            </div>
+            <div class="form-group">
+              <label>Sort Order</label>
+              <input type="number" name="sort_order" class="form-input" value="1" min="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Person</label>
+              <select name="person_id" class="form-input">
+                <option value="">Use free text instead</option>
+                {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Free Text Name</label>
+              <input type="text" name="display_name" class="form-input" placeholder="Guest speaker">
+            </div>
           </div>
           <div class="form-group">
-            <label>Sort Order</label>
-            <input type="number" name="sort_order" class="form-input" value="1" min="1">
+            <label>Notes</label>
+            <input type="text" name="notes" class="form-input" placeholder="Optional display note">
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Person</label>
-            <select name="person_id" class="form-input">
-              <option value="">Use free text instead</option>
-              {{range .Persons}}<option value="{{.ID}}">{{.FirstName}} {{.LastName}}</option>{{end}}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Free Text Name</label>
-            <input type="text" name="display_name" class="form-input" placeholder="Guest speaker">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Notes</label>
-          <input type="text" name="notes" class="form-input" placeholder="Optional display note">
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Add Credit</button>
-      </form>
+          <button type="submit" class="btn btn-primary btn-sm">Add Credit</button>
+        </form>
+      </details>
     </div>
   </div>
 </div>
 {{end}}
 
 {{define "admin_schedule_panel"}}
-<div class="card">
-  <div class="card-body">
-    <h3 class="card-title">{{if .Schedule}}Schedule Governance{{else}}Create Schedule{{end}}</h3>
-    <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Effective Standard Edition</label>
-          <select name="edition_id" class="form-input">
-            <option value="">No linked standard</option>
-            {{range .StandardEditions}}
-            <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.EffectiveStandardEditionID}}selected{{end}}{{end}}>
-              {{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}
-            </option>
-            {{end}}
-          </select>
+<div class="admin-show-stack">
+  <section class="card admin-show-card" id="show-schedule-governance">
+    <div class="card-body">
+      <h3 class="card-title">{{if .Schedule}}Schedule Governance{{else}}Create Schedule{{end}}</h3>
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/schedule" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Effective Standard Edition</label>
+            <select name="edition_id" class="form-input">
+              <option value="">No linked standard</option>
+              {{range .StandardEditions}}
+              <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.EffectiveStandardEditionID}}selected{{end}}{{end}}>
+                {{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}
+              </option>
+              {{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Source Document</label>
+            <select name="source_document_id" class="form-input">
+              <option value="">No linked source</option>
+              {{range .Sources}}
+              <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.SourceDocumentID}}selected{{end}}{{end}}>{{.Title}}</option>
+              {{end}}
+            </select>
+          </div>
         </div>
         <div class="form-group">
-          <label>Source Document</label>
-          <select name="source_document_id" class="form-input">
-            <option value="">No linked source</option>
-            {{range .Sources}}
-            <option value="{{.ID}}" {{if $.Schedule}}{{if eq .ID $.Schedule.SourceDocumentID}}selected{{end}}{{end}}>{{.Title}}</option>
-            {{end}}
-          </select>
+          <label>Notes</label>
+          <input type="text" name="notes" value="{{if .Schedule}}{{.Schedule.Notes}}{{end}}" class="form-input" placeholder="e.g. OJES 2019 with local staging addendum">
         </div>
-      </div>
-      <div class="form-group">
-        <label>Notes</label>
-        <input type="text" name="notes" value="{{if .Schedule}}{{.Schedule.Notes}}{{end}}" class="form-input" placeholder="e.g. OJES 2019 with local staging addendum">
-      </div>
-      <button type="submit" class="btn btn-primary btn-sm">{{if .Schedule}}Update Schedule Governance{{else}}Create Schedule{{end}}</button>
-    </form>
-    {{if .ScheduleEdition}}
-    <p class="card-meta">Current standard: <strong>{{.ScheduleEdition.EditionLabel}}</strong> {{if .ScheduleEdition.PublicationYear}}({{.ScheduleEdition.PublicationYear}}){{end}}</p>
-    {{end}}
-  </div>
-</div>
+        <button type="submit" class="btn btn-primary btn-sm">{{if .Schedule}}Update Schedule Governance{{else}}Create Schedule{{end}}</button>
+      </form>
+      {{if .ScheduleEdition}}
+      <p class="card-meta">Current standard: <strong>{{.ScheduleEdition.EditionLabel}}</strong> {{if .ScheduleEdition.PublicationYear}}({{.ScheduleEdition.PublicationYear}}){{end}}</p>
+      {{end}}
+    </div>
+  </section>
 
-{{if .Schedule}}
-{{range .Divisions}}
-<div class="schedule-division admin-division">
-  <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
-  {{range .Sections}}
-  <div class="schedule-section admin-section">
-    <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
-    {{range .Classes}}
-    <div class="class-item admin-class-item">
-      <div>
-        <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
-        <span class="badge badge-muted">sort {{.SortOrder}}</span>
-        {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+  {{if .Schedule}}
+  <section class="card admin-show-card" id="show-schedule-structure">
+    <div class="card-body">
+      <h3 class="card-title">Schedule structure</h3>
+      <p class="card-meta">Review the schedule top to bottom here. New divisions, sections, and classes are tucked into the expanders so the main list stays readable during the event.</p>
+      {{range .Divisions}}
+      <div class="schedule-division admin-division">
+        <h3>Division {{.Division.Code}}: {{.Division.Title}} <span class="badge badge-muted">{{.Division.Domain}}</span></h3>
+        {{range .Sections}}
+        <div class="schedule-section admin-section">
+          <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+          {{range .Classes}}
+          <div class="class-item admin-class-item">
+            <div>
+              <span class="class-number">{{.ClassNumber}}</span> {{.Title}}
+              <span class="badge badge-muted">sort {{.SortOrder}}</span>
+              {{if .SpecimenCount}}<span class="badge badge-muted">{{.SpecimenCount}} specimen{{if gt .SpecimenCount 1}}s{{end}}</span>{{end}}
+            </div>
+            <details class="account-collapsible compact admin-show-disclosure" style="margin-top:.5rem;">
+              <summary>Edit class</summary>
+              <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
+                <input type="hidden" name="show_id" value="{{$.Show.ID}}">
+                <input type="hidden" name="section_id" value="{{.SectionID}}">
+                <input type="text" name="class_number" value="{{.ClassNumber}}" class="form-input form-sm" required>
+                <input type="number" name="sort_order" value="{{.SortOrder}}" class="form-input form-sm" min="1">
+                <input type="text" name="title" value="{{.Title}}" class="form-input" required>
+                <select name="domain" class="form-input form-sm">
+                  <option value="horticulture" {{if eq .Domain "horticulture"}}selected{{end}}>Horticulture</option>
+                  <option value="design" {{if eq .Domain "design"}}selected{{end}}>Design</option>
+                  <option value="special" {{if eq .Domain "special"}}selected{{end}}>Special</option>
+                  <option value="other" {{if eq .Domain "other"}}selected{{end}}>Other</option>
+                </select>
+                <input type="number" name="specimen_count" value="{{.SpecimenCount}}" class="form-input form-sm" min="0">
+                <input type="text" name="description" value="{{.Description}}" class="form-input" placeholder="Description">
+                <button type="submit" class="btn btn-primary btn-sm">Save Class</button>
+              </form>
+            </details>
+          </div>
+          {{end}}
+          <details class="account-collapsible compact admin-show-disclosure">
+            <summary>Add class</summary>
+            <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
+              <input type="hidden" name="section_id" value="{{.Section.ID}}">
+              <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
+              <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1" min="1">
+              <input type="text" name="title" placeholder="Title" class="form-input" required>
+              <select name="domain" class="form-input form-sm">
+                <option value="horticulture">Horticulture</option>
+                <option value="design">Design</option>
+                <option value="special">Special</option>
+                <option value="other">Other</option>
+              </select>
+              <input type="text" name="description" placeholder="Description" class="form-input">
+              <input type="number" name="specimen_count" placeholder="Specimens" class="form-input form-sm" value="1">
+              <button type="submit" class="btn btn-primary btn-sm">Add Class</button>
+            </form>
+          </details>
+        </div>
+        {{end}}
+        <details class="account-collapsible compact admin-show-disclosure">
+          <summary>Add section</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
+            <input type="hidden" name="division_id" value="{{.Division.ID}}">
+            <input type="text" name="code" placeholder="Code" class="form-input form-sm">
+            <input type="text" name="title" placeholder="Section title" class="form-input" required>
+            <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+            <button type="submit" class="btn btn-primary btn-sm">Add Section</button>
+          </form>
+        </details>
       </div>
-      <details class="add-form" style="margin-top:.5rem;">
-        <summary class="btn btn-outline btn-sm">Edit Class</summary>
-        <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
-          <input type="hidden" name="show_id" value="{{$.Show.ID}}">
-          <input type="hidden" name="section_id" value="{{.SectionID}}">
-          <input type="text" name="class_number" value="{{.ClassNumber}}" class="form-input form-sm" required>
-          <input type="number" name="sort_order" value="{{.SortOrder}}" class="form-input form-sm" min="1">
-          <input type="text" name="title" value="{{.Title}}" class="form-input" required>
+      {{end}}
+
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Add division</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
+          <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
+          <input type="text" name="code" placeholder="Code" class="form-input form-sm">
+          <input type="text" name="title" placeholder="Division title" class="form-input" required>
           <select name="domain" class="form-input form-sm">
-            <option value="horticulture" {{if eq .Domain "horticulture"}}selected{{end}}>Horticulture</option>
-            <option value="design" {{if eq .Domain "design"}}selected{{end}}>Design</option>
-            <option value="special" {{if eq .Domain "special"}}selected{{end}}>Special</option>
-            <option value="other" {{if eq .Domain "other"}}selected{{end}}>Other</option>
+            <option value="horticulture">Horticulture</option>
+            <option value="design">Design</option>
+            <option value="special">Special</option>
+            <option value="other">Other</option>
           </select>
-          <input type="number" name="specimen_count" value="{{.SpecimenCount}}" class="form-input form-sm" min="0">
-          <input type="text" name="description" value="{{.Description}}" class="form-input" placeholder="Description">
-          <button type="submit" class="btn btn-primary btn-sm">Save Class</button>
+          <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
+          <button type="submit" class="btn btn-primary btn-sm">Add Division</button>
         </form>
       </details>
     </div>
-    {{end}}
-    <details class="add-form">
-      <summary class="btn btn-outline btn-sm">+ Add Class</summary>
-      <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/classes" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
-        <input type="hidden" name="section_id" value="{{.Section.ID}}">
-        <input type="text" name="class_number" placeholder="Number" class="form-input form-sm" required>
-        <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1" min="1">
-        <input type="text" name="title" placeholder="Title" class="form-input" required>
-        <select name="domain" class="form-input form-sm">
-          <option value="horticulture">Horticulture</option>
-          <option value="design">Design</option>
-          <option value="special">Special</option>
-          <option value="other">Other</option>
-        </select>
-        <input type="text" name="description" placeholder="Description" class="form-input">
-        <input type="number" name="specimen_count" placeholder="Specimens" class="form-input form-sm" value="1">
-        <button type="submit" class="btn btn-primary btn-sm">Add Class</button>
-      </form>
-    </details>
-  </div>
+  </section>
   {{end}}
-  <details class="add-form">
-    <summary class="btn btn-outline btn-sm">+ Add Section</summary>
-    <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-post="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/sections" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
-      <input type="hidden" name="division_id" value="{{.Division.ID}}">
-      <input type="text" name="code" placeholder="Code" class="form-input form-sm">
-      <input type="text" name="title" placeholder="Section title" class="form-input" required>
-      <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
-      <button type="submit" class="btn btn-primary btn-sm">Add Section</button>
-    </form>
-  </details>
 </div>
-{{end}}
-
-<details class="add-form">
-  <summary class="btn btn-outline btn-sm">+ Add Division</summary>
-  <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/divisions" hx-target="#admin-setup-panel" hx-swap="innerHTML" class="form form-compact">
-    <input type="hidden" name="schedule_id" value="{{.Schedule.ID}}">
-    <input type="text" name="code" placeholder="Code" class="form-input form-sm">
-    <input type="text" name="title" placeholder="Division title" class="form-input" required>
-    <select name="domain" class="form-input form-sm">
-      <option value="horticulture">Horticulture</option>
-      <option value="design">Design</option>
-      <option value="special">Special</option>
-      <option value="other">Other</option>
-    </select>
-    <input type="number" name="sort_order" placeholder="Sort" class="form-input form-sm" value="1">
-    <button type="submit" class="btn btn-primary btn-sm">Add Division</button>
-  </form>
-</details>
-{{end}}
 {{end}}
 
 {{define "admin_entry_intake_form"}}
@@ -528,9 +549,9 @@
         </form>
       </td>
       <td>
-        <details class="add-form">
-          <summary class="btn btn-outline btn-sm">Move</summary>
-          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+        <details class="account-collapsible compact admin-show-disclosure">
+          <summary>Move entry</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
             <select name="class_id" class="form-input" required>
               {{range $.Classes}}<option value="{{.ID}}" {{if eq .ID $currentEntry.ClassID}}selected{{end}}>{{.ClassNumber}}: {{.Title}}</option>{{end}}
             </select>
@@ -538,9 +559,9 @@
             <button type="submit" class="btn btn-primary btn-sm">Move Entry</button>
           </form>
         </details>
-        <details class="add-form" style="margin-top:.5rem;">
-          <summary class="btn btn-outline btn-sm">Entrant</summary>
-          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+        <details class="account-collapsible compact admin-show-disclosure" style="margin-top:.5rem;">
+          <summary>Change entrant</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
             <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
             <select id="entrant-select-{{$currentEntry.ID}}" name="person_id" class="form-input" required>
               {{range $.EntrantCandidates}}<option value="{{.Person.ID}}" {{if eq .Person.ID $currentEntry.PersonID}}selected{{end}}>{{.Label}}</option>{{end}}
@@ -596,36 +617,10 @@
 {{end}}
 
 {{define "admin_scoring_panel"}}
-<div class="card-grid">
-  <div class="card">
+<div class="admin-show-stack">
+  <section class="card admin-show-card" id="scoring-rubrics">
     <div class="card-body">
       <h3 class="card-title">Rubrics</h3>
-      <form method="POST" action="{{$.BasePath}}/admin/rubrics" hx-post="{{$.BasePath}}/admin/rubrics" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Title</label>
-            <input type="text" name="title" class="form-input" placeholder="Horticulture Specimen Judging" required>
-          </div>
-          <div class="form-group">
-            <label>Domain</label>
-            <select name="domain" class="form-input">
-              <option value="horticulture">Horticulture</option>
-              <option value="design">Design</option>
-              <option value="special">Special</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Standard Edition</label>
-          <select name="standard_edition_id" class="form-input">
-            <option value="">Show-local rubric</option>
-            {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Create Rubric</button>
-      </form>
-
       {{if .RubricViews}}
       <div class="governance-list">
         {{range .RubricViews}}
@@ -645,46 +640,77 @@
         {{end}}
       </div>
       {{end}}
-    </div>
-  </div>
 
-  <div class="card">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Create rubric</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/rubrics" hx-post="{{$.BasePath}}/admin/rubrics" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Title</label>
+              <input type="text" name="title" class="form-input" placeholder="Horticulture Specimen Judging" required>
+            </div>
+            <div class="form-group">
+              <label>Domain</label>
+              <select name="domain" class="form-input">
+                <option value="horticulture">Horticulture</option>
+                <option value="design">Design</option>
+                <option value="special">Special</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Standard Edition</label>
+            <select name="standard_edition_id" class="form-input">
+              <option value="">Show-local rubric</option>
+              {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Create Rubric</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section class="card admin-show-card" id="scoring-criteria">
     <div class="card-body">
       <h3 class="card-title">Criteria</h3>
       {{if .RubricViews}}
-      <form method="POST" action="{{$.BasePath}}/admin/criteria" hx-post="{{$.BasePath}}/admin/criteria" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-group">
-          <label>Rubric</label>
-          <select name="rubric_id" class="form-input" required>
-            {{range .RubricViews}}<option value="{{.Rubric.ID}}">{{.Rubric.Title}}</option>{{end}}
-          </select>
-        </div>
-        <div class="form-row">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Add criterion</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/criteria" hx-post="{{$.BasePath}}/admin/criteria" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
           <div class="form-group">
-            <label>Name</label>
-            <input type="text" name="name" class="form-input" placeholder="Form" required>
+            <label>Rubric</label>
+            <select name="rubric_id" class="form-input" required>
+              {{range .RubricViews}}<option value="{{.Rubric.ID}}">{{.Rubric.Title}}</option>{{end}}
+            </select>
           </div>
-          <div class="form-group">
-            <label>Max Points</label>
-            <input type="number" name="max_points" class="form-input" value="10" min="1" required>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Name</label>
+              <input type="text" name="name" class="form-input" placeholder="Form" required>
+            </div>
+            <div class="form-group">
+              <label>Max Points</label>
+              <input type="number" name="max_points" class="form-input" value="10" min="1" required>
+            </div>
+            <div class="form-group">
+              <label>Sort Order</label>
+              <input type="number" name="sort_order" class="form-input" value="1" min="1" required>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Sort Order</label>
-            <input type="number" name="sort_order" class="form-input" value="1" min="1" required>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Add Criterion</button>
-      </form>
+          <button type="submit" class="btn btn-primary btn-sm">Add Criterion</button>
+        </form>
+      </details>
       {{else}}
       <p class="empty-state">Create a rubric first.</p>
       {{end}}
     </div>
-  </div>
-</div>
+  </section>
 
-<div class="card">
-  <div class="card-body">
+  <section class="card admin-show-card" id="scoring-scorecards">
+    <div class="card-body">
     <h3 class="card-title">Submit Scorecard</h3>
     {{if and .RubricViews .Entries .Judges}}
     <form method="POST" action="{{$.BasePath}}/admin/scorecards" hx-post="{{$.BasePath}}/admin/scorecards" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" id="scorecard-form">
@@ -737,11 +763,11 @@
     {{else}}
     <p class="empty-state">Add assigned judges, rubrics, and entries before scoring.</p>
     {{end}}
-  </div>
-</div>
+    </div>
+  </section>
 
-<div class="card">
-  <div class="card-body">
+  <section class="card admin-show-card" id="scoring-placements">
+    <div class="card-body">
     <h3 class="card-title">Compute Placements From Scorecards</h3>
     {{if .Classes}}
     <div class="winner-list">
@@ -757,41 +783,16 @@
     {{else}}
     <p class="empty-state">Add classes before computing placements.</p>
     {{end}}
-  </div>
+    </div>
+  </section>
 </div>
 {{end}}
 
 {{define "admin_governance_panel"}}
-<div class="card-grid">
-  <div class="card">
+<div class="admin-show-stack">
+  <section class="card admin-show-card" id="governance-standards">
     <div class="card-body">
       <h3 class="card-title">Standards</h3>
-      <form method="POST" action="{{$.BasePath}}/admin/standards" hx-post="{{$.BasePath}}/admin/standards" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" name="name" class="form-input" placeholder="Official Judging and Exhibiting Standards" required>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Issuing Organization</label>
-            <select name="issuing_org_id" class="form-input">
-              <option value="">Select organization...</option>
-              {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Domain Scope</label>
-            <input type="text" name="domain_scope" class="form-input" placeholder="horticulture">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <input type="text" name="description" class="form-input">
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Create Standard</button>
-      </form>
-
       {{if .StandardViews}}
       <div class="governance-list">
         {{range .StandardViews}}
@@ -811,97 +812,97 @@
         {{end}}
       </div>
       {{end}}
-    </div>
-  </div>
 
-  <div class="card">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Create standard</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/standards" hx-post="{{$.BasePath}}/admin/standards" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" class="form-input" placeholder="Official Judging and Exhibiting Standards" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Issuing Organization</label>
+              <select name="issuing_org_id" class="form-input">
+                <option value="">Select organization...</option>
+                {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Domain Scope</label>
+              <input type="text" name="domain_scope" class="form-input" placeholder="horticulture">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" name="description" class="form-input">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Create Standard</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section class="card admin-show-card" id="governance-editions">
     <div class="card-body">
       <h3 class="card-title">Standard Editions</h3>
       {{if .Standards}}
-      <form method="POST" action="{{$.BasePath}}/admin/editions" hx-post="{{$.BasePath}}/admin/editions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-group">
-          <label>Standard</label>
-          <select name="standard_document_id" class="form-input" required>
-            {{range .Standards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-          </select>
-        </div>
-        <div class="form-row">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Create edition</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/editions" hx-post="{{$.BasePath}}/admin/editions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
           <div class="form-group">
-            <label>Edition Label</label>
-            <input type="text" name="edition_label" class="form-input" placeholder="2019" required>
-          </div>
-          <div class="form-group">
-            <label>Publication Year</label>
-            <input type="number" name="publication_year" class="form-input" value="2025" required>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select name="status" class="form-input">
-              <option value="current">current</option>
-              <option value="superseded">superseded</option>
-              <option value="draft">draft</option>
+            <label>Standard</label>
+            <select name="standard_document_id" class="form-input" required>
+              {{range .Standards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
             </select>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Source URL</label>
-            <input type="url" name="source_url" class="form-input">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Edition Label</label>
+              <input type="text" name="edition_label" class="form-input" placeholder="2019" required>
+            </div>
+            <div class="form-group">
+              <label>Publication Year</label>
+              <input type="number" name="publication_year" class="form-input" value="2025" required>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select name="status" class="form-input">
+                <option value="current">current</option>
+                <option value="superseded">superseded</option>
+                <option value="draft">draft</option>
+              </select>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Source Kind</label>
-            <select name="source_kind" class="form-input">
-              <option value="official_pdf">official_pdf</option>
-              <option value="print_only">print_only</option>
-              <option value="excerpt_pdf">excerpt_pdf</option>
-              <option value="catalog_record">catalog_record</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Source URL</label>
+              <input type="url" name="source_url" class="form-input">
+            </div>
+            <div class="form-group">
+              <label>Source Kind</label>
+              <select name="source_kind" class="form-input">
+                <option value="official_pdf">official_pdf</option>
+                <option value="print_only">print_only</option>
+                <option value="excerpt_pdf">excerpt_pdf</option>
+                <option value="catalog_record">catalog_record</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Create Edition</button>
-      </form>
+          <button type="submit" class="btn btn-primary btn-sm">Create Edition</button>
+        </form>
+      </details>
       {{else}}
       <p class="empty-state">Create a standard first.</p>
       {{end}}
     </div>
-  </div>
+  </section>
 
-  <div class="card">
+  <section class="card admin-show-card" id="governance-sources">
     <div class="card-body">
       <h3 class="card-title">Source Documents</h3>
-      <form method="POST" action="{{$.BasePath}}/admin/sources" hx-post="{{$.BasePath}}/admin/sources" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Organization</label>
-            <select name="organization_id" class="form-input">
-              {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.Show.OrganizationID}}selected{{end}}>{{.Name}}</option>{{end}}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Title</label>
-            <input type="text" name="title" class="form-input" placeholder="Spring Rose Show 2025 Schedule" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Document Type</label>
-            <select name="document_type" class="form-input">
-              <option value="schedule">schedule</option>
-              <option value="rulebook">rulebook</option>
-              <option value="results_sheet">results_sheet</option>
-              <option value="catalog_record">catalog_record</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Source URL</label>
-            <input type="url" name="source_url" class="form-input">
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Register Source</button>
-      </form>
-
       {{if .Sources}}
       <div class="governance-list">
         {{range .Sources}}
@@ -915,160 +916,203 @@
         {{end}}
       </div>
       {{end}}
-    </div>
-  </div>
-</div>
 
-<div class="card-grid" style="margin-top:1rem;">
-  <div class="card">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Register source</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/sources" hx-post="{{$.BasePath}}/admin/sources" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Organization</label>
+              <select name="organization_id" class="form-input">
+                {{range .Orgs}}<option value="{{.ID}}" {{if eq .ID $.Show.OrganizationID}}selected{{end}}>{{.Name}}</option>{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Title</label>
+              <input type="text" name="title" class="form-input" placeholder="Spring Rose Show 2025 Schedule" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Document Type</label>
+              <select name="document_type" class="form-input">
+                <option value="schedule">schedule</option>
+                <option value="rulebook">rulebook</option>
+                <option value="results_sheet">results_sheet</option>
+                <option value="catalog_record">catalog_record</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Source URL</label>
+              <input type="url" name="source_url" class="form-input">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Register Source</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section class="card admin-show-card" id="governance-rules">
     <div class="card-body">
       <h3 class="card-title">Rules & Overrides</h3>
       {{if .StandardEditions}}
-      <form method="POST" action="{{$.BasePath}}/admin/rules" hx-post="{{$.BasePath}}/admin/rules" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-group">
-          <label>Standard Edition</label>
-          <select name="standard_edition_id" class="form-input" required>
-            {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
-          </select>
-        </div>
-        <div class="form-row">
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Add standard rule</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/rules" hx-post="{{$.BasePath}}/admin/rules" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
           <div class="form-group">
-            <label>Domain</label>
-            <input type="text" name="domain" class="form-input" placeholder="horticulture" required>
-          </div>
-          <div class="form-group">
-            <label>Rule Type</label>
-            <select name="rule_type" class="form-input">
-              <option value="definition">definition</option>
-              <option value="presentation">presentation</option>
-              <option value="measurement">measurement</option>
-              <option value="eligibility">eligibility</option>
-              <option value="scale_of_points">scale_of_points</option>
-              <option value="naming">naming</option>
+            <label>Standard Edition</label>
+            <select name="standard_edition_id" class="form-input" required>
+              {{range .StandardEditions}}<option value="{{.ID}}">{{.EditionLabel}} {{if .PublicationYear}}({{.PublicationYear}}){{end}}</option>{{end}}
             </select>
           </div>
-        </div>
-        <div class="form-group">
-          <label>Subject</label>
-          <input type="text" name="subject_label" class="form-input" placeholder="Hybrid Tea specimens" required>
-        </div>
-        <div class="form-group">
-          <label>Body</label>
-          <textarea name="body" class="form-input" rows="3" required></textarea>
-        </div>
-        <div class="form-group">
-          <label>Page Reference</label>
-          <input type="text" name="page_ref" class="form-input" placeholder="p. 42">
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Add Standard Rule</button>
-      </form>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Domain</label>
+              <input type="text" name="domain" class="form-input" placeholder="horticulture" required>
+            </div>
+            <div class="form-group">
+              <label>Rule Type</label>
+              <select name="rule_type" class="form-input">
+                <option value="definition">definition</option>
+                <option value="presentation">presentation</option>
+                <option value="measurement">measurement</option>
+                <option value="eligibility">eligibility</option>
+                <option value="scale_of_points">scale_of_points</option>
+                <option value="naming">naming</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Subject</label>
+            <input type="text" name="subject_label" class="form-input" placeholder="Hybrid Tea specimens" required>
+          </div>
+          <div class="form-group">
+            <label>Body</label>
+            <textarea name="body" class="form-input" rows="3" required></textarea>
+          </div>
+          <div class="form-group">
+            <label>Page Reference</label>
+            <input type="text" name="page_ref" class="form-input" placeholder="p. 42">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Add Standard Rule</button>
+        </form>
+      </details>
       {{else}}
       <p class="empty-state">Create a standard edition first.</p>
       {{end}}
 
       {{if and .ClassRuleViews .StandardEditions}}
-      <form method="POST" action="{{$.BasePath}}/admin/overrides" hx-post="{{$.BasePath}}/admin/overrides" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Class</label>
-            <select name="show_class_id" class="form-input" required>
-              {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}} — {{.Title}}</option>{{end}}
-            </select>
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Add override</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/overrides" hx-post="{{$.BasePath}}/admin/overrides" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Class</label>
+              <select name="show_class_id" class="form-input" required>
+                {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}} — {{.Title}}</option>{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Base Rule</label>
+              <select name="base_standard_rule_id" class="form-input">
+                <option value="">Local-only override</option>
+                {{range .ClassRuleViews}}{{range .Rules}}{{if .Rule}}<option value="{{.Rule.ID}}">{{.Rule.SubjectLabel}}</option>{{end}}{{end}}{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Override Type</label>
+              <select name="override_type" class="form-input">
+                <option value="replace">replace</option>
+                <option value="narrow">narrow</option>
+                <option value="extend">extend</option>
+                <option value="local_only">local_only</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
-            <label>Base Rule</label>
-            <select name="base_standard_rule_id" class="form-input">
-              <option value="">Local-only override</option>
-              {{range .ClassRuleViews}}{{range .Rules}}{{if .Rule}}<option value="{{.Rule.ID}}">{{.Rule.SubjectLabel}}</option>{{end}}{{end}}{{end}}
-            </select>
+            <label>Override Body</label>
+            <textarea name="body" class="form-input" rows="3" required></textarea>
           </div>
           <div class="form-group">
-            <label>Override Type</label>
-            <select name="override_type" class="form-input">
-              <option value="replace">replace</option>
-              <option value="narrow">narrow</option>
-              <option value="extend">extend</option>
-              <option value="local_only">local_only</option>
-            </select>
+            <label>Rationale</label>
+            <input type="text" name="rationale" class="form-input" placeholder="Reason for local override">
           </div>
-        </div>
-        <div class="form-group">
-          <label>Override Body</label>
-          <textarea name="body" class="form-input" rows="3" required></textarea>
-        </div>
-        <div class="form-group">
-          <label>Rationale</label>
-          <input type="text" name="rationale" class="form-input" placeholder="Reason for local override">
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Add Override</button>
-      </form>
+          <button type="submit" class="btn btn-primary btn-sm">Add Override</button>
+        </form>
+      </details>
       {{end}}
     </div>
-  </div>
+  </section>
 
-  <div class="card">
+  <section class="card admin-show-card" id="governance-citations">
     <div class="card-body">
       <h3 class="card-title">Citations</h3>
       {{if and .Sources .CitationTargets}}
-      <form method="POST" action="{{$.BasePath}}/admin/citations" hx-post="{{$.BasePath}}/admin/citations" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Source Document</label>
-            <select name="source_document_id" class="form-input" required>
-              {{range .Sources}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
-            </select>
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Attach citation</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/citations" hx-post="{{$.BasePath}}/admin/citations" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Source Document</label>
+              <select name="source_document_id" class="form-input" required>
+                {{range .Sources}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Target</label>
+              <select name="target_ref" class="form-input" required>
+                {{range .CitationTargets}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Page From</label>
+              <input type="text" name="page_from" class="form-input" placeholder="7">
+            </div>
+            <div class="form-group">
+              <label>Page To</label>
+              <input type="text" name="page_to" class="form-input" placeholder="7">
+            </div>
+            <div class="form-group">
+              <label>Confidence</label>
+              <input type="number" name="extraction_confidence" class="form-input" min="0" max="1" step="0.01" value="0.90">
+            </div>
           </div>
           <div class="form-group">
-            <label>Target</label>
-            <select name="target_ref" class="form-input" required>
-              {{range .CitationTargets}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
-            </select>
+            <label>Quoted Text</label>
+            <textarea name="quoted_text" class="form-input" rows="3"></textarea>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Page From</label>
-            <input type="text" name="page_from" class="form-input" placeholder="7">
-          </div>
-          <div class="form-group">
-            <label>Page To</label>
-            <input type="text" name="page_to" class="form-input" placeholder="7">
-          </div>
-          <div class="form-group">
-            <label>Confidence</label>
-            <input type="number" name="extraction_confidence" class="form-input" min="0" max="1" step="0.01" value="0.90">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Quoted Text</label>
-          <textarea name="quoted_text" class="form-input" rows="3"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Attach Citation</button>
-      </form>
+          <button type="submit" class="btn btn-primary btn-sm">Attach Citation</button>
+        </form>
+      </details>
       {{else}}
       <p class="empty-state">Register source documents and rule/class targets first.</p>
       {{end}}
 
-      <h3 class="card-title" style="margin-top:1.5rem;">Ingestion</h3>
-      <form method="POST" action="{{$.BasePath}}/admin/ingestions" hx-post="{{$.BasePath}}/admin/ingestions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form">
-        <input type="hidden" name="show_id" value="{{.Show.ID}}">
-        <div class="form-group">
-          <label>Structured Extraction JSON</label>
-          <textarea name="payload" class="form-input" rows="10" placeholder='{"source_document":{"title":"Imported PDF","document_type":"rulebook"},"citations":[{"target_type":"show_class","target_id":"class_01","page_from":"2","quoted_text":"..." }]}' required></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Import Extraction</button>
-      </form>
+      <details class="account-collapsible compact admin-show-disclosure" style="margin-top:1rem;">
+        <summary>Import extraction</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/ingestions" hx-post="{{$.BasePath}}/admin/ingestions" hx-target="#admin-governance-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <div class="form-group">
+            <label>Structured Extraction JSON</label>
+            <textarea name="payload" class="form-input" rows="10" placeholder='{"source_document":{"title":"Imported PDF","document_type":"rulebook"},"citations":[{"target_type":"show_class","target_id":"class_01","page_from":"2","quoted_text":"..." }]}' required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Import Extraction</button>
+        </form>
+      </details>
       <p class="card-meta">The ingestion API stores the source document and all submitted citations so provenance survives the import.</p>
     </div>
-  </div>
-</div>
+  </section>
 
-{{if .ClassRuleViews}}
-<div class="card" style="margin-top:1rem;">
-  <div class="card-body">
+  {{if .ClassRuleViews}}
+  <section class="card admin-show-card" id="governance-effective-rules">
+    <div class="card-body">
     <h3 class="card-title">Effective Rules By Class</h3>
     {{range .ClassRuleViews}}
     <div class="rule-group">
@@ -1098,7 +1142,8 @@
       {{end}}
     </div>
     {{end}}
-  </div>
+    </div>
+  </section>
+  {{end}}
 </div>
-{{end}}
 {{end}}

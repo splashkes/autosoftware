@@ -91,13 +91,35 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
 
+    await page.locator('summary:has-text("Assign judge")').click();
     const judgeSelect = page.locator('form[action$="/judges"] select[name="person_id"]');
     await judgeSelect.selectOption({ index: 1 });
     await page
-      .locator('form[action$="/judges"] button:has-text("Assign Judge")')
-      .click();
+      .locator('form[action$="/judges"]')
+      .evaluate((form: HTMLFormElement) => form.requestSubmit());
 
     await expect(page.locator('#admin-setup-panel')).toContainText('assigned');
+  });
+
+  test('show admin uses the shared sidebar shell and switches sidebar links with the active tab', async ({
+    page,
+  }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin/shows/show_spring2025');
+
+    const sidebar = page.locator('[data-show-admin-shell] .account-sidebar');
+    const activeNav = sidebar.locator('[data-show-admin-nav].is-active');
+    await expect(sidebar).toBeVisible();
+    await expect(activeNav).toContainText('Show Basics');
+    await expect(activeNav).not.toContainText('Add Entry');
+
+    await page.getByRole('button', { name: 'Intake' }).click();
+    await expect(activeNav).toContainText('Add Entry');
+    await expect(activeNav).not.toContainText('Show Basics');
+
+    await page.getByRole('button', { name: 'Governance' }).click();
+    await expect(activeNav).toContainText('Standards');
+    await expect(activeNav).toContainText('Effective Rules');
   });
 
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
@@ -128,7 +150,7 @@ test.describe('Flowershow Admin Local', () => {
       'Update Schedule Governance',
     );
 
-    await page.locator('summary:has-text("+ Add Division")').click();
+    await page.locator('summary:has-text("Add division")').click();
     const divisionForm = page.locator('form[action$="/divisions"]');
     await divisionForm.locator('input[name="code"]').fill('I');
     await divisionForm.locator('input[name="title"]').fill('Playwright Division');
@@ -138,7 +160,7 @@ test.describe('Flowershow Admin Local', () => {
       'Playwright Division',
     );
 
-    await page.locator('summary:has-text("+ Add Section")').click();
+    await page.locator('summary:has-text("Add section")').click();
     const sectionForm = page.locator('form[action$="/sections"]');
     await sectionForm.locator('input[name="code"]').fill('A');
     await sectionForm.locator('input[name="title"]').fill('Playwright Section');
@@ -147,7 +169,7 @@ test.describe('Flowershow Admin Local', () => {
       'Playwright Section',
     );
 
-    await page.locator('summary:has-text("+ Add Class")').click();
+    await page.locator('summary:has-text("Add class")').click();
     const classForm = page.locator('form[action$="/classes"]');
     await classForm.locator('input[name="class_number"]').fill('12');
     await classForm.locator('input[name="title"]').fill('Playwright Bloom Class');

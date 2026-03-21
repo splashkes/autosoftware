@@ -1,80 +1,141 @@
 {{define "content"}}
-<div class="breadcrumb">
-  <a href="{{$.BasePath}}/admin">Admin</a> &rsaquo; <span>{{.Show.Name}}</span>
-</div>
+<section class="section account-shell show-admin-shell" hx-ext="sse" sse-connect="{{$.BasePath}}/admin/shows/{{.Show.ID}}/stream">
+  <div class="breadcrumb">
+    <a href="{{$.BasePath}}/admin">Admin</a> &rsaquo; <a href="{{$.BasePath}}/admin?section=shows">Shows</a> &rsaquo; <span>{{.Show.Name}}</span>
+  </div>
 
-<div class="admin-header">
-  <h1>{{.Show.Name}}</h1>
-  <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
-</div>
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Onsite workspace</div>
+      <h1>{{.Show.Name}}</h1>
+      <p class="card-meta">Keep setup, intake, judging support, scoring, and the live board on one surface. The sidebar changes with the active tab so the operator always has the next relevant section close at hand.</p>
+    </div>
+    <div class="show-actions">
+      <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
+    </div>
+  </div>
 
-<div hx-ext="sse" sse-connect="{{$.BasePath}}/admin/shows/{{.Show.ID}}/stream">
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
+  <section class="account-layout show-admin-layout" data-show-admin-shell data-show-admin-active-tab="setup">
+    <aside class="card account-sidebar show-admin-sidebar">
+      <div class="card-body">
+        <div class="login-step-kicker">Tab navigation</div>
+        <h2 class="card-title">{{.Show.Name}}</h2>
+        <p class="card-meta">The links below update with the active workspace tab.</p>
 
-  <div class="event-workspace-intro card">
-    <div class="card-body">
-      <div class="workflow-kicker">Onsite workspace</div>
-      <h2 class="card-title">One surface for setup, intake, floor corrections, scoring, and the live board.</h2>
-      <p class="card-meta">Operators can prepare the show before doors open, then stay in the same workflow while entries arrive, judges correct classes, and photos or placements are added later.</p>
+        <div class="show-admin-subnav is-active" data-show-admin-nav="setup">
+          <div class="show-admin-subnav-label">Setup</div>
+          <nav class="account-section-nav">
+            <a href="#show-basics" class="account-section-link">Show Basics</a>
+            <a href="#show-judges" class="account-section-link">Judges</a>
+            <a href="#show-credits" class="account-section-link">Credits</a>
+            <a href="#show-schedule" class="account-section-link">Schedule</a>
+          </nav>
+        </div>
+
+        <div class="show-admin-subnav" data-show-admin-nav="intake">
+          <div class="show-admin-subnav-label">Intake</div>
+          <nav class="account-section-nav">
+            <a href="#intake-add-entry" class="account-section-link">Add Entry</a>
+            <a href="#intake-photo-queue" class="account-section-link">Needs Photos</a>
+            <a href="#intake-recent" class="account-section-link">Recent Intake</a>
+          </nav>
+        </div>
+
+        <div class="show-admin-subnav" data-show-admin-nav="floor">
+          <div class="show-admin-subnav-label">Floor</div>
+          <nav class="account-section-nav">
+            <a href="#floor-corrections" class="account-section-link">Corrections</a>
+            <a href="#floor-placements" class="account-section-link">Placements</a>
+          </nav>
+        </div>
+
+        <div class="show-admin-subnav" data-show-admin-nav="scoring">
+          <div class="show-admin-subnav-label">Scoring</div>
+          <nav class="account-section-nav">
+            <a href="#scoring-rubrics" class="account-section-link">Rubrics</a>
+            <a href="#scoring-criteria" class="account-section-link">Criteria</a>
+            <a href="#scoring-scorecards" class="account-section-link">Scorecards</a>
+            <a href="#scoring-placements" class="account-section-link">Placements</a>
+          </nav>
+        </div>
+
+        <div class="show-admin-subnav" data-show-admin-nav="board">
+          <div class="show-admin-subnav-label">Board</div>
+          <nav class="account-section-nav">
+            <a href="#board-summary" class="account-section-link">Summary</a>
+            <a href="#board-grid" class="account-section-link">Full Board</a>
+          </nav>
+        </div>
+
+        <div class="show-admin-subnav" data-show-admin-nav="governance">
+          <div class="show-admin-subnav-label">Governance</div>
+          <nav class="account-section-nav">
+            <a href="#governance-standards" class="account-section-link">Standards</a>
+            <a href="#governance-editions" class="account-section-link">Editions</a>
+            <a href="#governance-sources" class="account-section-link">Sources</a>
+            <a href="#governance-rules" class="account-section-link">Rules</a>
+            <a href="#governance-citations" class="account-section-link">Citations</a>
+            <a href="#governance-effective-rules" class="account-section-link">Effective Rules</a>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <div class="account-main">
+      <div class="event-workspace-intro card">
+        <div class="card-body">
+          <div class="workflow-kicker">Onsite workspace</div>
+          <h2 class="card-title">One surface for setup, intake, floor corrections, scoring, and the live board.</h2>
+          <p class="card-meta">Operators can prepare the show before doors open, then stay in the same workflow while entries arrive, judges correct classes, and photos or placements are added later.</p>
+        </div>
+      </div>
+
+      <div class="tabs workflow-tabs show-admin-tabs">
+        <button type="button" class="tab active" onclick="showTab('setup')">Setup</button>
+        <button type="button" class="tab" onclick="showTab('intake')">Intake</button>
+        <button type="button" class="tab" onclick="showTab('floor')">Floor</button>
+        <button type="button" class="tab" onclick="showTab('scoring')">Scoring</button>
+        <button type="button" class="tab" onclick="showTab('board')">Board</button>
+        <button type="button" class="tab" onclick="showTab('governance')">Governance</button>
+      </div>
+
+      <div id="tab-setup" class="tab-content active">
+        <div id="admin-setup-panel" sse-swap="setup-refresh,info-refresh,schedule-refresh" hx-swap="innerHTML">
+          {{template "admin_setup_panel" .}}
+        </div>
+      </div>
+
+      <div id="tab-intake" class="tab-content">
+        <div id="admin-intake-panel" sse-swap="intake-refresh" hx-swap="innerHTML">
+          {{template "admin_intake_panel" .}}
+        </div>
+      </div>
+
+      <div id="tab-floor" class="tab-content">
+        <div id="admin-floor-panel" sse-swap="floor-refresh,entries-refresh" hx-swap="innerHTML">
+          {{template "admin_floor_panel" .}}
+        </div>
+      </div>
+
+      <div id="tab-scoring" class="tab-content">
+        <div id="admin-scoring-panel" sse-swap="scoring-refresh" hx-swap="innerHTML">
+          {{template "admin_scoring_panel" .}}
+        </div>
+      </div>
+
+      <div id="tab-board" class="tab-content">
+        <div id="admin-board-panel" sse-swap="board-refresh,winners-refresh" hx-swap="innerHTML">
+          {{template "admin_board_panel" .}}
+        </div>
+      </div>
+
+      <div id="tab-governance" class="tab-content">
+        <div id="admin-governance-panel" sse-swap="governance-refresh" hx-swap="innerHTML">
+          {{template "admin_governance_panel" .}}
+        </div>
+      </div>
     </div>
-  </div>
-
-  <div class="tabs workflow-tabs">
-    <button class="tab active" onclick="showTab('setup')">Setup</button>
-    <button class="tab" onclick="showTab('intake')">Intake</button>
-    <button class="tab" onclick="showTab('floor')">Floor</button>
-    <button class="tab" onclick="showTab('scoring')">Scoring</button>
-    <button class="tab" onclick="showTab('board')">Board</button>
-    <button class="tab" onclick="showTab('governance')">Governance</button>
-  </div>
-
-  <div id="tab-setup" class="tab-content active">
-    <div id="admin-setup-panel" sse-swap="setup-refresh,info-refresh,schedule-refresh" hx-swap="innerHTML">
-      {{template "admin_setup_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-intake" class="tab-content">
-    <div id="admin-intake-panel" sse-swap="intake-refresh" hx-swap="innerHTML">
-      {{template "admin_intake_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-floor" class="tab-content">
-    <div id="admin-floor-panel" sse-swap="floor-refresh,entries-refresh" hx-swap="innerHTML">
-      {{template "admin_floor_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-scoring" class="tab-content">
-    <div id="admin-scoring-panel" sse-swap="scoring-refresh" hx-swap="innerHTML">
-      {{template "admin_scoring_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-board" class="tab-content">
-    <div id="admin-board-panel" sse-swap="board-refresh,winners-refresh" hx-swap="innerHTML">
-      {{template "admin_board_panel" .}}
-    </div>
-  </div>
-
-  <div id="tab-governance" class="tab-content">
-    <div id="admin-governance-panel" sse-swap="governance-refresh" hx-swap="innerHTML">
-      {{template "admin_governance_panel" .}}
-    </div>
-  </div>
-</div>
-
-<script>
-function flowershowToggleRubricCriteria(select) {
-  var rubricID = select.value;
-  document.querySelectorAll('.criteria-group').forEach(function(el) {
-    el.classList.toggle('active', el.dataset.rubricId === rubricID);
-  });
-}
-document.addEventListener('DOMContentLoaded', function() {
-  var select = document.querySelector('#scorecard-form select[name="rubric_id"]');
-  if (select) flowershowToggleRubricCriteria(select);
-});
-</script>
+  </section>
+</section>
 {{end}}
