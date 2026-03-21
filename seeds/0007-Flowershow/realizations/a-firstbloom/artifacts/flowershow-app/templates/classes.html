@@ -28,7 +28,7 @@
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes/{{.Class.ID}}" class="card show-card-rich is-compact class-card-rich">
       <div class="show-card-media">
         <div class="show-visual-frame is-active theme-{{.Featured.Theme}}" {{if .Featured.MediaPath}}style="background-image:url('{{$.BasePath}}{{.Featured.MediaPath}}');"{{end}}>
-          <span>{{.Featured.Label}}</span>
+          <span class="class-card-visual-label">Class {{.Class.ClassNumber}}{{if .Class.Title}} · {{.Class.Title}}{{end}}{{if .Class.Description}} · {{.Class.Description}}{{end}}</span>
         </div>
       </div>
       <div class="card-body show-card-body">

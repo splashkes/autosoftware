@@ -279,6 +279,16 @@ a:hover {
   backdrop-filter: blur(8px);
   font-size: .85rem;
 }
+.show-visual-frame .class-card-visual-label {
+  display: inline-block;
+  max-width: min(100%, 22rem);
+  padding: .5rem .75rem;
+  border-radius: 16px;
+  line-height: 1.35;
+  white-space: normal;
+  text-wrap: balance;
+  background: rgba(28, 25, 23, .58);
+}
 .show-visual-frame.is-active { opacity: 1; }
 .show-visual-frame.theme-rose {
   background-image:
