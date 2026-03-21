@@ -238,6 +238,7 @@
                   <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
                   <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
                 </div>
+                <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
                 <div class="form-group" data-intake-award-group hidden>
                   <label>Link award</label>
                   {{if .Awards}}
@@ -415,7 +416,7 @@
   <div class="card admin-show-card" id="show-judges">
     <div class="card-body">
       <h3 class="card-title">Judges</h3>
-      <p class="card-meta">Only assigned judges can submit scorecards for this show.</p>
+      <p class="card-meta">Use assigned judges here by default, but anyone with scorecard authority can submit on this show.</p>
       {{if .Judges}}
       <div class="judge-list">
         {{range .Judges}}
@@ -751,6 +752,7 @@
             <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
             <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" title="Special status">★ Special</button>
           </div>
+          <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
           <div class="form-group" data-intake-award-group {{if not .Entry.SpecialStatus}}hidden{{end}}>
             <label>Link award</label>
             {{if $.Awards}}
@@ -984,25 +986,6 @@
     </div>
   </section>
 
-  <section class="card admin-show-card" id="scoring-placements">
-    <div class="card-body">
-    <h3 class="card-title">Compute Placements From Scorecards</h3>
-    {{if .Classes}}
-    <div class="winner-list">
-      {{range .Classes}}
-      <div class="winner-row">
-        <span class="winner-name">{{.ClassNumber}} — {{.Title}}</span>
-        <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="inline">
-          <button type="submit" class="btn btn-outline btn-sm">Compute Placements</button>
-        </form>
-      </div>
-      {{end}}
-    </div>
-    {{else}}
-    <p class="empty-state">Add classes before computing placements.</p>
-    {{end}}
-    </div>
-  </section>
 </div>
 {{end}}
 
