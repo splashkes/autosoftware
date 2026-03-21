@@ -414,6 +414,31 @@ func entryLightboxClassDetail(class *ShowClass, taxons []*Taxon) string {
 	return strings.Join(parts, " · ")
 }
 
+func publicEntryName(entry *Entry, person *Person) string {
+	if entry == nil {
+		return ""
+	}
+	name := strings.TrimSpace(entry.Name)
+	if name == "" || person == nil {
+		return name
+	}
+	firstName := strings.TrimSpace(person.FirstName)
+	if firstName == "" {
+		return name
+	}
+	lowerName := strings.ToLower(name)
+	lowerFirst := strings.ToLower(firstName)
+	if strings.HasPrefix(lowerName, lowerFirst+" ") {
+		trimmed := strings.TrimSpace(name[len(firstName):])
+		trimmed = strings.TrimLeft(trimmed, " -:\u2013\u2014")
+		trimmed = strings.TrimSpace(trimmed)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return name
+}
+
 func (a *app) classTaxons(class *ShowClass) []*Taxon {
 	if class == nil {
 		return nil
@@ -432,11 +457,41 @@ func entryClassTableDetails(class *ShowClass, taxons []*Taxon) []string {
 		return nil
 	}
 	lines := make([]string, 0, 8)
-	if strings.TrimSpace(class.Description) != "" {
-		lines = append(lines, strings.TrimSpace(class.Description))
+	description := strings.TrimSpace(class.Description)
+	if description != "" && !strings.EqualFold(description, strings.TrimSpace(class.Title)) {
+		lines = append(lines, description)
 	}
-	if detail := entryLightboxClassDetail(class, taxons); detail != "" {
-		lines = append(lines, detail)
+	detailParts := make([]string, 0, 4)
+	if class.SpecimenCount > 0 {
+		unit := strings.TrimSpace(class.Unit)
+		if unit == "" {
+			unit = "specimen"
+			if class.SpecimenCount != 1 {
+				unit += "s"
+			}
+		}
+		detailParts = append(detailParts, fmt.Sprintf("%d %s", class.SpecimenCount, unit))
+	}
+	taxonSummary := ""
+	if len(taxons) > 0 {
+		labels := make([]string, 0, len(taxons))
+		for _, taxon := range taxons {
+			if taxon == nil {
+				continue
+			}
+			label := strings.TrimSpace(taxon.Name)
+			if label == "" {
+				continue
+			}
+			labels = append(labels, label)
+		}
+		if len(labels) > 0 {
+			taxonSummary = strings.Join(labels, ", ")
+			detailParts = append(detailParts, taxonSummary)
+		}
+	}
+	if len(detailParts) > 0 {
+		lines = append(lines, strings.Join(detailParts, " · "))
 	}
 	if strings.TrimSpace(class.MeasurementRule) != "" {
 		lines = append(lines, "Measurement: "+strings.TrimSpace(class.MeasurementRule))
@@ -450,8 +505,10 @@ func entryClassTableDetails(class *ShowClass, taxons []*Taxon) []string {
 	if strings.TrimSpace(class.EligibilityRule) != "" {
 		lines = append(lines, "Eligibility: "+strings.TrimSpace(class.EligibilityRule))
 	}
-	if strings.TrimSpace(class.ScheduleNotes) != "" {
-		lines = append(lines, "Notes: "+strings.TrimSpace(class.ScheduleNotes))
+	if notes := strings.TrimSpace(class.ScheduleNotes); notes != "" &&
+		!strings.EqualFold(notes, description) &&
+		!strings.EqualFold(notes, taxonSummary) {
+		lines = append(lines, "Notes: "+notes)
 	}
 	return lines
 }
@@ -825,6 +882,7 @@ type entryView struct {
 	SpecialAward         *AwardDefinition
 	Media                []*Media
 	LeadMedia            *Media
+	PublicEntryName      string
 	ClassTableDetails    []string
 	LightboxEntrantLabel string
 	LightboxClassLabel   string
@@ -874,6 +932,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 			Class:                cls,
 			Media:                media,
 			LeadMedia:            leadMedia,
+			PublicEntryName:      publicEntryName(e, person),
 			ClassTableDetails:    entryClassTableDetails(cls, classTaxons),
 			LightboxEntrantLabel: publicPersonLabel(person),
 			LightboxClassLabel:   entryLightboxClassLabel(cls),
@@ -1044,6 +1103,7 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 			Class:                cls,
 			Media:                media,
 			LeadMedia:            leadMedia,
+			PublicEntryName:      publicEntryName(e, person),
 			LightboxEntrantLabel: publicPersonLabel(person),
 			LightboxClassLabel:   entryLightboxClassLabel(cls),
 			LightboxClassDetail:  entryLightboxClassDetail(cls, taxons),
@@ -1084,6 +1144,7 @@ type entryDetailData struct {
 	Taxons               []*Taxon
 	Scorecards           []*scorecardView
 	Media                []*Media
+	PublicEntryName      string
 	LightboxEntrantLabel string
 	LightboxClassLabel   string
 	LightboxClassDetail  string
@@ -1128,7 +1189,7 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "entry_detail.html", entryDetailData{
-		Title:                entry.Name,
+		Title:                publicEntryName(entry, person),
 		CurrentPath:          "/entries/" + entryID,
 		EntryID:              entry.ID,
 		ShowID:               entry.ShowID,
@@ -1142,6 +1203,7 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 		Taxons:               taxons,
 		Scorecards:           scorecardViews,
 		Media:                a.store.mediaByEntry(entry.ID),
+		PublicEntryName:      publicEntryName(entry, person),
 		LightboxEntrantLabel: publicPersonLabel(person),
 		LightboxClassLabel:   entryLightboxClassLabel(cls),
 		LightboxClassDetail:  entryLightboxClassDetail(cls, classTaxons),

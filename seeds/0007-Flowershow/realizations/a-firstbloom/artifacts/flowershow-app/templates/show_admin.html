@@ -14,6 +14,14 @@
   </div>
 
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
+  <div class="tabs workflow-tabs show-admin-tabs">
+    <button type="button" class="tab active" onclick="showTab('setup')">Setup</button>
+    <button type="button" class="tab" onclick="showTab('intake')">Intake</button>
+    <button type="button" class="tab" onclick="showTab('floor')">Floor</button>
+    <button type="button" class="tab" onclick="showTab('scoring')">Scoring</button>
+    <button type="button" class="tab" onclick="showTab('board')">Board</button>
+    <button type="button" class="tab" onclick="showTab('governance')">Governance</button>
+  </div>
   <section class="account-layout show-admin-layout" data-show-admin-shell data-show-admin-active-tab="setup">
     <aside class="card account-sidebar show-admin-sidebar">
       <div class="card-body">
@@ -29,12 +37,15 @@
 
         <div class="show-admin-subnav" data-show-admin-nav="intake">
           <div class="show-admin-subnav-label">Intake</div>
-          <nav class="account-section-nav">
-            <a href="#intake-grid" class="account-section-link">Class Intake</a>
+          <nav class="account-section-nav show-admin-intake-nav">
+            <a href="#intake-grid" class="account-section-link">Intake Grid</a>
             {{range .BoardDivisions}}
+            <div class="show-admin-subgroup">
+              <div class="show-admin-subgroup-label">{{.Division.Title}}</div>
               {{range .Sections}}
-            <a href="#intake-section-{{.Section.ID}}" class="account-section-link">{{.Section.Code}}. {{.Section.Title}}</a>
+            <a href="#intake-section-{{.Section.ID}}" class="account-section-link">{{.Section.Title}}</a>
               {{end}}
+            </div>
             {{end}}
           </nav>
         </div>
@@ -80,15 +91,6 @@
     </aside>
 
     <div class="account-main">
-      <div class="tabs workflow-tabs show-admin-tabs">
-        <button type="button" class="tab active" onclick="showTab('setup')">Setup</button>
-        <button type="button" class="tab" onclick="showTab('intake')">Intake</button>
-        <button type="button" class="tab" onclick="showTab('floor')">Floor</button>
-        <button type="button" class="tab" onclick="showTab('scoring')">Scoring</button>
-        <button type="button" class="tab" onclick="showTab('board')">Board</button>
-        <button type="button" class="tab" onclick="showTab('governance')">Governance</button>
-      </div>
-
       <div id="tab-setup" class="tab-content active">
         <div id="admin-setup-panel" sse-swap="setup-refresh,info-refresh,schedule-refresh" hx-swap="innerHTML">
           {{template "admin_setup_panel" .}}

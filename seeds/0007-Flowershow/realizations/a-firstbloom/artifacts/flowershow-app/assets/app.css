@@ -1576,6 +1576,27 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   display: grid;
   gap: 1.4rem;
 }
+.show-admin-intake-nav {
+  gap: .55rem;
+}
+.show-admin-subgroup {
+  display: grid;
+  gap: .28rem;
+  margin-top: .35rem;
+  padding-top: .55rem;
+  border-top: 1px solid rgba(45, 106, 79, .10);
+}
+.show-admin-subgroup:first-of-type {
+  margin-top: .1rem;
+}
+.show-admin-subgroup-label {
+  padding: 0 .2rem;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
 .intake-division-block,
 .intake-section-block {
   display: grid;

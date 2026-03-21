@@ -89,11 +89,11 @@
     {{range .Entries}}
     {{if .LeadMedia}}
     <div class="entry-thumb-card {{placementClass .Entry.Placement}}">
-      <button type="button" class="entry-thumb-preview" aria-label="Preview {{.Entry.Name}}" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.Entry.Name}}" data-media-entry="{{.Entry.Name}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
-        <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-thumb-image">
+      <button type="button" class="entry-thumb-preview" aria-label="Preview entry image" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.PublicEntryName}}" data-media-entry="{{.PublicEntryName}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
+        <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.PublicEntryName}}" class="entry-thumb-image">
       </button>
       <div class="entry-thumb-copy">
-        <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></strong>
+        <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.PublicEntryName}}</a></strong>
         <span>{{if .Person}}{{publicPersonLabel .Person}}{{end}}</span>
         {{if gt .Entry.Placement 0}}<span class="badge badge-gold">{{placementLabel .Entry.Placement}}</span>{{end}}
       </div>
@@ -112,14 +112,14 @@
         <td>
           <div class="entry-row-link">
             {{if .LeadMedia}}
-            <button type="button" class="entry-row-thumb-button" aria-label="Preview {{.Entry.Name}}" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.Entry.Name}}" data-media-entry="{{.Entry.Name}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
-              <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-row-thumb">
+            <button type="button" class="entry-row-thumb-button" aria-label="Preview entry image" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.PublicEntryName}}" data-media-entry="{{.PublicEntryName}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
+              <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.PublicEntryName}}" class="entry-row-thumb">
             </button>
             {{else}}
             <span class="entry-row-thumb entry-row-thumb-placeholder">No image</span>
             {{end}}
             <span class="entry-row-copy">
-              <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></strong>
+              <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.PublicEntryName}}</a></strong>
             </span>
           </div>
         </td>
