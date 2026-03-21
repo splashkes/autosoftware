@@ -2,10 +2,10 @@
 <div class="breadcrumb">
   <a href="{{$.BasePath}}/">Home</a> &rsaquo;
   {{if .Show}}<a href="{{$.BasePath}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;{{end}}
-  <span>{{.Entry.Name}}</span>
+  <span>{{.PublicEntryName}}</span>
 </div>
 
-<h1>{{.Entry.Name}}</h1>
+<h1>{{.PublicEntryName}}</h1>
 
 <div class="entry-meta">
   {{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}" class="badge badge-green">Entrant: {{publicPersonLabel .Person}}</a>{{end}}
@@ -27,13 +27,13 @@
     <div class="card-grid entry-media-grid">
     {{range .Media}}
     <div class="card">
-      <button type="button" class="card-body entry-media-card" aria-label="Open {{$.Entry.Name}} media" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}" data-media-entry="{{$.Entry.Name}}" data-media-entrant="{{$.LightboxEntrantLabel}}" data-media-class="{{$.LightboxClassLabel}}" data-media-class-detail="{{$.LightboxClassDetail}}" data-media-show="{{$.LightboxShowLabel}}">
+      <button type="button" class="card-body entry-media-card" aria-label="Open entry media" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.PublicEntryName}}" data-media-entry="{{$.PublicEntryName}}" data-media-entrant="{{$.LightboxEntrantLabel}}" data-media-class="{{$.LightboxClassLabel}}" data-media-class-detail="{{$.LightboxClassDetail}}" data-media-show="{{$.LightboxShowLabel}}">
         {{if eq .MediaType "video"}}
         <video muted playsinline preload="metadata" class="entry-inline-media">
           <source src="{{$.BasePath}}/media/{{.ID}}" type="{{.ContentType}}">
         </video>
         {{else}}
-        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$.Entry.Name}}" class="entry-inline-media">
+        <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$.PublicEntryName}}" class="entry-inline-media">
         {{end}}
       </button>
     </div>
