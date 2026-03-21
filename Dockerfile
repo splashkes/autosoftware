@@ -2,7 +2,7 @@ FROM golang:1.26.1-alpine AS builder
 
 WORKDIR /src
 
-COPY . .
+COPY kernel /src/kernel
 
 WORKDIR /src/kernel
 
@@ -26,7 +26,10 @@ COPY --from=builder /out/registryd /usr/local/bin/registryd
 COPY --from=builder /out/materializerd /usr/local/bin/materializerd
 COPY --from=builder /out/execd /usr/local/bin/execd
 COPY --from=builder /out/webd /usr/local/bin/webd
-COPY . /app
+COPY kernel /app/kernel
+COPY genesis /app/genesis
+COPY seeds /app/seeds
+COPY materialized /app/materialized
 
 RUN chown -R app:app /app
 
