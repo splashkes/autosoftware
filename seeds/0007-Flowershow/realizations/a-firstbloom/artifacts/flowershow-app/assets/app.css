@@ -414,7 +414,7 @@ a:hover {
 }
 .workflow-panel-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
 .workflow-lane {
@@ -432,6 +432,85 @@ a:hover {
 .workflow-lane-header p {
   color: var(--gray-500);
   font-size: .9rem;
+}
+.show-admin-shell {
+  margin-bottom: 2rem;
+}
+.show-admin-layout {
+  align-items: start;
+}
+.show-admin-sidebar .card-body {
+  display: grid;
+  gap: .9rem;
+}
+.show-admin-subnav {
+  display: none;
+}
+.show-admin-subnav.is-active {
+  display: block;
+}
+.show-admin-subnav-label {
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--green-light);
+}
+.show-admin-tabs {
+  margin-bottom: .8rem;
+}
+.admin-show-stack {
+  display: grid;
+  gap: 1rem;
+}
+.admin-show-section,
+.admin-show-card {
+  scroll-margin-top: 6rem;
+}
+.admin-show-section {
+  display: grid;
+  gap: .75rem;
+}
+.admin-show-section-header {
+  display: grid;
+  gap: .2rem;
+}
+.admin-show-section-header h3 {
+  color: var(--green);
+  margin: 0;
+}
+.admin-show-section-header p {
+  margin: 0;
+  color: var(--gray-500);
+  font-size: .94rem;
+}
+.admin-show-disclosure {
+  background: linear-gradient(135deg, rgba(248, 249, 250, .92), rgba(216, 243, 220, .28));
+}
+.admin-show-disclosure summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  color: var(--green);
+  font-weight: 700;
+}
+.admin-show-disclosure summary::after {
+  content: "Expand";
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+.admin-show-disclosure[open] summary::after {
+  content: "Hide";
+}
+.admin-show-card > .card-body {
+  display: grid;
+  gap: 1rem;
+}
+.admin-show-card .card-title {
+  margin-bottom: 0;
 }
 .intake-list {
   display: grid;
@@ -1220,6 +1299,10 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   padding-top: 1.25rem;
   border-top: 1px solid var(--gray-200);
 }
+.admin-show-card .rule-group:last-child,
+.admin-show-card .judge-chip:last-child {
+  margin-bottom: 0;
+}
 .form-grid-two {
   display: grid;
   gap: 1rem;
@@ -1244,6 +1327,12 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .add-form { margin: .5rem 0; }
 .add-form summary { cursor: pointer; list-style: none; }
 .add-form summary::-webkit-details-marker { display: none; }
+
+@media (min-width: 1380px) {
+  .workflow-panel-grid {
+    grid-template-columns: 1.45fr 1fr;
+  }
+}
 
 /* Winners */
 .winner-row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--gray-200); }
