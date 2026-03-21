@@ -1,4 +1,11 @@
 (function() {
+  function queryScope(scope) {
+    if (scope && typeof scope.querySelectorAll === 'function') {
+      return scope;
+    }
+    return document;
+  }
+
   function activateAgentTab(widget, tabName) {
     if (!widget || !tabName) return;
     widget.setAttribute('data-agent-active-tab', tabName);
@@ -39,7 +46,7 @@
 
   function initAgentWidgets(scope) {
     dedupeKernelWidgets();
-    (scope || document).querySelectorAll('[data-agent-widget]').forEach(bindAgentWidget);
+    queryScope(scope).querySelectorAll('[data-agent-widget]').forEach(bindAgentWidget);
     document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {
       el.textContent = window.location.pathname;
     });
@@ -54,6 +61,6 @@
   }
 
   document.addEventListener('htmx:afterSwap', function(evt) {
-    initAgentWidgets(evt.target);
+    initAgentWidgets(evt && evt.target);
   });
 })();

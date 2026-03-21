@@ -13,7 +13,11 @@
     <div class="card-body">
       <h2 class="card-title"><a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a></h2>
       <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent organization context{{end}}</p>
-
+      {{if and (eq (len .UpcomingShows) 0) (eq (len .PastShows) 0) (eq (len .TopPeople) 0)}}
+      <div class="club-card-empty">
+        <p class="card-meta">No public shows or exhibitor history yet.</p>
+      </div>
+      {{else}}
       <div class="club-card-columns">
         <div>
           <h3>Upcoming Shows</h3>
@@ -21,7 +25,7 @@
           <ul class="club-show-list">
             {{range .UpcomingShows}}
             <li>
-              <a href="{{$.BasePath}}/shows/{{.Slug}}" class="club-show-date">{{.Date}}</a>
+              <a href="{{$.BasePath}}/shows/{{.Slug}}" class="club-show-date">{{if .Date}}{{.Date}}{{else}}Season {{.Season}}{{end}}</a>
               <div class="card-meta">{{.Name}}</div>
             </li>
             {{end}}
@@ -37,7 +41,7 @@
           <ul class="club-show-list">
             {{range .PastShows}}
             <li>
-              <a href="{{$.BasePath}}/shows/{{.Slug}}" class="club-show-date">{{.Date}}</a>
+              <a href="{{$.BasePath}}/shows/{{.Slug}}" class="club-show-date">{{if .Date}}{{.Date}}{{else}}Season {{.Season}}{{end}}</a>
               <div class="card-meta">{{.Name}}</div>
             </li>
             {{end}}
@@ -60,6 +64,7 @@
         <p class="card-meta">No public exhibitor history yet.</p>
         {{end}}
       </div>
+      {{end}}
     </div>
   </section>
   {{end}}

@@ -5,6 +5,13 @@ const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
 const flowershowIntakeUploadStates = new WeakMap();
 
+function flowershowQueryScope(root) {
+  if (root && typeof root.querySelectorAll === 'function') {
+    return root;
+  }
+  return document;
+}
+
 function flowershowActivateShowAdminTab(shell, name) {
   if (!shell || !name) return;
   shell.dataset.showAdminActiveTab = name;
@@ -1215,7 +1222,7 @@ function flowershowSuppressDuplicateAgentWidgets() {
 }
 
 function flowershowInit(root) {
-  const scope = root || document;
+  const scope = flowershowQueryScope(root);
   scope.querySelectorAll('[data-photo-add-form]').forEach(flowershowBindPhotoForm);
   scope.querySelectorAll('[data-copy-target]').forEach(flowershowBindCopyButton);
   scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
@@ -1249,5 +1256,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 document.addEventListener('htmx:afterSwap', function(evt) {
-  flowershowInit(evt.target);
+  flowershowInit(evt && evt.target);
 });
