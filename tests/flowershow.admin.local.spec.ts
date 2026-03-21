@@ -135,7 +135,8 @@ test.describe('Flowershow Admin Local', () => {
     await expect(activeNav).not.toContainText('Add Entry');
 
     await page.getByRole('button', { name: 'Intake' }).click();
-    await expect(activeNav).toContainText('Add Entry');
+    await expect(activeNav).toContainText('Class Intake');
+    await expect(activeNav).toContainText('Hybrid Tea Roses');
     await expect(activeNav).not.toContainText('Show Basics');
 
     await page.getByRole('button', { name: 'Governance' }).click();

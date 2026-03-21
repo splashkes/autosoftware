@@ -33,7 +33,7 @@
           <span class="badge badge-muted">{{.Division.Domain}}</span>
         </div>
         {{range .Sections}}
-        <div class="intake-section-block">
+        <div class="intake-section-block" id="intake-section-{{.Section.ID}}">
           <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
           <div class="intake-class-grid">
             {{range .Classes}}
