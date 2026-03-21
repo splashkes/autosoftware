@@ -1429,8 +1429,8 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	if !strings.Contains(body, "Assign Judge") {
 		t.Fatal("admin show missing judge assignment controls")
 	}
-	if !strings.Contains(body, "Add Photo") {
-		t.Fatal("admin show missing mobile photo add control")
+	if !strings.Contains(body, `class="media-add-button admin-entry-media-button"`) {
+		t.Fatal("admin show missing floor media add control")
 	}
 	if !strings.Contains(body, `accept="image/jpeg,image/png,image/webp"`) {
 		t.Fatal("admin show missing constrained mobile photo accept types")

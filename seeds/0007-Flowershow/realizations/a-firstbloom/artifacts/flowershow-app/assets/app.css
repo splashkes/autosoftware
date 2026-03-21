@@ -416,6 +416,7 @@ a:hover {
 .badge { display: inline-block; padding: .125rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
 .badge-green { background: var(--green-pale); color: var(--green); }
 .badge-gold { background: var(--gold-pale); color: #8b6914; }
+.badge-pink { background: var(--pink-pale); color: #9b4564; }
 .badge-gray { background: var(--gray-200); color: var(--gray-700); }
 .badge-muted { background: var(--gray-100); color: var(--gray-500); }
 
@@ -1621,6 +1622,63 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .media-add-button.is-uploading {
   opacity: .65;
 }
+.admin-entry-card-list {
+  display: grid;
+  gap: 1rem;
+}
+.admin-entry-card {
+  overflow: hidden;
+}
+.admin-entry-card-body {
+  display: grid;
+  gap: 1rem;
+}
+.admin-entry-card-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+.admin-entry-card-copy {
+  display: grid;
+  gap: .35rem;
+}
+.admin-entry-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+}
+.admin-entry-status-row {
+  gap: .35rem;
+}
+.admin-entry-status-badge {
+  font-weight: 700;
+}
+.admin-entry-media-form,
+.admin-entry-visibility-form {
+  margin: 0;
+}
+.admin-entry-media-button {
+  width: 104px;
+  min-width: 104px;
+  height: 104px;
+}
+.admin-entry-results-form {
+  padding: .9rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(45, 106, 79, .12);
+  background: linear-gradient(135deg, rgba(246,255,249,.92), rgba(255,255,255,.98));
+}
+.admin-entry-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+  align-items: flex-start;
+}
+.admin-entry-card-actions > * {
+  margin: 0;
+}
 
 .intake-division-stack {
   display: grid;
@@ -1836,8 +1894,9 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   margin-bottom: .75rem;
 }
 .intake-placement-button {
-  min-width: 4rem;
+  min-width: 6.6rem;
   justify-content: center;
+  font-weight: 700;
 }
 .intake-placement-button.is-active {
   background: var(--green-deep);
@@ -1845,8 +1904,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   border-color: var(--green-deep);
 }
 .intake-award-toggle {
-  min-width: 3.2rem;
-  font-size: 1.1rem;
+  min-width: 7.25rem;
+  font-size: .98rem;
 }
 .intake-upload-queue {
   display: grid;
@@ -2081,6 +2140,15 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .intake-placement-button,
   .intake-award-toggle {
     width: 100%;
+  }
+  .admin-entry-card-main {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .admin-entry-media-button {
+    width: 96px;
+    min-width: 96px;
+    height: 96px;
   }
   .intake-upload-queue {
     grid-template-columns: repeat(2, minmax(0, 1fr));

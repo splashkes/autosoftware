@@ -525,11 +525,11 @@ var templateFuncMap = template.FuncMap{
 		if entry.Entry.Placement > 0 {
 			switch entry.Entry.Placement {
 			case 1:
-				out = append(out, "1st")
+				out = append(out, "#1")
 			case 2:
-				out = append(out, "2nd")
+				out = append(out, "#2")
 			case 3:
-				out = append(out, "3rd")
+				out = append(out, "#3")
 			}
 		} else if entry.Entry.Points > 0 {
 			out = append(out, "scored")
@@ -540,6 +540,23 @@ var templateFuncMap = template.FuncMap{
 			out = append(out, "★ special")
 		}
 		return out
+	},
+	"entryWorkflowBadgeClass": func(label string) string {
+		label = strings.TrimSpace(label)
+		switch {
+		case strings.HasPrefix(label, "#1"):
+			return "badge-gold"
+		case strings.HasPrefix(label, "#2"):
+			return "badge-gray"
+		case strings.HasPrefix(label, "#3"):
+			return "badge-pink"
+		case strings.HasPrefix(label, "★"):
+			return "badge-green"
+		case label == "suppressed":
+			return "badge-gray"
+		default:
+			return "badge-muted"
+		}
 	},
 	"entryCountWithPhotosMissing": func(entries []*entryView) int {
 		count := 0

@@ -87,8 +87,8 @@
                       <strong>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Entry.Name}}{{end}}</strong>
                       <span class="card-meta">{{.Entry.Name}}{{if not .Media}} · needs photo{{end}}</span>
                       {{if entryWorkflowBadges .}}
-                      <span class="tag-list">
-                        {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+                      <span class="tag-list admin-entry-status-row">
+                        {{range entryWorkflowBadges .}}<span class="badge {{entryWorkflowBadgeClass .}} admin-entry-status-badge">{{.}}</span>{{end}}
                       </span>
                       {{end}}
                     </span>
@@ -233,19 +233,19 @@
               <div class="form-group">
                 <label>Result</label>
                 <div class="intake-placement-actions">
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1</button>
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2</button>
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3</button>
-                  <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★</button>
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1 First</button>
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2 Second</button>
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
+                  <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
                 </div>
+                <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
                 <div class="form-group" data-intake-award-group hidden>
                   <label>Link award</label>
                   {{if .Awards}}
                   <select class="form-input" data-intake-award-select>
-                    <option value="">Select award...</option>
+                    <option value="">Keep as star only</option>
                     {{range .Awards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
                   </select>
-                  <p class="card-meta">Use the star for special status and optionally link the entry to a show or club award.</p>
                   {{else}}
                   <p class="card-meta">No awards are defined for this show yet.</p>
                   {{end}}
@@ -292,17 +292,10 @@
 <div class="admin-show-stack">
   <section class="admin-show-section" id="floor-corrections">
     <div class="admin-show-section-header">
-      <h3>Floor corrections</h3>
-      <p>Correct classes, entrants, or mistaken entries.</p>
+      <h3>Floor corrections and results</h3>
+      <p>Correct entries, add photos, and mark results from one surface.</p>
     </div>
     {{template "admin_entry_floor_table" .}}
-  </section>
-  <section class="admin-show-section" id="floor-placements">
-    <div class="admin-show-section-header">
-      <h3>Placement control</h3>
-      <p>Set placements without leaving the workspace.</p>
-    </div>
-    {{template "admin_winners_panel" .}}
   </section>
 </div>
 {{end}}
@@ -358,8 +351,8 @@
                   <div class="board-entry-body">
                     <strong>{{.Entry.Name}}</strong>
                     <p class="card-meta">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
-                    <div class="tag-list">
-                      {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+                    <div class="tag-list admin-entry-status-row">
+                      {{range entryWorkflowBadges .}}<span class="badge {{entryWorkflowBadgeClass .}} admin-entry-status-badge">{{.}}</span>{{end}}
                     </div>
                   </div>
                 </div>
@@ -423,7 +416,7 @@
   <div class="card admin-show-card" id="show-judges">
     <div class="card-body">
       <h3 class="card-title">Judges</h3>
-      <p class="card-meta">Only assigned judges can submit scorecards for this show.</p>
+      <p class="card-meta">Use assigned judges here by default, but anyone with scorecard authority can submit on this show.</p>
       {{if .Judges}}
       <div class="judge-list">
         {{range .Judges}}
@@ -692,35 +685,13 @@
 {{define "admin_entry_floor_table"}}
 <h3>All Entries ({{len .Entries}})</h3>
 {{if .Entries}}
-<table class="table">
-  <thead><tr><th>Name</th><th>Class</th><th>Person</th><th>Public</th><th>Placement</th><th>Points</th><th>Media</th><th>Actions</th></tr></thead>
-  <tbody>
-    {{range .Entries}}
-    {{$currentEntry := .Entry}}
-    <tr class="{{placementClass .Entry.Placement}}">
-      <td>
-        {{.Entry.Name}}
-        {{if .Entry.Suppressed}}<span class="badge badge-muted">suppressed</span>{{end}}
-      </td>
-      <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
-      <td>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}</td>
-      <td>
-        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline">
-          <input type="hidden" name="suppressed" value="{{if .Entry.Suppressed}}false{{else}}true{{end}}">
-          <button type="submit" class="btn btn-outline btn-sm">{{if .Entry.Suppressed}}Restore{{else}}Suppress{{end}}</button>
-        </form>
-      </td>
-      <td>{{placementLabel .Entry.Placement}}</td>
-      <td>{{.Entry.Points}}</td>
-      <td>
-        {{if .Media}}
-        <div class="tag-list">
-          {{range .Media}}
-          <a href="{{$.BasePath}}/media/{{.ID}}" class="tag" target="_blank">{{.FileName}}</a>
-          {{end}}
-        </div>
-        {{end}}
-        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form" style="margin-top:.5rem;">
+<div class="admin-entry-card-list">
+  {{range .Entries}}
+  {{$currentEntry := .Entry}}
+  <article class="card admin-entry-card {{placementClass .Entry.Placement}}">
+    <div class="card-body admin-entry-card-body">
+      <div class="admin-entry-card-main">
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form admin-entry-media-form">
           <input
             type="file"
             id="media-input-{{.Entry.ID}}"
@@ -729,11 +700,11 @@
             accept="image/jpeg,image/png,image/webp"
             capture="environment"
             required>
-          <button type="button" class="media-add-button" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('media-input-{{.Entry.ID}}').click()">
+          <button type="button" class="media-add-button admin-entry-media-button" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('media-input-{{.Entry.ID}}').click()">
             {{if .Media}}
               {{with index .Media 0}}
                 {{if eq .MediaType "photo"}}
-                <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{.FileName}}" class="media-add-thumb">
+                <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$.Entry.Name}}" class="media-add-thumb">
                 {{else}}
                 <span class="media-add-plus">+</span>
                 {{end}}
@@ -743,13 +714,61 @@
             {{end}}
             <span class="media-add-badge">+</span>
           </button>
-          <div class="media-add-copy">
-            <strong>Add Photo</strong>
-            <span class="card-meta">Phone capture normalizes to JPEG, max 2048px. HEIC is rejected.</span>
-          </div>
         </form>
-      </td>
-      <td>
+        <div class="admin-entry-card-copy">
+          <div class="admin-entry-card-title-row">
+            <strong>{{.Entry.Name}}</strong>
+            {{if entryWorkflowBadges .}}
+            <span class="tag-list admin-entry-status-row">
+              {{range entryWorkflowBadges .}}<span class="badge {{entryWorkflowBadgeClass .}} admin-entry-status-badge">{{.}}</span>{{end}}
+            </span>
+            {{end}}
+          </div>
+          {{if .Class}}
+          <div class="entry-class-cell">
+            <strong>{{.Class.ClassNumber}}: {{.Class.Title}}</strong>
+            {{if .Class.Description}}<div class="card-meta">{{.Class.Description}}</div>{{end}}
+          </div>
+          {{end}}
+          <div class="card-meta">{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}No entrant linked{{end}}</div>
+        </div>
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/visibility" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline admin-entry-visibility-form">
+          <input type="hidden" name="suppressed" value="{{if .Entry.Suppressed}}false{{else}}true{{end}}">
+          <button type="submit" class="btn btn-outline btn-sm">{{if .Entry.Suppressed}}Restore{{else}}Suppress{{end}}</button>
+        </form>
+      </div>
+
+      <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/results" class="form admin-entry-results-form" data-target="#admin-floor-panel" data-intake-results-form>
+        <input type="hidden" name="section" value="floor">
+        <input type="hidden" name="placement" value="{{.Entry.Placement}}" data-intake-placement-input>
+        <input type="hidden" name="special_status" value="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" data-intake-special-status-input>
+        <input type="hidden" name="award_id" value="{{if .SpecialAward}}{{.SpecialAward.ID}}{{end}}" data-intake-award-input>
+        <input type="hidden" name="points" value="{{printf "%.1f" .Entry.Points}}">
+        <div class="form-group">
+          <label>Result</label>
+          <div class="intake-placement-actions">
+            <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1 First</button>
+            <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2 Second</button>
+            <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
+            <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" title="Special status">★ Special</button>
+          </div>
+          <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
+          <div class="form-group" data-intake-award-group {{if not .Entry.SpecialStatus}}hidden{{end}}>
+            <label>Link award</label>
+            {{if $.Awards}}
+            <select class="form-input" data-intake-award-select>
+              <option value="">Keep as star only</option>
+              {{range $.Awards}}<option value="{{.ID}}" {{if and $currentEntry.SpecialAwardID (eq .ID $currentEntry.SpecialAwardID)}}selected{{end}}>{{.Name}}</option>{{end}}
+            </select>
+            {{else}}
+            <p class="card-meta">No awards are defined for this show yet.</p>
+            {{end}}
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save Result</button>
+      </form>
+
+      <div class="admin-entry-card-actions">
         <details class="account-collapsible compact admin-show-disclosure">
           <summary>Move entry</summary>
           <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/move" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
@@ -760,24 +779,24 @@
             <button type="submit" class="btn btn-primary btn-sm">Move Entry</button>
           </form>
         </details>
-        <details class="account-collapsible compact admin-show-disclosure" style="margin-top:.5rem;">
+        <details class="account-collapsible compact admin-show-disclosure">
           <summary>Change entrant</summary>
           <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/entrant" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact" style="margin-top:1rem;">
-            <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
+            <input type="text" class="form-input form-sm" placeholder="Search people" data-person-filter-input data-filter-target="#entrant-select-{{$currentEntry.ID}}">
             <select id="entrant-select-{{$currentEntry.ID}}" name="person_id" class="form-input" required>
               {{range $.EntrantCandidates}}<option value="{{.Person.ID}}" {{if eq .Person.ID $currentEntry.PersonID}}selected{{end}}>{{.Label}}</option>{{end}}
             </select>
             <button type="submit" class="btn btn-primary btn-sm">Change Entrant</button>
           </form>
         </details>
-        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline" style="margin-top:.5rem;">
+        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/delete" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="inline">
           <button type="submit" class="btn btn-outline btn-sm">Delete</button>
         </form>
-      </td>
-    </tr>
-    {{end}}
-  </tbody>
-</table>
+      </div>
+    </div>
+  </article>
+  {{end}}
+</div>
 {{else}}
 <p class="empty-state">No entries yet.</p>
 {{end}}
@@ -967,25 +986,6 @@
     </div>
   </section>
 
-  <section class="card admin-show-card" id="scoring-placements">
-    <div class="card-body">
-    <h3 class="card-title">Compute Placements From Scorecards</h3>
-    {{if .Classes}}
-    <div class="winner-list">
-      {{range .Classes}}
-      <div class="winner-row">
-        <span class="winner-name">{{.ClassNumber}} — {{.Title}}</span>
-        <form method="POST" action="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-post="{{$.BasePath}}/admin/classes/{{.ID}}/compute-placements" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="inline">
-          <button type="submit" class="btn btn-outline btn-sm">Compute Placements</button>
-        </form>
-      </div>
-      {{end}}
-    </div>
-    {{else}}
-    <p class="empty-state">Add classes before computing placements.</p>
-    {{end}}
-    </div>
-  </section>
 </div>
 {{end}}
 

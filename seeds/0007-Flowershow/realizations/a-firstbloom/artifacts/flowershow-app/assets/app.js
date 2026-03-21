@@ -1230,6 +1230,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
   scope.querySelectorAll('[data-intake-modal-open]').forEach(flowershowBindIntakeTrigger);
   scope.querySelectorAll('[data-intake-modal]').forEach(flowershowBindIntakeModal);
+  scope.querySelectorAll('[data-intake-results-form]').forEach(flowershowBindIntakeResultsForm);
   scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);
   scope.querySelectorAll('[data-nav-shell]').forEach(flowershowBindNav);
   scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
