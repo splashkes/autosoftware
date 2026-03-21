@@ -216,8 +216,11 @@ function flowershowPopulateIntakeClassHero(modal, trigger) {
 function flowershowRefreshPlacementButtons(form) {
   const value = String(parseInt((form.querySelector('[data-intake-placement-input]') || {}).value || '0', 10) || 0);
   form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
-    button.classList.toggle('is-active', button.dataset.intakePlacementButton === value && value !== '0');
+    const active = button.dataset.intakePlacementButton === value && value !== '0';
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  flowershowRefreshResultButtons(form);
 }
 
 function flowershowRefreshAwardState(form) {
@@ -236,6 +239,24 @@ function flowershowRefreshAwardState(form) {
   }
   if (awardSelect && awardInput && awardSelect.value !== awardInput.value) {
     awardSelect.value = awardInput.value;
+  }
+  flowershowRefreshResultButtons(form);
+}
+
+function flowershowRefreshResultButtons(form) {
+  if (!form) return;
+  const placementInput = form.querySelector('[data-intake-placement-input]');
+  const placementValue = String(parseInt((placementInput || {}).value || '0', 10) || 0);
+  const awardToggle = form.querySelector('[data-intake-award-toggle]');
+  const awardActive = !!(awardToggle && awardToggle.getAttribute('aria-pressed') === 'true');
+  const anyActive = placementValue !== '0' || awardActive;
+
+  form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
+    const active = button.dataset.intakePlacementButton === placementValue && placementValue !== '0';
+    button.classList.toggle('is-dimmed', anyActive && !active);
+  });
+  if (awardToggle) {
+    awardToggle.classList.toggle('is-dimmed', anyActive && !awardActive);
   }
 }
 
