@@ -1314,7 +1314,11 @@ func (a *app) handleAdminEntryResults(w http.ResponseWriter, r *http.Request) {
 	a.sseBroker.publish(entry.ShowID, "placement-set", `<div class="toast">Entry result updated</div>`)
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring")
 	a.publishShowSummary(entry.ShowID)
-	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "intake")
+	section := strings.TrimSpace(r.FormValue("section"))
+	if section == "" {
+		section = "intake"
+	}
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, section)
 }
 
 func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) {
