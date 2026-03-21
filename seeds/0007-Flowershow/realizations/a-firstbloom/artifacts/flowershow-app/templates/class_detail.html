@@ -104,7 +104,7 @@
   {{end}}
   <table class="table">
     <thead>
-      <tr><th>Entry</th><th>Entrant</th><th>Placement</th><th>Points</th></tr>
+      <tr><th>Entry</th><th>Entrant</th><th>Placement</th></tr>
     </thead>
     <tbody>
       {{range .Entries}}
@@ -125,7 +125,6 @@
         </td>
         <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
-        <td>{{.Entry.Points}}</td>
       </tr>
       {{end}}
     </tbody>
