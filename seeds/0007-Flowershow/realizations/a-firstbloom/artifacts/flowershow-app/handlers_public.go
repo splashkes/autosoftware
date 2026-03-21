@@ -43,10 +43,11 @@ type accountData struct {
 }
 
 type accountSectionView struct {
-	ID      string
-	Label   string
-	Href    string
-	Current bool
+	ID        string
+	Label     string
+	Href      string
+	Current   bool
+	AdminLink bool
 }
 
 type accountPermissionView struct {
@@ -654,16 +655,17 @@ func accountSection(raw string) string {
 }
 
 func accountSections(active string, isAdmin bool) []accountSectionView {
-	items := []accountSectionView{
-		{ID: "overview", Label: "Overview", Href: "/account?section=overview", Current: active == "overview"},
-		{ID: "shows", Label: "Shows", Href: "/account?section=shows", Current: active == "shows"},
-		{ID: "clubs", Label: "Clubs", Href: "/account?section=clubs", Current: active == "clubs"},
-		{ID: "entries", Label: "Entries", Href: "/account?section=entries", Current: active == "entries"},
-		{ID: "access", Label: "Access Tokens", Href: "/account?section=access#agent-tokens", Current: active == "access"},
-	}
+	items := make([]accountSectionView, 0, 6)
 	if isAdmin {
-		items = append(items, accountSectionView{ID: "admin", Label: "Admin Workspace", Href: "/admin", Current: false})
+		items = append(items, accountSectionView{ID: "admin", Label: "Admin Workspace", Href: "/admin", Current: false, AdminLink: true})
 	}
+	items = append(items,
+		accountSectionView{ID: "overview", Label: "Overview", Href: "/account?section=overview", Current: active == "overview"},
+		accountSectionView{ID: "shows", Label: "Shows", Href: "/account?section=shows", Current: active == "shows"},
+		accountSectionView{ID: "clubs", Label: "Clubs", Href: "/account?section=clubs", Current: active == "clubs"},
+		accountSectionView{ID: "entries", Label: "Entries", Href: "/account?section=entries", Current: active == "entries"},
+		accountSectionView{ID: "access", Label: "Access Tokens", Href: "/account?section=access#agent-tokens", Current: active == "access"},
+	)
 	return items
 }
 
