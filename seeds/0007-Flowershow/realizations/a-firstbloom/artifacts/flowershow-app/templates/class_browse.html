@@ -13,7 +13,11 @@
     <h3>{{.Section.Title}}</h3>
     <div class="class-grid">
       {{range .ClassCards}}
-      <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.Class.ID}}" class="card class-card">
+      <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.Class.ID}}" class="card class-card {{if .Featured.MediaPath}}class-card-illustrated{{end}}">
+        {{if .Featured.MediaPath}}
+        <div class="class-card-visual" style="background-image:url('{{.Featured.MediaPath}}');"></div>
+        <div class="class-card-visual-scrim"></div>
+        {{end}}
         <div class="card-body">
           <span class="class-number">{{.Class.ClassNumber}}</span>
           <h4 class="card-title">{{.Class.Title}}</h4>

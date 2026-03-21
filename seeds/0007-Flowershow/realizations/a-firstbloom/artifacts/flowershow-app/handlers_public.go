@@ -792,6 +792,7 @@ type publicClassListItem struct {
 	Class        *ShowClass
 	EntryCount   int
 	TaxonSummary string
+	Featured     showVisualFrame
 }
 
 func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
@@ -847,6 +848,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 						Class:        class,
 						EntryCount:   entryCountByClass[class.ID],
 						TaxonSummary: a.classTaxonSummary(class),
+						Featured:     a.classVisualFrame(show, class.ID),
 					})
 				}
 				dv.Sections = append(dv.Sections, sv)
@@ -911,6 +913,7 @@ func (a *app) handleClassBrowse(w http.ResponseWriter, r *http.Request) {
 					sv.ClassCards = append(sv.ClassCards, &publicClassListItem{
 						Class:        class,
 						TaxonSummary: a.classTaxonSummary(class),
+						Featured:     a.classVisualFrame(show, class.ID),
 					})
 				}
 				dv.Sections = append(dv.Sections, sv)
