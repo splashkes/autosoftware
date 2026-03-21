@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -363,6 +364,70 @@ func placementLabelText(placement int) string {
 	}
 }
 
+func entryLightboxClassLabel(class *ShowClass) string {
+	if class == nil {
+		return ""
+	}
+	if strings.TrimSpace(class.ClassNumber) == "" {
+		return strings.TrimSpace(class.Title)
+	}
+	return strings.TrimSpace("Class " + class.ClassNumber + ": " + class.Title)
+}
+
+func entryLightboxClassDetail(class *ShowClass, taxons []*Taxon) string {
+	if class == nil {
+		return ""
+	}
+	var parts []string
+	if strings.TrimSpace(class.Description) != "" {
+		parts = append(parts, strings.TrimSpace(class.Description))
+	}
+	if class.SpecimenCount > 0 {
+		unit := strings.TrimSpace(class.Unit)
+		if unit == "" {
+			unit = "specimen"
+			if class.SpecimenCount != 1 {
+				unit += "s"
+			}
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", class.SpecimenCount, unit))
+	}
+	if len(taxons) > 0 {
+		labels := make([]string, 0, len(taxons))
+		for _, taxon := range taxons {
+			if taxon == nil {
+				continue
+			}
+			label := strings.TrimSpace(taxon.Name)
+			if label == "" {
+				continue
+			}
+			labels = append(labels, label)
+		}
+		if len(labels) > 0 {
+			parts = append(parts, strings.Join(labels, ", "))
+		}
+	}
+	if strings.TrimSpace(class.ScheduleNotes) != "" {
+		parts = append(parts, strings.TrimSpace(class.ScheduleNotes))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func entryLightboxShowLabel(show *Show, entry *Entry) string {
+	if show == nil {
+		return placementLabelText(entry.Placement)
+	}
+	var parts []string
+	if strings.TrimSpace(show.Name) != "" {
+		parts = append(parts, strings.TrimSpace(show.Name))
+	}
+	if placement := placementLabelText(entry.Placement); placement != "" {
+		parts = append(parts, placement+" place")
+	}
+	return strings.Join(parts, " · ")
+}
+
 func (a *app) accountEntriesForUser(user UserIdentity) []accountEntryView {
 	person, ok := a.store.personByEmail(user.Email)
 	if !ok || person == nil {
@@ -712,16 +777,21 @@ type sectionView struct {
 }
 
 type entryView struct {
-	Entry     *Entry
-	Person    *Person
-	Class     *ShowClass
-	Media     []*Media
-	LeadMedia *Media
+	Entry                *Entry
+	Person               *Person
+	Class                *ShowClass
+	Media                []*Media
+	LeadMedia            *Media
+	LightboxEntrantLabel string
+	LightboxClassLabel   string
+	LightboxClassDetail  string
+	LightboxShowLabel    string
 }
 
 type publicClassListItem struct {
-	Class      *ShowClass
-	EntryCount int
+	Class        *ShowClass
+	EntryCount   int
+	TaxonSummary string
 }
 
 func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
@@ -753,11 +823,15 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 			entryCountByClass[cls.ID]++
 		}
 		entries = append(entries, &entryView{
-			Entry:     e,
-			Person:    person,
-			Class:     cls,
-			Media:     media,
-			LeadMedia: leadMedia,
+			Entry:                e,
+			Person:               person,
+			Class:                cls,
+			Media:                media,
+			LeadMedia:            leadMedia,
+			LightboxEntrantLabel: publicPersonLabel(person),
+			LightboxClassLabel:   entryLightboxClassLabel(cls),
+			LightboxClassDetail:  entryLightboxClassDetail(cls, nil),
+			LightboxShowLabel:    entryLightboxShowLabel(show, e),
 		})
 	}
 	if sched != nil {
@@ -770,8 +844,9 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 				}
 				for _, class := range sv.Classes {
 					sv.ClassCards = append(sv.ClassCards, &publicClassListItem{
-						Class:      class,
-						EntryCount: entryCountByClass[class.ID],
+						Class:        class,
+						EntryCount:   entryCountByClass[class.ID],
+						TaxonSummary: a.classTaxonSummary(class),
 					})
 				}
 				dv.Sections = append(dv.Sections, sv)
@@ -831,6 +906,12 @@ func (a *app) handleClassBrowse(w http.ResponseWriter, r *http.Request) {
 				sv := &sectionView{
 					Section: sec,
 					Classes: a.store.classesBySection(sec.ID),
+				}
+				for _, class := range sv.Classes {
+					sv.ClassCards = append(sv.ClassCards, &publicClassListItem{
+						Class:        class,
+						TaxonSummary: a.classTaxonSummary(class),
+					})
 				}
 				dv.Sections = append(dv.Sections, sv)
 			}
@@ -909,11 +990,15 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 			hasMedia = true
 		}
 		entries = append(entries, &entryView{
-			Entry:     e,
-			Person:    person,
-			Class:     cls,
-			Media:     media,
-			LeadMedia: leadMedia,
+			Entry:                e,
+			Person:               person,
+			Class:                cls,
+			Media:                media,
+			LeadMedia:            leadMedia,
+			LightboxEntrantLabel: publicPersonLabel(person),
+			LightboxClassLabel:   entryLightboxClassLabel(cls),
+			LightboxClassDetail:  entryLightboxClassDetail(cls, taxons),
+			LightboxShowLabel:    entryLightboxShowLabel(show, e),
 		})
 	}
 
@@ -936,19 +1021,24 @@ func (a *app) handleClassDetail(w http.ResponseWriter, r *http.Request) {
 // --- Entry Detail ---
 
 type entryDetailData struct {
-	Title       string
-	CurrentPath string
-	EntryID     string
-	ShowID      string
-	ClassID     string
-	PersonID    string
-	Entry       *Entry
-	Person      *Person
-	Class       *ShowClass
-	Show        *Show
-	Taxons      []*Taxon
-	Scorecards  []*scorecardView
-	Media       []*Media
+	Title                string
+	CurrentPath          string
+	EntryID              string
+	ShowID               string
+	ClassID              string
+	PersonID             string
+	Entry                *Entry
+	Person               *Person
+	Class                *ShowClass
+	ClassTaxons          []*Taxon
+	Show                 *Show
+	Taxons               []*Taxon
+	Scorecards           []*scorecardView
+	Media                []*Media
+	LightboxEntrantLabel string
+	LightboxClassLabel   string
+	LightboxClassDetail  string
+	LightboxShowLabel    string
 }
 
 type scorecardView struct {
@@ -968,6 +1058,14 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 	person, _ := a.store.personByID(entry.PersonID)
 	cls, _ := a.store.classByID(entry.ClassID)
 	show, _ := a.store.showByID(entry.ShowID)
+	var classTaxons []*Taxon
+	if cls != nil {
+		for _, ref := range cls.TaxonRefs {
+			if t, ok := a.store.taxonByID(ref); ok && t != nil {
+				classTaxons = append(classTaxons, t)
+			}
+		}
+	}
 
 	var taxons []*Taxon
 	for _, ref := range entry.TaxonRefs {
@@ -988,19 +1086,24 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "entry_detail.html", entryDetailData{
-		Title:       entry.Name,
-		CurrentPath: "/entries/" + entryID,
-		EntryID:     entry.ID,
-		ShowID:      entry.ShowID,
-		ClassID:     entry.ClassID,
-		PersonID:    entry.PersonID,
-		Entry:       entry,
-		Person:      person,
-		Class:       cls,
-		Show:        show,
-		Taxons:      taxons,
-		Scorecards:  scorecardViews,
-		Media:       a.store.mediaByEntry(entry.ID),
+		Title:                entry.Name,
+		CurrentPath:          "/entries/" + entryID,
+		EntryID:              entry.ID,
+		ShowID:               entry.ShowID,
+		ClassID:              entry.ClassID,
+		PersonID:             entry.PersonID,
+		Entry:                entry,
+		Person:               person,
+		Class:                cls,
+		ClassTaxons:          classTaxons,
+		Show:                 show,
+		Taxons:               taxons,
+		Scorecards:           scorecardViews,
+		Media:                a.store.mediaByEntry(entry.ID),
+		LightboxEntrantLabel: publicPersonLabel(person),
+		LightboxClassLabel:   entryLightboxClassLabel(cls),
+		LightboxClassDetail:  entryLightboxClassDetail(cls, classTaxons),
+		LightboxShowLabel:    entryLightboxShowLabel(show, entry),
 	})
 }
 

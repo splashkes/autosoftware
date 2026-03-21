@@ -24,10 +24,10 @@
 {{if .Media}}
 <section class="section">
   {{if gt (len .Media) 1}}<p class="section-desc entry-gallery-note">{{len .Media}} images. Tap any image to view it full screen.</p>{{end}}
-  <div class="card-grid entry-media-grid">
+    <div class="card-grid entry-media-grid">
     {{range .Media}}
     <div class="card">
-      <button type="button" class="card-body entry-media-card" aria-label="Open {{$.Entry.Name}} media" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}">
+      <button type="button" class="card-body entry-media-card" aria-label="Open {{$.Entry.Name}} media" data-media-open data-media-type="{{if eq .MediaType "video"}}video{{else}}image{{end}}" data-media-src="{{$.BasePath}}/media/{{.ID}}" data-media-label="{{$.Entry.Name}}" data-media-entry="{{$.Entry.Name}}" data-media-entrant="{{$.LightboxEntrantLabel}}" data-media-class="{{$.LightboxClassLabel}}" data-media-class-detail="{{$.LightboxClassDetail}}" data-media-show="{{$.LightboxShowLabel}}">
         {{if eq .MediaType "video"}}
         <video muted playsinline preload="metadata" class="entry-inline-media">
           <source src="{{$.BasePath}}/media/{{.ID}}" type="{{.ContentType}}">
@@ -44,8 +44,20 @@
 <div class="media-lightbox" data-media-lightbox hidden>
   <div class="media-lightbox-backdrop" data-media-close></div>
   <div class="media-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Entry media viewer">
+    <button type="button" class="media-lightbox-nav media-lightbox-nav-prev" aria-label="Previous image" data-media-prev>&larr;</button>
+    <button type="button" class="media-lightbox-nav media-lightbox-nav-next" aria-label="Next image" data-media-next>&rarr;</button>
     <button type="button" class="media-lightbox-close" aria-label="Close image viewer" data-media-close>&times;</button>
     <div class="media-lightbox-stage" data-media-lightbox-stage></div>
+    <div class="media-lightbox-meta" data-media-lightbox-meta hidden>
+      <div class="media-lightbox-meta-scrim"></div>
+      <div class="media-lightbox-meta-copy">
+        <strong data-media-lightbox-entry></strong>
+        <span data-media-lightbox-entrant></span>
+        <span data-media-lightbox-class></span>
+        <span data-media-lightbox-class-detail></span>
+        <span data-media-lightbox-show></span>
+      </div>
+    </div>
   </div>
 </div>
 {{end}}

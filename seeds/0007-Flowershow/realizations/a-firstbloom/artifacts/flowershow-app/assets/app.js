@@ -354,8 +354,46 @@ function flowershowOpenLightbox(lightbox, trigger) {
     media.alt = label;
   }
   stage.appendChild(media);
+  const gallery = Array.from(document.querySelectorAll('[data-media-open]'));
+  const index = gallery.indexOf(trigger);
+  lightbox.dataset.mediaIndex = index >= 0 ? String(index) : '';
+  const meta = lightbox.querySelector('[data-media-lightbox-meta]');
+  if (meta) {
+    const fields = {
+      '[data-media-lightbox-entry]': trigger.dataset.mediaEntry || label,
+      '[data-media-lightbox-entrant]': trigger.dataset.mediaEntrant || '',
+      '[data-media-lightbox-class]': trigger.dataset.mediaClass || '',
+      '[data-media-lightbox-class-detail]': trigger.dataset.mediaClassDetail || '',
+      '[data-media-lightbox-show]': trigger.dataset.mediaShow || ''
+    };
+    let hasContent = false;
+    Object.keys(fields).forEach(function(selector) {
+      const element = meta.querySelector(selector);
+      if (!element) return;
+      const value = (fields[selector] || '').trim();
+      element.textContent = value;
+      element.hidden = value === '';
+      if (value !== '') {
+        hasContent = true;
+      }
+    });
+    meta.hidden = !hasContent;
+  }
+  lightbox.querySelectorAll('[data-media-prev], [data-media-next]').forEach(function(button) {
+    button.hidden = gallery.length < 2;
+  });
   lightbox.hidden = false;
   document.body.classList.add('body-lightbox-open');
+}
+
+function flowershowStepLightbox(lightbox, delta) {
+  if (!lightbox) return;
+  const gallery = Array.from(document.querySelectorAll('[data-media-open]'));
+  if (gallery.length < 2) return;
+  const currentIndex = parseInt(lightbox.dataset.mediaIndex || '-1', 10);
+  const safeIndex = Number.isFinite(currentIndex) && currentIndex >= 0 ? currentIndex : 0;
+  const nextIndex = (safeIndex + delta + gallery.length) % gallery.length;
+  flowershowOpenLightbox(lightbox, gallery[nextIndex]);
 }
 
 function flowershowCloseLightbox(lightbox) {
@@ -364,6 +402,14 @@ function flowershowCloseLightbox(lightbox) {
   const stage = lightbox.querySelector('[data-media-lightbox-stage]');
   if (stage) {
     stage.innerHTML = '';
+  }
+  const meta = lightbox.querySelector('[data-media-lightbox-meta]');
+  if (meta) {
+    meta.hidden = true;
+    meta.querySelectorAll('[data-media-lightbox-entry],[data-media-lightbox-entrant],[data-media-lightbox-class],[data-media-lightbox-class-detail],[data-media-lightbox-show]').forEach(function(element) {
+      element.textContent = '';
+      element.hidden = true;
+    });
   }
   document.body.classList.remove('body-lightbox-open');
 }
@@ -376,9 +422,28 @@ function flowershowBindLightbox(lightbox) {
       flowershowCloseLightbox(lightbox);
     });
   });
+  lightbox.querySelectorAll('[data-media-prev]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      flowershowStepLightbox(lightbox, -1);
+    });
+  });
+  lightbox.querySelectorAll('[data-media-next]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      flowershowStepLightbox(lightbox, 1);
+    });
+  });
   document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape' && !lightbox.hidden) {
       flowershowCloseLightbox(lightbox);
+      return;
+    }
+    if (lightbox.hidden) {
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      flowershowStepLightbox(lightbox, -1);
+    } else if (event.key === 'ArrowRight') {
+      flowershowStepLightbox(lightbox, 1);
     }
   });
 }

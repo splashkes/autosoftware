@@ -12,16 +12,19 @@
   <div class="schedule-section">
     <h3>{{.Section.Title}}</h3>
     <div class="class-grid">
-      {{range .Classes}}
-      <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.ID}}" class="card class-card">
+      {{range .ClassCards}}
+      <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.Class.ID}}" class="card class-card">
         <div class="card-body">
-          <span class="class-number">{{.ClassNumber}}</span>
-          <h4 class="card-title">{{.Title}}</h4>
-          {{if .Description}}<p class="card-meta">{{.Description}}</p>{{end}}
-          {{if .SpecimenCount}}<p class="card-meta">{{.SpecimenCount}} {{if .Unit}}{{.Unit}}{{else}}specimen{{if gt .SpecimenCount 1}}s{{end}}{{end}}</p>{{end}}
-          {{if .MeasurementRule}}<p class="card-meta">Measurement: {{.MeasurementRule}}</p>{{end}}
-          {{if .NamingRequirement}}<p class="card-meta">Naming: {{.NamingRequirement}}</p>{{end}}
-          {{if .ScheduleNotes}}<p class="card-meta">{{.ScheduleNotes}}</p>{{end}}
+          <span class="class-number">{{.Class.ClassNumber}}</span>
+          <h4 class="card-title">{{.Class.Title}}</h4>
+          {{if .Class.Description}}<p class="card-meta">{{.Class.Description}}</p>{{end}}
+          {{if .TaxonSummary}}<p class="card-meta">Taxon: {{.TaxonSummary}}</p>{{end}}
+          {{if .Class.SpecimenCount}}<p class="card-meta">Presentation: {{.Class.SpecimenCount}} {{if .Class.Unit}}{{.Class.Unit}}{{else}}specimen{{if gt .Class.SpecimenCount 1}}s{{end}}{{end}}</p>{{end}}
+          {{if .Class.MeasurementRule}}<p class="card-meta">Measurement: {{.Class.MeasurementRule}}</p>{{end}}
+          {{if .Class.NamingRequirement}}<p class="card-meta">Naming: {{.Class.NamingRequirement}}</p>{{end}}
+          {{if .Class.ContainerRule}}<p class="card-meta">Container: {{.Class.ContainerRule}}</p>{{end}}
+          {{if .Class.EligibilityRule}}<p class="card-meta">Eligibility: {{.Class.EligibilityRule}}</p>{{end}}
+          {{if .Class.ScheduleNotes}}<p class="card-meta">{{.Class.ScheduleNotes}}</p>{{end}}
         </div>
       </a>
       {{end}}
