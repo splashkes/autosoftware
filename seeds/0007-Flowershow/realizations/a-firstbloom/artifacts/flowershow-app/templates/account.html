@@ -71,7 +71,7 @@
         {{if .User.Name}}<p class="card-meta">{{.User.Name}}</p>{{end}}
         <nav class="account-section-nav">
           {{range .Sections}}
-          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .AdminLink}}account-section-link-admin{{end}} {{if .Current}}is-current{{end}}">{{.Label}}</a>
           {{end}}
         </nav>
       </div>
