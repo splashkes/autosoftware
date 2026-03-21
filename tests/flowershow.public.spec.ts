@@ -31,7 +31,6 @@ test.describe('Flowershow Public', () => {
       'href',
       '/clubs/org_demo1',
     );
-    await expect(page.getByRole('link', { name: 'Open Club' })).toHaveAttribute('href', '/clubs/org_demo1');
     await expectAgentPath(page, '/shows/spring-rose-show-2025');
   });
 

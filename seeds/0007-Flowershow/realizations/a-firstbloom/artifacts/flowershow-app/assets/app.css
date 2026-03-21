@@ -323,13 +323,13 @@ a:hover {
 .class-card-visual {
   background-size: cover;
   background-position: center;
-  opacity: .22;
-  transform: scale(1.04);
+  opacity: .3;
+  transform: scale(1.02);
 }
 .class-card-visual-scrim {
   background:
-    linear-gradient(180deg, rgba(255,255,255,.32), rgba(255,255,255,.78) 55%, rgba(255,255,255,.92)),
-    linear-gradient(135deg, rgba(246, 255, 249, .18), rgba(255,255,255,.05));
+    linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.74) 52%, rgba(255,255,255,.9)),
+    linear-gradient(135deg, rgba(246, 255, 249, .08), rgba(255,255,255,.04));
 }
 .class-card .card-body {
   position: relative;
@@ -351,7 +351,15 @@ a:hover {
   color: var(--green);
   text-decoration: none;
 }
+.club-show-date {
+  font-weight: 700;
+  letter-spacing: .01em;
+}
 .club-show-list a:hover { text-decoration: underline; }
+.entry-class-cell {
+  display: grid;
+  gap: .18rem;
+}
 .club-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(260px, .85fr);
@@ -1080,7 +1088,7 @@ a:hover {
 }
 .media-lightbox-meta {
   position: absolute;
-  inset: auto 3.5rem 1rem 5.25rem;
+  inset: auto 0 1rem 0;
   min-height: 10rem;
   display: grid;
   align-items: end;
@@ -1090,7 +1098,7 @@ a:hover {
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.94));
-  border-radius: 0 0 18px 18px;
+  border-radius: 0 0 24px 24px;
 }
 .media-lightbox-meta-copy {
   position: relative;
@@ -1098,7 +1106,8 @@ a:hover {
   display: grid;
   gap: .2rem;
   padding: 2rem 1.35rem 1.2rem 1.35rem;
-  max-width: min(60ch, calc(100% - 1rem));
+  margin-left: 5.25rem;
+  max-width: min(56ch, calc(100% - 8.75rem));
   color: white;
 }
 .media-lightbox-meta-copy strong {
@@ -1690,13 +1699,14 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
     right: calc(50% - 2.65rem);
   }
   .media-lightbox-meta {
-    inset: auto .4rem 3.55rem .4rem;
+    inset: auto 0 3.55rem 0;
     min-height: 8rem;
   }
   .media-lightbox-meta-scrim {
     border-radius: 0 0 18px 18px;
   }
   .media-lightbox-meta-copy {
+    margin-left: 0;
     max-width: 100%;
     padding: 1.55rem .95rem .9rem;
   }

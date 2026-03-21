@@ -351,7 +351,7 @@ function flowershowOpenLightbox(lightbox, trigger) {
   } else {
     media = document.createElement('img');
     media.src = src;
-    media.alt = label;
+    media.alt = '';
   }
   stage.appendChild(media);
   const gallery = Array.from(document.querySelectorAll('[data-media-open]'));

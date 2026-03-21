@@ -12,7 +12,6 @@
   <div class="show-actions">
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary">Live Winners</a>
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
-    {{if .Org}}<a href="{{$.BasePath}}/clubs/{{.Org.ID}}" class="btn btn-outline">Open Club</a>{{end}}
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
   </div>
 </div>
@@ -64,7 +63,7 @@
   {{if .Entries}}
   <table class="table">
     <thead>
-      <tr><th>Entry</th><th>Class</th><th>Entrant</th><th>Placement</th><th>Points</th></tr>
+      <tr><th>Entry</th><th>Class</th><th>Entrant</th><th>Placement</th></tr>
     </thead>
     <tbody>
       {{range .Entries}}
@@ -84,10 +83,18 @@
             </span>
           </div>
         </td>
-        <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
+        <td>
+          {{if .Class}}
+          <div class="entry-class-cell">
+            <strong>{{.Class.ClassNumber}}: {{.Class.Title}}</strong>
+            {{range .ClassTableDetails}}
+            <div class="card-meta">{{.}}</div>
+            {{end}}
+          </div>
+          {{end}}
+        </td>
         <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
         <td>{{placementLabel .Entry.Placement}}</td>
-        <td>{{.Entry.Points}}</td>
       </tr>
       {{end}}
     </tbody>
@@ -108,8 +115,8 @@
     <div class="media-lightbox-meta" data-media-lightbox-meta hidden>
       <div class="media-lightbox-meta-scrim"></div>
       <div class="media-lightbox-meta-copy">
-        <strong data-media-lightbox-entry></strong>
         <span data-media-lightbox-entrant></span>
+        <strong data-media-lightbox-entry></strong>
         <span data-media-lightbox-class></span>
         <span data-media-lightbox-class-detail></span>
         <span data-media-lightbox-show></span>

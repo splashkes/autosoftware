@@ -136,6 +136,8 @@ func main() {
 
 	// Admin pages
 	mux.HandleFunc("GET /admin", a.requireAdmin(a.handleAdminDashboard))
+	mux.HandleFunc("POST /admin/judges", a.requireAdmin(a.handleAdminJudgeCreate))
+	mux.HandleFunc("GET /admin/judges/{personID}", a.requireAdmin(a.handleAdminJudgeProfile))
 	mux.HandleFunc("GET /admin/roles", a.requireAdmin(a.handleRoleManagement))
 	mux.HandleFunc("POST /admin/roles", a.requireAdmin(a.handleRoleAssign))
 	mux.HandleFunc("GET /admin/clubs/new", a.requireAdmin(a.handleAdminClubNew))
@@ -761,6 +763,7 @@ func parseTemplates() map[string]*template.Template {
 		"templates/show_rules.html",
 		"templates/show_admin.html",
 		"templates/admin_dashboard.html",
+		"templates/admin_judge.html",
 		"templates/admin_club.html",
 		"templates/admin_club_new.html",
 		"templates/admin_show_new.html",
