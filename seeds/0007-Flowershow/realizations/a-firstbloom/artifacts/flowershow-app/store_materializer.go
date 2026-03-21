@@ -219,8 +219,8 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 	}
 	for _, id := range sortedMapKeys(mem.entries) {
 		item := mem.entries[id]
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-			item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+			item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, item.SpecialStatus, item.SpecialAwardID, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
 			return fmt.Errorf("insert entry projection %s: %w", item.ID, err)
 		}
 	}

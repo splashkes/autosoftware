@@ -86,7 +86,7 @@ function flowershowSyncEntrantLookup(input) {
     .closest('[data-intake-new-panel]')
     .querySelector('[data-intake-person-id-input]');
   if (!hidden) return false;
-  const listId = input.getAttribute('list');
+  const listId = input.dataset.intakeEntrantList || input.getAttribute('list');
   const list = listId ? document.getElementById(listId) : null;
   const value = (input.value || '').trim();
   hidden.value = '';
@@ -103,18 +103,146 @@ function flowershowSyncEntrantLookup(input) {
   return hidden.value !== '';
 }
 
+function flowershowEntrantMatches(input) {
+  const listId = input.dataset.intakeEntrantList || input.getAttribute('list');
+  const list = listId ? document.getElementById(listId) : null;
+  if (!list) return [];
+  const query = (input.value || '').trim().toLowerCase();
+  return Array.from(list.options).map(function(option) {
+    return {
+      label: (option.value || '').trim(),
+      personID: option.dataset.personId || ''
+    };
+  }).filter(function(option) {
+    if (option.label === '' || option.personID === '') return false;
+    if (query === '') return true;
+    return option.label.toLowerCase().includes(query);
+  }).slice(0, 8);
+}
+
+function flowershowRenderEntrantResults(input) {
+  if (!input) return;
+  const formGroup = input.closest('.form-group');
+  const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
+  if (!results) return;
+  const matches = flowershowEntrantMatches(input);
+  results.innerHTML = '';
+  if (matches.length === 0) {
+    results.hidden = true;
+    return;
+  }
+  matches.forEach(function(match) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'intake-autocomplete-option';
+    button.textContent = match.label;
+    button.addEventListener('click', function() {
+      input.value = match.label;
+      const hidden = input.closest('[data-intake-new-panel]').querySelector('[data-intake-person-id-input]');
+      if (hidden) {
+        hidden.value = match.personID;
+      }
+      results.hidden = true;
+      results.innerHTML = '';
+    });
+    results.appendChild(button);
+  });
+  results.hidden = false;
+}
+
+function flowershowFormatClassCount(countRaw, unitRaw) {
+  const count = parseInt(countRaw || '0', 10);
+  if (!Number.isFinite(count) || count <= 0) return '';
+  const unit = (unitRaw || '').trim().toLowerCase();
+  if (unit) {
+    const label = count === 1 || unit.endsWith('s') ? unit : unit + 's';
+    return count + ' ' + label;
+  }
+  return count + ' ' + (count === 1 ? 'specimen' : 'specimens');
+}
+
+function flowershowPopulateIntakeClassHero(modal, trigger) {
+  const hero = modal.querySelector('[data-intake-class-hero]');
+  if (!hero) return;
+  const number = (trigger.dataset.intakeClassNumber || '').trim();
+  const title = (trigger.dataset.intakeClassTitle || '').trim();
+  const description = (trigger.dataset.intakeClassDescription || '').trim();
+  const countLabel = flowershowFormatClassCount(trigger.dataset.intakeClassSpecimenCount, trigger.dataset.intakeClassUnit);
+  const detailValues = [
+    countLabel,
+    (trigger.dataset.intakeClassMeasurementRule || '').trim(),
+    (trigger.dataset.intakeClassNamingRequirement || '').trim(),
+    (trigger.dataset.intakeClassContainerRule || '').trim(),
+    (trigger.dataset.intakeClassEligibilityRule || '').trim()
+  ].filter(Boolean);
+  const notes = (trigger.dataset.intakeClassScheduleNotes || '').trim();
+
+  const numberNode = hero.querySelector('[data-intake-class-number-display]');
+  const titleNode = hero.querySelector('[data-intake-class-title-display]');
+  const descriptionNode = hero.querySelector('[data-intake-class-description-display]');
+  const detailsNode = hero.querySelector('[data-intake-class-detail-display]');
+  const notesNode = hero.querySelector('[data-intake-class-notes-display]');
+
+  if (numberNode) numberNode.textContent = number;
+  if (titleNode) titleNode.textContent = title;
+  if (descriptionNode) {
+    descriptionNode.textContent = description;
+    descriptionNode.hidden = description === '';
+  }
+  if (detailsNode) {
+    detailsNode.innerHTML = '';
+    detailValues.forEach(function(value) {
+      const chip = document.createElement('span');
+      chip.className = 'intake-class-detail-chip';
+      chip.textContent = value;
+      detailsNode.appendChild(chip);
+    });
+    detailsNode.hidden = detailValues.length === 0;
+  }
+  if (notesNode) {
+    notesNode.textContent = notes;
+    notesNode.hidden = notes === '';
+  }
+  hero.hidden = !(number || title || description || detailValues.length || notes);
+}
+
+function flowershowRefreshPlacementButtons(form) {
+  const value = String(parseInt((form.querySelector('[data-intake-placement-input]') || {}).value || '0', 10) || 0);
+  form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
+    button.classList.toggle('is-active', button.dataset.intakePlacementButton === value && value !== '0');
+  });
+}
+
+function flowershowRefreshAwardState(form) {
+  const specialInput = form.querySelector('[data-intake-special-status-input]');
+  const awardInput = form.querySelector('[data-intake-award-input]');
+  const awardGroup = form.querySelector('[data-intake-award-group]');
+  const awardToggle = form.querySelector('[data-intake-award-toggle]');
+  const awardSelect = form.querySelector('[data-intake-award-select]');
+  const active = !!((specialInput && specialInput.value === 'true') || (awardToggle && awardToggle.dataset.forceOpen === 'true'));
+  if (awardGroup) {
+    awardGroup.hidden = !active;
+  }
+  if (awardToggle) {
+    awardToggle.classList.toggle('is-active', active);
+    awardToggle.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+  if (awardSelect && awardInput && awardSelect.value !== awardInput.value) {
+    awardSelect.value = awardInput.value;
+  }
+}
+
 function flowershowOpenIntakeModal(modal, trigger) {
   if (!modal || !trigger) return;
   const mode = trigger.dataset.intakeMode || 'new';
   const title = modal.querySelector('[data-intake-modal-title]');
-  const subtitle = modal.querySelector('[data-intake-modal-subtitle]');
   const newPanel = modal.querySelector('[data-intake-new-panel]');
   const existingPanel = modal.querySelector('[data-intake-existing-panel]');
-  if (!title || !subtitle || !newPanel || !existingPanel) return;
+  if (!title || !newPanel || !existingPanel) return;
 
   const classLabel = trigger.dataset.intakeClassLabel || '';
   title.textContent = mode === 'existing' ? 'Update intake' : 'Add entry';
-  subtitle.textContent = classLabel;
+  flowershowPopulateIntakeClassHero(modal, trigger);
 
   newPanel.hidden = mode !== 'new';
   existingPanel.hidden = mode === 'new';
@@ -122,7 +250,6 @@ function flowershowOpenIntakeModal(modal, trigger) {
   if (mode === 'new') {
     const form = modal.querySelector('[data-intake-entry-form]');
     const classIDInput = modal.querySelector('[data-intake-class-id-input]');
-    const classLabelInput = modal.querySelector('[data-intake-class-label-input]');
     const entrantInput = modal.querySelector('[data-intake-entrant-input]');
     const personIDInput = modal.querySelector('[data-intake-person-id-input]');
     if (form) {
@@ -132,11 +259,12 @@ function flowershowOpenIntakeModal(modal, trigger) {
       flowershowResetIntakeUploadState(form);
     }
     if (classIDInput) classIDInput.value = trigger.dataset.intakeClassId || '';
-    if (classLabelInput) classLabelInput.value = classLabel;
     if (entrantInput) entrantInput.value = '';
     if (personIDInput) personIDInput.value = '';
+    flowershowRenderEntrantResults(entrantInput);
   } else {
     const uploadForm = modal.querySelector('[data-intake-upload-form]');
+    const resultsForm = modal.querySelector('[data-intake-results-form]');
     const entrant = modal.querySelector('[data-intake-existing-entrant]');
     const entry = modal.querySelector('[data-intake-existing-entry]');
     const classInfo = modal.querySelector('[data-intake-existing-class]');
@@ -145,6 +273,31 @@ function flowershowOpenIntakeModal(modal, trigger) {
       uploadForm.reset();
       uploadForm.action = trigger.dataset.intakeUploadAction || '';
       flowershowResetIntakeUploadState(uploadForm);
+    }
+    if (resultsForm) {
+      const placementInput = resultsForm.querySelector('[data-intake-placement-input]');
+      const specialStatusInput = resultsForm.querySelector('[data-intake-special-status-input]');
+      const awardInput = resultsForm.querySelector('[data-intake-award-input]');
+      const awardSelect = resultsForm.querySelector('[data-intake-award-select]');
+      resultsForm.action = trigger.dataset.intakeResultsAction || '';
+      if (placementInput) {
+        placementInput.value = trigger.dataset.intakePlacement || '0';
+      }
+      if (specialStatusInput) {
+        specialStatusInput.value = trigger.dataset.intakeSpecialStatus === 'true' ? 'true' : 'false';
+      }
+      if (awardInput) {
+        awardInput.value = trigger.dataset.intakeAwardId || '';
+      }
+      if (awardSelect) {
+        awardSelect.value = trigger.dataset.intakeAwardId || '';
+      }
+      const awardToggle = resultsForm.querySelector('[data-intake-award-toggle]');
+      if (awardToggle) {
+        awardToggle.dataset.forceOpen = trigger.dataset.intakeSpecialStatus === 'true' ? 'true' : '';
+      }
+      flowershowRefreshPlacementButtons(resultsForm);
+      flowershowRefreshAwardState(resultsForm);
     }
     if (entrant) entrant.textContent = trigger.dataset.intakeEntrant || '';
     if (entry) entry.textContent = trigger.dataset.intakeEntryName || '';
@@ -176,13 +329,28 @@ function flowershowBindIntakeModal(modal) {
   if (entrantInput) {
     entrantInput.addEventListener('input', function() {
       flowershowSyncEntrantLookup(entrantInput);
+      flowershowRenderEntrantResults(entrantInput);
     });
     entrantInput.addEventListener('change', function() {
       flowershowSyncEntrantLookup(entrantInput);
+      flowershowRenderEntrantResults(entrantInput);
+    });
+    entrantInput.addEventListener('focus', function() {
+      flowershowRenderEntrantResults(entrantInput);
+    });
+    entrantInput.addEventListener('blur', function() {
+      window.setTimeout(function() {
+        const formGroup = entrantInput.closest('.form-group');
+        const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
+        if (results) {
+          results.hidden = true;
+        }
+      }, 120);
     });
   }
   flowershowBindIntakeForm(modal.querySelector('[data-intake-entry-form]'), { isNew: true });
   flowershowBindIntakeForm(modal.querySelector('[data-intake-upload-form]'), { isNew: false });
+  flowershowBindIntakeResultsForm(modal.querySelector('[data-intake-results-form]'));
 }
 
 function flowershowBindIntakeTrigger(button) {
@@ -316,12 +484,10 @@ function flowershowRenderIntakeUploadQueue(form) {
   if (!queue) return;
   queue.innerHTML = '';
   if (state.items.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'intake-upload-empty';
-    empty.textContent = 'No media added yet. Use Capture or Upload above.';
-    queue.appendChild(empty);
+    queue.hidden = true;
     return;
   }
+  queue.hidden = false;
   state.items.forEach(function(item) {
     const card = document.createElement('article');
     card.className = 'intake-upload-card';
@@ -595,6 +761,80 @@ function flowershowBindIntakeForm(form, options) {
       return;
     }
     flowershowSubmitIntakeForm(form, options);
+  });
+}
+
+function flowershowBindIntakeResultsForm(form) {
+  if (!form || form.dataset.bound === 'true') return;
+  form.dataset.bound = 'true';
+  const placementInput = form.querySelector('[data-intake-placement-input]');
+  const specialInput = form.querySelector('[data-intake-special-status-input]');
+  const awardInput = form.querySelector('[data-intake-award-input]');
+  const awardToggle = form.querySelector('[data-intake-award-toggle]');
+  const awardSelect = form.querySelector('[data-intake-award-select]');
+
+  form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (!placementInput) return;
+      const next = button.dataset.intakePlacementButton || '0';
+      placementInput.value = placementInput.value === next ? '0' : next;
+      flowershowRefreshPlacementButtons(form);
+    });
+  });
+  if (awardToggle) {
+    awardToggle.addEventListener('click', function() {
+      const nextActive = awardToggle.getAttribute('aria-pressed') !== 'true';
+      awardToggle.dataset.forceOpen = nextActive ? 'true' : '';
+      if (specialInput) {
+        specialInput.value = nextActive ? 'true' : 'false';
+      }
+      if (!nextActive) {
+        if (awardInput) awardInput.value = '';
+        if (awardSelect) awardSelect.value = '';
+      }
+      flowershowRefreshAwardState(form);
+      if (nextActive && awardSelect) {
+        awardSelect.focus();
+      }
+    });
+  }
+  if (awardSelect) {
+    awardSelect.addEventListener('change', function() {
+      if (awardInput) awardInput.value = awardSelect.value || '';
+      if (specialInput && awardSelect.value) {
+        specialInput.value = 'true';
+      }
+      if (awardToggle && specialInput) {
+        awardToggle.dataset.forceOpen = specialInput.value === 'true' ? 'true' : '';
+      }
+      flowershowRefreshAwardState(form);
+    });
+  }
+  flowershowRefreshPlacementButtons(form);
+  flowershowRefreshAwardState(form);
+
+  form.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        credentials: 'same-origin',
+        headers: { 'HX-Request': 'true' }
+      });
+      const html = await response.text();
+      if (!response.ok) {
+        throw new Error((html || 'Could not save result.').replace(/<[^>]+>/g, ''));
+      }
+      const modal = form.closest('[data-intake-modal]');
+      if (modal) {
+        modal.hidden = true;
+        document.body.classList.remove('body-lightbox-open');
+      }
+      flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', html || '');
+    } catch (error) {
+      flowershowToast(error && error.message ? error.message : 'Could not save result.', true);
+    }
   });
 }
 

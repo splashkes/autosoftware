@@ -147,6 +147,23 @@ test.describe('Flowershow Admin Local', () => {
     await expect(activeNav).toContainText('Effective Rules');
   });
 
+  test('intake modal can set placement and a plain special status for an existing entry', async ({ page }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin/shows/show_spring2025');
+
+    await page.getByRole('button', { name: 'Intake' }).click();
+    const firstEntryTile = page.locator('[data-intake-modal-open][data-intake-mode="existing"]').first();
+    await firstEntryTile.click();
+
+    await expect(page.locator('[data-intake-class-number-display]')).not.toBeEmpty();
+    await page.getByRole('button', { name: '#1' }).click();
+    await page.getByRole('button', { name: '★' }).click();
+    await page.getByRole('button', { name: 'Save Result' }).click();
+
+    await expect(page.locator('#admin-intake-panel')).toContainText('1st');
+    await expect(page.locator('#admin-intake-panel')).toContainText('★ special');
+  });
+
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
     page,
   }) => {
@@ -211,7 +228,8 @@ test.describe('Flowershow Admin Local', () => {
     await page
       .locator('[data-intake-modal-open][data-intake-mode="new"][data-intake-class-label="12: Playwright Bloom Class"]')
       .click();
-    await page.locator('[data-intake-entrant-input]').fill('Margaret Chen · member · Metro Rose Society');
+    await page.locator('[data-intake-entrant-input]').fill('Chen');
+    await page.locator('[data-intake-person-results]').getByRole('button', { name: /Margaret Chen/ }).click();
     await page.locator('form[data-intake-entry-form] input[name="name"]').fill('Playwright Peace');
     await page.locator('form[data-intake-entry-form] input[name="notes"]').fill('Created in Playwright.');
     await page

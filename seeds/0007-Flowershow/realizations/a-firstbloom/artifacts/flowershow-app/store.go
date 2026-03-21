@@ -186,6 +186,8 @@ type flowershowStore interface {
 	deleteEntry(entryID string) error
 	setEntrySuppressed(entryID string, suppressed bool) error
 	setPlacement(entryID string, placement int, points float64) error
+	setEntrySpecialStatus(entryID string, special bool, awardID string) error
+	setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error
 	entryByID(id string) (*Entry, bool)
 	entriesByShow(showID string) []*Entry
 	entriesByClass(classID string) []*Entry
@@ -1199,6 +1201,61 @@ func (s *memoryStore) setPlacement(entryID string, placement int, points float64
 	e.Points = points
 	s.appendClaim(e.ID, "entry", "entry.placement_set", map[string]any{
 		"placement": placement, "points": points,
+	})
+	return nil
+}
+
+func (s *memoryStore) setEntrySpecialStatus(entryID string, special bool, awardID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	awardID = strings.TrimSpace(awardID)
+	if awardID != "" {
+		if _, ok := s.awards[awardID]; !ok {
+			return errors.New("award not found")
+		}
+	}
+	if !special {
+		awardID = ""
+	}
+	e.SpecialStatus = special
+	e.SpecialAwardID = awardID
+	s.appendClaim(e.ID, "entry", "entry.special_status_set", map[string]any{
+		"special_status": special,
+		"award_id":       awardID,
+	})
+	return nil
+}
+
+func (s *memoryStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	awardID = strings.TrimSpace(awardID)
+	if awardID != "" {
+		if _, ok := s.awards[awardID]; !ok {
+			return errors.New("award not found")
+		}
+	}
+	if !special {
+		awardID = ""
+	}
+	e.Placement = placement
+	e.Points = points
+	e.SpecialStatus = special
+	e.SpecialAwardID = awardID
+	s.appendClaim(e.ID, "entry", "entry.placement_set", map[string]any{
+		"placement": placement, "points": points,
+	})
+	s.appendClaim(e.ID, "entry", "entry.special_status_set", map[string]any{
+		"special_status": special,
+		"award_id":       awardID,
 	})
 	return nil
 }
@@ -2474,6 +2531,8 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
   suppressed BOOLEAN NOT NULL DEFAULT FALSE,
   placement INTEGER NOT NULL DEFAULT 0,
   points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  special_status BOOLEAN NOT NULL DEFAULT FALSE,
+  special_award_id TEXT NOT NULL DEFAULT '',
   taxon_refs TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2748,6 +2807,8 @@ ALTER TABLE as_flowershow_m_entries
   ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS placement INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS special_status BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS special_award_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS taxon_refs TEXT[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -2915,8 +2976,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			c.ID, c.SectionID, c.ClassNumber, c.SortOrder, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
 	}
 	for _, e := range mem.entries {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
-			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.TaxonRefs, e.CreatedAt)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
+			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.SpecialStatus, e.SpecialAwardID, e.TaxonRefs, e.CreatedAt)
 	}
 	for _, credit := range mem.showCredits {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
@@ -3435,6 +3496,32 @@ func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, po
 		return err
 	}
 	if err := mem.setPlacement(entryID, placement, points); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
+
+func (s *postgresFlowershowStore) setEntrySpecialStatus(entryID string, special bool, awardID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.setEntrySpecialStatus(entryID, special, awardID); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
+
+func (s *postgresFlowershowStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.setEntryResults(entryID, placement, points, special, awardID); err != nil {
 		return err
 	}
 	return s.commitDomainMutation(ctx, mem, claimStart)

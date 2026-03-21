@@ -948,11 +948,16 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 	for _, e := range a.store.entriesByShow(show.ID) {
 		person, _ := a.store.personByID(e.PersonID)
 		cls, _ := a.store.classByID(e.ClassID)
+		var specialAward *AwardDefinition
+		if strings.TrimSpace(e.SpecialAwardID) != "" {
+			specialAward, _ = a.store.awardByID(e.SpecialAwardID)
+		}
 		entries = append(entries, &entryView{
-			Entry:  e,
-			Person: person,
-			Class:  cls,
-			Media:  a.store.mediaByEntry(e.ID),
+			Entry:        e,
+			Person:       person,
+			Class:        cls,
+			SpecialAward: specialAward,
+			Media:        a.store.mediaByEntry(e.ID),
 		})
 	}
 	boardDivisions, boardStats := a.boardDataForShow(show.ID, entries)
@@ -966,10 +971,7 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 	}
 
 	orgs := a.store.allOrganizations()
-	var awards []*AwardDefinition
-	for _, org := range orgs {
-		awards = append(awards, a.store.awardsByOrganization(org.ID)...)
-	}
+	awards := a.awardsForShow(show)
 	standardViews := a.standardViews()
 	rubricViews := a.rubricViewsForShow(show.ID)
 	var scheduleEdition *StandardEdition
@@ -1013,6 +1015,27 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 		ClassRuleViews:       classRuleViews,
 		CitationTargets:      a.citationTargetsForShow(show.ID, classRuleViews),
 	}, nil
+}
+
+func (a *app) awardsForShow(show *Show) []*AwardDefinition {
+	if show == nil {
+		return nil
+	}
+	items := a.store.awardsByOrganization(show.OrganizationID)
+	out := make([]*AwardDefinition, 0, len(items))
+	for _, award := range items {
+		if award == nil {
+			continue
+		}
+		if strings.TrimSpace(award.Season) != "" && strings.TrimSpace(show.Season) != "" && award.Season != show.Season {
+			continue
+		}
+		out = append(out, award)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 func (a *app) handleAdminShowUpdate(w http.ResponseWriter, r *http.Request) {
@@ -1264,6 +1287,34 @@ func (a *app) handleAdminEntryDelete(w http.ResponseWriter, r *http.Request) {
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
 	a.publishShowSummary(entry.ShowID)
 	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "floor")
+}
+
+func (a *app) handleAdminEntryResults(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	entry, ok := a.store.entryByID(entryID)
+	if !ok || entry == nil {
+		http.NotFound(w, r)
+		return
+	}
+	placement, _ := strconv.Atoi(r.FormValue("placement"))
+	points, _ := strconv.ParseFloat(r.FormValue("points"), 64)
+	specialStatus := r.FormValue("special_status") == "true" || r.FormValue("special_status") == "on"
+	if points == 0 {
+		pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
+		points = pointsMap[placement]
+	}
+	if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.sseBroker.publish(entry.ShowID, "placement-set", `<div class="toast">Entry result updated</div>`)
+	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring")
+	a.publishShowSummary(entry.ShowID)
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "intake")
 }
 
 func (a *app) handleAdminEntryPlacement(w http.ResponseWriter, r *http.Request) {
