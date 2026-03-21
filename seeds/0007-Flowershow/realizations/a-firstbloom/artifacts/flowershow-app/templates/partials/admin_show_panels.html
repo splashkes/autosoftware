@@ -19,70 +19,195 @@
 
 {{define "admin_intake_panel"}}
 <div class="admin-show-stack">
-  <section class="admin-show-section" id="intake-add-entry">
+  <section class="admin-show-section" id="intake-grid">
     <div class="admin-show-section-header">
-      <h3>Rapid intake</h3>
-      <p>Start from the class, link the entrant from host-club members or guests, and keep moving even if photos come later.</p>
+      <h3>Class intake grid</h3>
+      <p>Scan every class in show order, add entries from the plus tile, and complete missing photos from the same surface.</p>
     </div>
-    {{template "admin_entry_intake_form" .}}
-  </section>
-  <section class="admin-show-section" id="intake-photo-queue">
-    <div class="admin-show-section-header">
-      <h3>Needs photos</h3>
-      <p>These entries are in the show but still need media. Another operator can complete them later.</p>
+    {{if .BoardDivisions}}
+    <div class="intake-division-stack">
+      {{range .BoardDivisions}}
+      <section class="intake-division-block">
+        <div class="intake-division-header">
+          <h3>Division {{.Division.Code}}: {{.Division.Title}}</h3>
+          <span class="badge badge-muted">{{.Division.Domain}}</span>
+        </div>
+        {{range .Sections}}
+        <div class="intake-section-block">
+          <h4>Section {{.Section.Code}}: {{.Section.Title}}</h4>
+          <div class="intake-class-grid">
+            {{range .Classes}}
+            <article class="card intake-class-card">
+              <div class="card-body">
+                <div class="intake-class-header">
+                  <div>
+                    <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
+                    {{if .Class.Description}}<div class="card-meta">{{.Class.Description}}</div>{{end}}
+                  </div>
+                  <span class="card-meta">{{.EntryCount}} entries{{if gt .MissingPhotoCount 0}} · {{.MissingPhotoCount}} need photos{{end}}</span>
+                </div>
+                <div class="intake-entry-grid">
+                  {{range .Entries}}
+                  {{$entry := .}}
+                  <button
+                    type="button"
+                    class="intake-entry-tile {{if .Media}}has-photo{{else}}needs-photo{{end}}"
+                    data-intake-modal-open
+                    data-intake-mode="existing"
+                    data-intake-entry-id="{{.Entry.ID}}"
+                    data-intake-entry-name="{{.Entry.Name}}"
+                    data-intake-entrant="{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}"
+                    data-intake-class-id="{{if .Class}}{{.Class.ID}}{{end}}"
+                    data-intake-class-label="{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}"
+                    data-intake-notes="{{.Entry.Notes}}"
+                    data-intake-upload-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media"
+                    data-intake-entry-href="{{$.BasePath}}/entries/{{.Entry.ID}}">
+                    <span class="intake-entry-visual">
+                      {{with primaryMedia .Media}}
+                      <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="intake-entry-image">
+                      {{else}}
+                      <span class="intake-entry-initials">{{if .Person}}{{.Person.Initials}}{{else}}?{{end}}</span>
+                      {{end}}
+                    </span>
+                    <span class="intake-entry-meta">
+                      <strong>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Entry.Name}}{{end}}</strong>
+                      <span class="card-meta">{{.Entry.Name}}{{if not .Media}} · needs photo{{end}}</span>
+                    </span>
+                  </button>
+                  {{end}}
+                  <button
+                    type="button"
+                    class="intake-entry-tile intake-entry-tile-add"
+                    data-intake-modal-open
+                    data-intake-mode="new"
+                    data-intake-class-id="{{.Class.ID}}"
+                    data-intake-class-label="{{.Class.ClassNumber}}: {{.Class.Title}}"
+                    data-intake-create-action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/entries">
+                    <span class="intake-entry-visual intake-entry-plus-wrap">
+                      <span class="intake-entry-plus">+</span>
+                    </span>
+                    <span class="intake-entry-meta">
+                      <strong>Add entry</strong>
+                      <span class="card-meta">Create directly in this class</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </article>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </section>
+      {{end}}
     </div>
-    <div class="card">
-      <div class="card-body">
-        {{if .EntriesNeedingPhotos}}
-        <div class="intake-list">
-          {{range .EntriesNeedingPhotos}}
-          <div class="intake-item">
-            <div>
-              <strong>{{.Entry.Name}}</strong>
-              <p class="card-meta">{{if .Class}}{{.Class.ClassNumber}} · {{.Class.Title}}{{end}}{{if .Person}} · {{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
-            </div>
-            <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-intake-panel" class="media-add-form media-add-form-inline">
-              <input type="file" id="intake-media-input-{{.Entry.ID}}" name="media" class="visually-hidden" accept="image/jpeg,image/png,image/webp" capture="environment" required>
-              <button type="button" class="media-add-button media-add-button-sm" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('intake-media-input-{{.Entry.ID}}').click()">
-                <span class="media-add-plus">+</span>
-                <span class="media-add-badge">+</span>
-              </button>
+
+    <div class="intake-modal" data-intake-modal hidden>
+      <div class="intake-modal-backdrop" data-intake-modal-close></div>
+      <div class="intake-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="intake-modal-title">
+        <button type="button" class="media-lightbox-close intake-modal-close" data-intake-modal-close aria-label="Close intake editor">×</button>
+        <div class="intake-modal-shell">
+          <div class="intake-modal-header">
+            <div class="login-step-kicker">Onsite intake</div>
+            <h3 id="intake-modal-title" class="card-title" data-intake-modal-title>Add entry</h3>
+            <p class="card-meta" data-intake-modal-subtitle></p>
+          </div>
+
+          <div data-intake-new-panel>
+            <form
+              method="POST"
+              action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
+              enctype="multipart/form-data"
+              hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
+              hx-encoding="multipart/form-data"
+              hx-target="#admin-intake-panel"
+              hx-swap="innerHTML"
+              class="form"
+              data-intake-entry-form>
+              <input type="hidden" name="class_id" value="" data-intake-class-id-input>
+              <div class="form-group">
+                <label>Class</label>
+                <input type="text" class="form-input" value="" data-intake-class-label-input readonly>
+              </div>
+              <div class="form-group">
+                <label>Entrant</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  list="intake-entrant-options"
+                  placeholder="Start typing a full name"
+                  data-intake-entrant-input
+                  autocomplete="off"
+                  required>
+                <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+                <datalist id="intake-entrant-options">
+                  {{range .EntrantCandidates}}
+                  <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
+                  {{end}}
+                </datalist>
+              </div>
+              <div class="form-group">
+                <label>Entry name</label>
+                <input type="text" name="name" class="form-input" placeholder="Optional cultivar or display name">
+              </div>
+              <div class="form-group">
+                <label>Notes</label>
+                <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+              </div>
+              <div class="form-group">
+                <label>Photos</label>
+                <input type="file" name="media" class="form-input" accept="image/jpeg,image/png,image/webp" capture="environment" multiple>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Entry</button>
             </form>
           </div>
-          {{end}}
-        </div>
-        {{else}}
-        <p class="empty-state">Every current entry already has at least one photo.</p>
-        {{end}}
-      </div>
-    </div>
-  </section>
-  <section class="admin-show-section" id="intake-recent">
-    <div class="admin-show-section-header">
-      <h3>Recent intake</h3>
-      <p>The newest entries stay visible here so operators can confirm names, classes, and photo follow-up.</p>
-    </div>
-    <div class="card">
-      <div class="card-body">
-        {{if .RecentEntries}}
-        <div class="intake-list">
-          {{range .RecentEntries}}
-          <div class="intake-item">
-            <div>
-              <strong>{{.Entry.Name}}</strong>
-              <p class="card-meta">{{if .Class}}{{.Class.ClassNumber}} · {{.Class.Title}}{{end}}{{if .Person}} · {{.Person.FirstName}} {{.Person.LastName}}{{end}}</p>
+
+          <div data-intake-existing-panel hidden>
+            <div class="account-role-list intake-detail-list">
+              <div class="account-role-item">
+                <div>
+                  <strong>Entrant</strong>
+                  <div class="card-meta" data-intake-existing-entrant></div>
+                </div>
+              </div>
+              <div class="account-role-item">
+                <div>
+                  <strong>Entry</strong>
+                  <div class="card-meta" data-intake-existing-entry></div>
+                </div>
+              </div>
+              <div class="account-role-item">
+                <div>
+                  <strong>Class</strong>
+                  <div class="card-meta" data-intake-existing-class></div>
+                </div>
+              </div>
             </div>
-            <div class="tag-list">
-              {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+            <form
+              method="POST"
+              action=""
+              enctype="multipart/form-data"
+              data-photo-add-form
+              data-target="#admin-intake-panel"
+              class="form"
+              data-intake-upload-form>
+              <input type="hidden" name="section" value="intake">
+              <div class="form-group">
+                <label>Add more photos</label>
+                <input type="file" name="media" class="form-input" accept="image/jpeg,image/png,image/webp" capture="environment" multiple required>
+              </div>
+              <button type="submit" class="btn btn-primary">Upload Photos</button>
+            </form>
+            <div class="show-actions">
+              <a href="#" class="btn btn-outline" data-intake-existing-link>Open public entry</a>
             </div>
           </div>
-          {{end}}
         </div>
-        {{else}}
-        <p class="empty-state">No entries yet.</p>
-        {{end}}
       </div>
     </div>
+    {{else}}
+    <p class="empty-state">Create a schedule and classes first, then intake will render directly from the live show order.</p>
+    {{end}}
   </section>
 </div>
 {{end}}

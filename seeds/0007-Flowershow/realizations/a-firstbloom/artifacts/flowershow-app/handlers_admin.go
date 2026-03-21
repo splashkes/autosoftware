@@ -1174,17 +1174,47 @@ func (a *app) handleAdminClassUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("showID")
-	r.ParseForm()
-	_, err := a.store.createEntry(EntryInput{
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(maxFormMemory); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		if classID := strings.TrimSpace(r.FormValue("class_id")); classID != "" {
+			if class, ok := a.store.classByID(classID); ok && class != nil {
+				name = strings.TrimSpace(class.Title)
+			}
+		}
+	}
+	entry, err := a.store.createEntry(EntryInput{
 		ShowID:   showID,
 		ClassID:  r.FormValue("class_id"),
 		PersonID: r.FormValue("person_id"),
-		Name:     r.FormValue("name"),
+		Name:     name,
 		Notes:    r.FormValue("notes"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if entry != nil && r.MultipartForm != nil {
+		for _, header := range r.MultipartForm.File["media"] {
+			media, err := a.media.Store(r.Context(), entry.ID, header)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if _, err := a.store.attachMedia(*media); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	a.sseBroker.publish(showID, "entry-created", `<div class="toast">Entry added</div>`)
 	a.publishAdminSections(showID, "intake", "floor", "board", "scoring", "governance")
@@ -1318,7 +1348,11 @@ func (a *app) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
 	if entry, ok := a.store.entryByID(entryID); ok {
 		a.publishAdminSections(entry.ShowID, "intake", "floor", "board")
 		a.publishShowSummary(entry.ShowID)
-		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "floor")
+		section := strings.TrimSpace(r.FormValue("section"))
+		if section == "" {
+			section = "floor"
+		}
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, section)
 		return
 	}
 	redirect(w, r)
