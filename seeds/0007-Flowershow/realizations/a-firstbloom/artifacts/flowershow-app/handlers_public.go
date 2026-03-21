@@ -1241,15 +1241,29 @@ func (a *app) handlePersonDetail(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		cls, _ := a.store.classByID(entry.ClassID)
+		show, _ := a.store.showByID(entry.ShowID)
+		classTaxons := a.classTaxons(cls)
+		media := a.store.mediaByEntry(entry.ID)
+		var leadMedia *Media
+		if len(media) > 0 {
+			leadMedia = media[0]
+		}
 		totalPoints += entry.Points
 		if entry.Placement == 1 {
 			firstCount++
 		}
 		entries = append(entries, &entryView{
-			Entry:  entry,
-			Person: person,
-			Class:  cls,
-			Media:  a.store.mediaByEntry(entry.ID),
+			Entry:                entry,
+			Person:               person,
+			Class:                cls,
+			Media:                media,
+			LeadMedia:            leadMedia,
+			PublicEntryName:      publicEntryName(entry, person),
+			ClassTableDetails:    entryClassTableDetails(cls, classTaxons),
+			LightboxEntrantLabel: publicPersonLabel(person),
+			LightboxClassLabel:   entryLightboxClassLabel(cls),
+			LightboxClassDetail:  entryLightboxClassDetail(cls, classTaxons),
+			LightboxShowLabel:    entryLightboxShowLabel(show, entry),
 		})
 	}
 
