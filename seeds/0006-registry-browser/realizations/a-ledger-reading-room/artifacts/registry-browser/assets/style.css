@@ -75,16 +75,26 @@ footer{border-top:1px solid #e0e0e0;padding:1rem 0;font-size:.8rem;color:#888;te
 .field-table{width:100%;border-collapse:collapse}
 .field-table td{padding:.35rem .5rem;font-size:.85rem;border-bottom:1px solid #f0f0f0;vertical-align:top}
 .field-table td:first-child{font-weight:600;color:#555;white-space:nowrap;width:140px}
+.field-value-long{white-space:pre-wrap;word-break:break-word}
 .data-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden}
 .data-table th,.data-table td{padding:.55rem .7rem;border-bottom:1px solid #f0f0f0;vertical-align:top;text-align:left;font-size:.84rem}
 .data-table th{background:#f8f5ee;color:#5d5243;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase}
 .data-table tr:last-child td{border-bottom:none}
+.field-stack{display:flex;flex-direction:column;gap:.35rem}
+.field-inline{display:flex;flex-direction:column;gap:.08rem;font-size:.8rem}
+.field-inline-label{font-weight:600;color:#6a6052;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
 .shape-block{background:#f6f1e6;border:1px solid #e6dcc8;border-radius:8px;padding:.85rem 1rem;font-size:.8rem;line-height:1.5;overflow-x:auto;color:#3b3428}
 .tag{display:inline-block;padding:.1rem .4rem;background:#f0f0f0;border-radius:3px;font-size:.75rem;margin:.1rem}
 .field-pills{display:flex;flex-wrap:wrap;gap:.45rem .5rem}
 .field-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;background:#fbf8f2;border:1px solid #ebe3d7;border-radius:999px;font-size:.78rem;color:#4d4438}
 .field-pill code{font-size:.72rem}
 .lineage-arrow{color:#9d6b26;font-weight:700;padding:0 .15rem}
+.raw-details{margin-top:.75rem}
+.raw-details summary{cursor:pointer;font-weight:600;color:#5d5243;list-style:none}
+.raw-details summary::-webkit-details-marker{display:none}
+.raw-details summary::before{content:"▸";display:inline-block;margin-right:.4rem;color:#9d6b26}
+.raw-details[open] summary::before{content:"▾"}
+.raw-details .shape-block{margin-top:.65rem}
 
 /* Agent guidance */
 .agent-box{background:#f8f5ee;border:1px solid #e5dcc8;border-radius:8px;padding:1rem 1.25rem;margin-top:1.5rem}
@@ -103,4 +113,5 @@ footer{border-top:1px solid #e0e0e0;padding:1rem 0;font-size:.8rem;color:#888;te
 
 @media (max-width:700px){
   .field-table td:first-child{width:auto}
+  .data-table{display:block;overflow-x:auto}
 }

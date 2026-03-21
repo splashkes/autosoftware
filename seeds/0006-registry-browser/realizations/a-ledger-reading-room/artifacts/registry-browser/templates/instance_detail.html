@@ -3,7 +3,7 @@
 <div class="page-head">
   <div class="page-kicker">Object Instance · {{$i.Summary.SeedID}}</div>
   <h2>{{$i.Summary.Label}}</h2>
-  <p>Raw accepted registry content for <a href="{{$i.InstanceDefinition}}">{{$i.Summary.Kind}}</a>.</p>
+  <p>Current accepted content for <a href="{{$i.InstanceDefinition}}">{{$i.Summary.Kind}}</a>, with raw registry payloads available below.</p>
   <div class="page-meta">
     <span class="page-chip">{{$i.Summary.Kind}}</span>
     <span class="page-chip"><code>{{$i.Summary.ObjectID}}</code></span>
@@ -17,6 +17,31 @@
   <h3>Definition</h3>
   <p><a href="{{$i.InstanceDefinition}}">Back to {{$i.Summary.Kind}} definition</a></p>
 </div>
+
+{{if $i.CurrentFields}}
+<div class="detail-section">
+  <h3>Current Fields</h3>
+  <table class="field-table">
+    <tbody>
+      {{range $i.CurrentFields}}
+      <tr>
+        <td>{{.Label}}</td>
+        <td>
+          {{if .Path}}
+          <a href="{{.Path}}"><code>{{.Value}}</code></a>
+          <div class="summary">{{.Kind}}</div>
+          {{else if .IsCode}}
+          <code>{{.Value}}</code>
+          {{else}}
+          <span class="{{if .IsLong}}field-value-long{{end}}">{{.Value}}</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
 
 {{if $i.RelatedInstances}}
 <div class="detail-section">
@@ -32,13 +57,40 @@
 {{end}}
 
 <div class="detail-section">
-  <h3>Stable Identity Row</h3>
-  <pre class="shape-block">{{$i.ObjectPayloadJSON}}</pre>
+  <h3>Stable Identity</h3>
+  {{if $i.IdentityFields}}
+  <table class="field-table">
+    <tbody>
+      {{range $i.IdentityFields}}
+      <tr>
+        <td>{{.Label}}</td>
+        <td>
+          {{if .Path}}
+          <a href="{{.Path}}"><code>{{.Value}}</code></a>
+          <div class="summary">{{.Kind}}</div>
+          {{else if .IsCode}}
+          <code>{{.Value}}</code>
+          {{else}}
+          <span class="{{if .IsLong}}field-value-long{{end}}">{{.Value}}</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+  <details class="raw-details">
+    <summary>Inspect stable identity row JSON</summary>
+    <pre class="shape-block">{{$i.ObjectPayloadJSON}}</pre>
+  </details>
 </div>
 
 <div class="detail-section">
   <h3>Latest Accepted Claim</h3>
-  <pre class="shape-block">{{$i.LatestClaimJSON}}</pre>
+  <details class="raw-details" open>
+    <summary>Inspect latest accepted claim JSON</summary>
+    <pre class="shape-block">{{$i.LatestClaimJSON}}</pre>
+  </details>
 </div>
 
 {{if $i.ClaimRows}}
@@ -53,7 +105,31 @@
         {{if .ClaimID}}<span><code>{{.ClaimID}}</code></span>{{end}}
         <span>{{formatTime .AcceptedAt}}</span>
       </div>
-      <pre class="shape-block">{{.PayloadJSON}}</pre>
+      {{if .Fields}}
+      <table class="field-table">
+        <tbody>
+          {{range .Fields}}
+          <tr>
+            <td>{{.Label}}</td>
+            <td>
+              {{if .Path}}
+              <a href="{{.Path}}"><code>{{.Value}}</code></a>
+              <div class="summary">{{.Kind}}</div>
+              {{else if .IsCode}}
+              <code>{{.Value}}</code>
+              {{else}}
+              <span class="{{if .IsLong}}field-value-long{{end}}">{{.Value}}</span>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{end}}
+      <details class="raw-details">
+        <summary>Inspect raw claim JSON</summary>
+        <pre class="shape-block">{{.PayloadJSON}}</pre>
+      </details>
       {{if .RelatedInstances}}
       <div class="meta">
         {{range $j, $related := .RelatedInstances}}{{if $j}}, {{end}}<a href="{{$related.Path}}">{{$related.Kind}} {{$related.ObjectID}}</a>{{end}}
