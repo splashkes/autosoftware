@@ -414,6 +414,48 @@ func entryLightboxClassDetail(class *ShowClass, taxons []*Taxon) string {
 	return strings.Join(parts, " · ")
 }
 
+func (a *app) classTaxons(class *ShowClass) []*Taxon {
+	if class == nil {
+		return nil
+	}
+	taxons := make([]*Taxon, 0, len(class.TaxonRefs))
+	for _, ref := range class.TaxonRefs {
+		if taxon, ok := a.store.taxonByID(ref); ok && taxon != nil {
+			taxons = append(taxons, taxon)
+		}
+	}
+	return taxons
+}
+
+func entryClassTableDetails(class *ShowClass, taxons []*Taxon) []string {
+	if class == nil {
+		return nil
+	}
+	lines := make([]string, 0, 8)
+	if strings.TrimSpace(class.Description) != "" {
+		lines = append(lines, strings.TrimSpace(class.Description))
+	}
+	if detail := entryLightboxClassDetail(class, taxons); detail != "" {
+		lines = append(lines, detail)
+	}
+	if strings.TrimSpace(class.MeasurementRule) != "" {
+		lines = append(lines, "Measurement: "+strings.TrimSpace(class.MeasurementRule))
+	}
+	if strings.TrimSpace(class.NamingRequirement) != "" {
+		lines = append(lines, "Naming: "+strings.TrimSpace(class.NamingRequirement))
+	}
+	if strings.TrimSpace(class.ContainerRule) != "" {
+		lines = append(lines, "Container: "+strings.TrimSpace(class.ContainerRule))
+	}
+	if strings.TrimSpace(class.EligibilityRule) != "" {
+		lines = append(lines, "Eligibility: "+strings.TrimSpace(class.EligibilityRule))
+	}
+	if strings.TrimSpace(class.ScheduleNotes) != "" {
+		lines = append(lines, "Notes: "+strings.TrimSpace(class.ScheduleNotes))
+	}
+	return lines
+}
+
 func entryLightboxShowLabel(show *Show, entry *Entry) string {
 	if show == nil {
 		return placementLabelText(entry.Placement)
@@ -782,6 +824,7 @@ type entryView struct {
 	Class                *ShowClass
 	Media                []*Media
 	LeadMedia            *Media
+	ClassTableDetails    []string
 	LightboxEntrantLabel string
 	LightboxClassLabel   string
 	LightboxClassDetail  string
@@ -823,15 +866,17 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		if cls != nil {
 			entryCountByClass[cls.ID]++
 		}
+		classTaxons := a.classTaxons(cls)
 		entries = append(entries, &entryView{
 			Entry:                e,
 			Person:               person,
 			Class:                cls,
 			Media:                media,
 			LeadMedia:            leadMedia,
+			ClassTableDetails:    entryClassTableDetails(cls, classTaxons),
 			LightboxEntrantLabel: publicPersonLabel(person),
 			LightboxClassLabel:   entryLightboxClassLabel(cls),
-			LightboxClassDetail:  entryLightboxClassDetail(cls, nil),
+			LightboxClassDetail:  entryLightboxClassDetail(cls, classTaxons),
 			LightboxShowLabel:    entryLightboxShowLabel(show, e),
 		})
 	}
@@ -1061,14 +1106,7 @@ func (a *app) handleEntryDetail(w http.ResponseWriter, r *http.Request) {
 	person, _ := a.store.personByID(entry.PersonID)
 	cls, _ := a.store.classByID(entry.ClassID)
 	show, _ := a.store.showByID(entry.ShowID)
-	var classTaxons []*Taxon
-	if cls != nil {
-		for _, ref := range cls.TaxonRefs {
-			if t, ok := a.store.taxonByID(ref); ok && t != nil {
-				classTaxons = append(classTaxons, t)
-			}
-		}
-	}
+	classTaxons := a.classTaxons(cls)
 
 	var taxons []*Taxon
 	for _, ref := range entry.TaxonRefs {

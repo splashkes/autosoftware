@@ -47,15 +47,42 @@ type adminJudgeShowView struct {
 	ShowHref    string
 	ShowDate    string
 	StatusLabel string
+	RoleLabel   string
 }
 
 type adminJudgePersonView struct {
-	PersonName   string
-	PersonHref   string
-	Email        string
-	Initials     string
-	Affiliations []string
-	Shows        []adminJudgeShowView
+	PersonID       string
+	PersonName     string
+	PersonHref     string
+	Email          string
+	Phone          string
+	Initials       string
+	Specialties    string
+	Qualifications string
+	Notes          string
+	Affiliations   []string
+	Shows          []adminJudgeShowView
+}
+
+type adminJudgePickView struct {
+	EntryName    string
+	EntryHref    string
+	ShowName     string
+	ShowHref     string
+	ShowDate     string
+	ClassLabel   string
+	EntrantLabel string
+	MediaPath    string
+}
+
+type adminJudgeProfileData struct {
+	Title         string
+	CurrentPath   string
+	Sections      []accountSectionView
+	Judge         adminJudgePersonView
+	UpcomingShows []adminJudgeShowView
+	PastShows     []adminJudgeShowView
+	FirstPicks    []adminJudgePickView
 }
 
 type adminReferenceLink struct {
@@ -133,6 +160,50 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *app) handleAdminJudgeCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	firstName := strings.TrimSpace(r.FormValue("first_name"))
+	lastName := strings.TrimSpace(r.FormValue("last_name"))
+	if firstName == "" && lastName == "" {
+		http.Error(w, "judge name required", http.StatusBadRequest)
+		return
+	}
+	orgID := strings.TrimSpace(r.FormValue("organization_id"))
+	orgRole := ""
+	if orgID != "" {
+		orgRole = "judge"
+	}
+	person, err := a.store.createPerson(PersonInput{
+		FirstName:        firstName,
+		LastName:         lastName,
+		Email:            strings.TrimSpace(r.FormValue("email")),
+		Phone:            strings.TrimSpace(r.FormValue("phone")),
+		Specialties:      strings.TrimSpace(r.FormValue("specialties")),
+		Qualifications:   strings.TrimSpace(r.FormValue("qualifications")),
+		Notes:            strings.TrimSpace(r.FormValue("notes")),
+		IsJudge:          true,
+		OrganizationID:   orgID,
+		OrganizationRole: orgRole,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/admin/judges/"+person.ID, http.StatusSeeOther)
+}
+
+func (a *app) handleAdminJudgeProfile(w http.ResponseWriter, r *http.Request) {
+	data, err := a.adminJudgeProfileData(r.PathValue("personID"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a.render(w, r, "admin_judge.html", data)
+}
+
 func adminDashboardSection(raw string) string {
 	switch strings.TrimSpace(raw) {
 	case "shows", "clubs", "people", "judges", "references":
@@ -167,7 +238,7 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 	type judgeBucket struct {
 		Person       *Person
 		Affiliations map[string]struct{}
-		Shows        []adminJudgeShowView
+		ShowsByKey   map[string]adminJudgeShowView
 	}
 
 	now := dateOnly(time.Now())
@@ -175,6 +246,13 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 	for _, person := range a.store.allPersons() {
 		if person == nil {
 			continue
+		}
+		if person.IsJudge {
+			buckets[person.ID] = &judgeBucket{
+				Person:       person,
+				Affiliations: make(map[string]struct{}),
+				ShowsByKey:   make(map[string]adminJudgeShowView),
+			}
 		}
 		for _, link := range a.store.personOrganizationsByPerson(person.ID) {
 			if link == nil || !strings.Contains(strings.ToLower(strings.TrimSpace(link.Role)), "judge") {
@@ -185,6 +263,7 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 				bucket = &judgeBucket{
 					Person:       person,
 					Affiliations: make(map[string]struct{}),
+					ShowsByKey:   make(map[string]adminJudgeShowView),
 				}
 				buckets[person.ID] = bucket
 			}
@@ -222,15 +301,55 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 				bucket = &judgeBucket{
 					Person:       person,
 					Affiliations: make(map[string]struct{}),
+					ShowsByKey:   make(map[string]adminJudgeShowView),
 				}
 				buckets[person.ID] = bucket
 			}
-			bucket.Shows = append(bucket.Shows, adminJudgeShowView{
+			bucket.ShowsByKey[show.ID] = adminJudgeShowView{
 				ShowName:    show.Name,
 				ShowHref:    "/admin/shows/" + show.ID,
 				ShowDate:    strings.TrimSpace(show.Date),
 				StatusLabel: statusLabel,
-			})
+				RoleLabel:   "Assigned judge",
+			}
+		}
+	}
+
+	for _, show := range a.store.allShows() {
+		if show == nil {
+			continue
+		}
+		statusLabel := "Completed"
+		if showDate, ok := parseShowDate(show.Date); ok && !showDate.Before(now) {
+			statusLabel = "Scheduled"
+		}
+		for _, entry := range a.store.entriesByShow(show.ID) {
+			for _, scorecard := range a.store.scorecardsByEntry(entry.ID) {
+				person, _ := a.store.personByID(scorecard.JudgeID)
+				if person == nil {
+					continue
+				}
+				bucket := buckets[person.ID]
+				if bucket == nil {
+					bucket = &judgeBucket{
+						Person:       person,
+						Affiliations: make(map[string]struct{}),
+						ShowsByKey:   make(map[string]adminJudgeShowView),
+					}
+					buckets[person.ID] = bucket
+				}
+				showView := adminJudgeShowView{
+					ShowName:    show.Name,
+					ShowHref:    "/admin/shows/" + show.ID,
+					ShowDate:    strings.TrimSpace(show.Date),
+					StatusLabel: statusLabel,
+					RoleLabel:   "Scored entries",
+				}
+				if existing, ok := bucket.ShowsByKey[show.ID]; ok && existing.RoleLabel == "Assigned judge" {
+					continue
+				}
+				bucket.ShowsByKey[show.ID] = showView
+			}
 		}
 	}
 
@@ -239,24 +358,18 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 		if bucket == nil || bucket.Person == nil {
 			continue
 		}
-		sort.Slice(bucket.Shows, func(i, j int) bool {
-			leftDate, leftOK := parseShowDate(bucket.Shows[i].ShowDate)
-			rightDate, rightOK := parseShowDate(bucket.Shows[j].ShowDate)
+		shows := make([]adminJudgeShowView, 0, len(bucket.ShowsByKey))
+		for _, show := range bucket.ShowsByKey {
+			shows = append(shows, show)
+		}
+		sort.Slice(shows, func(i, j int) bool {
+			leftDate, leftOK := parseShowDate(shows[i].ShowDate)
+			rightDate, rightOK := parseShowDate(shows[j].ShowDate)
 			if leftOK && rightOK && !leftDate.Equal(rightDate) {
 				return leftDate.After(rightDate)
 			}
-			return bucket.Shows[i].ShowName < bucket.Shows[j].ShowName
+			return shows[i].ShowName < shows[j].ShowName
 		})
-		seenShows := make(map[string]struct{})
-		shows := make([]adminJudgeShowView, 0, len(bucket.Shows))
-		for _, show := range bucket.Shows {
-			key := show.ShowHref + "|" + show.ShowDate
-			if _, ok := seenShows[key]; ok {
-				continue
-			}
-			seenShows[key] = struct{}{}
-			shows = append(shows, show)
-		}
 		affiliations := make([]string, 0, len(bucket.Affiliations))
 		for label := range bucket.Affiliations {
 			affiliations = append(affiliations, label)
@@ -267,12 +380,17 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 			fullName = bucket.Person.Initials
 		}
 		out = append(out, adminJudgePersonView{
-			PersonName:   fullName,
-			PersonHref:   "/people/" + bucket.Person.ID,
-			Email:        strings.TrimSpace(bucket.Person.Email),
-			Initials:     strings.TrimSpace(bucket.Person.Initials),
-			Affiliations: affiliations,
-			Shows:        shows,
+			PersonID:       bucket.Person.ID,
+			PersonName:     fullName,
+			PersonHref:     "/admin/judges/" + bucket.Person.ID,
+			Email:          strings.TrimSpace(bucket.Person.Email),
+			Phone:          strings.TrimSpace(bucket.Person.Phone),
+			Initials:       strings.TrimSpace(bucket.Person.Initials),
+			Specialties:    strings.TrimSpace(bucket.Person.Specialties),
+			Qualifications: strings.TrimSpace(bucket.Person.Qualifications),
+			Notes:          strings.TrimSpace(bucket.Person.Notes),
+			Affiliations:   affiliations,
+			Shows:          shows,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -282,6 +400,92 @@ func (a *app) adminJudgePersonViews() []adminJudgePersonView {
 		return out[i].PersonName < out[j].PersonName
 	})
 	return out
+}
+
+func (a *app) adminJudgeProfileData(personID string) (adminJudgeProfileData, error) {
+	var judge *adminJudgePersonView
+	for _, item := range a.adminJudgePersonViews() {
+		if item.PersonID == personID {
+			copy := item
+			judge = &copy
+			break
+		}
+	}
+	if judge == nil {
+		return adminJudgeProfileData{}, fmt.Errorf("judge not found")
+	}
+
+	var upcoming []adminJudgeShowView
+	var past []adminJudgeShowView
+	now := dateOnly(time.Now())
+	for _, show := range judge.Shows {
+		if showDate, ok := parseShowDate(show.ShowDate); ok && showDate.Before(now) {
+			past = append(past, show)
+			continue
+		}
+		upcoming = append(upcoming, show)
+	}
+
+	firstPickByEntry := make(map[string]adminJudgePickView)
+	for _, show := range a.store.allShows() {
+		if show == nil {
+			continue
+		}
+		for _, entry := range a.store.entriesByShow(show.ID) {
+			if entry == nil || entry.Placement != 1 || entry.Suppressed {
+				continue
+			}
+			var picked bool
+			for _, scorecard := range a.store.scorecardsByEntry(entry.ID) {
+				if scorecard != nil && scorecard.JudgeID == personID {
+					picked = true
+					break
+				}
+			}
+			if !picked {
+				continue
+			}
+			class, _ := a.store.classByID(entry.ClassID)
+			person, _ := a.store.personByID(entry.PersonID)
+			view := adminJudgePickView{
+				EntryName: entry.Name,
+				EntryHref: "/entries/" + entry.ID,
+			}
+			view.ShowName = show.Name
+			view.ShowHref = "/shows/" + show.Slug
+			view.ShowDate = strings.TrimSpace(show.Date)
+			if class != nil {
+				view.ClassLabel = strings.TrimSpace(class.ClassNumber + " · " + class.Title)
+			}
+			if person != nil {
+				view.EntrantLabel = publicPersonLabel(person)
+			}
+			if media := a.store.mediaByEntry(entry.ID); len(media) > 0 {
+				view.MediaPath = "/media/" + media[0].ID
+			}
+			firstPickByEntry[entry.ID] = view
+		}
+	}
+	firstPicks := make([]adminJudgePickView, 0, len(firstPickByEntry))
+	for _, pick := range firstPickByEntry {
+		firstPicks = append(firstPicks, pick)
+	}
+	sort.Slice(firstPicks, func(i, j int) bool {
+		if firstPicks[i].ShowDate == firstPicks[j].ShowDate {
+			return firstPicks[i].EntryName < firstPicks[j].EntryName
+		}
+		return firstPicks[i].ShowDate > firstPicks[j].ShowDate
+	})
+
+	return adminJudgeProfileData{
+		Title:         "Judge Profile: " + judge.PersonName,
+		CurrentPath:   "/admin/judges/" + personID,
+		Sections:      adminDashboardSections("judges"),
+		Judge:         *judge,
+		UpcomingShows: upcoming,
+		PastShows:     past,
+		FirstPicks:    firstPicks,
+	}, nil
 }
 
 func clubAdminSections(organizationID, active string) []accountSectionView {

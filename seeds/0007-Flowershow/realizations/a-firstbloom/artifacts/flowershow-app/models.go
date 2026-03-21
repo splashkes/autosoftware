@@ -51,6 +51,11 @@ type Person struct {
 	LastName          string `json:"last_name"`
 	Initials          string `json:"initials"`
 	Email             string `json:"email,omitempty"`
+	Phone             string `json:"phone,omitempty"`
+	Specialties       string `json:"specialties,omitempty"`
+	Qualifications    string `json:"qualifications,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+	IsJudge           bool   `json:"is_judge,omitempty"`
 	PublicDisplayMode string `json:"public_display_mode,omitempty"`
 }
 
@@ -58,6 +63,11 @@ type PersonInput struct {
 	FirstName         string `json:"first_name"`
 	LastName          string `json:"last_name"`
 	Email             string `json:"email,omitempty"`
+	Phone             string `json:"phone,omitempty"`
+	Specialties       string `json:"specialties,omitempty"`
+	Qualifications    string `json:"qualifications,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+	IsJudge           bool   `json:"is_judge,omitempty"`
 	PublicDisplayMode string `json:"public_display_mode,omitempty"`
 	OrganizationID    string `json:"organization_id,omitempty"`
 	OrganizationRole  string `json:"organization_role,omitempty"`

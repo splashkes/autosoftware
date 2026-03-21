@@ -161,8 +161,8 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 	}
 	for _, id := range sortedMapKeys(mem.persons) {
 		item := mem.persons[id]
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6)`,
-			item.ID, item.FirstName, item.LastName, item.Initials, item.Email, item.PublicDisplayMode); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, phone, specialties, qualifications, notes, is_judge, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+			item.ID, item.FirstName, item.LastName, item.Initials, item.Email, item.Phone, item.Specialties, item.Qualifications, item.Notes, item.IsJudge, item.PublicDisplayMode); err != nil {
 			return fmt.Errorf("insert person projection %s: %w", item.ID, err)
 		}
 	}

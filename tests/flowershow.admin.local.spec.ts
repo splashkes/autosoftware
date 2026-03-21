@@ -101,6 +101,27 @@ test.describe('Flowershow Admin Local', () => {
     await expect(page.locator('#admin-setup-panel')).toContainText('assigned');
   });
 
+  test('admin can create a judge profile from the judge directory', async ({ page }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin?section=judges');
+
+    const firstName = uniqueName('Priya');
+    const emailSlug = firstName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    await page.fill('#judge_first_name', firstName);
+    await page.fill('#judge_last_name', 'Tester');
+    await page.fill('#judge_email', `${emailSlug}@example.com`);
+    await page.fill('#judge_phone', '555-0105');
+    await page.fill('#judge_specialties', 'Dahlias, specimen judging');
+    await page.fill('#judge_qualifications', 'National panel judge');
+    await page.fill('#judge_notes', 'Prefers morning assignments.');
+    await page.getByRole('button', { name: 'Add Judge' }).click();
+
+    await expect(page).toHaveURL(/\/admin\/judges\/person_/);
+    await expect(page.locator('h1')).toContainText(`${firstName} Tester`);
+    await expect(page.locator('body')).toContainText('National panel judge');
+    await expect(page.locator('body')).toContainText('Flowers Chosen First');
+  });
+
   test('show admin uses the shared sidebar shell and switches sidebar links with the active tab', async ({
     page,
   }) => {

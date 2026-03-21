@@ -571,18 +571,18 @@ func (s *memoryStore) resetShowSchedule(showID string) error {
 	}
 
 	s.appendClaim(showID, "show", "show.schedule_reset", map[string]any{
-		"show_id":               showID,
-		"schedule_ids":          sortedKeys(scheduleIDs),
-		"division_ids":          sortedKeys(divisionIDs),
-		"section_ids":           sortedKeys(sectionIDs),
-		"class_ids":             sortedKeys(classIDs),
-		"entry_ids":             sortedKeys(entryIDs),
-		"media_ids":             sortedKeys(mediaIDs),
-		"scorecard_ids":         sortedKeys(scorecardIDs),
-		"criterion_score_ids":   sortedKeys(criterionScoreIDs),
-		"judge_assignment_ids":  sortedKeys(judgeAssignmentIDs),
-		"class_override_ids":    sortedKeys(classOverrideIDs),
-		"source_citation_ids":   sortedKeys(citationIDs),
+		"show_id":              showID,
+		"schedule_ids":         sortedKeys(scheduleIDs),
+		"division_ids":         sortedKeys(divisionIDs),
+		"section_ids":          sortedKeys(sectionIDs),
+		"class_ids":            sortedKeys(classIDs),
+		"entry_ids":            sortedKeys(entryIDs),
+		"media_ids":            sortedKeys(mediaIDs),
+		"scorecard_ids":        sortedKeys(scorecardIDs),
+		"criterion_score_ids":  sortedKeys(criterionScoreIDs),
+		"judge_assignment_ids": sortedKeys(judgeAssignmentIDs),
+		"class_override_ids":   sortedKeys(classOverrideIDs),
+		"source_citation_ids":  sortedKeys(citationIDs),
 	})
 	return nil
 }
@@ -676,6 +676,11 @@ func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
 		LastName:          input.LastName,
 		Initials:          initials,
 		Email:             input.Email,
+		Phone:             strings.TrimSpace(input.Phone),
+		Specialties:       strings.TrimSpace(input.Specialties),
+		Qualifications:    strings.TrimSpace(input.Qualifications),
+		Notes:             strings.TrimSpace(input.Notes),
+		IsJudge:           input.IsJudge,
 		PublicDisplayMode: publicDisplayMode,
 	}
 	s.persons[p.ID] = p
@@ -706,6 +711,11 @@ func (s *memoryStore) updatePerson(id string, input PersonInput) (*Person, error
 	p.FirstName = input.FirstName
 	p.LastName = input.LastName
 	p.Email = input.Email
+	p.Phone = strings.TrimSpace(input.Phone)
+	p.Specialties = strings.TrimSpace(input.Specialties)
+	p.Qualifications = strings.TrimSpace(input.Qualifications)
+	p.Notes = strings.TrimSpace(input.Notes)
+	p.IsJudge = input.IsJudge
 	if strings.TrimSpace(input.PublicDisplayMode) != "" {
 		p.PublicDisplayMode = strings.TrimSpace(input.PublicDisplayMode)
 	}
@@ -2365,10 +2375,20 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
   last_name TEXT NOT NULL,
   initials TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  specialties TEXT NOT NULL DEFAULT '',
+  qualifications TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  is_judge BOOLEAN NOT NULL DEFAULT FALSE,
   public_display_mode TEXT NOT NULL DEFAULT 'initials'
 );
 
 ALTER TABLE as_flowershow_m_persons
+  ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS specialties TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS qualifications TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS is_judge BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_person_organizations (
@@ -2658,6 +2678,11 @@ ALTER TABLE as_flowershow_m_persons
   ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS initials TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS specialties TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS qualifications TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS is_judge BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
 
 ALTER TABLE as_flowershow_m_person_organizations
@@ -2862,8 +2887,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
 	}
 	for _, p := range mem.persons {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
-			p.ID, p.FirstName, p.LastName, p.Initials, p.Email, p.PublicDisplayMode)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, phone, specialties, qualifications, notes, is_judge, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT DO NOTHING`,
+			p.ID, p.FirstName, p.LastName, p.Initials, p.Email, p.Phone, p.Specialties, p.Qualifications, p.Notes, p.IsJudge, p.PublicDisplayMode)
 	}
 	for _, po := range mem.personOrgs {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,

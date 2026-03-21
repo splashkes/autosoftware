@@ -1,0 +1,138 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Judge Profile</div>
+      <h1>{{.Judge.PersonName}}</h1>
+    </div>
+  </div>
+
+  <section class="account-layout">
+    <aside class="card account-sidebar">
+      <div class="card-body">
+        <div class="login-step-kicker">Workspace Navigation</div>
+        <h2 class="card-title">Flowershow Admin</h2>
+        <nav class="account-section-nav">
+          {{range .Sections}}
+          <a href="{{$.BasePath}}{{.Href}}" class="account-section-link {{if .Current}}is-current{{end}}">{{.Label}}</a>
+          {{end}}
+        </nav>
+      </div>
+    </aside>
+
+    <div class="account-main">
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Contact</div>
+          <h2 class="card-title">{{.Judge.PersonName}}</h2>
+          <div class="account-role-list">
+            <div class="account-role-item">
+              <div>
+                <strong>Email</strong>
+                <div class="card-meta">{{if .Judge.Email}}{{.Judge.Email}}{{else}}No email yet{{end}}</div>
+              </div>
+            </div>
+            <div class="account-role-item">
+              <div>
+                <strong>Phone</strong>
+                <div class="card-meta">{{if .Judge.Phone}}{{.Judge.Phone}}{{else}}No phone yet{{end}}</div>
+              </div>
+            </div>
+            <div class="account-role-item">
+              <div>
+                <strong>Specialties</strong>
+                <div class="card-meta">{{if .Judge.Specialties}}{{.Judge.Specialties}}{{else}}No specialties noted yet{{end}}</div>
+              </div>
+            </div>
+            <div class="account-role-item">
+              <div>
+                <strong>Qualifications</strong>
+                <div class="card-meta">{{if .Judge.Qualifications}}{{.Judge.Qualifications}}{{else}}No qualifications recorded yet{{end}}</div>
+              </div>
+            </div>
+            <div class="account-role-item">
+              <div>
+                <strong>Notes</strong>
+                <div class="card-meta">{{if .Judge.Notes}}{{.Judge.Notes}}{{else}}No notes recorded yet{{end}}</div>
+              </div>
+            </div>
+          </div>
+          {{if .Judge.Affiliations}}
+          <div class="club-admin-role-chips">
+            {{range .Judge.Affiliations}}
+            <span class="badge badge-muted">{{.}}</span>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Scheduled</div>
+          <h2 class="card-title">Upcoming Shows</h2>
+          {{if .UpcomingShows}}
+          <div class="admin-judge-show-list">
+            {{range .UpcomingShows}}
+            <a href="{{$.BasePath}}{{.ShowHref}}" class="admin-judge-show-link">
+              <strong>{{.ShowName}}</strong>
+              <span class="card-meta">{{if .ShowDate}}{{.ShowDate}} · {{end}}{{.StatusLabel}}{{if .RoleLabel}} · {{.RoleLabel}}{{end}}</span>
+            </a>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="card-meta">No upcoming show assignments yet.</p>
+          {{end}}
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">History</div>
+          <h2 class="card-title">Past Shows</h2>
+          {{if .PastShows}}
+          <div class="admin-judge-show-list">
+            {{range .PastShows}}
+            <a href="{{$.BasePath}}{{.ShowHref}}" class="admin-judge-show-link">
+              <strong>{{.ShowName}}</strong>
+              <span class="card-meta">{{if .ShowDate}}{{.ShowDate}} · {{end}}{{.StatusLabel}}{{if .RoleLabel}} · {{.RoleLabel}}{{end}}</span>
+            </a>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="card-meta">No past judging history yet.</p>
+          {{end}}
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-body">
+          <div class="login-step-kicker">Selections</div>
+          <h2 class="card-title">Flowers Chosen First</h2>
+          {{if .FirstPicks}}
+          <div class="card-grid">
+            {{range .FirstPicks}}
+            <a href="{{$.BasePath}}{{.EntryHref}}" class="card show-card">
+              {{if .MediaPath}}
+              <div class="show-card-thumb">
+                <img src="{{$.BasePath}}{{.MediaPath}}" alt="">
+              </div>
+              {{end}}
+              <div class="card-body">
+                <h3 class="card-title">{{.EntryName}}</h3>
+                {{if .EntrantLabel}}<div class="card-meta">{{.EntrantLabel}}</div>{{end}}
+                {{if .ClassLabel}}<div class="card-meta">{{.ClassLabel}}</div>{{end}}
+                {{if .ShowName}}<div class="card-meta">{{.ShowName}}{{if .ShowDate}} · {{.ShowDate}}{{end}}</div>{{end}}
+              </div>
+            </a>
+            {{end}}
+          </div>
+          {{else}}
+          <p class="card-meta">No first-place selections recorded for this judge yet.</p>
+          {{end}}
+        </div>
+      </section>
+    </div>
+  </section>
+</section>
+{{end}}
