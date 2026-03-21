@@ -135,12 +135,13 @@ type clubDetailData struct {
 }
 
 type publicClassCard struct {
-	Show       *Show
-	Org        *Organization
-	Class      *ShowClass
-	Featured   showVisualFrame
-	ShowCount  int
-	EntryCount int
+	Show         *Show
+	Org          *Organization
+	Class        *ShowClass
+	Featured     showVisualFrame
+	ShowCount    int
+	EntryCount   int
+	TaxonSummary string
 }
 
 type classesDomainView struct {
@@ -699,12 +700,13 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 			entryCount := classEntryCounts[class.ID]
 			if card == nil {
 				card = &publicClassCard{
-					Show:       show,
-					Org:        org,
-					Class:      class,
-					Featured:   frame,
-					ShowCount:  1,
-					EntryCount: entryCount,
+					Show:         show,
+					Org:          org,
+					Class:        class,
+					Featured:     frame,
+					ShowCount:    1,
+					EntryCount:   entryCount,
+					TaxonSummary: a.classTaxonSummary(class),
 				}
 				cardIndex[cardKey] = card
 				view.Items = append(view.Items, card)
@@ -723,6 +725,7 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 				card.Class = class
 				card.Featured = frame
 				card.EntryCount = entryCount
+				card.TaxonSummary = a.classTaxonSummary(class)
 			}
 		}
 	}
@@ -745,6 +748,31 @@ func (a *app) classesIndexDomains(query string) []*classesDomainView {
 		}
 	}
 	return out
+}
+
+func (a *app) classTaxonSummary(class *ShowClass) string {
+	if class == nil || len(class.TaxonRefs) == 0 {
+		return ""
+	}
+	labels := make([]string, 0, len(class.TaxonRefs))
+	for _, ref := range class.TaxonRefs {
+		taxon, ok := a.store.taxonByID(ref)
+		if !ok || taxon == nil {
+			continue
+		}
+		label := strings.TrimSpace(taxon.Name)
+		if label == "" {
+			continue
+		}
+		labels = append(labels, label)
+	}
+	if len(labels) == 0 {
+		return ""
+	}
+	if len(labels) > 3 {
+		labels = labels[:3]
+	}
+	return strings.Join(labels, ", ")
 }
 
 func parseShowDate(raw string) (time.Time, bool) {

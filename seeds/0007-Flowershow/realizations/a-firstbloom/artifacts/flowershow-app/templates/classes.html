@@ -36,7 +36,13 @@
         <p class="card-meta">{{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}} · {{.ShowCount}} show{{if ne .ShowCount 1}}s{{end}}</p>
         {{with showContextMeta .Show .Org}}<p class="card-meta">{{.}}</p>{{end}}
         {{if .Class.Description}}<p class="card-meta">{{.Class.Description}}</p>{{end}}
-        {{if .Class.SpecimenCount}}<p class="card-meta">{{.Class.SpecimenCount}} {{if .Class.Unit}}{{.Class.Unit}}{{else}}specimen{{if gt .Class.SpecimenCount 1}}s{{end}}{{end}}</p>{{end}}
+        {{if .TaxonSummary}}<p class="card-meta">Taxon: {{.TaxonSummary}}</p>{{end}}
+        {{if .Class.SpecimenCount}}<p class="card-meta">Presentation: {{.Class.SpecimenCount}} {{if .Class.Unit}}{{.Class.Unit}}{{else}}specimen{{if gt .Class.SpecimenCount 1}}s{{end}}{{end}}</p>{{end}}
+        {{if .Class.MeasurementRule}}<p class="card-meta">Measurement: {{.Class.MeasurementRule}}</p>{{end}}
+        {{if .Class.NamingRequirement}}<p class="card-meta">Naming: {{.Class.NamingRequirement}}</p>{{end}}
+        {{if .Class.ContainerRule}}<p class="card-meta">Container: {{.Class.ContainerRule}}</p>{{end}}
+        {{if .Class.EligibilityRule}}<p class="card-meta">Eligibility: {{.Class.EligibilityRule}}</p>{{end}}
+        {{if .Class.ScheduleNotes}}<p class="card-meta">{{.Class.ScheduleNotes}}</p>{{end}}
       </div>
     </a>
     {{end}}

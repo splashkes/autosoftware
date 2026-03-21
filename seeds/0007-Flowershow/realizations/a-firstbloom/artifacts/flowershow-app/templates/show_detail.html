@@ -70,17 +70,19 @@
       {{range .Entries}}
       <tr class="{{placementClass .Entry.Placement}}">
         <td>
-          <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-row-link">
+          <div class="entry-row-link">
             {{if .LeadMedia}}
-            <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-row-thumb">
+            <button type="button" class="entry-row-thumb-button" aria-label="Preview {{.Entry.Name}}" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.Entry.Name}}" data-media-entry="{{.Entry.Name}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
+              <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.Entry.Name}}" class="entry-row-thumb">
+            </button>
             {{else}}
             <span class="entry-row-thumb entry-row-thumb-placeholder">No image</span>
             {{end}}
             <span class="entry-row-copy">
-              <strong>{{.Entry.Name}}</strong>
+              <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.Entry.Name}}</a></strong>
               {{if gt .Entry.Placement 0}}<span class="entry-row-placement">{{placementLabel .Entry.Placement}}</span>{{end}}
             </span>
-          </a>
+          </div>
         </td>
         <td>{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}</td>
         <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
@@ -94,6 +96,28 @@
   <p class="empty-state">No entries yet.</p>
   {{end}}
 </section>
+
+{{if .Entries}}
+<div class="media-lightbox" data-media-lightbox hidden>
+  <div class="media-lightbox-backdrop" data-media-close></div>
+  <div class="media-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Show entry media viewer">
+    <button type="button" class="media-lightbox-nav media-lightbox-nav-prev" aria-label="Previous image" data-media-prev>&larr;</button>
+    <button type="button" class="media-lightbox-nav media-lightbox-nav-next" aria-label="Next image" data-media-next>&rarr;</button>
+    <button type="button" class="media-lightbox-close" aria-label="Close image viewer" data-media-close>&times;</button>
+    <div class="media-lightbox-stage" data-media-lightbox-stage></div>
+    <div class="media-lightbox-meta" data-media-lightbox-meta hidden>
+      <div class="media-lightbox-meta-scrim"></div>
+      <div class="media-lightbox-meta-copy">
+        <strong data-media-lightbox-entry></strong>
+        <span data-media-lightbox-entrant></span>
+        <span data-media-lightbox-class></span>
+        <span data-media-lightbox-class-detail></span>
+        <span data-media-lightbox-show></span>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
 
 {{if .Awards}}
 <section class="section">

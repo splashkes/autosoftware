@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,19 +20,19 @@ func (a *app) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 // --- Dashboard ---
 
 type adminDashboardData struct {
-	Title       string
-	CurrentPath string
+	Title         string
+	CurrentPath   string
 	ActiveSection string
-	Sections    []accountSectionView
-	Shows       []*Show
-	Persons     []*Person
-	Orgs        []*Organization
-	Judges      []adminJudgeShowView
-	References  []adminReferenceLink
-	Awards      []*AwardDefinition
-	Rubrics     []*JudgingRubric
-	SearchQuery string
-	SearchHits  []adminSearchHit
+	Sections      []accountSectionView
+	Shows         []*Show
+	Persons       []*Person
+	Orgs          []*Organization
+	Judges        []adminJudgePersonView
+	References    []adminReferenceLink
+	Awards        []*AwardDefinition
+	Rubrics       []*JudgingRubric
+	SearchQuery   string
+	SearchHits    []adminSearchHit
 }
 
 type adminSearchHit struct {
@@ -43,9 +43,19 @@ type adminSearchHit struct {
 }
 
 type adminJudgeShowView struct {
-	ShowName string
-	ShowHref string
-	Judges   []string
+	ShowName    string
+	ShowHref    string
+	ShowDate    string
+	StatusLabel string
+}
+
+type adminJudgePersonView struct {
+	PersonName   string
+	PersonHref   string
+	Email        string
+	Initials     string
+	Affiliations []string
+	Shows        []adminJudgeShowView
 }
 
 type adminReferenceLink struct {
@@ -114,7 +124,7 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		Shows:         a.store.allShows(),
 		Persons:       a.store.allPersons(),
 		Orgs:          orgs,
-		Judges:        a.adminJudgeShowViews(),
+		Judges:        a.adminJudgePersonViews(),
 		References:    adminReferenceLinks(),
 		Awards:        awards,
 		Rubrics:       a.store.allRubrics(),
@@ -153,26 +163,124 @@ func adminReferenceLinks() []adminReferenceLink {
 	}
 }
 
-func (a *app) adminJudgeShowViews() []adminJudgeShowView {
-	out := make([]adminJudgeShowView, 0)
+func (a *app) adminJudgePersonViews() []adminJudgePersonView {
+	type judgeBucket struct {
+		Person       *Person
+		Affiliations map[string]struct{}
+		Shows        []adminJudgeShowView
+	}
+
+	now := dateOnly(time.Now())
+	buckets := map[string]*judgeBucket{}
+	for _, person := range a.store.allPersons() {
+		if person == nil {
+			continue
+		}
+		for _, link := range a.store.personOrganizationsByPerson(person.ID) {
+			if link == nil || !strings.Contains(strings.ToLower(strings.TrimSpace(link.Role)), "judge") {
+				continue
+			}
+			bucket := buckets[person.ID]
+			if bucket == nil {
+				bucket = &judgeBucket{
+					Person:       person,
+					Affiliations: make(map[string]struct{}),
+				}
+				buckets[person.ID] = bucket
+			}
+			orgName := link.OrganizationID
+			if org, ok := a.store.organizationByID(link.OrganizationID); ok && org != nil {
+				orgName = org.Name
+			}
+			roleLabel := strings.TrimSpace(link.Role)
+			if roleLabel == "" {
+				roleLabel = "judge"
+			}
+			bucket.Affiliations[orgName+" · "+roleLabel] = struct{}{}
+		}
+	}
+
 	for _, show := range a.store.allShows() {
 		if show == nil {
 			continue
 		}
-		item := adminJudgeShowView{
-			ShowName: show.Name,
-			ShowHref: "/admin/shows/" + show.ID,
+		statusLabel := strings.Title(strings.TrimSpace(show.Status))
+		if showDate, ok := parseShowDate(show.Date); ok {
+			if showDate.Before(now) {
+				statusLabel = "Completed"
+			} else {
+				statusLabel = "Scheduled"
+			}
 		}
 		for _, assignment := range a.store.judgesByShow(show.ID) {
 			person, _ := a.store.personByID(assignment.PersonID)
-			if person != nil {
-				item.Judges = append(item.Judges, strings.TrimSpace(person.FirstName+" "+person.LastName))
+			if person == nil {
+				continue
 			}
+			bucket := buckets[person.ID]
+			if bucket == nil {
+				bucket = &judgeBucket{
+					Person:       person,
+					Affiliations: make(map[string]struct{}),
+				}
+				buckets[person.ID] = bucket
+			}
+			bucket.Shows = append(bucket.Shows, adminJudgeShowView{
+				ShowName:    show.Name,
+				ShowHref:    "/admin/shows/" + show.ID,
+				ShowDate:    strings.TrimSpace(show.Date),
+				StatusLabel: statusLabel,
+			})
 		}
-		sort.Strings(item.Judges)
-		out = append(out, item)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ShowName < out[j].ShowName })
+
+	out := make([]adminJudgePersonView, 0, len(buckets))
+	for _, bucket := range buckets {
+		if bucket == nil || bucket.Person == nil {
+			continue
+		}
+		sort.Slice(bucket.Shows, func(i, j int) bool {
+			leftDate, leftOK := parseShowDate(bucket.Shows[i].ShowDate)
+			rightDate, rightOK := parseShowDate(bucket.Shows[j].ShowDate)
+			if leftOK && rightOK && !leftDate.Equal(rightDate) {
+				return leftDate.After(rightDate)
+			}
+			return bucket.Shows[i].ShowName < bucket.Shows[j].ShowName
+		})
+		seenShows := make(map[string]struct{})
+		shows := make([]adminJudgeShowView, 0, len(bucket.Shows))
+		for _, show := range bucket.Shows {
+			key := show.ShowHref + "|" + show.ShowDate
+			if _, ok := seenShows[key]; ok {
+				continue
+			}
+			seenShows[key] = struct{}{}
+			shows = append(shows, show)
+		}
+		affiliations := make([]string, 0, len(bucket.Affiliations))
+		for label := range bucket.Affiliations {
+			affiliations = append(affiliations, label)
+		}
+		sort.Strings(affiliations)
+		fullName := strings.TrimSpace(bucket.Person.FirstName + " " + bucket.Person.LastName)
+		if fullName == "" {
+			fullName = bucket.Person.Initials
+		}
+		out = append(out, adminJudgePersonView{
+			PersonName:   fullName,
+			PersonHref:   "/people/" + bucket.Person.ID,
+			Email:        strings.TrimSpace(bucket.Person.Email),
+			Initials:     strings.TrimSpace(bucket.Person.Initials),
+			Affiliations: affiliations,
+			Shows:        shows,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].PersonName == out[j].PersonName {
+			return out[i].Email < out[j].Email
+		}
+		return out[i].PersonName < out[j].PersonName
+	})
 	return out
 }
 
@@ -335,7 +443,7 @@ func (a *app) clubAdminData(organizationID, activeSection string, user *UserIden
 				FullName:         strings.TrimSpace(person.FirstName + " " + person.LastName),
 				Email:            person.Email,
 				OrganizationRole: link.Role,
-				PermissionRoles:  append([]string(nil), func() []string {
+				PermissionRoles: append([]string(nil), func() []string {
 					if roles := roleAssignments[person.ID]; len(roles) > 0 {
 						return roles
 					}
@@ -403,7 +511,12 @@ func (a *app) handleAdminClubInviteCreate(w http.ResponseWriter, r *http.Request
 		Email:            r.FormValue("email"),
 		OrganizationRole: r.FormValue("organization_role"),
 		PermissionRoles:  r.Form["permission_roles"],
-		InvitedBySubject: func() string { if user != nil { return user.SubjectID }; return "" }(),
+		InvitedBySubject: func() string {
+			if user != nil {
+				return user.SubjectID
+			}
+			return ""
+		}(),
 		InvitedByName: func() string {
 			if user == nil {
 				return ""
@@ -482,7 +595,12 @@ func (a *app) handleAdminClubCreate(w http.ResponseWriter, r *http.Request) {
 			Email:            email,
 			OrganizationRole: "admin",
 			PermissionRoles:  []string{"organization_admin"},
-			InvitedBySubject: func() string { if user != nil { return user.SubjectID }; return "" }(),
+			InvitedBySubject: func() string {
+				if user != nil {
+					return user.SubjectID
+				}
+				return ""
+			}(),
 			InvitedByName: func() string {
 				if user == nil {
 					return ""
@@ -536,9 +654,9 @@ func (a *app) inferOrganizationLevel(parentID string) string {
 
 func (a *app) handleAdminShowNew(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "admin_show_new.html", map[string]any{
-		"Title":       "New Show",
-		"CurrentPath": "/admin/shows/new",
-		"Orgs":        a.store.allOrganizations(),
+		"Title":         "New Show",
+		"CurrentPath":   "/admin/shows/new",
+		"Orgs":          a.store.allOrganizations(),
 		"DefaultSeason": time.Now().Format("2006"),
 	})
 }

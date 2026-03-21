@@ -148,17 +148,35 @@
       <section class="card">
         <div class="card-body">
           <div class="login-step-kicker">Judges</div>
-          <h2 class="card-title">Judges By Show</h2>
+          <h2 class="card-title">Judge Directory</h2>
           {{if .Judges}}
           <div class="account-role-list">
             {{range .Judges}}
-            <div class="account-role-item">
+            <div class="account-role-item admin-judge-card">
               <div>
-                <strong><a href="{{$.BasePath}}{{.ShowHref}}">{{.ShowName}}</a></strong>
-                {{if .Judges}}
-                <div class="card-meta">{{range $i, $judge := .Judges}}{{if $i}}, {{end}}{{$judge}}{{end}}</div>
+                <strong><a href="{{$.BasePath}}{{.PersonHref}}">{{.PersonName}}</a></strong>
+                <div class="card-meta">
+                  {{if .Email}}{{.Email}}{{else}}No email yet{{end}}
+                  {{if .Initials}} · {{.Initials}}{{end}}
+                </div>
+                {{if .Affiliations}}
+                <div class="club-admin-role-chips">
+                  {{range .Affiliations}}
+                  <span class="badge badge-muted">{{.}}</span>
+                  {{end}}
+                </div>
+                {{end}}
+                {{if .Shows}}
+                <div class="admin-judge-show-list">
+                  {{range .Shows}}
+                  <a href="{{$.BasePath}}{{.ShowHref}}" class="admin-judge-show-link">
+                    <strong>{{.ShowName}}</strong>
+                    <span class="card-meta">{{if .ShowDate}}{{.ShowDate}} · {{end}}{{.StatusLabel}}</span>
+                  </a>
+                  {{end}}
+                </div>
                 {{else}}
-                <div class="card-meta">No judges assigned yet.</div>
+                <div class="card-meta">No assigned shows yet.</div>
                 {{end}}
               </div>
             </div>
