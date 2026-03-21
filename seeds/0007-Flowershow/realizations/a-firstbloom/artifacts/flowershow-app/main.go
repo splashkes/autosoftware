@@ -163,6 +163,7 @@ func main() {
 
 	// Admin entries
 	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireCapabilityPage("entries.manage", a.handleAdminEntryCreate))
+	mux.HandleFunc("POST /admin/entries/{entryID}", a.requireCapabilityPage("entries.manage", a.handleAdminEntryUpdate))
 	mux.HandleFunc("POST /admin/entries/{entryID}/move", a.requireCapabilityPage("entries.manage", a.handleAdminEntryMove))
 	mux.HandleFunc("POST /admin/entries/{entryID}/entrant", a.requireCapabilityPage("entries.manage", a.handleAdminEntryReassign))
 	mux.HandleFunc("POST /admin/entries/{entryID}/delete", a.requireCapabilityPage("entries.manage", a.handleAdminEntryDelete))

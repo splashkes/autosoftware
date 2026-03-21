@@ -291,23 +291,19 @@ function flowershowOpenIntakeModal(modal, trigger) {
     if (personIDInput) personIDInput.value = '';
     flowershowRenderEntrantResults(entrantInput);
   } else {
-    const uploadForm = modal.querySelector('[data-intake-upload-form]');
-    const resultsForm = modal.querySelector('[data-intake-results-form]');
-    const entrant = modal.querySelector('[data-intake-existing-entrant]');
-    const entry = modal.querySelector('[data-intake-existing-entry]');
-    const classInfo = modal.querySelector('[data-intake-existing-class]');
-    const entryLink = modal.querySelector('[data-intake-existing-link]');
-    if (uploadForm) {
-      uploadForm.reset();
-      uploadForm.action = trigger.dataset.intakeUploadAction || '';
-      flowershowResetIntakeUploadState(uploadForm);
-    }
-    if (resultsForm) {
-      const placementInput = resultsForm.querySelector('[data-intake-placement-input]');
-      const specialStatusInput = resultsForm.querySelector('[data-intake-special-status-input]');
-      const awardInput = resultsForm.querySelector('[data-intake-award-input]');
-      const awardSelect = resultsForm.querySelector('[data-intake-award-select]');
-      resultsForm.action = trigger.dataset.intakeResultsAction || '';
+    const editForm = modal.querySelector('[data-intake-edit-form]');
+    if (editForm) {
+      const placementInput = editForm.querySelector('[data-intake-placement-input]');
+      const specialStatusInput = editForm.querySelector('[data-intake-special-status-input]');
+      const awardInput = editForm.querySelector('[data-intake-award-input]');
+      const awardSelect = editForm.querySelector('[data-intake-award-select]');
+      const entrantInput = editForm.querySelector('[data-intake-entrant-input]');
+      const personIDInput = editForm.querySelector('[data-intake-person-id-input]');
+      const classSelect = editForm.querySelector('[data-intake-existing-class-select]');
+      const nameInput = editForm.querySelector('[data-intake-existing-name-input]');
+      const notesInput = editForm.querySelector('[data-intake-existing-notes-input]');
+      editForm.reset();
+      editForm.action = trigger.dataset.intakeUpdateAction || '';
       if (placementInput) {
         placementInput.value = trigger.dataset.intakePlacement || '0';
       }
@@ -320,17 +316,30 @@ function flowershowOpenIntakeModal(modal, trigger) {
       if (awardSelect) {
         awardSelect.value = trigger.dataset.intakeAwardId || '';
       }
-      const awardToggle = resultsForm.querySelector('[data-intake-award-toggle]');
+      if (entrantInput) {
+        entrantInput.value = trigger.dataset.intakeEntrant || '';
+        flowershowRenderEntrantResults(entrantInput);
+      }
+      if (personIDInput) {
+        personIDInput.value = trigger.dataset.intakePersonId || '';
+      }
+      if (classSelect) {
+        classSelect.value = trigger.dataset.intakeClassId || '';
+      }
+      if (nameInput) {
+        nameInput.value = trigger.dataset.intakeEntryName || '';
+      }
+      if (notesInput) {
+        notesInput.value = trigger.dataset.intakeNotes || '';
+      }
+      const awardToggle = editForm.querySelector('[data-intake-award-toggle]');
       if (awardToggle) {
         awardToggle.dataset.forceOpen = trigger.dataset.intakeSpecialStatus === 'true' ? 'true' : '';
       }
-      flowershowRefreshPlacementButtons(resultsForm);
-      flowershowRefreshAwardState(resultsForm);
+      flowershowResetIntakeUploadState(editForm);
+      flowershowRefreshPlacementButtons(editForm);
+      flowershowRefreshAwardState(editForm);
     }
-    if (entrant) entrant.textContent = trigger.dataset.intakeEntrant || '';
-    if (entry) entry.textContent = trigger.dataset.intakeEntryName || '';
-    if (classInfo) classInfo.textContent = classLabel;
-    if (entryLink) entryLink.href = trigger.dataset.intakeEntryHref || '#';
   }
 
   modal.hidden = false;
@@ -353,8 +362,7 @@ function flowershowBindIntakeModal(modal) {
     }
   });
 
-  const entrantInput = modal.querySelector('[data-intake-entrant-input]');
-  if (entrantInput) {
+  modal.querySelectorAll('[data-intake-entrant-input]').forEach(function(entrantInput) {
     entrantInput.addEventListener('input', function() {
       flowershowSyncEntrantLookup(entrantInput);
       flowershowRenderEntrantResults(entrantInput);
@@ -375,9 +383,9 @@ function flowershowBindIntakeModal(modal) {
         }
       }, 120);
     });
-  }
+  });
   flowershowBindIntakeForm(modal.querySelector('[data-intake-entry-form]'), { isNew: true });
-  flowershowBindIntakeForm(modal.querySelector('[data-intake-upload-form]'), { isNew: false });
+  flowershowBindIntakeForm(modal.querySelector('[data-intake-edit-form]'), { isNew: false });
   flowershowBindIntakeResultsForm(modal.querySelector('[data-intake-results-form]'));
 }
 
@@ -776,15 +784,15 @@ function flowershowBindIntakeCaptureButton(button) {
 }
 
 function flowershowBindIntakeForm(form, options) {
-  if (!form || form.dataset.bound === 'true') return;
-  form.dataset.bound = 'true';
+  if (!form || form.dataset.intakeFormBound === 'true') return;
+  form.dataset.intakeFormBound = 'true';
   flowershowRenderIntakeUploadQueue(form);
   form.querySelectorAll('[data-intake-media-button]').forEach(flowershowBindIntakeCaptureButton);
   form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
   form.addEventListener('submit', function(event) {
     event.preventDefault();
     const entrantInput = form.querySelector('[data-intake-entrant-input]');
-    if (options && options.isNew && entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
+    if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
       flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
       return;
     }
@@ -793,8 +801,8 @@ function flowershowBindIntakeForm(form, options) {
 }
 
 function flowershowBindIntakeResultsForm(form) {
-  if (!form || form.dataset.bound === 'true') return;
-  form.dataset.bound = 'true';
+  if (!form || form.dataset.intakeResultsBound === 'true') return;
+  form.dataset.intakeResultsBound = 'true';
   const placementInput = form.querySelector('[data-intake-placement-input]');
   const specialInput = form.querySelector('[data-intake-special-status-input]');
   const awardInput = form.querySelector('[data-intake-award-input]');

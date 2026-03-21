@@ -1245,6 +1245,76 @@ func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 	a.respondAdminSectionOrRedirect(w, r, showID, "intake")
 }
 
+func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
+	entryID := r.PathValue("entryID")
+	entry, ok := a.store.entryByID(entryID)
+	if !ok || entry == nil {
+		http.NotFound(w, r)
+		return
+	}
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(maxFormMemory); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		if classID := strings.TrimSpace(r.FormValue("class_id")); classID != "" {
+			if class, ok := a.store.classByID(classID); ok && class != nil {
+				name = strings.TrimSpace(class.Title)
+			}
+		}
+	}
+	updated, err := a.store.updateEntry(entryID, EntryInput{
+		ShowID:   entry.ShowID,
+		ClassID:  r.FormValue("class_id"),
+		PersonID: r.FormValue("person_id"),
+		Name:     name,
+		Notes:    r.FormValue("notes"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	placement, _ := strconv.Atoi(r.FormValue("placement"))
+	points, _ := strconv.ParseFloat(r.FormValue("points"), 64)
+	specialStatus := r.FormValue("special_status") == "true" || r.FormValue("special_status") == "on"
+	if points == 0 {
+		pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
+		points = pointsMap[placement]
+	}
+	if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.MultipartForm != nil {
+		for _, header := range r.MultipartForm.File["media"] {
+			media, err := a.media.Store(r.Context(), entryID, header)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if _, err := a.store.attachMedia(*media); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry updated</div>`)
+	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
+	a.publishShowSummary(entry.ShowID)
+	section := strings.TrimSpace(r.FormValue("section"))
+	if section == "" {
+		section = "intake"
+	}
+	a.respondAdminSectionOrRedirect(w, r, updated.ShowID, section)
+}
+
 func (a *app) handleAdminEntryMove(w http.ResponseWriter, r *http.Request) {
 	entryID := r.PathValue("entryID")
 	r.ParseForm()

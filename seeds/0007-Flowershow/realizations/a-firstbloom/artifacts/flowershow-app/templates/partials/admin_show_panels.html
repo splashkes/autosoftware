@@ -57,6 +57,7 @@
                     data-intake-entry-id="{{.Entry.ID}}"
                     data-intake-entry-name="{{.Entry.Name}}"
                     data-intake-entrant="{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}"
+                    data-intake-person-id="{{.Entry.PersonID}}"
                     data-intake-class-id="{{if .Class}}{{.Class.ID}}{{end}}"
                     data-intake-class-label="{{if .Class}}{{.Class.ClassNumber}} — {{.Class.Title}}{{end}}"
                     data-intake-class-number="{{if .Class}}{{.Class.ClassNumber}}{{end}}"
@@ -74,6 +75,7 @@
                     data-intake-special-status="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}"
                     data-intake-award-id="{{if .SpecialAward}}{{.SpecialAward.ID}}{{end}}"
                     data-intake-upload-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media"
+                    data-intake-update-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}"
                     data-intake-results-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/results"
                     data-intake-entry-href="{{$.BasePath}}/entries/{{.Entry.ID}}">
                     <span class="intake-entry-visual">
@@ -200,36 +202,50 @@
           </div>
 
           <div data-intake-existing-panel hidden>
-            <div class="account-role-list intake-detail-list">
-              <div class="account-role-item">
-                <div>
-                  <strong>Entrant</strong>
-                  <div class="card-meta" data-intake-existing-entrant></div>
-                </div>
-              </div>
-              <div class="account-role-item">
-                <div>
-                  <strong>Entry</strong>
-                  <div class="card-meta" data-intake-existing-entry></div>
-                </div>
-              </div>
-              <div class="account-role-item">
-                <div>
-                  <strong>Class</strong>
-                  <div class="card-meta" data-intake-existing-class></div>
-                </div>
-              </div>
-            </div>
             <form
               method="POST"
               action=""
+              enctype="multipart/form-data"
               class="form"
               data-target="#admin-intake-panel"
+              data-intake-edit-form
               data-intake-results-form>
               <input type="hidden" name="section" value="intake">
               <input type="hidden" name="placement" value="0" data-intake-placement-input>
               <input type="hidden" name="special_status" value="false" data-intake-special-status-input>
               <input type="hidden" name="award_id" value="" data-intake-award-input>
+              <div class="form-group">
+                <label>Entrant</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  placeholder="Start typing a full name"
+                  data-intake-entrant-list="intake-entrant-options-existing"
+                  data-intake-entrant-input
+                  autocomplete="off"
+                  required>
+                <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+                <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
+                <datalist id="intake-entrant-options-existing">
+                  {{range .EntrantCandidates}}
+                  <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
+                  {{end}}
+                </datalist>
+              </div>
+              <div class="form-group">
+                <label>Class</label>
+                <select name="class_id" class="form-input" data-intake-existing-class-select required>
+                  {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}}: {{.Title}}{{if .Description}} · {{.Description}}{{end}}</option>{{end}}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Entry name</label>
+                <input type="text" name="name" class="form-input" data-intake-existing-name-input placeholder="Optional cultivar or display name">
+              </div>
+              <div class="form-group">
+                <label>Notes</label>
+                <input type="text" name="notes" class="form-input" data-intake-existing-notes-input placeholder="Optional notes">
+              </div>
               <div class="form-group">
                 <label>Result</label>
                 <div class="intake-placement-actions">
@@ -251,19 +267,8 @@
                   {{end}}
                 </div>
               </div>
-              <button type="submit" class="btn btn-primary">Save Result</button>
-            </form>
-            <form
-              method="POST"
-              action=""
-              enctype="multipart/form-data"
-              data-photo-add-form
-              data-target="#admin-intake-panel"
-              class="form"
-              data-intake-upload-form>
-              <input type="hidden" name="section" value="intake">
               <div class="form-group">
-                <label>Add more media</label>
+                <label>Add media</label>
                 <div class="intake-capture-actions">
                   <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
                   <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
@@ -272,11 +277,8 @@
                 <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
-              <button type="submit" class="btn btn-primary">Upload Media</button>
+              <button type="submit" class="btn btn-primary">Save Entry</button>
             </form>
-            <div class="show-actions">
-              <a href="#" class="btn btn-outline" data-intake-existing-link>Open public entry</a>
-            </div>
           </div>
         </div>
       </div>
