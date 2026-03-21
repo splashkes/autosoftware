@@ -31,6 +31,7 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"entry.deleted":                  {},
 	"entry.visibility_set":           {},
 	"entry.placement_set":            {},
+	"entry.special_status_set":       {},
 	"show_credit.created":            {},
 	"show_credit.deleted":            {},
 	"media.attached":                 {},
@@ -247,6 +248,18 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 			if item, ok := fresh.entries[claim.ObjectID]; ok {
 				item.Placement = payload.Placement
 				item.Points = payload.Points
+			}
+		case "entry.special_status_set":
+			payload, err := decodeFlowershowClaimPayload[struct {
+				SpecialStatus bool   `json:"special_status"`
+				AwardID       string `json:"award_id"`
+			}](claim)
+			if err != nil {
+				return nil, err
+			}
+			if item, ok := fresh.entries[claim.ObjectID]; ok {
+				item.SpecialStatus = payload.SpecialStatus
+				item.SpecialAwardID = payload.AwardID
 			}
 		case "show_credit.created":
 			item, err := decodeFlowershowClaimPayload[ShowCredit](claim)

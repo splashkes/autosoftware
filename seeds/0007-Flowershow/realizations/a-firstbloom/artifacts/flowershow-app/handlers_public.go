@@ -822,6 +822,7 @@ type entryView struct {
 	Entry                *Entry
 	Person               *Person
 	Class                *ShowClass
+	SpecialAward         *AwardDefinition
 	Media                []*Media
 	LeadMedia            *Media
 	ClassTableDetails    []string

@@ -58,9 +58,23 @@
                     data-intake-entry-name="{{.Entry.Name}}"
                     data-intake-entrant="{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}"
                     data-intake-class-id="{{if .Class}}{{.Class.ID}}{{end}}"
-                    data-intake-class-label="{{if .Class}}{{.Class.ClassNumber}}: {{.Class.Title}}{{end}}"
+                    data-intake-class-label="{{if .Class}}{{.Class.ClassNumber}} — {{.Class.Title}}{{end}}"
+                    data-intake-class-number="{{if .Class}}{{.Class.ClassNumber}}{{end}}"
+                    data-intake-class-title="{{if .Class}}{{.Class.Title}}{{end}}"
+                    data-intake-class-description="{{if .Class}}{{.Class.Description}}{{end}}"
+                    data-intake-class-specimen-count="{{if .Class}}{{.Class.SpecimenCount}}{{end}}"
+                    data-intake-class-unit="{{if .Class}}{{.Class.Unit}}{{end}}"
+                    data-intake-class-measurement-rule="{{if .Class}}{{.Class.MeasurementRule}}{{end}}"
+                    data-intake-class-naming-requirement="{{if .Class}}{{.Class.NamingRequirement}}{{end}}"
+                    data-intake-class-container-rule="{{if .Class}}{{.Class.ContainerRule}}{{end}}"
+                    data-intake-class-eligibility-rule="{{if .Class}}{{.Class.EligibilityRule}}{{end}}"
+                    data-intake-class-schedule-notes="{{if .Class}}{{.Class.ScheduleNotes}}{{end}}"
                     data-intake-notes="{{.Entry.Notes}}"
+                    data-intake-placement="{{.Entry.Placement}}"
+                    data-intake-special-status="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}"
+                    data-intake-award-id="{{if .SpecialAward}}{{.SpecialAward.ID}}{{end}}"
                     data-intake-upload-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media"
+                    data-intake-results-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/results"
                     data-intake-entry-href="{{$.BasePath}}/entries/{{.Entry.ID}}">
                     <span class="intake-entry-visual">
                       {{with primaryMedia .Media}}
@@ -72,6 +86,11 @@
                     <span class="intake-entry-meta">
                       <strong>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Entry.Name}}{{end}}</strong>
                       <span class="card-meta">{{.Entry.Name}}{{if not .Media}} · needs photo{{end}}</span>
+                      {{if entryWorkflowBadges .}}
+                      <span class="tag-list">
+                        {{range entryWorkflowBadges .}}<span class="tag">{{.}}</span>{{end}}
+                      </span>
+                      {{end}}
                     </span>
                   </button>
                   {{end}}
@@ -81,7 +100,17 @@
                     data-intake-modal-open
                     data-intake-mode="new"
                     data-intake-class-id="{{.Class.ID}}"
-                    data-intake-class-label="{{.Class.ClassNumber}}: {{.Class.Title}}"
+                    data-intake-class-label="{{.Class.ClassNumber}} — {{.Class.Title}}"
+                    data-intake-class-number="{{.Class.ClassNumber}}"
+                    data-intake-class-title="{{.Class.Title}}"
+                    data-intake-class-description="{{.Class.Description}}"
+                    data-intake-class-specimen-count="{{.Class.SpecimenCount}}"
+                    data-intake-class-unit="{{.Class.Unit}}"
+                    data-intake-class-measurement-rule="{{.Class.MeasurementRule}}"
+                    data-intake-class-naming-requirement="{{.Class.NamingRequirement}}"
+                    data-intake-class-container-rule="{{.Class.ContainerRule}}"
+                    data-intake-class-eligibility-rule="{{.Class.EligibilityRule}}"
+                    data-intake-class-schedule-notes="{{.Class.ScheduleNotes}}"
                     data-intake-create-action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/entries">
                     <span class="intake-entry-visual intake-entry-plus-wrap">
                       <span class="intake-entry-plus">+</span>
@@ -110,7 +139,15 @@
           <div class="intake-modal-header">
             <div class="login-step-kicker">Onsite intake</div>
             <h3 id="intake-modal-title" class="card-title" data-intake-modal-title>Add entry</h3>
-            <p class="card-meta" data-intake-modal-subtitle></p>
+            <div class="intake-class-hero" data-intake-class-hero hidden>
+              <div class="intake-class-number-display" data-intake-class-number-display></div>
+              <div class="intake-class-hero-copy">
+                <div class="intake-class-title-display" data-intake-class-title-display></div>
+                <p class="card-meta" data-intake-class-description-display hidden></p>
+                <div class="intake-class-detail-display" data-intake-class-detail-display></div>
+                <p class="card-meta" data-intake-class-notes-display hidden></p>
+              </div>
+            </div>
           </div>
 
           <div data-intake-new-panel>
@@ -123,20 +160,17 @@
               data-intake-entry-form>
               <input type="hidden" name="class_id" value="" data-intake-class-id-input>
               <div class="form-group">
-                <label>Class</label>
-                <input type="text" class="form-input" value="" data-intake-class-label-input readonly>
-              </div>
-              <div class="form-group">
                 <label>Entrant</label>
                 <input
                   type="text"
                   class="form-input"
-                  list="intake-entrant-options"
                   placeholder="Start typing a full name"
+                  data-intake-entrant-list="intake-entrant-options"
                   data-intake-entrant-input
                   autocomplete="off"
                   required>
                 <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+                <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
                 <datalist id="intake-entrant-options">
                   {{range .EntrantCandidates}}
                   <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
@@ -152,14 +186,13 @@
                 <input type="text" name="notes" class="form-input" placeholder="Optional notes">
               </div>
               <div class="form-group">
-                <label>Capture media</label>
+                <label>Add media</label>
                 <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
                 </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
-                <p class="card-meta">Camera capture prefers JPEG or PNG photos and compressed mobile video.</p>
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
               <button type="submit" class="btn btn-primary">Save Entry</button>
@@ -190,6 +223,39 @@
             <form
               method="POST"
               action=""
+              class="form"
+              data-target="#admin-intake-panel"
+              data-intake-results-form>
+              <input type="hidden" name="section" value="intake">
+              <input type="hidden" name="placement" value="0" data-intake-placement-input>
+              <input type="hidden" name="special_status" value="false" data-intake-special-status-input>
+              <input type="hidden" name="award_id" value="" data-intake-award-input>
+              <div class="form-group">
+                <label>Result</label>
+                <div class="intake-placement-actions">
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1</button>
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2</button>
+                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3</button>
+                  <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★</button>
+                </div>
+                <div class="form-group" data-intake-award-group hidden>
+                  <label>Link award</label>
+                  {{if .Awards}}
+                  <select class="form-input" data-intake-award-select>
+                    <option value="">Select award...</option>
+                    {{range .Awards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                  </select>
+                  <p class="card-meta">Use the star for special status and optionally link the entry to a show or club award.</p>
+                  {{else}}
+                  <p class="card-meta">No awards are defined for this show yet.</p>
+                  {{end}}
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Result</button>
+            </form>
+            <form
+              method="POST"
+              action=""
               enctype="multipart/form-data"
               data-photo-add-form
               data-target="#admin-intake-panel"
@@ -199,12 +265,11 @@
               <div class="form-group">
                 <label>Add more media</label>
                 <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
                 </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
-                <p class="card-meta">Use mobile capture for quick onsite updates. New thumbnails will broadcast to the live workspace when ready.</p>
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
               <button type="submit" class="btn btn-primary">Upload Media</button>

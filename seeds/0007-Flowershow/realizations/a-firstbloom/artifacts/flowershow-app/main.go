@@ -166,6 +166,7 @@ func main() {
 	mux.HandleFunc("POST /admin/entries/{entryID}/move", a.requireCapabilityPage("entries.manage", a.handleAdminEntryMove))
 	mux.HandleFunc("POST /admin/entries/{entryID}/entrant", a.requireCapabilityPage("entries.manage", a.handleAdminEntryReassign))
 	mux.HandleFunc("POST /admin/entries/{entryID}/delete", a.requireCapabilityPage("entries.manage", a.handleAdminEntryDelete))
+	mux.HandleFunc("POST /admin/entries/{entryID}/results", a.requireCapabilityPage("entries.manage", a.handleAdminEntryResults))
 	mux.HandleFunc("POST /admin/entries/{entryID}/placement", a.requireCapabilityPage("entries.manage", a.handleAdminEntryPlacement))
 	mux.HandleFunc("POST /admin/entries/{entryID}/visibility", a.requireCapabilityPage("entries.manage", a.handleAdminEntryVisibility))
 	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireCapabilityPage("media.manage", a.handleMediaUpload))
@@ -532,6 +533,11 @@ var templateFuncMap = template.FuncMap{
 			}
 		} else if entry.Entry.Points > 0 {
 			out = append(out, "scored")
+		}
+		if entry.SpecialAward != nil && strings.TrimSpace(entry.SpecialAward.Name) != "" {
+			out = append(out, "★ "+entry.SpecialAward.Name)
+		} else if entry.Entry.SpecialStatus {
+			out = append(out, "★ special")
 		}
 		return out
 	},

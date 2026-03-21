@@ -126,24 +126,98 @@ func (a *app) availableJudgesForShow(showID string) []*Person {
 }
 
 func (a *app) personLookupViewsForShow(showID, query string) []*personLookupView {
-	items := a.store.lookupPersonsForShow(showID, query)
-	out := make([]*personLookupView, 0, len(items))
-	for _, item := range items {
-		person, ok := a.store.personByID(item.PersonID)
-		if !ok {
+	show, _ := a.store.showByID(showID)
+	query = strings.ToLower(strings.TrimSpace(query))
+	persons := append([]*Person(nil), a.store.allPersons()...)
+	sort.Slice(persons, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(persons[i].LastName + " " + persons[i].FirstName + " " + persons[i].Email))
+		right := strings.ToLower(strings.TrimSpace(persons[j].LastName + " " + persons[j].FirstName + " " + persons[j].Email))
+		return left < right
+	})
+
+	out := make([]*personLookupView, 0, len(persons))
+	for _, person := range persons {
+		if person == nil {
 			continue
 		}
-		org, _ := a.store.organizationByID(item.OrganizationID)
-		orgName := item.OrganizationID
-		if org != nil {
-			orgName = org.Name
+		links := a.store.personOrganizationsByPerson(person.ID)
+		var preferred *PersonOrganization
+		for _, link := range links {
+			if link == nil {
+				continue
+			}
+			if preferred == nil {
+				copy := *link
+				preferred = &copy
+			}
+			if show != nil && link.OrganizationID == show.OrganizationID {
+				copy := *link
+				preferred = &copy
+				break
+			}
 		}
-		label := fmt.Sprintf("%s %s · %s · %s", person.FirstName, person.LastName, item.Role, orgName)
+
+		fullName := strings.TrimSpace(strings.TrimSpace(person.FirstName) + " " + strings.TrimSpace(person.LastName))
+		if fullName == "" {
+			fullName = strings.TrimSpace(person.Initials)
+		}
+		if fullName == "" {
+			fullName = person.ID
+		}
+
+		orgName := ""
+		role := ""
+		if preferred != nil {
+			role = strings.TrimSpace(preferred.Role)
+			org, _ := a.store.organizationByID(preferred.OrganizationID)
+			if org != nil {
+				orgName = strings.TrimSpace(org.Name)
+			}
+			if orgName == "" {
+				orgName = strings.TrimSpace(preferred.OrganizationID)
+			}
+		}
+
+		haystackParts := []string{
+			fullName,
+			person.Email,
+			person.Initials,
+			person.Phone,
+		}
+		for _, link := range links {
+			if link == nil {
+				continue
+			}
+			haystackParts = append(haystackParts, link.Role)
+			if org, ok := a.store.organizationByID(link.OrganizationID); ok && org != nil {
+				haystackParts = append(haystackParts, org.Name)
+			}
+		}
+		haystack := strings.ToLower(strings.Join(haystackParts, " "))
+		if query != "" && !strings.Contains(haystack, query) {
+			continue
+		}
+
+		label := fullName
+		switch {
+		case role != "" && orgName != "":
+			label = fmt.Sprintf("%s · %s · %s", fullName, role, orgName)
+		case orgName != "":
+			label = fmt.Sprintf("%s · %s", fullName, orgName)
+		case strings.TrimSpace(person.Email) != "":
+			label = fmt.Sprintf("%s · %s", fullName, strings.TrimSpace(person.Email))
+		}
+
 		out = append(out, &personLookupView{
-			Person:           person,
-			OrganizationID:   item.OrganizationID,
+			Person: person,
+			OrganizationID: func() string {
+				if preferred != nil {
+					return preferred.OrganizationID
+				}
+				return ""
+			}(),
 			OrganizationName: orgName,
-			AffiliationRole:  item.Role,
+			AffiliationRole:  role,
 			Label:            label,
 		})
 	}

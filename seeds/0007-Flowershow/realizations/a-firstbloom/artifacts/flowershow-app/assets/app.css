@@ -1684,6 +1684,71 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   gap: 1rem;
   padding: 1.2rem;
 }
+.intake-class-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .9rem;
+  align-items: start;
+  padding: .95rem 1rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(216,243,220,.45), rgba(255,248,209,.72));
+  border: 1px solid rgba(45, 106, 79, .15);
+}
+.intake-class-number-display {
+  min-width: 3rem;
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--green-deep);
+}
+.intake-class-title-display {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.intake-class-hero-copy {
+  display: grid;
+  gap: .45rem;
+}
+.intake-class-detail-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.intake-class-detail-chip {
+  padding: .28rem .6rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,.8);
+  color: var(--gray-700);
+  font-size: .78rem;
+  font-weight: 600;
+}
+.intake-autocomplete-results {
+  display: grid;
+  gap: .35rem;
+  margin-top: .55rem;
+  padding: .45rem;
+  border-radius: 16px;
+  border: 1px solid var(--gray-200);
+  background: rgba(255,255,255,.96);
+  box-shadow: var(--shadow-sm);
+}
+.intake-autocomplete-option {
+  width: 100%;
+  text-align: left;
+  padding: .75rem .85rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.intake-autocomplete-option:hover,
+.intake-autocomplete-option:focus-visible {
+  background: rgba(216,243,220,.6);
+  outline: none;
+}
 .intake-capture-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1692,6 +1757,25 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .intake-capture-button {
   flex: 1 1 180px;
   justify-content: center;
+}
+.intake-placement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin-bottom: .75rem;
+}
+.intake-placement-button {
+  min-width: 4rem;
+  justify-content: center;
+}
+.intake-placement-button.is-active {
+  background: var(--green-deep);
+  color: white;
+  border-color: var(--green-deep);
+}
+.intake-award-toggle {
+  min-width: 3.2rem;
+  font-size: 1.1rem;
 }
 .intake-upload-queue {
   display: grid;
@@ -1905,10 +1989,26 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
     gap: .85rem;
     padding: 1rem .95rem 1.1rem;
   }
+  .intake-class-hero {
+    grid-template-columns: 1fr;
+    gap: .55rem;
+  }
+  .intake-class-number-display {
+    min-width: 0;
+    font-size: 1.7rem;
+  }
   .intake-capture-actions {
     flex-direction: column;
   }
   .intake-capture-button {
+    width: 100%;
+  }
+  .intake-placement-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .intake-placement-button,
+  .intake-award-toggle {
     width: 100%;
   }
   .intake-upload-queue {
