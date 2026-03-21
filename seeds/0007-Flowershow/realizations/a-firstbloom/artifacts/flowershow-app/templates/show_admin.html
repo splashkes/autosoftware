@@ -6,9 +6,7 @@
 
   <div class="section-header account-page-header">
     <div>
-      <div class="login-step-kicker">Onsite workspace</div>
       <h1>{{.Show.Name}}</h1>
-      <p class="card-meta">Keep setup, intake, judging support, scoring, and the live board on one surface. The sidebar changes with the active tab so the operator always has the next relevant section close at hand.</p>
     </div>
     <div class="show-actions">
       <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
@@ -32,9 +30,12 @@
         <div class="show-admin-subnav" data-show-admin-nav="intake">
           <div class="show-admin-subnav-label">Intake</div>
           <nav class="account-section-nav">
-            <a href="#intake-add-entry" class="account-section-link">Add Entry</a>
-            <a href="#intake-photo-queue" class="account-section-link">Needs Photos</a>
-            <a href="#intake-recent" class="account-section-link">Recent Intake</a>
+            <a href="#intake-grid" class="account-section-link">Class Intake</a>
+            {{range .BoardDivisions}}
+              {{range .Sections}}
+            <a href="#intake-section-{{.Section.ID}}" class="account-section-link">{{.Section.Code}}. {{.Section.Title}}</a>
+              {{end}}
+            {{end}}
           </nav>
         </div>
 
