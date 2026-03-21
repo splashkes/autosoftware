@@ -215,7 +215,7 @@ test.describe('Flowershow Admin Local', () => {
     await page.locator('form[data-intake-entry-form] input[name="name"]').fill('Playwright Peace');
     await page.locator('form[data-intake-entry-form] input[name="notes"]').fill('Created in Playwright.');
     await page
-      .locator('form[data-intake-entry-form] [data-intake-capture-input="photo"]')
+      .locator('form[data-intake-entry-form] [data-intake-media-input="upload"]')
       .setInputFiles(fixtureImage);
     await expect(page.locator('form[data-intake-entry-form] [data-intake-upload-queue]')).toContainText('appIcon.jpg');
     await page.getByRole('button', { name: 'Save Entry' }).click();

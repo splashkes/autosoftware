@@ -318,7 +318,7 @@ function flowershowRenderIntakeUploadQueue(form) {
   if (state.items.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'intake-upload-empty';
-    empty.textContent = 'No captured media yet. Use the buttons above to add photos or video.';
+    empty.textContent = 'No media added yet. Use Capture or Upload above.';
     queue.appendChild(empty);
     return;
   }
@@ -407,7 +407,7 @@ function flowershowResetIntakeUploadState(form) {
   });
   state.items = [];
   state.uploading = false;
-  form.querySelectorAll('[data-intake-capture-input]').forEach(function(input) {
+  form.querySelectorAll('[data-intake-media-input]').forEach(function(input) {
     input.value = '';
   });
   flowershowRenderIntakeUploadQueue(form);
@@ -573,8 +573,8 @@ function flowershowBindIntakeCaptureButton(button) {
   button.dataset.bound = 'true';
   button.addEventListener('click', function() {
     const form = button.closest('form');
-    const kind = button.dataset.intakeCaptureButton || 'photo';
-    const input = form && form.querySelector('[data-intake-capture-input="' + kind + '"]');
+    const kind = button.dataset.intakeMediaButton || 'capture';
+    const input = form && form.querySelector('[data-intake-media-input="' + kind + '"]');
     if (input) {
       input.click();
     }
@@ -585,8 +585,8 @@ function flowershowBindIntakeForm(form, options) {
   if (!form || form.dataset.bound === 'true') return;
   form.dataset.bound = 'true';
   flowershowRenderIntakeUploadQueue(form);
-  form.querySelectorAll('[data-intake-capture-button]').forEach(flowershowBindIntakeCaptureButton);
-  form.querySelectorAll('[data-intake-capture-input]').forEach(flowershowBindIntakeCaptureInput);
+  form.querySelectorAll('[data-intake-media-button]').forEach(flowershowBindIntakeCaptureButton);
+  form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
   form.addEventListener('submit', function(event) {
     event.preventDefault();
     const entrantInput = form.querySelector('[data-intake-entrant-input]');

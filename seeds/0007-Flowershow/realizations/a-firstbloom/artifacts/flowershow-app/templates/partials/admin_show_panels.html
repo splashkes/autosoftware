@@ -152,14 +152,14 @@
                 <input type="text" name="notes" class="form-input" placeholder="Optional notes">
               </div>
               <div class="form-group">
-                <label>Capture media</label>
+                <label>Add media</label>
                 <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
                 </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
-                <p class="card-meta">Camera capture prefers JPEG or PNG photos and compressed mobile video.</p>
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+                <p class="card-meta">Use Capture on phones and tablets, or Upload from desktop. Photos stay JPEG/PNG and mobile video is kept small.</p>
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
               <button type="submit" class="btn btn-primary">Save Entry</button>
@@ -199,12 +199,12 @@
               <div class="form-group">
                 <label>Add more media</label>
                 <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
                 </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
-                <p class="card-meta">Use mobile capture for quick onsite updates. New thumbnails will broadcast to the live workspace when ready.</p>
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+                <p class="card-meta">Capture onsite or upload from desktop. New thumbnails will broadcast to the live workspace when ready.</p>
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
               <button type="submit" class="btn btn-primary">Upload Media</button>
