@@ -66,6 +66,132 @@ function flowershowBindPersonFilter(input) {
   });
 }
 
+function flowershowCloseIntakeModal(modal) {
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('body-lightbox-open');
+}
+
+function flowershowSyncEntrantLookup(input) {
+  if (!input) return false;
+  const hidden = input
+    .closest('[data-intake-new-panel]')
+    .querySelector('[data-intake-person-id-input]');
+  if (!hidden) return false;
+  const listId = input.getAttribute('list');
+  const list = listId ? document.getElementById(listId) : null;
+  const value = (input.value || '').trim();
+  hidden.value = '';
+  if (!list || value === '') {
+    return false;
+  }
+  const match = Array.from(list.options).find(function(option) {
+    return option.value.trim() === value;
+  });
+  if (!match) {
+    return false;
+  }
+  hidden.value = match.dataset.personId || '';
+  return hidden.value !== '';
+}
+
+function flowershowOpenIntakeModal(modal, trigger) {
+  if (!modal || !trigger) return;
+  const mode = trigger.dataset.intakeMode || 'new';
+  const title = modal.querySelector('[data-intake-modal-title]');
+  const subtitle = modal.querySelector('[data-intake-modal-subtitle]');
+  const newPanel = modal.querySelector('[data-intake-new-panel]');
+  const existingPanel = modal.querySelector('[data-intake-existing-panel]');
+  if (!title || !subtitle || !newPanel || !existingPanel) return;
+
+  const classLabel = trigger.dataset.intakeClassLabel || '';
+  title.textContent = mode === 'existing' ? 'Update intake' : 'Add entry';
+  subtitle.textContent = classLabel;
+
+  newPanel.hidden = mode !== 'new';
+  existingPanel.hidden = mode === 'new';
+
+  if (mode === 'new') {
+    const form = modal.querySelector('[data-intake-entry-form]');
+    const classIDInput = modal.querySelector('[data-intake-class-id-input]');
+    const classLabelInput = modal.querySelector('[data-intake-class-label-input]');
+    const entrantInput = modal.querySelector('[data-intake-entrant-input]');
+    const personIDInput = modal.querySelector('[data-intake-person-id-input]');
+    if (form) {
+      form.reset();
+      form.action = trigger.dataset.intakeCreateAction || form.action;
+      form.setAttribute('hx-post', trigger.dataset.intakeCreateAction || form.action);
+    }
+    if (classIDInput) classIDInput.value = trigger.dataset.intakeClassId || '';
+    if (classLabelInput) classLabelInput.value = classLabel;
+    if (entrantInput) entrantInput.value = '';
+    if (personIDInput) personIDInput.value = '';
+  } else {
+    const uploadForm = modal.querySelector('[data-intake-upload-form]');
+    const entrant = modal.querySelector('[data-intake-existing-entrant]');
+    const entry = modal.querySelector('[data-intake-existing-entry]');
+    const classInfo = modal.querySelector('[data-intake-existing-class]');
+    const entryLink = modal.querySelector('[data-intake-existing-link]');
+    if (uploadForm) {
+      uploadForm.reset();
+      uploadForm.action = trigger.dataset.intakeUploadAction || '';
+    }
+    if (entrant) entrant.textContent = trigger.dataset.intakeEntrant || '';
+    if (entry) entry.textContent = trigger.dataset.intakeEntryName || '';
+    if (classInfo) classInfo.textContent = classLabel;
+    if (entryLink) entryLink.href = trigger.dataset.intakeEntryHref || '#';
+  }
+
+  modal.hidden = false;
+  document.body.classList.add('body-lightbox-open');
+}
+
+function flowershowBindIntakeModal(modal) {
+  if (!modal || modal.dataset.bound === 'true') return;
+  modal.dataset.bound = 'true';
+
+  modal.querySelectorAll('[data-intake-modal-close]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      flowershowCloseIntakeModal(modal);
+    });
+  });
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && !modal.hidden) {
+      flowershowCloseIntakeModal(modal);
+    }
+  });
+
+  const entrantInput = modal.querySelector('[data-intake-entrant-input]');
+  if (entrantInput) {
+    entrantInput.addEventListener('input', function() {
+      flowershowSyncEntrantLookup(entrantInput);
+    });
+    entrantInput.addEventListener('change', function() {
+      flowershowSyncEntrantLookup(entrantInput);
+    });
+  }
+
+  const form = modal.querySelector('[data-intake-entry-form]');
+  if (form && !form.dataset.entryBound) {
+    form.dataset.entryBound = 'true';
+    form.addEventListener('submit', function(event) {
+      if (!flowershowSyncEntrantLookup(entrantInput)) {
+        event.preventDefault();
+        flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
+      }
+    });
+  }
+}
+
+function flowershowBindIntakeTrigger(button) {
+  if (!button || button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  button.addEventListener('click', function() {
+    flowershowOpenIntakeModal(document.querySelector('[data-intake-modal]'), button);
+  });
+}
+
 async function flowershowNormalizeImage(file) {
   const maxEdge = 2048;
   const url = URL.createObjectURL(file);
@@ -483,6 +609,8 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
+  scope.querySelectorAll('[data-intake-modal-open]').forEach(flowershowBindIntakeTrigger);
+  scope.querySelectorAll('[data-intake-modal]').forEach(flowershowBindIntakeModal);
   scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);
   scope.querySelectorAll('[data-nav-shell]').forEach(flowershowBindNav);
   scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
