@@ -29,12 +29,15 @@
 
         <div class="show-admin-subnav" data-show-admin-nav="intake">
           <div class="show-admin-subnav-label">Intake</div>
-          <nav class="account-section-nav">
-            <a href="#intake-grid" class="account-section-link">Class Intake</a>
+          <nav class="account-section-nav show-admin-intake-nav">
+            <a href="#intake-grid" class="account-section-link">Intake Grid</a>
             {{range .BoardDivisions}}
+            <div class="show-admin-subgroup">
+              <div class="show-admin-subgroup-label">{{.Division.Title}}</div>
               {{range .Sections}}
-            <a href="#intake-section-{{.Section.ID}}" class="account-section-link">{{.Section.Code}}. {{.Section.Title}}</a>
+            <a href="#intake-section-{{.Section.ID}}" class="account-section-link">{{.Section.Title}}</a>
               {{end}}
+            </div>
             {{end}}
           </nav>
         </div>
