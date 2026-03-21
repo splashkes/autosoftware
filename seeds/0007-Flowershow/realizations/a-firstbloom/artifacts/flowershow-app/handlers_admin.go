@@ -1346,6 +1346,7 @@ func (a *app) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if entry, ok := a.store.entryByID(entryID); ok {
+		a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Media uploaded</div>`)
 		a.publishAdminSections(entry.ShowID, "intake", "floor", "board")
 		a.publishShowSummary(entry.ShowID)
 		section := strings.TrimSpace(r.FormValue("section"))

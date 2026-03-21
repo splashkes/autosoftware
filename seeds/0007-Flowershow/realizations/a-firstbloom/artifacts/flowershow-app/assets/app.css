@@ -1684,6 +1684,124 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   gap: 1rem;
   padding: 1.2rem;
 }
+.intake-capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+}
+.intake-capture-button {
+  flex: 1 1 180px;
+  justify-content: center;
+}
+.intake-upload-queue {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .8rem;
+  margin-top: .8rem;
+}
+.intake-upload-empty {
+  margin: 0;
+  padding: .85rem 1rem;
+  border-radius: 16px;
+  border: 1px dashed var(--gray-300);
+  color: var(--gray-500);
+  background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(216,243,220,.35));
+}
+.intake-upload-card {
+  position: relative;
+  display: grid;
+  gap: .45rem;
+  padding: .55rem;
+  border-radius: 18px;
+  border: 1px solid var(--gray-200);
+  background: white;
+  box-shadow: var(--shadow-sm);
+}
+.intake-upload-card.is-uploading {
+  border-color: rgba(45, 106, 79, .28);
+}
+.intake-upload-card.is-error {
+  border-color: rgba(180, 59, 59, .38);
+}
+.intake-upload-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--gray-100), var(--green-pale));
+}
+.intake-upload-preview img,
+.intake-upload-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.intake-upload-preview video {
+  pointer-events: none;
+}
+.intake-upload-progress {
+  position: absolute;
+  inset: auto .4rem .4rem .4rem;
+  height: .45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.34);
+}
+.intake-upload-progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--green));
+  transition: width .18s ease;
+}
+.intake-upload-status {
+  display: grid;
+  gap: .12rem;
+}
+.intake-upload-status strong {
+  font-size: .84rem;
+  line-height: 1.25;
+  word-break: break-word;
+}
+.intake-upload-status span {
+  font-size: .76rem;
+  color: var(--gray-500);
+}
+.intake-upload-remove {
+  position: absolute;
+  top: .45rem;
+  right: .45rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, .78);
+  color: white;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.intake-upload-remove:hover {
+  background: rgba(17, 24, 39, .92);
+}
+.intake-upload-card.is-uploading .intake-upload-remove {
+  display: none;
+}
+.intake-upload-kind {
+  position: absolute;
+  left: .5rem;
+  top: .5rem;
+  padding: .16rem .42rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, .68);
+  color: white;
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 .intake-modal-header {
   display: grid;
   gap: .2rem;
@@ -1772,6 +1890,30 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   }
   .intake-entry-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .intake-modal {
+    padding: .75rem;
+    align-items: end;
+  }
+  .intake-modal-dialog {
+    width: 100%;
+    max-height: min(92vh, 920px);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .intake-modal-shell {
+    gap: .85rem;
+    padding: 1rem .95rem 1.1rem;
+  }
+  .intake-capture-actions {
+    flex-direction: column;
+  }
+  .intake-capture-button {
+    width: 100%;
+  }
+  .intake-upload-queue {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
   }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
   .winner-row { flex-direction: column; align-items: flex-start; }

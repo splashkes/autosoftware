@@ -1,5 +1,10 @@
 // Flowershow — minimal JS (HTMX handles most interactivity)
 
+const FLOWERSHOW_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
+const flowershowIntakeUploadStates = new WeakMap();
+
 function flowershowActivateShowAdminTab(shell, name) {
   if (!shell || !name) return;
   shell.dataset.showAdminActiveTab = name;
@@ -68,6 +73,9 @@ function flowershowBindPersonFilter(input) {
 
 function flowershowCloseIntakeModal(modal) {
   if (!modal) return;
+  modal.querySelectorAll('[data-intake-entry-form], [data-intake-upload-form]').forEach(function(form) {
+    flowershowResetIntakeUploadState(form);
+  });
   modal.hidden = true;
   document.body.classList.remove('body-lightbox-open');
 }
@@ -121,6 +129,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
       form.reset();
       form.action = trigger.dataset.intakeCreateAction || form.action;
       form.setAttribute('hx-post', trigger.dataset.intakeCreateAction || form.action);
+      flowershowResetIntakeUploadState(form);
     }
     if (classIDInput) classIDInput.value = trigger.dataset.intakeClassId || '';
     if (classLabelInput) classLabelInput.value = classLabel;
@@ -135,6 +144,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
     if (uploadForm) {
       uploadForm.reset();
       uploadForm.action = trigger.dataset.intakeUploadAction || '';
+      flowershowResetIntakeUploadState(uploadForm);
     }
     if (entrant) entrant.textContent = trigger.dataset.intakeEntrant || '';
     if (entry) entry.textContent = trigger.dataset.intakeEntryName || '';
@@ -171,17 +181,8 @@ function flowershowBindIntakeModal(modal) {
       flowershowSyncEntrantLookup(entrantInput);
     });
   }
-
-  const form = modal.querySelector('[data-intake-entry-form]');
-  if (form && !form.dataset.entryBound) {
-    form.dataset.entryBound = 'true';
-    form.addEventListener('submit', function(event) {
-      if (!flowershowSyncEntrantLookup(entrantInput)) {
-        event.preventDefault();
-        flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
-      }
-    });
-  }
+  flowershowBindIntakeForm(modal.querySelector('[data-intake-entry-form]'), { isNew: true });
+  flowershowBindIntakeForm(modal.querySelector('[data-intake-upload-form]'), { isNew: false });
 }
 
 function flowershowBindIntakeTrigger(button) {
@@ -224,6 +225,377 @@ async function flowershowNormalizeImage(file) {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+function flowershowSanitizeUploadBase(name) {
+  return ((name || 'capture')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'capture');
+}
+
+function flowershowLooksLikeHeic(file) {
+  const lowerName = (file.name || '').toLowerCase();
+  const mime = (file.type || '').toLowerCase();
+  return lowerName.endsWith('.heic') ||
+    lowerName.endsWith('.heif') ||
+    mime === 'image/heic' ||
+    mime === 'image/heif';
+}
+
+function flowershowPhotoLike(file) {
+  const lowerName = (file.name || '').toLowerCase();
+  const mime = (file.type || '').toLowerCase();
+  return /^image\//.test(mime) || /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName);
+}
+
+function flowershowVideoLike(file) {
+  const lowerName = (file.name || '').toLowerCase();
+  const mime = (file.type || '').toLowerCase();
+  return /^video\//.test(mime) || /\.(mp4|webm|mov)$/i.test(lowerName);
+}
+
+async function flowershowNormalizeVideo(file) {
+  if (file.size > FLOWERSHOW_MAX_VIDEO_BYTES) {
+    throw new Error('Video exceeds 50 MB. Capture a shorter or smaller clip.');
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const dimensions = await new Promise(function(resolve, reject) {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.playsInline = true;
+      video.onloadedmetadata = function() {
+        resolve({ width: video.videoWidth || 0, height: video.videoHeight || 0 });
+      };
+      video.onerror = function() {
+        reject(new Error('Could not read the captured video.'));
+      };
+      video.src = url;
+    });
+    if (Math.max(dimensions.width, dimensions.height) > FLOWERSHOW_MAX_VIDEO_EDGE) {
+      throw new Error('Video exceeds 1920px on one edge. Capture a smaller clip.');
+    }
+    const lowerName = (file.name || '').toLowerCase();
+    let extension = '.mp4';
+    if (lowerName.endsWith('.webm') || file.type === 'video/webm') {
+      extension = '.webm';
+    } else if (lowerName.endsWith('.mov') || file.type === 'video/quicktime') {
+      extension = '.mov';
+    }
+    return new File([file], flowershowSanitizeUploadBase(file.name) + extension, {
+      type: file.type || 'video/mp4',
+      lastModified: file.lastModified || Date.now()
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function flowershowFormatUploadBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+}
+
+function flowershowGetIntakeUploadState(form) {
+  let state = flowershowIntakeUploadStates.get(form);
+  if (state) return state;
+  state = {
+    items: [],
+    queue: form ? form.querySelector('[data-intake-upload-queue]') : null,
+    uploading: false
+  };
+  flowershowIntakeUploadStates.set(form, state);
+  return state;
+}
+
+function flowershowRenderIntakeUploadQueue(form) {
+  const state = flowershowGetIntakeUploadState(form);
+  const queue = state.queue;
+  if (!queue) return;
+  queue.innerHTML = '';
+  if (state.items.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'intake-upload-empty';
+    empty.textContent = 'No captured media yet. Use the buttons above to add photos or video.';
+    queue.appendChild(empty);
+    return;
+  }
+  state.items.forEach(function(item) {
+    const card = document.createElement('article');
+    card.className = 'intake-upload-card';
+    if (item.status === 'uploading') card.classList.add('is-uploading');
+    if (item.status === 'error') card.classList.add('is-error');
+
+    const preview = document.createElement('div');
+    preview.className = 'intake-upload-preview';
+
+    const kind = document.createElement('div');
+    kind.className = 'intake-upload-kind';
+    kind.textContent = item.kind;
+    preview.appendChild(kind);
+
+    if (item.kind === 'video') {
+      const video = document.createElement('video');
+      video.src = item.previewURL;
+      video.muted = true;
+      video.playsInline = true;
+      video.loop = true;
+      video.autoplay = true;
+      preview.appendChild(video);
+    } else {
+      const image = document.createElement('img');
+      image.src = item.previewURL;
+      image.alt = '';
+      preview.appendChild(image);
+    }
+
+    const progress = document.createElement('div');
+    progress.className = 'intake-upload-progress';
+    const bar = document.createElement('div');
+    bar.className = 'intake-upload-progress-bar';
+    bar.style.width = String(Math.max(0, Math.min(100, item.progress || 0))) + '%';
+    progress.appendChild(bar);
+    preview.appendChild(progress);
+    card.appendChild(preview);
+
+    const status = document.createElement('div');
+    status.className = 'intake-upload-status';
+    const title = document.createElement('strong');
+    title.textContent = item.file.name;
+    const meta = document.createElement('span');
+    if (item.status === 'uploading') {
+      meta.textContent = 'Uploading ' + Math.round(item.progress || 0) + '%';
+    } else if (item.status === 'error') {
+      meta.textContent = item.error || 'Upload failed';
+    } else if (item.status === 'done') {
+      meta.textContent = 'Uploaded';
+    } else {
+      meta.textContent = flowershowFormatUploadBytes(item.file.size) + ' ready';
+    }
+    status.appendChild(title);
+    status.appendChild(meta);
+    card.appendChild(status);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'intake-upload-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove ' + item.file.name);
+    remove.addEventListener('click', function() {
+      if (state.uploading) return;
+      URL.revokeObjectURL(item.previewURL);
+      state.items = state.items.filter(function(candidate) {
+        return candidate.id !== item.id;
+      });
+      flowershowRenderIntakeUploadQueue(form);
+    });
+    card.appendChild(remove);
+
+    queue.appendChild(card);
+  });
+}
+
+function flowershowResetIntakeUploadState(form) {
+  if (!form) return;
+  const state = flowershowGetIntakeUploadState(form);
+  state.items.forEach(function(item) {
+    if (item.previewURL) {
+      URL.revokeObjectURL(item.previewURL);
+    }
+  });
+  state.items = [];
+  state.uploading = false;
+  form.querySelectorAll('[data-intake-capture-input]').forEach(function(input) {
+    input.value = '';
+  });
+  flowershowRenderIntakeUploadQueue(form);
+}
+
+async function flowershowPrepareCaptureItem(file) {
+  if (flowershowLooksLikeHeic(file)) {
+    throw new Error('HEIC/HEIF is not supported. Capture JPEG or PNG instead.');
+  }
+  if (flowershowPhotoLike(file)) {
+    if (file.size > FLOWERSHOW_MAX_PHOTO_BYTES) {
+      throw new Error('Photo exceeds 5 MB before optimization. Capture a smaller image.');
+    }
+    const normalized = await flowershowNormalizeImage(file);
+    return {
+      id: 'upload_' + Math.random().toString(36).slice(2, 10),
+      kind: 'photo',
+      file: normalized,
+      progress: 0,
+      status: 'ready',
+      previewURL: URL.createObjectURL(normalized)
+    };
+  }
+  if (flowershowVideoLike(file)) {
+    const normalized = await flowershowNormalizeVideo(file);
+    return {
+      id: 'upload_' + Math.random().toString(36).slice(2, 10),
+      kind: 'video',
+      file: normalized,
+      progress: 0,
+      status: 'ready',
+      previewURL: URL.createObjectURL(normalized)
+    };
+  }
+  throw new Error('Unsupported media type. Use JPEG, PNG, MP4, WebM, or MOV.');
+}
+
+async function flowershowQueueCaptureFiles(form, files) {
+  const state = flowershowGetIntakeUploadState(form);
+  for (const file of Array.from(files || [])) {
+    const item = await flowershowPrepareCaptureItem(file);
+    state.items.push(item);
+  }
+  flowershowRenderIntakeUploadQueue(form);
+}
+
+function flowershowDistributeUploadProgress(items, loaded, total) {
+  if (!items.length) return;
+  if (!Number.isFinite(total) || total <= 0) {
+    items.forEach(function(item) {
+      item.progress = 100;
+    });
+    return;
+  }
+  let remaining = loaded;
+  items.forEach(function(item) {
+    const size = Math.max(1, item.file.size || 1);
+    const itemLoaded = Math.max(0, Math.min(size, remaining));
+    item.progress = Math.max(0, Math.min(100, Math.round((itemLoaded / size) * 100)));
+    remaining -= itemLoaded;
+  });
+}
+
+function flowershowSwapAdminTarget(targetSelector, html) {
+  const target = document.querySelector(targetSelector || '#admin-intake-panel');
+  if (!target) return;
+  target.innerHTML = html;
+  if (window.htmx) {
+    window.htmx.process(target);
+  }
+  flowershowInit(target);
+}
+
+function flowershowSubmitIntakeForm(form, options) {
+  const isNew = !!(options && options.isNew);
+  const state = flowershowGetIntakeUploadState(form);
+  const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+  if (!isNew && state.items.length === 0) {
+    flowershowToast('Capture at least one photo or video before uploading.', true);
+    return;
+  }
+  const formData = new FormData(form);
+  state.items.forEach(function(item) {
+    formData.append('media', item.file, item.file.name);
+  });
+  state.items.forEach(function(item) {
+    item.status = 'uploading';
+    item.progress = 0;
+  });
+  state.uploading = true;
+  flowershowRenderIntakeUploadQueue(form);
+  submitButtons.forEach(function(button) {
+    button.disabled = true;
+  });
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', form.action);
+  xhr.setRequestHeader('HX-Request', 'true');
+  xhr.upload.addEventListener('progress', function(event) {
+    flowershowDistributeUploadProgress(state.items, event.loaded, event.total);
+    flowershowRenderIntakeUploadQueue(form);
+  });
+  xhr.addEventListener('load', function() {
+    state.uploading = false;
+    submitButtons.forEach(function(button) {
+      button.disabled = false;
+    });
+    if (xhr.status < 200 || xhr.status >= 300) {
+      state.items.forEach(function(item) {
+        item.status = 'error';
+        item.error = xhr.responseText || 'Upload failed';
+      });
+      flowershowRenderIntakeUploadQueue(form);
+      flowershowToast((xhr.responseText || 'Upload failed.').replace(/<[^>]+>/g, ''), true);
+      return;
+    }
+    state.items.forEach(function(item) {
+      item.progress = 100;
+      item.status = 'done';
+      item.error = '';
+    });
+    flowershowRenderIntakeUploadQueue(form);
+    const modal = form.closest('[data-intake-modal]');
+    if (modal) {
+      modal.hidden = true;
+      document.body.classList.remove('body-lightbox-open');
+    }
+    flowershowResetIntakeUploadState(form);
+    flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', xhr.responseText || '');
+    document.body.dispatchEvent(new CustomEvent('flowershow:media-ready'));
+  });
+  xhr.addEventListener('error', function() {
+    state.uploading = false;
+    submitButtons.forEach(function(button) {
+      button.disabled = false;
+    });
+    state.items.forEach(function(item) {
+      item.status = 'error';
+      item.error = 'Network error while uploading';
+    });
+    flowershowRenderIntakeUploadQueue(form);
+    flowershowToast('Upload failed. Check the connection and try again.', true);
+  });
+  xhr.send(formData);
+}
+
+function flowershowBindIntakeCaptureInput(input) {
+  if (!input || input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+  input.addEventListener('change', async function() {
+    const form = input.closest('form');
+    try {
+      await flowershowQueueCaptureFiles(form, input.files);
+    } catch (error) {
+      flowershowToast(error && error.message ? error.message : 'Could not prepare media.', true);
+    } finally {
+      input.value = '';
+    }
+  });
+}
+
+function flowershowBindIntakeCaptureButton(button) {
+  if (!button || button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  button.addEventListener('click', function() {
+    const form = button.closest('form');
+    const kind = button.dataset.intakeCaptureButton || 'photo';
+    const input = form && form.querySelector('[data-intake-capture-input="' + kind + '"]');
+    if (input) {
+      input.click();
+    }
+  });
+}
+
+function flowershowBindIntakeForm(form, options) {
+  if (!form || form.dataset.bound === 'true') return;
+  form.dataset.bound = 'true';
+  flowershowRenderIntakeUploadQueue(form);
+  form.querySelectorAll('[data-intake-capture-button]').forEach(flowershowBindIntakeCaptureButton);
+  form.querySelectorAll('[data-intake-capture-input]').forEach(flowershowBindIntakeCaptureInput);
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+    const entrantInput = form.querySelector('[data-intake-entrant-input]');
+    if (options && options.isNew && entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
+      flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
+      return;
+    }
+    flowershowSubmitIntakeForm(form, options);
+  });
 }
 
 async function flowershowSubmitPhotoForm(form, file) {

@@ -114,15 +114,12 @@
           </div>
 
           <div data-intake-new-panel>
-            <form
+              <form
               method="POST"
               action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
               enctype="multipart/form-data"
-              hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
-              hx-encoding="multipart/form-data"
-              hx-target="#admin-intake-panel"
-              hx-swap="innerHTML"
               class="form"
+              data-target="#admin-intake-panel"
               data-intake-entry-form>
               <input type="hidden" name="class_id" value="" data-intake-class-id-input>
               <div class="form-group">
@@ -155,8 +152,15 @@
                 <input type="text" name="notes" class="form-input" placeholder="Optional notes">
               </div>
               <div class="form-group">
-                <label>Photos</label>
-                <input type="file" name="media" class="form-input" accept="image/jpeg,image/png,image/webp" capture="environment" multiple>
+                <label>Capture media</label>
+                <div class="intake-capture-actions">
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                </div>
+                <input type="file" class="visually-hidden" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
+                <input type="file" class="visually-hidden" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
+                <p class="card-meta">Camera capture prefers JPEG or PNG photos and compressed mobile video.</p>
+                <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
               <button type="submit" class="btn btn-primary">Save Entry</button>
             </form>
@@ -193,10 +197,17 @@
               data-intake-upload-form>
               <input type="hidden" name="section" value="intake">
               <div class="form-group">
-                <label>Add more photos</label>
-                <input type="file" name="media" class="form-input" accept="image/jpeg,image/png,image/webp" capture="environment" multiple required>
+                <label>Add more media</label>
+                <div class="intake-capture-actions">
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="photo">Capture photo</button>
+                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-capture-button="video">Capture video</button>
+                </div>
+                <input type="file" class="visually-hidden" accept="image/jpeg,image/png" capture="environment" multiple data-intake-capture-input="photo">
+                <input type="file" class="visually-hidden" accept="video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-capture-input="video">
+                <p class="card-meta">Use mobile capture for quick onsite updates. New thumbnails will broadcast to the live workspace when ready.</p>
+                <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
-              <button type="submit" class="btn btn-primary">Upload Photos</button>
+              <button type="submit" class="btn btn-primary">Upload Media</button>
             </form>
             <div class="show-actions">
               <a href="#" class="btn btn-outline" data-intake-existing-link>Open public entry</a>

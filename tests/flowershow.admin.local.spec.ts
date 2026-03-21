@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import {
   expectAgentPath,
@@ -7,6 +8,8 @@ import {
   loginLocalViewer,
   uniqueName,
 } from './flowershow.helpers';
+
+const fixtureImage = path.join(process.cwd(), 'node_modules/playwright-core/lib/server/chromium/appIcon.png');
 
 test.describe('Flowershow Admin Local', () => {
   test('admin login and dashboard work locally', async ({ page }) => {
@@ -211,6 +214,10 @@ test.describe('Flowershow Admin Local', () => {
     await page.locator('[data-intake-entrant-input]').fill('Margaret Chen · member · Metro Rose Society');
     await page.locator('form[data-intake-entry-form] input[name="name"]').fill('Playwright Peace');
     await page.locator('form[data-intake-entry-form] input[name="notes"]').fill('Created in Playwright.');
+    await page
+      .locator('form[data-intake-entry-form] [data-intake-capture-input="photo"]')
+      .setInputFiles(fixtureImage);
+    await expect(page.locator('form[data-intake-entry-form] [data-intake-upload-queue]')).toContainText('appIcon.jpg');
     await page.getByRole('button', { name: 'Save Entry' }).click();
     await expect(page.locator('#admin-intake-panel')).toContainText(
       'Playwright Peace',

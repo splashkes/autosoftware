@@ -32,8 +32,9 @@ var allowedPhotoTypes = map[string]string{
 }
 
 var allowedVideoTypes = map[string]string{
-	"video/mp4":  "video/mp4",
-	"video/webm": "video/webm",
+	"video/mp4":       "video/mp4",
+	"video/webm":      "video/webm",
+	"video/quicktime": "video/quicktime",
 }
 
 var allowedPhotoExtensions = map[string]string{
@@ -46,6 +47,7 @@ var allowedPhotoExtensions = map[string]string{
 var allowedVideoExtensions = map[string]string{
 	".mp4":  "video/mp4",
 	".webm": "video/webm",
+	".mov":  "video/quicktime",
 }
 
 type mediaStore interface {
@@ -163,9 +165,9 @@ func canonicalMediaType(header *multipart.FileHeader) (string, string, error) {
 		return "", "", fmt.Errorf("unsupported photo type %q; use JPEG, PNG, or WebP", contentType)
 	}
 	if strings.HasPrefix(contentType, "video/") {
-		return "", "", fmt.Errorf("unsupported video type %q; use MP4 or WebM", contentType)
+		return "", "", fmt.Errorf("unsupported video type %q; use MP4, WebM, or MOV", contentType)
 	}
-	return "", "", errors.New("unsupported media type; use JPEG, PNG, WebP, MP4, or WebM")
+	return "", "", errors.New("unsupported media type; use JPEG, PNG, WebP, MP4, WebM, or MOV")
 }
 
 func (m *localMediaStore) Store(_ context.Context, entryID string, header *multipart.FileHeader) (*Media, error) {
