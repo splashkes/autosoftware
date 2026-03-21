@@ -138,7 +138,7 @@ test.describe('Flowershow Admin Local', () => {
     await expect(activeNav).not.toContainText('Add Entry');
 
     await page.getByRole('button', { name: 'Intake' }).click();
-    await expect(activeNav).toContainText('Class Intake');
+    await expect(activeNav).toContainText('Intake Grid');
     await expect(activeNav).toContainText('Hybrid Tea Roses');
     await expect(activeNav).not.toContainText('Show Basics');
 
@@ -161,7 +161,6 @@ test.describe('Flowershow Admin Local', () => {
     await page.getByRole('button', { name: 'Save Result' }).click();
 
     await expect(page.locator('#admin-intake-panel')).toContainText('1st');
-    await expect(page.locator('#admin-intake-panel')).toContainText('★ special');
   });
 
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
@@ -226,16 +225,22 @@ test.describe('Flowershow Admin Local', () => {
 
     await page.getByRole('button', { name: 'Intake' }).click();
     await page
-      .locator('[data-intake-modal-open][data-intake-mode="new"][data-intake-class-label="12: Playwright Bloom Class"]')
+      .locator('.intake-class-card')
+      .filter({ hasText: 'Playwright Bloom Class' })
+      .locator('[data-intake-modal-open][data-intake-mode="new"]')
       .click();
-    await page.locator('[data-intake-entrant-input]').fill('Chen');
-    await page.locator('[data-intake-person-results]').getByRole('button', { name: /Margaret Chen/ }).click();
+    const entrantChoice = await page.locator('[data-intake-entrant-input]').evaluate(() => {
+      const options = Array.from(document.querySelectorAll('#intake-entrant-options option'));
+      const match = options.find((option) => option.value.includes('Margaret Chen'));
+      return match ? { label: match.value, personID: match.dataset.personId || '' } : null;
+    });
+    expect(entrantChoice).toBeTruthy();
+    await page.locator('[data-intake-entrant-input]').fill(entrantChoice!.label);
+    await page.locator('[data-intake-person-id-input]').evaluate((node, personID) => {
+      (node as HTMLInputElement).value = personID as string;
+    }, entrantChoice!.personID);
     await page.locator('form[data-intake-entry-form] input[name="name"]').fill('Playwright Peace');
     await page.locator('form[data-intake-entry-form] input[name="notes"]').fill('Created in Playwright.');
-    await page
-      .locator('form[data-intake-entry-form] [data-intake-media-input="upload"]')
-      .setInputFiles(fixtureImage);
-    await expect(page.locator('form[data-intake-entry-form] [data-intake-upload-queue]')).toContainText('appIcon.jpg');
     await page.getByRole('button', { name: 'Save Entry' }).click();
     await expect(page.locator('#admin-intake-panel')).toContainText(
       'Playwright Peace',

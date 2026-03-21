@@ -355,6 +355,16 @@ a:hover {
   font-weight: 700;
   letter-spacing: .01em;
 }
+.club-card-empty {
+  margin-top: 1rem;
+  padding: .85rem .95rem;
+  border: 1px dashed rgba(45, 106, 79, .18);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(246, 255, 249, .78));
+}
+.club-card-empty .card-meta {
+  margin: 0;
+}
 .club-show-list a:hover { text-decoration: underline; }
 .entry-class-cell {
   display: grid;
@@ -535,14 +545,15 @@ a:hover {
   font-weight: 700;
 }
 .admin-show-disclosure summary::after {
-  content: "Expand";
-  font-size: .72rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  content: "▾";
+  font-size: 1rem;
+  line-height: 1;
   color: var(--gray-500);
+  transition: transform .18s ease, color .18s ease;
 }
 .admin-show-disclosure[open] summary::after {
-  content: "Hide";
+  transform: rotate(180deg);
+  color: var(--green);
 }
 .admin-show-card > .card-body {
   display: grid;
@@ -853,6 +864,17 @@ a:hover {
 .class-item { display: flex; align-items: center; gap: .75rem; padding: .5rem .65rem; border-radius: var(--radius); text-decoration: none; color: inherit; transition: background .15s; }
 .class-item:hover { background: var(--green-pale); }
 .class-number { font-weight: 700; color: var(--green); min-width: 3rem; }
+.class-card-kicker {
+  font-size: .77rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.class-card-qualifier {
+  color: var(--gray-700);
+  font-weight: 600;
+}
 .class-title { flex: 1; }
 .class-specimens { color: var(--gray-500); font-size: .8rem; white-space: nowrap; }
 .class-description { color: var(--gray-500); margin-bottom: 1rem; }
@@ -2044,7 +2066,17 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   .summary-actions { justify-content: flex-start; }
   .winner-mag-card { min-height: 300px; }
   .agent-access-tabs { gap: .45rem; }
-  .agent-access-widget { margin: 0 6vw; }
+  .agent-access-widget {
+    margin: 0 6vw;
+    font-size: .82rem;
+  }
+  .agent-access-tabs {
+    padding: .7rem .85rem .55rem;
+  }
+  .agent-access-tab {
+    padding: .34rem .68rem;
+    font-size: .74rem;
+  }
   .show-actions {
     flex-direction: column;
     align-items: stretch;

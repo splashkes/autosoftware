@@ -393,20 +393,11 @@ func (a *app) showVisualFrames(show *Show) []showVisualFrame {
 	entries := a.publicEntriesByShow(show.ID)
 	var frames []showVisualFrame
 	themes := []string{"rose", "fern", "gold"}
+	labels := []string{"Featured blooms", "Show highlights", "Class favorites"}
 	for _, entry := range entries {
 		media := a.store.mediaByEntry(entry.ID)
-		class, _ := a.store.classByID(entry.ClassID)
-		label := strings.TrimSpace(entry.Name)
-		if class != nil {
-			switch {
-			case strings.TrimSpace(class.Description) != "":
-				label = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Description)
-			case strings.TrimSpace(class.Title) != "":
-				label = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Title)
-			}
-		}
 		frame := showVisualFrame{
-			Label: label,
+			Label: labels[len(frames)%len(labels)],
 			Theme: themes[len(frames)%len(themes)],
 		}
 		if len(media) > 0 {
@@ -616,11 +607,12 @@ func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
 	class, _ := a.store.classByID(classID)
 	classLabel := "Class highlights"
 	if class != nil {
-		switch {
-		case strings.TrimSpace(class.Description) != "":
-			classLabel = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Description)
-		case strings.TrimSpace(class.Title) != "":
-			classLabel = "Class " + strings.TrimSpace(class.ClassNumber) + " · " + strings.TrimSpace(class.Title)
+		number := strings.TrimSpace(class.ClassNumber)
+		title := strings.TrimSpace(class.Title)
+		if number != "" {
+			classLabel = "Class " + number
+		} else if title != "" {
+			classLabel = title
 		}
 	}
 	for _, entry := range a.publicEntriesByShow(show.ID) {

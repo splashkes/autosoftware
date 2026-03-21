@@ -3,14 +3,14 @@
   <section class="admin-show-section" id="show-basics">
     <div class="admin-show-section-header">
       <h3>Setup basics</h3>
-      <p>Keep the show profile, assigned judges, and public-facing credits accurate before and during the event.</p>
+      <p>Keep the show profile, judges, and public credits accurate.</p>
     </div>
     {{template "admin_info_panel" .}}
   </section>
   <section class="admin-show-section" id="show-schedule">
     <div class="admin-show-section-header">
       <h3>Schedule and class order</h3>
-      <p>Use the same workspace to create divisions, sections, and classes, then tighten the ordering before intake begins.</p>
+      <p>Build the schedule and tighten class order before intake starts.</p>
     </div>
     {{template "admin_schedule_panel" .}}
   </section>
@@ -22,15 +22,15 @@
   <section class="admin-show-section" id="intake-grid">
     <div class="admin-show-section-header">
       <h3>Class intake grid</h3>
-      <p>Scan every class in show order, add entries from the plus tile, and complete missing photos from the same surface.</p>
+      <p>Scan classes in show order, add entries, and finish missing photos from one grid.</p>
     </div>
     {{if .BoardDivisions}}
     <div class="intake-division-stack">
       {{range .BoardDivisions}}
       <section class="intake-division-block">
         <div class="intake-division-header">
-          <h3>Division {{.Division.Code}}: {{.Division.Title}}</h3>
-          <span class="badge badge-muted">{{.Division.Domain}}</span>
+          <h3>{{divisionDisplay .Division}}</h3>
+          {{with divisionDomainLabel .Division}}<span class="badge badge-muted">{{.}}</span>{{end}}
         </div>
         {{range .Sections}}
         <div class="intake-section-block" id="intake-section-{{.Section.ID}}">
@@ -293,14 +293,14 @@
   <section class="admin-show-section" id="floor-corrections">
     <div class="admin-show-section-header">
       <h3>Floor corrections</h3>
-      <p>Use this lane when judges correct classes, when entrant assignments need fixing, or when mistaken entries must be removed.</p>
+      <p>Correct classes, entrants, or mistaken entries.</p>
     </div>
     {{template "admin_entry_floor_table" .}}
   </section>
   <section class="admin-show-section" id="floor-placements">
     <div class="admin-show-section-header">
       <h3>Placement control</h3>
-      <p>Set placements quickly without leaving the live operator workspace.</p>
+      <p>Set placements without leaving the workspace.</p>
     </div>
     {{template "admin_winners_panel" .}}
   </section>
@@ -312,7 +312,7 @@
   <section class="admin-show-section" id="board-summary">
     <div class="admin-show-section-header">
       <h3>Full show board</h3>
-      <p>All classes and entries in one place, with thumbnail and workflow status cues for missing photos, placements, and suppression.</p>
+      <p>See all classes and entries with photo and placement status at a glance.</p>
     </div>
     <div class="board-summary-grid">
       <div class="board-summary-card"><span class="board-summary-value">{{.BoardStats.TotalEntries}}</span><span class="board-summary-label">entries</span></div>

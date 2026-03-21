@@ -1,4 +1,11 @@
 (() => {
+  function queryScope(root) {
+    if (root && typeof root.querySelectorAll === "function") {
+      return root;
+    }
+    return document;
+  }
+
   const SELECTOR = "[data-sprout-logo]";
   const SVG_NS = "http://www.w3.org/2000/svg";
   const DURATION = 30000;
@@ -910,6 +917,6 @@
     init();
   }
 
-  document.addEventListener("htmx:load", (event) => init(event.target));
+  document.addEventListener("htmx:load", (event) => init(queryScope(event && event.target)));
   window.ASSproutLogo = { init, setProgress };
 })();

@@ -118,9 +118,26 @@
 @media (max-width: 640px) {
   .agent-access-widget {
     margin: 0 6vw;
+    font-size: 0.8rem;
   }
 
   .agent-access-tabs {
     gap: 0.45rem;
+    padding: 0.72rem 0.82rem 0.5rem;
+  }
+
+  .agent-access-tab {
+    padding: 0.34rem 0.66rem;
+    font-size: 0.73rem;
+  }
+
+  .agent-access-content {
+    padding: 0 0.82rem 0.8rem;
+  }
+
+  .agent-access-body,
+  .agent-access-lead,
+  .agent-access-grid p {
+    font-size: 0.75rem;
   }
 }
