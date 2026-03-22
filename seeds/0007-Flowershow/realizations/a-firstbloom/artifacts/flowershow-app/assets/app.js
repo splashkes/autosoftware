@@ -1,6 +1,7 @@
 // Flowershow — minimal JS (HTMX handles most interactivity)
 
-const FLOWERSHOW_MAX_PHOTO_BYTES = 12 * 1024 * 1024;
+const FLOWERSHOW_MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+const FLOWERSHOW_MAX_PHOTO_EDGE = 4096;
 const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
 const flowershowIntakeUploadStates = new WeakMap();
@@ -484,8 +485,7 @@ function flowershowBindIntakeTrigger(button) {
   });
 }
 
-async function flowershowNormalizeImage(file) {
-  const maxEdge = 2048;
+async function flowershowNormalizeImage(file, maxEdge, quality) {
   const url = URL.createObjectURL(file);
   try {
     const image = await new Promise(function(resolve, reject) {
@@ -503,7 +503,7 @@ async function flowershowNormalizeImage(file) {
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(function(resolve) {
-      canvas.toBlob(resolve, 'image/jpeg', 0.86);
+      canvas.toBlob(resolve, 'image/jpeg', quality);
     });
     if (!blob) {
       throw new Error('Could not prepare photo for upload.');
@@ -512,7 +512,11 @@ async function flowershowNormalizeImage(file) {
       .replace(/\.[^.]+$/, '')
       .replace(/[^a-zA-Z0-9_-]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'capture';
-    return new File([blob], name + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+    return {
+      file: new File([blob], name + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }),
+      width: canvas.width,
+      height: canvas.height
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -589,6 +593,38 @@ function flowershowFormatUploadBytes(bytes) {
   return Math.max(1, Math.round(bytes / 1024)) + ' KB';
 }
 
+function flowershowDescribeUploadItem(item) {
+  if (!item) return '';
+  if (item.status === 'preparing') return item.stage || 'Preparing media...';
+  if (item.status === 'uploading') return item.stage || ('Uploading ' + Math.round(item.progress || 0) + '%');
+  if (item.status === 'saving') return item.stage || 'Saving media...';
+  if (item.status === 'error') return item.error || 'Upload failed';
+  if (item.status === 'done') return item.stage || 'Uploaded';
+  if (item.details) return item.details;
+  return flowershowFormatUploadBytes(item.file && item.file.size);
+}
+
+function flowershowCreateUploadItem(file) {
+  const lowerName = (file && file.name ? file.name : '').toLowerCase();
+  const mime = (file && file.type ? file.type : '').toLowerCase();
+  const kind = flowershowVideoLike(file) ? 'video' : 'photo';
+  let previewURL = '';
+  if ((kind === 'photo' && (/^image\//.test(mime) || /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName))) || (kind === 'video' && (/^video\//.test(mime) || /\.(mp4|webm|mov)$/i.test(lowerName)))) {
+    previewURL = URL.createObjectURL(file);
+  }
+  return {
+    id: 'upload_' + Math.random().toString(36).slice(2, 10),
+    kind: kind,
+    file: file,
+    originalName: file && file.name ? file.name : (kind === 'video' ? 'capture.mov' : 'capture.jpg'),
+    progress: 4,
+    status: 'preparing',
+    stage: kind === 'video' ? 'Checking video…' : 'Preparing photo…',
+    details: '',
+    previewURL: previewURL
+  };
+}
+
 function flowershowGetIntakeUploadState(form) {
   let state = flowershowIntakeUploadStates.get(form);
   if (state) return state;
@@ -614,7 +650,7 @@ function flowershowRenderIntakeUploadQueue(form) {
   state.items.forEach(function(item) {
     const card = document.createElement('article');
     card.className = 'intake-upload-card';
-    if (item.status === 'uploading') card.classList.add('is-uploading');
+    if (item.status === 'preparing' || item.status === 'uploading' || item.status === 'saving') card.classList.add('is-uploading');
     if (item.status === 'error') card.classList.add('is-error');
 
     const preview = document.createElement('div');
@@ -625,7 +661,12 @@ function flowershowRenderIntakeUploadQueue(form) {
     kind.textContent = item.kind;
     preview.appendChild(kind);
 
-    if (item.kind === 'video') {
+    if (!item.previewURL) {
+      const fallback = document.createElement('div');
+      fallback.className = 'intake-upload-fallback';
+      fallback.textContent = item.kind === 'video' ? 'Video' : 'Photo';
+      preview.appendChild(fallback);
+    } else if (item.kind === 'video') {
       const video = document.createElement('video');
       video.src = item.previewURL;
       video.muted = true;
@@ -652,17 +693,9 @@ function flowershowRenderIntakeUploadQueue(form) {
     const status = document.createElement('div');
     status.className = 'intake-upload-status';
     const title = document.createElement('strong');
-    title.textContent = item.file.name;
+    title.textContent = item.originalName || (item.file && item.file.name) || 'media';
     const meta = document.createElement('span');
-    if (item.status === 'uploading') {
-      meta.textContent = 'Uploading ' + Math.round(item.progress || 0) + '%';
-    } else if (item.status === 'error') {
-      meta.textContent = item.error || 'Upload failed';
-    } else if (item.status === 'done') {
-      meta.textContent = 'Uploaded';
-    } else {
-      meta.textContent = flowershowFormatUploadBytes(item.file.size) + ' ready';
-    }
+    meta.textContent = flowershowDescribeUploadItem(item);
     status.appendChild(title);
     status.appendChild(meta);
     card.appendChild(status);
@@ -671,7 +704,7 @@ function flowershowRenderIntakeUploadQueue(form) {
     remove.type = 'button';
     remove.className = 'intake-upload-remove';
     remove.textContent = '×';
-    remove.setAttribute('aria-label', 'Remove ' + item.file.name);
+    remove.setAttribute('aria-label', 'Remove ' + (item.originalName || (item.file && item.file.name) || 'media'));
     remove.addEventListener('click', function() {
       if (state.uploading) return;
       URL.revokeObjectURL(item.previewURL);
@@ -708,14 +741,21 @@ async function flowershowPrepareCaptureItem(file) {
   }
   if (flowershowPhotoLike(file)) {
     try {
-      const normalized = await flowershowNormalizeImage(file);
+      const primary = await flowershowNormalizeImage(file, FLOWERSHOW_MAX_PHOTO_EDGE, 0.86);
+      let normalized = primary;
+      if (primary.file.size > FLOWERSHOW_MAX_PHOTO_BYTES) {
+        normalized = await flowershowNormalizeImage(file, 3072, 0.78);
+      }
       return {
         id: 'upload_' + Math.random().toString(36).slice(2, 10),
         kind: 'photo',
-        file: normalized,
+        file: normalized.file,
+        originalName: file.name,
         progress: 0,
         status: 'ready',
-        previewURL: URL.createObjectURL(normalized)
+        stage: '',
+        details: flowershowFormatUploadBytes(normalized.file.size) + ' · JPEG · ' + normalized.width + '×' + normalized.height,
+        previewURL: URL.createObjectURL(normalized.file)
       };
     } catch (error) {
       const lowerName = (file.name || '').toLowerCase();
@@ -731,8 +771,11 @@ async function flowershowPrepareCaptureItem(file) {
           type: file.type || 'image/jpeg',
           lastModified: file.lastModified || Date.now()
         }),
+        originalName: file.name,
         progress: 0,
         status: 'ready',
+        stage: '',
+        details: flowershowFormatUploadBytes(file.size) + ' · original file',
         previewURL: URL.createObjectURL(file)
       };
     }
@@ -743,8 +786,11 @@ async function flowershowPrepareCaptureItem(file) {
       id: 'upload_' + Math.random().toString(36).slice(2, 10),
       kind: 'video',
       file: normalized,
+      originalName: file.name,
       progress: 0,
       status: 'ready',
+      stage: '',
+      details: flowershowFormatUploadBytes(normalized.size) + ' · video',
       previewURL: URL.createObjectURL(normalized)
     };
   }
@@ -753,11 +799,36 @@ async function flowershowPrepareCaptureItem(file) {
 
 async function flowershowQueueCaptureFiles(form, files) {
   const state = flowershowGetIntakeUploadState(form);
+  let firstError = '';
   for (const file of Array.from(files || [])) {
-    const item = await flowershowPrepareCaptureItem(file);
+    const item = flowershowCreateUploadItem(file);
     state.items.push(item);
+    flowershowRenderIntakeUploadQueue(form);
+    try {
+      const prepared = await flowershowPrepareCaptureItem(file);
+      if (item.previewURL && prepared.previewURL && item.previewURL !== prepared.previewURL) {
+        URL.revokeObjectURL(item.previewURL);
+      }
+      item.kind = prepared.kind;
+      item.file = prepared.file;
+      item.originalName = prepared.originalName || item.originalName;
+      item.progress = prepared.progress || 0;
+      item.status = prepared.status || 'ready';
+      item.stage = prepared.stage || '';
+      item.details = prepared.details || '';
+      item.previewURL = prepared.previewURL || item.previewURL;
+    } catch (error) {
+      item.progress = 100;
+      item.status = 'error';
+      item.error = error && error.message ? error.message : 'Could not prepare media.';
+      item.stage = '';
+      if (!firstError) {
+        firstError = item.error;
+      }
+    }
+    flowershowRenderIntakeUploadQueue(form);
   }
-  flowershowRenderIntakeUploadQueue(form);
+  return { firstError: firstError };
 }
 
 function flowershowDistributeUploadProgress(items, loaded, total) {
@@ -801,6 +872,7 @@ function flowershowSubmitIntakeForm(form, options) {
   state.items.forEach(function(item) {
     item.status = 'uploading';
     item.progress = 0;
+    item.stage = 'Uploading…';
   });
   state.uploading = true;
   flowershowRenderIntakeUploadQueue(form);
@@ -812,6 +884,17 @@ function flowershowSubmitIntakeForm(form, options) {
   xhr.setRequestHeader('HX-Request', 'true');
   xhr.upload.addEventListener('progress', function(event) {
     flowershowDistributeUploadProgress(state.items, event.loaded, event.total);
+    state.items.forEach(function(item) {
+      item.stage = 'Uploading ' + Math.round(item.progress || 0) + '%';
+    });
+    flowershowRenderIntakeUploadQueue(form);
+  });
+  xhr.upload.addEventListener('load', function() {
+    state.items.forEach(function(item) {
+      item.progress = 100;
+      item.status = 'saving';
+      item.stage = 'Saving media…';
+    });
     flowershowRenderIntakeUploadQueue(form);
   });
   xhr.addEventListener('load', function() {
@@ -836,6 +919,7 @@ function flowershowSubmitIntakeForm(form, options) {
       item.progress = 100;
       item.status = 'done';
       item.error = '';
+      item.stage = 'Saved';
     });
     flowershowRenderIntakeUploadQueue(form);
     if (closeModal) {
@@ -878,8 +962,18 @@ function flowershowBindIntakeCaptureInput(input) {
   input.addEventListener('change', async function() {
     const form = input.closest('form');
     try {
-      await flowershowQueueCaptureFiles(form, input.files);
-      if (form && form.dataset.intakeAutosave === 'true') {
+      const result = await flowershowQueueCaptureFiles(form, input.files);
+      if (result && result.firstError) {
+        flowershowToast(result.firstError, true);
+        if (form && form.dataset.intakeAutosave === 'true') {
+          flowershowSetAutosaveStatus(form, result.firstError, true);
+        }
+      }
+      const state = form ? flowershowGetIntakeUploadState(form) : null;
+      const hasReadyItems = !!(state && state.items.some(function(item) {
+        return item.status === 'ready';
+      }));
+      if (form && form.dataset.intakeAutosave === 'true' && hasReadyItems) {
         await flowershowSubmitAutosaveForm(form, { keepMessage: true, closeModal: false });
       }
     } catch (error) {
@@ -1189,10 +1283,10 @@ function flowershowBindPhotoForm(form) {
       return;
     }
     try {
-      const normalized = await flowershowNormalizeImage(file);
-      const preview = URL.createObjectURL(normalized);
+      const normalized = await flowershowNormalizeImage(file, FLOWERSHOW_MAX_PHOTO_EDGE, 0.86);
+      const preview = URL.createObjectURL(normalized.file);
       button.innerHTML = '<img src="' + preview + '" alt="Selected photo" class="media-add-thumb"><span class="media-add-badge">+</span>';
-      await flowershowSubmitPhotoForm(form, normalized);
+      await flowershowSubmitPhotoForm(form, normalized.file);
     } catch (error) {
       flowershowToast(error && error.message ? error.message : 'Photo upload failed.', true);
     } finally {
