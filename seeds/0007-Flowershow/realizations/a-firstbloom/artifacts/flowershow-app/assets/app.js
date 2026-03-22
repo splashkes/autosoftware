@@ -274,6 +274,55 @@ function flowershowRefreshResultButtons(form) {
   }
 }
 
+function flowershowIntakeInitials(label) {
+  const text = (label || '').trim();
+  if (!text) return 'this entrant';
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'this entrant';
+  const initials = parts.slice(0, 2).map(function(part) {
+    return part.charAt(0).toUpperCase();
+  }).join('');
+  return initials || text;
+}
+
+function flowershowIntakeClassNumber(form) {
+  if (!form) return '';
+  if (form.dataset.intakeClassNumber) return form.dataset.intakeClassNumber;
+  const select = form.querySelector('[data-intake-existing-class-select]');
+  if (select && select.selectedOptions && select.selectedOptions[0]) {
+    const label = select.selectedOptions[0].textContent || '';
+    return label.split(':')[0].trim();
+  }
+  return '';
+}
+
+function flowershowIntakeEntrantDisplay(form) {
+  if (!form) return 'this entrant';
+  const explicit = (form.dataset.intakeEntrantDisplay || '').trim();
+  if (explicit) return explicit;
+  const entrantInput = form.querySelector('[data-intake-entrant-input]');
+  if (entrantInput && entrantInput.value.trim()) {
+    return flowershowIntakeInitials(entrantInput.value);
+  }
+  return 'this entrant';
+}
+
+function flowershowIntakeConfirmMessage(form, token) {
+  if (!token) return '';
+  const entrant = flowershowIntakeEntrantDisplay(form);
+  const classNumber = flowershowIntakeClassNumber(form);
+  let resultLabel = '';
+  if (token.indexOf('placement:') === 0) {
+    const placement = token.split(':')[1];
+    resultLabel = placement === '1' ? '1st place' : placement === '2' ? '2nd place' : placement === '3' ? '3rd place' : 'result';
+  } else if (token === 'special:true') {
+    resultLabel = 'special status';
+  } else {
+    resultLabel = 'result';
+  }
+  return classNumber ? ('Confirm ' + resultLabel + ' for ' + entrant + ' in Class ' + classNumber + '.') : ('Confirm ' + resultLabel + ' for ' + entrant + '.');
+}
+
 function flowershowOpenIntakeModal(modal, trigger) {
   if (!modal || !trigger) return;
   const mode = trigger.dataset.intakeMode || 'new';
@@ -334,6 +383,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
       if (entrantInput) {
         entrantInput.value = trigger.dataset.intakeEntrant || '';
         flowershowRenderEntrantResults(entrantInput);
+        editForm.dataset.intakeEntrantDisplay = flowershowIntakeInitials(trigger.dataset.intakeEntrant || '');
       }
       if (personIDInput) {
         personIDInput.value = trigger.dataset.intakePersonId || '';
@@ -341,6 +391,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
       if (classSelect) {
         classSelect.value = trigger.dataset.intakeClassId || '';
       }
+      editForm.dataset.intakeClassNumber = trigger.dataset.intakeClassNumber || '';
       if (nameInput) {
         nameInput.value = trigger.dataset.intakeEntryName || '';
       }
@@ -383,10 +434,20 @@ function flowershowBindIntakeModal(modal) {
     entrantInput.addEventListener('input', function() {
       flowershowSyncEntrantLookup(entrantInput);
       flowershowRenderEntrantResults(entrantInput);
+      const form = entrantInput.closest('form');
+      if (form) {
+        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+        flowershowRefreshResultButtons(form);
+      }
     });
     entrantInput.addEventListener('change', function() {
       flowershowSyncEntrantLookup(entrantInput);
       flowershowRenderEntrantResults(entrantInput);
+      const form = entrantInput.closest('form');
+      if (form) {
+        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+        flowershowRefreshResultButtons(form);
+      }
     });
     entrantInput.addEventListener('focus', function() {
       flowershowRenderEntrantResults(entrantInput);
@@ -399,6 +460,15 @@ function flowershowBindIntakeModal(modal) {
           results.hidden = true;
         }
       }, 120);
+    });
+  });
+  modal.querySelectorAll('[data-intake-existing-class-select]').forEach(function(classSelect) {
+    classSelect.addEventListener('change', function() {
+      const form = classSelect.closest('form');
+      if (form && classSelect.selectedOptions && classSelect.selectedOptions[0]) {
+        form.dataset.intakeClassNumber = (classSelect.selectedOptions[0].textContent || '').split(':')[0].trim();
+        flowershowRefreshResultButtons(form);
+      }
     });
   });
   flowershowBindIntakeForm(modal.querySelector('[data-intake-entry-form]'), { isNew: true });
@@ -935,9 +1005,9 @@ function flowershowBindIntakeResultsForm(form) {
     form.dataset.intakePendingConfirm = token || '';
     if (resultHelp) {
       if (token) {
-        resultHelp.textContent = 'Tap the highlighted result again to CONFIRM and save.';
+        resultHelp.textContent = flowershowIntakeConfirmMessage(form, token);
       } else {
-        resultHelp.textContent = 'Ties are allowed. Tap a result once to select it, then tap the same result again to CONFIRM.';
+        resultHelp.textContent = 'Select a placement or special status.';
       }
     }
     flowershowRefreshResultButtons(form);
