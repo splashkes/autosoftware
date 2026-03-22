@@ -160,10 +160,14 @@ test.describe('Flowershow Admin Local', () => {
     await expect(page.locator('[data-intake-class-number-display]')).not.toBeEmpty();
     await editForm.getByRole('button', { name: '#3 Third' }).click();
     await editForm.getByRole('button', { name: 'Confirm #3 Third' }).click();
-    await editForm.getByRole('button', { name: '#3 Third' }).click();
-    await editForm.getByRole('button', { name: 'Confirm remove #3 Third' }).click();
     await editForm.getByRole('button', { name: '★ Special' }).click();
     await editForm.getByRole('button', { name: 'Confirm ★ Special' }).click();
+
+    await expect(editForm.getByRole('button', { name: '#3 Third' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(editForm.getByRole('button', { name: '★ Special' })).toHaveAttribute('aria-pressed', 'true');
+
+    await editForm.getByRole('button', { name: '#3 Third' }).click();
+    await editForm.getByRole('button', { name: 'Confirm remove #3 Third' }).click();
     await editForm.getByRole('button', { name: '★ Special' }).click();
     await editForm.getByRole('button', { name: 'Confirm remove ★ Special' }).click();
 

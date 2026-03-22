@@ -1312,12 +1312,6 @@ function flowershowBindIntakeResultsForm(form) {
       const isRevokeConfirm = form.dataset.intakePendingConfirm === revokeToken;
       if (isConfirm) {
         placementInput.value = next;
-        if (specialInput) {
-          specialInput.value = 'false';
-        }
-        if (awardInput) awardInput.value = '';
-        if (awardSelect) awardSelect.value = '';
-        if (awardToggle) awardToggle.dataset.forceOpen = '';
         flowershowRefreshPlacementButtons(form);
         flowershowRefreshAwardState(form);
         setPendingConfirm('');
@@ -1347,12 +1341,6 @@ function flowershowBindIntakeResultsForm(form) {
         return;
       }
       placementInput.value = next;
-      if (specialInput) {
-        specialInput.value = 'false';
-      }
-      if (awardInput) awardInput.value = '';
-      if (awardSelect) awardSelect.value = '';
-      if (awardToggle) awardToggle.dataset.forceOpen = '';
       flowershowRefreshPlacementButtons(form);
       flowershowRefreshAwardState(form);
       setPendingConfirm(token);
@@ -1370,7 +1358,6 @@ function flowershowBindIntakeResultsForm(form) {
         if (specialInput) {
           specialInput.value = 'true';
         }
-        if (placementInput) placementInput.value = '0';
         flowershowRefreshAwardState(form);
         setPendingConfirm('');
         if (form.dataset.intakeAutosave === 'true') {
@@ -1405,7 +1392,6 @@ function flowershowBindIntakeResultsForm(form) {
       if (specialInput) {
         specialInput.value = nextActive ? 'true' : 'false';
       }
-      if (placementInput) placementInput.value = '0';
       flowershowRefreshAwardState(form);
       if (nextActive && awardSelect) {
         awardSelect.focus();
