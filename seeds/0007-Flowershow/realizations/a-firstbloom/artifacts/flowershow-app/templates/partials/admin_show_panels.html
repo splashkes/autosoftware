@@ -208,6 +208,7 @@
               enctype="multipart/form-data"
               class="form"
               data-target="#admin-intake-panel"
+              data-intake-autosave="true"
               data-intake-edit-form
               data-intake-results-form>
               <input type="hidden" name="section" value="intake">
@@ -254,7 +255,7 @@
                   <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
                   <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
                 </div>
-                <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
+                <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
                 <div class="form-group" data-intake-award-group hidden>
                   <label>Link award</label>
                   {{if .Awards}}
@@ -277,7 +278,7 @@
                 <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
                 <div class="intake-upload-queue" data-intake-upload-queue></div>
               </div>
-              <button type="submit" class="btn btn-primary">Save Entry</button>
+              <p class="card-meta intake-autosave-status" data-intake-autosave-status aria-live="polite"></p>
             </form>
           </div>
         </div>
@@ -745,7 +746,6 @@
         <input type="hidden" name="placement" value="{{.Entry.Placement}}" data-intake-placement-input>
         <input type="hidden" name="special_status" value="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" data-intake-special-status-input>
         <input type="hidden" name="award_id" value="{{if .SpecialAward}}{{.SpecialAward.ID}}{{end}}" data-intake-award-input>
-        <input type="hidden" name="points" value="{{printf "%.1f" .Entry.Points}}">
         <div class="form-group">
           <label>Result</label>
           <div class="intake-placement-actions">
@@ -754,7 +754,7 @@
             <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
             <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" title="Special status">★ Special</button>
           </div>
-          <p class="card-meta">Ties are allowed. Mark the same result on more than one entry when needed.</p>
+          <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
           <div class="form-group" data-intake-award-group {{if not .Entry.SpecialStatus}}hidden{{end}}>
             <label>Link award</label>
             {{if $.Awards}}
@@ -767,7 +767,7 @@
             {{end}}
           </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">Save Result</button>
+        <p class="card-meta intake-autosave-status" data-intake-autosave-status aria-live="polite"></p>
       </form>
 
       <div class="admin-entry-card-actions">

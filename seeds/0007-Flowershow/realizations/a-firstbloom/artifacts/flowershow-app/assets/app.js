@@ -1,9 +1,10 @@
 // Flowershow — minimal JS (HTMX handles most interactivity)
 
-const FLOWERSHOW_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const FLOWERSHOW_MAX_PHOTO_BYTES = 12 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
 const flowershowIntakeUploadStates = new WeakMap();
+const flowershowIntakeAutosaveTimers = new WeakMap();
 
 function flowershowQueryScope(root) {
   if (root && typeof root.querySelectorAll === 'function') {
@@ -80,7 +81,9 @@ function flowershowBindPersonFilter(input) {
 
 function flowershowCloseIntakeModal(modal) {
   if (!modal) return;
-  modal.querySelectorAll('[data-intake-entry-form], [data-intake-upload-form]').forEach(function(form) {
+  modal.querySelectorAll('[data-intake-entry-form], [data-intake-edit-form]').forEach(function(form) {
+    flowershowClearAutosaveTimer(form);
+    flowershowSetAutosaveStatus(form, '', false);
     flowershowResetIntakeUploadState(form);
   });
   modal.hidden = true;
@@ -90,7 +93,7 @@ function flowershowCloseIntakeModal(modal) {
 function flowershowSyncEntrantLookup(input) {
   if (!input) return false;
   const hidden = input
-    .closest('[data-intake-new-panel]')
+    .closest('form')
     .querySelector('[data-intake-person-id-input]');
   if (!hidden) return false;
   const listId = input.dataset.intakeEntrantList || input.getAttribute('list');
@@ -145,12 +148,16 @@ function flowershowRenderEntrantResults(input) {
     button.textContent = match.label;
     button.addEventListener('click', function() {
       input.value = match.label;
-      const hidden = input.closest('[data-intake-new-panel]').querySelector('[data-intake-person-id-input]');
+      const form = input.closest('form');
+      const hidden = form ? form.querySelector('[data-intake-person-id-input]') : null;
       if (hidden) {
         hidden.value = match.personID;
       }
       results.hidden = true;
       results.innerHTML = '';
+      if (form && form.dataset.intakeAutosave === 'true') {
+        flowershowScheduleAutosave(form, 0);
+      }
     });
     results.appendChild(button);
   });
@@ -285,6 +292,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
       form.action = trigger.dataset.intakeCreateAction || form.action;
       form.setAttribute('hx-post', trigger.dataset.intakeCreateAction || form.action);
       flowershowResetIntakeUploadState(form);
+      flowershowSetAutosaveStatus(form, '', false);
     }
     if (classIDInput) classIDInput.value = trigger.dataset.intakeClassId || '';
     if (entrantInput) entrantInput.value = '';
@@ -336,7 +344,9 @@ function flowershowOpenIntakeModal(modal, trigger) {
       if (awardToggle) {
         awardToggle.dataset.forceOpen = trigger.dataset.intakeSpecialStatus === 'true' ? 'true' : '';
       }
+      editForm.dataset.intakePendingConfirm = '';
       flowershowResetIntakeUploadState(editForm);
+      flowershowSetAutosaveStatus(editForm, '', false);
       flowershowRefreshPlacementButtons(editForm);
       flowershowRefreshAwardState(editForm);
     }
@@ -620,18 +630,35 @@ async function flowershowPrepareCaptureItem(file) {
     throw new Error('HEIC/HEIF is not supported. Capture JPEG or PNG instead.');
   }
   if (flowershowPhotoLike(file)) {
-    if (file.size > FLOWERSHOW_MAX_PHOTO_BYTES) {
-      throw new Error('Photo exceeds 5 MB before optimization. Capture a smaller image.');
+    try {
+      const normalized = await flowershowNormalizeImage(file);
+      return {
+        id: 'upload_' + Math.random().toString(36).slice(2, 10),
+        kind: 'photo',
+        file: normalized,
+        progress: 0,
+        status: 'ready',
+        previewURL: URL.createObjectURL(normalized)
+      };
+    } catch (error) {
+      const lowerName = (file.name || '').toLowerCase();
+      const mime = (file.type || '').toLowerCase();
+      const fallbackAllowed = /^image\/(jpeg|png|webp)$/i.test(mime) || /\.(jpe?g|png|webp)$/i.test(lowerName);
+      if (!fallbackAllowed) {
+        throw error;
+      }
+      return {
+        id: 'upload_' + Math.random().toString(36).slice(2, 10),
+        kind: 'photo',
+        file: new File([file], flowershowSanitizeUploadBase(file.name) + (lowerName.endsWith('.png') ? '.png' : lowerName.endsWith('.webp') ? '.webp' : '.jpg'), {
+          type: file.type || 'image/jpeg',
+          lastModified: file.lastModified || Date.now()
+        }),
+        progress: 0,
+        status: 'ready',
+        previewURL: URL.createObjectURL(file)
+      };
     }
-    const normalized = await flowershowNormalizeImage(file);
-    return {
-      id: 'upload_' + Math.random().toString(36).slice(2, 10),
-      kind: 'photo',
-      file: normalized,
-      progress: 0,
-      status: 'ready',
-      previewURL: URL.createObjectURL(normalized)
-    };
   }
   if (flowershowVideoLike(file)) {
     const normalized = await flowershowNormalizeVideo(file);
@@ -684,13 +711,11 @@ function flowershowSwapAdminTarget(targetSelector, html) {
 }
 
 function flowershowSubmitIntakeForm(form, options) {
-  const isNew = !!(options && options.isNew);
+  const closeModal = !options || options.closeModal !== false;
+  const onSuccess = options && typeof options.onSuccess === 'function' ? options.onSuccess : null;
+  const onError = options && typeof options.onError === 'function' ? options.onError : null;
   const state = flowershowGetIntakeUploadState(form);
   const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
-  if (!isNew && state.items.length === 0) {
-    flowershowToast('Capture at least one photo or video before uploading.', true);
-    return;
-  }
   const formData = new FormData(form);
   state.items.forEach(function(item) {
     formData.append('media', item.file, item.file.name);
@@ -717,12 +742,16 @@ function flowershowSubmitIntakeForm(form, options) {
       button.disabled = false;
     });
     if (xhr.status < 200 || xhr.status >= 300) {
+      const message = (xhr.responseText || 'Upload failed.').replace(/<[^>]+>/g, '');
       state.items.forEach(function(item) {
         item.status = 'error';
         item.error = xhr.responseText || 'Upload failed';
       });
       flowershowRenderIntakeUploadQueue(form);
-      flowershowToast((xhr.responseText || 'Upload failed.').replace(/<[^>]+>/g, ''), true);
+      flowershowToast(message, true);
+      if (onError) {
+        onError(new Error(message));
+      }
       return;
     }
     state.items.forEach(function(item) {
@@ -731,13 +760,18 @@ function flowershowSubmitIntakeForm(form, options) {
       item.error = '';
     });
     flowershowRenderIntakeUploadQueue(form);
-    const modal = form.closest('[data-intake-modal]');
-    if (modal) {
-      modal.hidden = true;
-      document.body.classList.remove('body-lightbox-open');
+    if (closeModal) {
+      const modal = form.closest('[data-intake-modal]');
+      if (modal) {
+        modal.hidden = true;
+        document.body.classList.remove('body-lightbox-open');
+      }
     }
     flowershowResetIntakeUploadState(form);
     flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', xhr.responseText || '');
+    if (onSuccess) {
+      onSuccess();
+    }
     document.body.dispatchEvent(new CustomEvent('flowershow:media-ready'));
   });
   xhr.addEventListener('error', function() {
@@ -751,6 +785,9 @@ function flowershowSubmitIntakeForm(form, options) {
     });
     flowershowRenderIntakeUploadQueue(form);
     flowershowToast('Upload failed. Check the connection and try again.', true);
+    if (onError) {
+      onError(new Error('Upload failed. Check the connection and try again.'));
+    }
   });
   xhr.send(formData);
 }
@@ -762,12 +799,69 @@ function flowershowBindIntakeCaptureInput(input) {
     const form = input.closest('form');
     try {
       await flowershowQueueCaptureFiles(form, input.files);
+      if (form && form.dataset.intakeAutosave === 'true') {
+        await flowershowSubmitAutosaveForm(form, { keepMessage: true });
+      }
     } catch (error) {
       flowershowToast(error && error.message ? error.message : 'Could not prepare media.', true);
+      if (form && form.dataset.intakeAutosave === 'true') {
+        flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not prepare media.', true);
+      }
     } finally {
       input.value = '';
     }
   });
+}
+
+function flowershowSetAutosaveStatus(form, message, isError) {
+  if (!form) return;
+  const node = form.querySelector('[data-intake-autosave-status]');
+  if (!node) return;
+  node.textContent = message || '';
+  node.classList.toggle('is-error', !!(isError && message));
+  node.classList.toggle('is-success', !!(!isError && message));
+}
+
+function flowershowClearAutosaveTimer(form) {
+  const timer = flowershowIntakeAutosaveTimers.get(form);
+  if (timer) {
+    clearTimeout(timer);
+    flowershowIntakeAutosaveTimers.delete(form);
+  }
+}
+
+async function flowershowSubmitAutosaveForm(form, options) {
+  const closeModal = !!(options && options.closeModal);
+  const keepMessage = !!(options && options.keepMessage);
+  const entrantInput = form.querySelector('[data-intake-entrant-input]');
+  if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
+    flowershowSetAutosaveStatus(form, 'Choose an entrant from the suggestions.', true);
+    return;
+  }
+  flowershowClearAutosaveTimer(form);
+  flowershowSetAutosaveStatus(form, 'Saving…', false);
+  try {
+    await new Promise(function(resolve, reject) {
+      flowershowSubmitIntakeForm(form, {
+        closeModal: closeModal,
+        onSuccess: resolve,
+        onError: reject
+      });
+    });
+    flowershowSetAutosaveStatus(form, keepMessage ? 'Saved.' : '', false);
+  } catch (error) {
+    flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not save.', true);
+    flowershowToast(error && error.message ? error.message : 'Could not save.', true);
+  }
+}
+
+function flowershowScheduleAutosave(form, delay) {
+  if (!form || form.dataset.intakeAutosave !== 'true') return;
+  flowershowClearAutosaveTimer(form);
+  const timeout = window.setTimeout(function() {
+    flowershowSubmitAutosaveForm(form, { keepMessage: true });
+  }, Math.max(0, delay || 0));
+  flowershowIntakeAutosaveTimers.set(form, timeout);
 }
 
 function flowershowBindIntakeCaptureButton(button) {
@@ -798,6 +892,21 @@ function flowershowBindIntakeForm(form, options) {
     }
     flowershowSubmitIntakeForm(form, options);
   });
+  if (form.dataset.intakeAutosave === 'true') {
+    form.querySelectorAll('input[type="text"], textarea').forEach(function(input) {
+      input.addEventListener('input', function() {
+        flowershowScheduleAutosave(form, 450);
+      });
+      input.addEventListener('change', function() {
+        flowershowScheduleAutosave(form, 0);
+      });
+    });
+    form.querySelectorAll('select').forEach(function(select) {
+      select.addEventListener('change', function() {
+        flowershowScheduleAutosave(form, 0);
+      });
+    });
+  }
 }
 
 function flowershowBindIntakeResultsForm(form) {
@@ -808,29 +917,81 @@ function flowershowBindIntakeResultsForm(form) {
   const awardInput = form.querySelector('[data-intake-award-input]');
   const awardToggle = form.querySelector('[data-intake-award-toggle]');
   const awardSelect = form.querySelector('[data-intake-award-select]');
+  const resultHelp = form.querySelector('[data-intake-result-help]');
+
+  function setPendingConfirm(token) {
+    form.dataset.intakePendingConfirm = token || '';
+    if (resultHelp) {
+      if (token) {
+        resultHelp.textContent = 'Tap the selected result again to confirm and save.';
+      } else {
+        resultHelp.textContent = 'Ties are allowed. Tap a result once to select it, then tap again to confirm.';
+      }
+    }
+  }
 
   form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
     button.addEventListener('click', function() {
       if (!placementInput) return;
       const next = button.dataset.intakePlacementButton || '0';
-      placementInput.value = placementInput.value === next ? '0' : next;
+      const token = 'placement:' + next;
+      const isConfirm = form.dataset.intakePendingConfirm === token;
+      placementInput.value = next;
+      if (specialInput) {
+        specialInput.value = 'false';
+      }
+      if (awardInput) awardInput.value = '';
+      if (awardSelect) awardSelect.value = '';
+      if (awardToggle) awardToggle.dataset.forceOpen = '';
       flowershowRefreshPlacementButtons(form);
+      flowershowRefreshAwardState(form);
+      if (isConfirm) {
+        setPendingConfirm('');
+        if (form.dataset.intakeAutosave === 'true') {
+          flowershowSubmitAutosaveForm(form, { keepMessage: true });
+        } else {
+          form.requestSubmit();
+        }
+        return;
+      }
+      setPendingConfirm(token);
     });
   });
   if (awardToggle) {
     awardToggle.addEventListener('click', function() {
+      const token = 'special:true';
       const nextActive = awardToggle.getAttribute('aria-pressed') !== 'true';
+      const isConfirm = nextActive && form.dataset.intakePendingConfirm === token;
       awardToggle.dataset.forceOpen = nextActive ? 'true' : '';
       if (specialInput) {
         specialInput.value = nextActive ? 'true' : 'false';
       }
       if (!nextActive) {
+        if (placementInput) placementInput.value = '0';
         if (awardInput) awardInput.value = '';
         if (awardSelect) awardSelect.value = '';
+        setPendingConfirm('');
+        if (form.dataset.intakeAutosave === 'true') {
+          flowershowScheduleAutosave(form, 0);
+        } else {
+          form.requestSubmit();
+        }
       }
       flowershowRefreshAwardState(form);
       if (nextActive && awardSelect) {
         awardSelect.focus();
+      }
+      if (nextActive) {
+        if (isConfirm) {
+          setPendingConfirm('');
+          if (form.dataset.intakeAutosave === 'true') {
+            flowershowSubmitAutosaveForm(form, { keepMessage: true });
+          } else {
+            form.requestSubmit();
+          }
+          return;
+        }
+        setPendingConfirm(token);
       }
     });
   }
@@ -844,6 +1005,12 @@ function flowershowBindIntakeResultsForm(form) {
         awardToggle.dataset.forceOpen = specialInput.value === 'true' ? 'true' : '';
       }
       flowershowRefreshAwardState(form);
+      setPendingConfirm('');
+      if (form.dataset.intakeAutosave === 'true') {
+        flowershowScheduleAutosave(form, 0);
+      } else {
+        form.requestSubmit();
+      }
     });
   }
   flowershowRefreshPlacementButtons(form);
@@ -862,13 +1029,19 @@ function flowershowBindIntakeResultsForm(form) {
       if (!response.ok) {
         throw new Error((html || 'Could not save result.').replace(/<[^>]+>/g, ''));
       }
+      setPendingConfirm('');
       const modal = form.closest('[data-intake-modal]');
       if (modal) {
-        modal.hidden = true;
-        document.body.classList.remove('body-lightbox-open');
+        if (form.dataset.intakeAutosave !== 'true') {
+          modal.hidden = true;
+          document.body.classList.remove('body-lightbox-open');
+        }
       }
+      flowershowSetAutosaveStatus(form, form.dataset.intakeAutosave === 'true' ? 'Saved.' : '', false);
       flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', html || '');
     } catch (error) {
+      setPendingConfirm('');
+      flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not save result.', true);
       flowershowToast(error && error.message ? error.message : 'Could not save result.', true);
     }
   });
