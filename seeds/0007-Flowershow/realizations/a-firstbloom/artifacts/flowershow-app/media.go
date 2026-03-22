@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	maxPhotoSize = 5 << 20
+	maxPhotoSize = 20 << 20
 	maxVideoSize = 50 << 20
 )
 
