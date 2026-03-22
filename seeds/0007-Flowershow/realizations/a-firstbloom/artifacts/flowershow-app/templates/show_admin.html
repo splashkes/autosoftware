@@ -17,7 +17,7 @@
   <div class="tabs workflow-tabs show-admin-tabs">
     <button type="button" class="tab {{if eq .DefaultTab "setup"}}active{{end}}" onclick="showTab('setup')">Setup</button>
     <button type="button" class="tab {{if eq .DefaultTab "intake"}}active{{end}}" onclick="showTab('intake')">Entries</button>
-    <button type="button" class="tab {{if eq .DefaultTab "floor"}}active{{end}}" onclick="showTab('floor')">Floor</button>
+    <button type="button" class="tab {{if eq .DefaultTab "floor"}}active{{end}}" onclick="showTab('floor')">Corrections</button>
     <button type="button" class="tab {{if eq .DefaultTab "scoring"}}active{{end}}" onclick="showTab('scoring')">Scoring</button>
     <button type="button" class="tab {{if eq .DefaultTab "board"}}active{{end}}" onclick="showTab('board')">Board</button>
     <button type="button" class="tab {{if eq .DefaultTab "governance"}}active{{end}}" onclick="showTab('governance')">Governance</button>
@@ -47,14 +47,6 @@
               {{end}}
             </div>
             {{end}}
-          </nav>
-        </div>
-
-        <div class="show-admin-subnav {{if eq .DefaultTab "floor"}}is-active{{end}}" data-show-admin-nav="floor">
-          <div class="show-admin-subnav-label">Floor</div>
-          <nav class="account-section-nav">
-            <a href="#floor-corrections" class="account-section-link">Corrections</a>
-            <a href="#floor-placements" class="account-section-link">Placements</a>
           </nav>
         </div>
 

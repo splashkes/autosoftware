@@ -94,6 +94,7 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
 
+    await page.getByRole('button', { name: 'Setup' }).click();
     await page.locator('summary:has-text("Assign judge")').click();
     const judgeSelect = page.locator('form[action$="/judges"] select[name="person_id"]');
     await judgeSelect.selectOption({ index: 1 });
@@ -134,15 +135,15 @@ test.describe('Flowershow Admin Local', () => {
     const sidebar = page.locator('[data-show-admin-shell] .account-sidebar');
     const activeNav = sidebar.locator('[data-show-admin-nav].is-active');
     await expect(sidebar).toBeVisible();
-    await expect(activeNav).toContainText('Show Basics');
-    await expect(activeNav).not.toContainText('Add Entry');
-
-    await page.getByRole('button', { name: 'Intake' }).click();
     await expect(activeNav).toContainText('Intake Grid');
     await expect(activeNav).toContainText('Hybrid Tea Roses');
     await expect(activeNav).not.toContainText('Show Basics');
 
-    await page.getByRole('button', { name: 'Governance' }).click();
+    await page.getByRole('button', { name: 'Setup' }).click();
+    await expect(activeNav).toContainText('Show Basics');
+    await expect(activeNav).not.toContainText('Intake Grid');
+
+    await page.getByRole('button', { name: 'Governance', exact: true }).click();
     await expect(activeNav).toContainText('Standards');
     await expect(activeNav).toContainText('Effective Rules');
   });
@@ -151,16 +152,22 @@ test.describe('Flowershow Admin Local', () => {
     await loginLocalAdmin(page);
     await page.goto('/admin/shows/show_spring2025');
 
-    await page.getByRole('button', { name: 'Intake' }).click();
+    await page.getByRole('button', { name: 'Entries' }).click();
     const firstEntryTile = page.locator('[data-intake-modal-open][data-intake-mode="existing"]').first();
     await firstEntryTile.click();
+    const editForm = page.locator('[data-intake-edit-form]');
 
     await expect(page.locator('[data-intake-class-number-display]')).not.toBeEmpty();
-    await page.getByRole('button', { name: '#1' }).click();
-    await page.getByRole('button', { name: '★' }).click();
-    await page.getByRole('button', { name: 'Save Result' }).click();
+    await editForm.getByRole('button', { name: '#3 Third' }).click();
+    await editForm.getByRole('button', { name: 'Confirm #3 Third' }).click();
+    await editForm.getByRole('button', { name: '#3 Third' }).click();
+    await editForm.getByRole('button', { name: 'Confirm remove #3 Third' }).click();
+    await editForm.getByRole('button', { name: '★ Special' }).click();
+    await editForm.getByRole('button', { name: 'Confirm ★ Special' }).click();
+    await editForm.getByRole('button', { name: '★ Special' }).click();
+    await editForm.getByRole('button', { name: 'Confirm remove ★ Special' }).click();
 
-    await expect(page.locator('#admin-intake-panel')).toContainText('1st');
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
   });
 
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
@@ -223,20 +230,21 @@ test.describe('Flowershow Admin Local', () => {
       'Playwright Bloom Class',
     );
 
-    await page.getByRole('button', { name: 'Intake' }).click();
+    await page.getByRole('button', { name: 'Entries' }).click();
     await page
       .locator('.intake-class-card')
       .filter({ hasText: 'Playwright Bloom Class' })
       .locator('[data-intake-modal-open][data-intake-mode="new"]')
       .click();
-    const entrantChoice = await page.locator('[data-intake-entrant-input]').evaluate(() => {
+    const entrantInput = page.locator('[data-intake-entry-form] [data-intake-entrant-input]');
+    const entrantChoice = await entrantInput.evaluate(() => {
       const options = Array.from(document.querySelectorAll('#intake-entrant-options option'));
       const match = options.find((option) => option.value.includes('Margaret Chen'));
       return match ? { label: match.value, personID: match.dataset.personId || '' } : null;
     });
     expect(entrantChoice).toBeTruthy();
-    await page.locator('[data-intake-entrant-input]').fill(entrantChoice!.label);
-    await page.locator('[data-intake-person-id-input]').evaluate((node, personID) => {
+    await entrantInput.fill(entrantChoice!.label);
+    await page.locator('[data-intake-entry-form] [data-intake-person-id-input]').evaluate((node, personID) => {
       (node as HTMLInputElement).value = personID as string;
     }, entrantChoice!.personID);
     await page.locator('form[data-intake-entry-form] input[name="name"]').fill('Playwright Peace');
@@ -254,9 +262,10 @@ test.describe('Flowershow Admin Local', () => {
     await expectAgentPath(page, publicPath!);
 
     await page.goto(adminShowPath);
-    await page.getByRole('button', { name: 'Floor' }).click();
-    const entryRow = page.locator('tr', { hasText: 'Playwright Peace' });
-    await entryRow.locator('button:has-text("Suppress")').click();
+    await page.getByRole('button', { name: 'Corrections' }).click();
+    const entryCard = page.locator('.admin-entry-card', { hasText: 'Playwright Peace' });
+    await entryCard.locator('summary:has-text("Correction")').click();
+    await entryCard.locator('button:has-text("Suppress")').click();
     await expect(page.locator('#admin-floor-panel')).toContainText('suppressed');
 
     await page.goto(publicPath!);
@@ -271,13 +280,13 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
 
-    await page.getByRole('button', { name: 'Intake' }).click();
+    await page.getByRole('button', { name: 'Entries' }).click();
     await page.locator('[data-intake-modal-open][data-intake-mode="new"]').first().click();
-    const entrantInput = page.locator('[data-intake-entrant-input]');
+    const entrantInput = page.locator('[data-intake-entry-form] [data-intake-entrant-input]');
     await expect(entrantInput).toBeVisible();
     await entrantInput.fill('Susan Park · guest · Metro Rose Society');
     await entrantInput.blur();
-    await expect(page.locator('[data-intake-person-id-input]')).not.toHaveValue('');
+    await expect(page.locator('[data-intake-entry-form] [data-intake-person-id-input]')).not.toHaveValue('');
 
     await page.goto('/admin/roles');
     await expect(page).toHaveURL(/\/account\?notice=admin_required$/);
