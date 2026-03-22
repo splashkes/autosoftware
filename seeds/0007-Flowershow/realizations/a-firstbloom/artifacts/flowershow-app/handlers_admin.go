@@ -884,6 +884,7 @@ func (a *app) handleAdminShowCreate(w http.ResponseWriter, r *http.Request) {
 type adminShowDetailData struct {
 	Title                string
 	CurrentPath          string
+	DefaultTab           string
 	ShowID               string
 	Show                 *Show
 	Schedule             *ShowSchedule
@@ -984,10 +985,15 @@ func (a *app) adminShowDetailData(showID string) (adminShowDetailData, error) {
 		}
 		return sched.EffectiveStandardEditionID
 	}())
+	defaultTab := "setup"
+	if sched != nil || len(a.store.classesByShowID(show.ID)) > 0 || len(entries) > 0 {
+		defaultTab = "intake"
+	}
 
 	return adminShowDetailData{
 		Title:                "Admin: " + show.Name,
 		CurrentPath:          "/admin/shows/" + show.ID,
+		DefaultTab:           defaultTab,
 		ShowID:               show.ID,
 		Show:                 show,
 		Schedule:             sched,
