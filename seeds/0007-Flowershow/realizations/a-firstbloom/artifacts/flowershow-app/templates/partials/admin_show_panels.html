@@ -262,7 +262,7 @@
               <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
               <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
             </div>
-            <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
+            <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap the same result again to CONFIRM.</p>
             <div class="form-group" data-intake-award-group hidden>
               <label>Link award</label>
               {{if .Awards}}
@@ -756,7 +756,7 @@
             <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
             <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}" title="Special status">★ Special</button>
           </div>
-          <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
+          <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap the same result again to CONFIRM.</p>
           <div class="form-group" data-intake-award-group {{if not .Entry.SpecialStatus}}hidden{{end}}>
             <label>Link award</label>
             {{if $.Awards}}
