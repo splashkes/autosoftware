@@ -714,6 +714,7 @@ function flowershowSubmitIntakeForm(form, options) {
   const closeModal = !options || options.closeModal !== false;
   const onSuccess = options && typeof options.onSuccess === 'function' ? options.onSuccess : null;
   const onError = options && typeof options.onError === 'function' ? options.onError : null;
+  const skipSwap = !!(options && options.skipSwap);
   const state = flowershowGetIntakeUploadState(form);
   const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
   const formData = new FormData(form);
@@ -768,7 +769,9 @@ function flowershowSubmitIntakeForm(form, options) {
       }
     }
     flowershowResetIntakeUploadState(form);
-    flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', xhr.responseText || '');
+    if (!skipSwap) {
+      flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', xhr.responseText || '');
+    }
     if (onSuccess) {
       onSuccess();
     }
@@ -800,7 +803,7 @@ function flowershowBindIntakeCaptureInput(input) {
     try {
       await flowershowQueueCaptureFiles(form, input.files);
       if (form && form.dataset.intakeAutosave === 'true') {
-        await flowershowSubmitAutosaveForm(form, { keepMessage: true });
+        await flowershowSubmitAutosaveForm(form, { keepMessage: true, closeModal: false });
       }
     } catch (error) {
       flowershowToast(error && error.message ? error.message : 'Could not prepare media.', true);
@@ -842,8 +845,10 @@ async function flowershowSubmitAutosaveForm(form, options) {
   flowershowSetAutosaveStatus(form, 'Saving…', false);
   try {
     await new Promise(function(resolve, reject) {
+      const modal = form.closest('[data-intake-modal]');
       flowershowSubmitIntakeForm(form, {
         closeModal: closeModal,
+        skipSwap: !!modal,
         onSuccess: resolve,
         onError: reject
       });

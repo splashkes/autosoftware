@@ -132,162 +132,164 @@
       </section>
       {{end}}
     </div>
-
-    <div class="intake-modal" data-intake-modal hidden>
-      <div class="intake-modal-backdrop" data-intake-modal-close></div>
-      <div class="intake-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="intake-modal-title">
-        <button type="button" class="media-lightbox-close intake-modal-close" data-intake-modal-close aria-label="Close intake editor">×</button>
-        <div class="intake-modal-shell">
-          <div class="intake-modal-header">
-            <div class="login-step-kicker">Onsite intake</div>
-            <h3 id="intake-modal-title" class="card-title" data-intake-modal-title>Add entry</h3>
-            <div class="intake-class-hero" data-intake-class-hero hidden>
-              <div class="intake-class-number-display" data-intake-class-number-display></div>
-              <div class="intake-class-hero-copy">
-                <div class="intake-class-title-display" data-intake-class-title-display></div>
-                <p class="card-meta" data-intake-class-description-display hidden></p>
-                <div class="intake-class-detail-display" data-intake-class-detail-display></div>
-                <p class="card-meta" data-intake-class-notes-display hidden></p>
-              </div>
-            </div>
-          </div>
-
-          <div data-intake-new-panel>
-              <form
-              method="POST"
-              action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
-              enctype="multipart/form-data"
-              class="form"
-              data-target="#admin-intake-panel"
-              data-intake-entry-form>
-              <input type="hidden" name="class_id" value="" data-intake-class-id-input>
-              <div class="form-group">
-                <label>Entrant</label>
-                <input
-                  type="text"
-                  class="form-input"
-                  placeholder="Start typing a full name"
-                  data-intake-entrant-list="intake-entrant-options"
-                  data-intake-entrant-input
-                  autocomplete="off"
-                  required>
-                <input type="hidden" name="person_id" value="" data-intake-person-id-input>
-                <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
-                <datalist id="intake-entrant-options">
-                  {{range .EntrantCandidates}}
-                  <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
-                  {{end}}
-                </datalist>
-              </div>
-              <div class="form-group">
-                <label>Entry name</label>
-                <input type="text" name="name" class="form-input" placeholder="Optional cultivar or display name">
-              </div>
-              <div class="form-group">
-                <label>Notes</label>
-                <input type="text" name="notes" class="form-input" placeholder="Optional notes">
-              </div>
-              <div class="form-group">
-                <label>Add media</label>
-                <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
-                </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
-                <div class="intake-upload-queue" data-intake-upload-queue></div>
-              </div>
-              <button type="submit" class="btn btn-primary">Save Entry</button>
-            </form>
-          </div>
-
-          <div data-intake-existing-panel hidden>
-            <form
-              method="POST"
-              action=""
-              enctype="multipart/form-data"
-              class="form"
-              data-target="#admin-intake-panel"
-              data-intake-autosave="true"
-              data-intake-edit-form
-              data-intake-results-form>
-              <input type="hidden" name="section" value="intake">
-              <input type="hidden" name="placement" value="0" data-intake-placement-input>
-              <input type="hidden" name="special_status" value="false" data-intake-special-status-input>
-              <input type="hidden" name="award_id" value="" data-intake-award-input>
-              <div class="form-group">
-                <label>Entrant</label>
-                <input
-                  type="text"
-                  class="form-input"
-                  placeholder="Start typing a full name"
-                  data-intake-entrant-list="intake-entrant-options-existing"
-                  data-intake-entrant-input
-                  autocomplete="off"
-                  required>
-                <input type="hidden" name="person_id" value="" data-intake-person-id-input>
-                <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
-                <datalist id="intake-entrant-options-existing">
-                  {{range .EntrantCandidates}}
-                  <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
-                  {{end}}
-                </datalist>
-              </div>
-              <div class="form-group">
-                <label>Class</label>
-                <select name="class_id" class="form-input" data-intake-existing-class-select required>
-                  {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}}: {{.Title}}{{if .Description}} · {{.Description}}{{end}}</option>{{end}}
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Entry name</label>
-                <input type="text" name="name" class="form-input" data-intake-existing-name-input placeholder="Optional cultivar or display name">
-              </div>
-              <div class="form-group">
-                <label>Notes</label>
-                <input type="text" name="notes" class="form-input" data-intake-existing-notes-input placeholder="Optional notes">
-              </div>
-              <div class="form-group">
-                <label>Result</label>
-                <div class="intake-placement-actions">
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1 First</button>
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2 Second</button>
-                  <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
-                  <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
-                </div>
-                <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
-                <div class="form-group" data-intake-award-group hidden>
-                  <label>Link award</label>
-                  {{if .Awards}}
-                  <select class="form-input" data-intake-award-select>
-                    <option value="">Keep as star only</option>
-                    {{range .Awards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-                  </select>
-                  {{else}}
-                  <p class="card-meta">No awards are defined for this show yet.</p>
-                  {{end}}
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Add media</label>
-                <div class="intake-capture-actions">
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
-                  <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
-                </div>
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
-                <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
-                <div class="intake-upload-queue" data-intake-upload-queue></div>
-              </div>
-              <p class="card-meta intake-autosave-status" data-intake-autosave-status aria-live="polite"></p>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
     {{else}}
     <p class="empty-state">Create a schedule and classes first, then intake will render directly from the live show order.</p>
     {{end}}
   </section>
+</div>
+{{end}}
+
+{{define "admin_intake_modal"}}
+<div class="intake-modal" data-intake-modal hidden>
+  <div class="intake-modal-backdrop" data-intake-modal-close></div>
+  <div class="intake-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="intake-modal-title">
+    <button type="button" class="media-lightbox-close intake-modal-close" data-intake-modal-close aria-label="Close intake editor">×</button>
+    <div class="intake-modal-shell">
+      <div class="intake-modal-header">
+        <div class="login-step-kicker">Onsite intake</div>
+        <h3 id="intake-modal-title" class="card-title" data-intake-modal-title>Add entry</h3>
+        <div class="intake-class-hero" data-intake-class-hero hidden>
+          <div class="intake-class-number-display" data-intake-class-number-display></div>
+          <div class="intake-class-hero-copy">
+            <div class="intake-class-title-display" data-intake-class-title-display></div>
+            <p class="card-meta" data-intake-class-description-display hidden></p>
+            <div class="intake-class-detail-display" data-intake-class-detail-display></div>
+            <p class="card-meta" data-intake-class-notes-display hidden></p>
+          </div>
+        </div>
+      </div>
+
+      <div data-intake-new-panel>
+        <form
+          method="POST"
+          action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries"
+          enctype="multipart/form-data"
+          class="form"
+          data-target="#admin-intake-panel"
+          data-intake-entry-form>
+          <input type="hidden" name="class_id" value="" data-intake-class-id-input>
+          <div class="form-group">
+            <label>Entrant</label>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Start typing a full name"
+              data-intake-entrant-list="intake-entrant-options"
+              data-intake-entrant-input
+              autocomplete="off"
+              required>
+            <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+            <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
+            <datalist id="intake-entrant-options">
+              {{range .EntrantCandidates}}
+              <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
+              {{end}}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>Entry name</label>
+            <input type="text" name="name" class="form-input" placeholder="Optional cultivar or display name">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+          </div>
+          <div class="form-group">
+            <label>Add media</label>
+            <div class="intake-capture-actions">
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
+            </div>
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+            <div class="intake-upload-queue" data-intake-upload-queue></div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Entry</button>
+        </form>
+      </div>
+
+      <div data-intake-existing-panel hidden>
+        <form
+          method="POST"
+          action=""
+          enctype="multipart/form-data"
+          class="form"
+          data-target="#admin-intake-panel"
+          data-intake-autosave="true"
+          data-intake-edit-form
+          data-intake-results-form>
+          <input type="hidden" name="section" value="intake">
+          <input type="hidden" name="placement" value="0" data-intake-placement-input>
+          <input type="hidden" name="special_status" value="false" data-intake-special-status-input>
+          <input type="hidden" name="award_id" value="" data-intake-award-input>
+          <div class="form-group">
+            <label>Entrant</label>
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Start typing a full name"
+              data-intake-entrant-list="intake-entrant-options-existing"
+              data-intake-entrant-input
+              autocomplete="off"
+              required>
+            <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+            <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
+            <datalist id="intake-entrant-options-existing">
+              {{range .EntrantCandidates}}
+              <option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>
+              {{end}}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>Class</label>
+            <select name="class_id" class="form-input" data-intake-existing-class-select required>
+              {{range .Classes}}<option value="{{.ID}}">{{.ClassNumber}}: {{.Title}}{{if .Description}} · {{.Description}}{{end}}</option>{{end}}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Entry name</label>
+            <input type="text" name="name" class="form-input" data-intake-existing-name-input placeholder="Optional cultivar or display name">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" name="notes" class="form-input" data-intake-existing-notes-input placeholder="Optional notes">
+          </div>
+          <div class="form-group">
+            <label>Result</label>
+            <div class="intake-placement-actions">
+              <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="1">#1 First</button>
+              <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="2">#2 Second</button>
+              <button type="button" class="btn btn-outline intake-placement-button" data-intake-placement-button="3">#3 Third</button>
+              <button type="button" class="btn btn-outline intake-placement-button intake-award-toggle" data-intake-award-toggle aria-pressed="false" title="Special status">★ Special</button>
+            </div>
+            <p class="card-meta" data-intake-result-help>Ties are allowed. Tap a result once to select it, then tap again to confirm.</p>
+            <div class="form-group" data-intake-award-group hidden>
+              <label>Link award</label>
+              {{if .Awards}}
+              <select class="form-input" data-intake-award-select>
+                <option value="">Keep as star only</option>
+                {{range .Awards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+              </select>
+              {{else}}
+              <p class="card-meta">No awards are defined for this show yet.</p>
+              {{end}}
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Add media</label>
+            <div class="intake-capture-actions">
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
+            </div>
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+            <div class="intake-upload-queue" data-intake-upload-queue></div>
+          </div>
+          <p class="card-meta intake-autosave-status" data-intake-autosave-status aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 {{end}}
 
