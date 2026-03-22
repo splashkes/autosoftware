@@ -15,17 +15,17 @@
 
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
   <div class="tabs workflow-tabs show-admin-tabs">
-    <button type="button" class="tab active" onclick="showTab('setup')">Setup</button>
-    <button type="button" class="tab" onclick="showTab('intake')">Intake</button>
-    <button type="button" class="tab" onclick="showTab('floor')">Floor</button>
-    <button type="button" class="tab" onclick="showTab('scoring')">Scoring</button>
-    <button type="button" class="tab" onclick="showTab('board')">Board</button>
-    <button type="button" class="tab" onclick="showTab('governance')">Governance</button>
+    <button type="button" class="tab {{if eq .DefaultTab "setup"}}active{{end}}" onclick="showTab('setup')">Setup</button>
+    <button type="button" class="tab {{if eq .DefaultTab "intake"}}active{{end}}" onclick="showTab('intake')">Entries</button>
+    <button type="button" class="tab {{if eq .DefaultTab "floor"}}active{{end}}" onclick="showTab('floor')">Floor</button>
+    <button type="button" class="tab {{if eq .DefaultTab "scoring"}}active{{end}}" onclick="showTab('scoring')">Scoring</button>
+    <button type="button" class="tab {{if eq .DefaultTab "board"}}active{{end}}" onclick="showTab('board')">Board</button>
+    <button type="button" class="tab {{if eq .DefaultTab "governance"}}active{{end}}" onclick="showTab('governance')">Governance</button>
   </div>
-  <section class="account-layout show-admin-layout" data-show-admin-shell data-show-admin-active-tab="setup">
+  <section class="account-layout show-admin-layout" data-show-admin-shell data-show-admin-active-tab="{{.DefaultTab}}">
     <aside class="card account-sidebar show-admin-sidebar">
       <div class="card-body">
-        <div class="show-admin-subnav is-active" data-show-admin-nav="setup">
+        <div class="show-admin-subnav {{if eq .DefaultTab "setup"}}is-active{{end}}" data-show-admin-nav="setup">
           <div class="show-admin-subnav-label">Setup</div>
           <nav class="account-section-nav">
             <a href="#show-basics" class="account-section-link">Show Basics</a>
@@ -35,8 +35,8 @@
           </nav>
         </div>
 
-        <div class="show-admin-subnav" data-show-admin-nav="intake">
-          <div class="show-admin-subnav-label">Intake</div>
+        <div class="show-admin-subnav {{if eq .DefaultTab "intake"}}is-active{{end}}" data-show-admin-nav="intake">
+          <div class="show-admin-subnav-label">Entries</div>
           <nav class="account-section-nav show-admin-intake-nav">
             <a href="#intake-grid" class="account-section-link">Intake Grid</a>
             {{range .BoardDivisions}}
@@ -50,7 +50,7 @@
           </nav>
         </div>
 
-        <div class="show-admin-subnav" data-show-admin-nav="floor">
+        <div class="show-admin-subnav {{if eq .DefaultTab "floor"}}is-active{{end}}" data-show-admin-nav="floor">
           <div class="show-admin-subnav-label">Floor</div>
           <nav class="account-section-nav">
             <a href="#floor-corrections" class="account-section-link">Corrections</a>
@@ -58,7 +58,7 @@
           </nav>
         </div>
 
-        <div class="show-admin-subnav" data-show-admin-nav="scoring">
+        <div class="show-admin-subnav {{if eq .DefaultTab "scoring"}}is-active{{end}}" data-show-admin-nav="scoring">
           <div class="show-admin-subnav-label">Scoring</div>
           <nav class="account-section-nav">
             <a href="#scoring-rubrics" class="account-section-link">Rubrics</a>
@@ -68,7 +68,7 @@
           </nav>
         </div>
 
-        <div class="show-admin-subnav" data-show-admin-nav="board">
+        <div class="show-admin-subnav {{if eq .DefaultTab "board"}}is-active{{end}}" data-show-admin-nav="board">
           <div class="show-admin-subnav-label">Board</div>
           <nav class="account-section-nav">
             <a href="#board-summary" class="account-section-link">Summary</a>
@@ -76,7 +76,7 @@
           </nav>
         </div>
 
-        <div class="show-admin-subnav" data-show-admin-nav="governance">
+        <div class="show-admin-subnav {{if eq .DefaultTab "governance"}}is-active{{end}}" data-show-admin-nav="governance">
           <div class="show-admin-subnav-label">Governance</div>
           <nav class="account-section-nav">
             <a href="#governance-standards" class="account-section-link">Standards</a>
@@ -91,37 +91,37 @@
     </aside>
 
     <div class="account-main">
-      <div id="tab-setup" class="tab-content active">
+      <div id="tab-setup" class="tab-content {{if eq .DefaultTab "setup"}}active{{end}}">
         <div id="admin-setup-panel" sse-swap="setup-refresh,info-refresh,schedule-refresh" hx-swap="innerHTML">
           {{template "admin_setup_panel" .}}
         </div>
       </div>
 
-      <div id="tab-intake" class="tab-content">
+      <div id="tab-intake" class="tab-content {{if eq .DefaultTab "intake"}}active{{end}}">
         <div id="admin-intake-panel" sse-swap="intake-refresh" hx-swap="innerHTML">
           {{template "admin_intake_panel" .}}
         </div>
       </div>
 
-      <div id="tab-floor" class="tab-content">
+      <div id="tab-floor" class="tab-content {{if eq .DefaultTab "floor"}}active{{end}}">
         <div id="admin-floor-panel" sse-swap="floor-refresh,entries-refresh" hx-swap="innerHTML">
           {{template "admin_floor_panel" .}}
         </div>
       </div>
 
-      <div id="tab-scoring" class="tab-content">
+      <div id="tab-scoring" class="tab-content {{if eq .DefaultTab "scoring"}}active{{end}}">
         <div id="admin-scoring-panel" sse-swap="scoring-refresh" hx-swap="innerHTML">
           {{template "admin_scoring_panel" .}}
         </div>
       </div>
 
-      <div id="tab-board" class="tab-content">
+      <div id="tab-board" class="tab-content {{if eq .DefaultTab "board"}}active{{end}}">
         <div id="admin-board-panel" sse-swap="board-refresh,winners-refresh" hx-swap="innerHTML">
           {{template "admin_board_panel" .}}
         </div>
       </div>
 
-      <div id="tab-governance" class="tab-content">
+      <div id="tab-governance" class="tab-content {{if eq .DefaultTab "governance"}}active{{end}}">
         <div id="admin-governance-panel" sse-swap="governance-refresh" hx-swap="innerHTML">
           {{template "admin_governance_panel" .}}
         </div>
