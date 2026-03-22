@@ -705,16 +705,8 @@
   <article class="card admin-entry-card {{placementClass .Entry.Placement}}" data-corrections-searchable data-corrections-search-text="{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}} {{.Person.Initials}}{{end}} {{.Entry.Name}} {{if .Class}}{{.Class.ClassNumber}} {{.Class.Title}} {{.Class.Description}}{{end}}">
     <div class="card-body admin-entry-card-body">
       <div class="admin-entry-card-main">
-        <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-photo-add-form data-target="#admin-floor-panel" class="media-add-form admin-entry-media-form">
-          <input
-            type="file"
-            id="media-input-{{.Entry.ID}}"
-            name="media"
-            class="visually-hidden"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            required>
-          <button type="button" class="media-add-button admin-entry-media-button" aria-label="Add photo for {{.Entry.Name}}" onclick="document.getElementById('media-input-{{.Entry.ID}}').click()">
+        <div class="admin-entry-media-stack">
+          <div class="media-add-button admin-entry-media-button" aria-hidden="true">
             {{if .Media}}
               {{with index .Media 0}}
                 {{if eq .MediaType "photo"}}
@@ -727,8 +719,17 @@
             <span class="media-add-plus">+</span>
             {{end}}
             <span class="media-add-badge">+</span>
-          </button>
-        </form>
+          </div>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media" enctype="multipart/form-data" data-corrections-media-form data-target="#admin-floor-panel" class="admin-entry-media-form">
+            <div class="intake-capture-actions admin-entry-media-actions">
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
+            </div>
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+            <div class="intake-upload-queue admin-entry-media-queue" data-intake-upload-queue></div>
+          </form>
+        </div>
         <div class="admin-entry-card-copy">
           <div class="admin-entry-card-title-row">
             <strong>{{.Entry.Name}}</strong>

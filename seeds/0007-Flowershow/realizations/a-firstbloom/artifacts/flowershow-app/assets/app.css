@@ -1688,10 +1688,39 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .admin-entry-visibility-form {
   margin: 0;
 }
+.admin-entry-media-stack {
+  display: grid;
+  gap: .6rem;
+  align-items: start;
+}
 .admin-entry-media-button {
   width: 104px;
   min-width: 104px;
   height: 104px;
+}
+.admin-entry-media-actions {
+  gap: .45rem;
+}
+.admin-entry-media-actions .intake-capture-button {
+  min-height: 2.2rem;
+  padding: .5rem .72rem;
+  font-size: .88rem;
+  border-radius: 12px;
+}
+.admin-entry-media-queue {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+  margin-top: .45rem;
+}
+.admin-entry-media-queue .intake-upload-empty {
+  display: none;
+}
+.admin-entry-media-queue .intake-upload-card {
+  padding: .42rem;
+  border-radius: 14px;
+}
+.admin-entry-media-queue .intake-upload-preview {
+  border-radius: 12px;
 }
 .admin-entry-results-form {
   padding: .9rem 1rem;
