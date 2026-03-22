@@ -257,12 +257,19 @@ function flowershowRefreshResultButtons(form) {
   const awardToggle = form.querySelector('[data-intake-award-toggle]');
   const awardActive = !!(awardToggle && awardToggle.getAttribute('aria-pressed') === 'true');
   const anyActive = placementValue !== '0' || awardActive;
+  const pendingConfirm = form.dataset.intakePendingConfirm || '';
 
   form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
     const active = button.dataset.intakePlacementButton === placementValue && placementValue !== '0';
+    const baseLabel = button.dataset.intakeBaseLabel || button.textContent.trim();
+    button.dataset.intakeBaseLabel = baseLabel;
+    button.textContent = pendingConfirm === ('placement:' + button.dataset.intakePlacementButton) ? ('Confirm ' + baseLabel) : baseLabel;
     button.classList.toggle('is-dimmed', anyActive && !active);
   });
   if (awardToggle) {
+    const awardBaseLabel = awardToggle.dataset.intakeBaseLabel || awardToggle.textContent.trim();
+    awardToggle.dataset.intakeBaseLabel = awardBaseLabel;
+    awardToggle.textContent = pendingConfirm === 'special:true' ? ('Confirm ' + awardBaseLabel) : awardBaseLabel;
     awardToggle.classList.toggle('is-dimmed', anyActive && !awardActive);
   }
 }
@@ -928,11 +935,12 @@ function flowershowBindIntakeResultsForm(form) {
     form.dataset.intakePendingConfirm = token || '';
     if (resultHelp) {
       if (token) {
-        resultHelp.textContent = 'Tap the selected result again to confirm and save.';
+        resultHelp.textContent = 'Tap the highlighted result again to CONFIRM and save.';
       } else {
-        resultHelp.textContent = 'Ties are allowed. Tap a result once to select it, then tap again to confirm.';
+        resultHelp.textContent = 'Ties are allowed. Tap a result once to select it, then tap the same result again to CONFIRM.';
       }
     }
+    flowershowRefreshResultButtons(form);
   }
 
   form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
