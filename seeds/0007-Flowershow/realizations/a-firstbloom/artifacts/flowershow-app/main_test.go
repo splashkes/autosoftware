@@ -1432,8 +1432,11 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	if !strings.Contains(body, `class="media-add-button admin-entry-media-button"`) {
 		t.Fatal("admin show missing floor media add control")
 	}
-	if !strings.Contains(body, `accept="image/jpeg,image/png,image/webp"`) {
-		t.Fatal("admin show missing constrained mobile photo accept types")
+	if !strings.Contains(body, `data-corrections-media-form`) {
+		t.Fatal("admin show missing corrections media form")
+	}
+	if !strings.Contains(body, `accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov"`) {
+		t.Fatal("admin show missing constrained corrections media accept types")
 	}
 }
 

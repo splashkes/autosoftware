@@ -170,6 +170,17 @@ test.describe('Flowershow Admin Local', () => {
     await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
   });
 
+  test('corrections uses compact capture and upload controls without a visible file chooser', async ({ page }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin/shows/show_spring2025#corrections');
+
+    await page.getByRole('button', { name: 'Corrections' }).click();
+    const firstCard = page.locator('#admin-floor-entry-list article').first();
+    await expect(firstCard.getByRole('button', { name: 'Capture' })).toBeVisible();
+    await expect(firstCard.getByRole('button', { name: 'Upload' })).toBeVisible();
+    await expect(firstCard.locator('input[type="file"]:visible')).toHaveCount(0);
+  });
+
   test('admin can create schedule hierarchy, add an entry, and suppress it from public view', async ({
     page,
   }) => {
