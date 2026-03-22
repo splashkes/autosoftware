@@ -1,6 +1,8 @@
 # Validation Evidence
 
-This folder has four distinct validation artifacts:
+This folder is the canonical validation index for the current Flowershow realization.
+
+It currently carries four distinct validation artifacts:
 
 - [`ACCEPTANCE_CHECKLIST.md`](./ACCEPTANCE_CHECKLIST.md) combines the seed
   acceptance criteria with the agent/API parity work that just landed.
@@ -28,10 +30,39 @@ This folder has four distinct validation artifacts:
   `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-auth.setup.ts`,
   `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-admin.spec.ts`,
   and `/Users/splash/as-flower-agent/autosoftware/tests/flowershow.remote-agent-api.spec.ts`.
-- The recent agent/API parity work added contract discovery, structured errors,
-  service-token workspace access, schedule upsert, and the shared agent-access
-  widget. Some of that is covered now, but the full admin parity surface still
-  needs broader API and browser tests.
+
+Current validated local baseline:
+
+- `go test ./...` in `artifacts/flowershow-app`
+- `npm run test:flowershow` in `/Users/splash/as-flower-agent/autosoftware/tests`
+
+That Playwright suite currently covers:
+
+- public browsing flows
+- local admin and club-admin flows
+- service-token API flows
+- widget rendering on public and admin pages
+- show-night entry intake/edit/result flows
+
+## Durability And Registry Evidence
+
+The important architecture change since the earlier Flowershow losses is:
+
+- accepted Flowershow mutations append through the kernel runtime registry boundary
+- Flowershow projections are rebuilt from replayed accepted history
+- authority grants are materialized from registry-backed runtime history
+
+Validation evidence for that lives across:
+
+- `artifacts/flowershow-app/main_test.go`
+- `artifacts/flowershow-app/store_postgres_integration_test.go`
+- `COMMAND_DURABILITY_MATRIX.yaml`
+
+The canonical expectation now is not merely “writes survive restart,” but also:
+
+- projection loss is survivable
+- effective access is materialized, not only remembered in-process
+- browser/API/admin flows do not bypass the published semantic command surface
 
 ## Acceptance Criteria → Test Evidence
 

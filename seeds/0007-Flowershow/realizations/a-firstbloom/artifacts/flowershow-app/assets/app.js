@@ -80,6 +80,26 @@ function flowershowBindPersonFilter(input) {
   });
 }
 
+function flowershowFilterCorrections(input) {
+  const targetSelector = input.dataset.filterTarget;
+  if (!targetSelector) return;
+  const root = document.querySelector(targetSelector);
+  if (!root) return;
+  const query = (input.value || '').trim().toLowerCase();
+  root.querySelectorAll('[data-corrections-searchable]').forEach(function(card) {
+    const haystack = (card.dataset.correctionsSearchText || '').toLowerCase();
+    card.hidden = query !== '' && haystack.indexOf(query) === -1;
+  });
+}
+
+function flowershowBindCorrectionsFilter(input) {
+  if (!input || input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+  input.addEventListener('input', function() {
+    flowershowFilterCorrections(input);
+  });
+}
+
 function flowershowCloseIntakeModal(modal) {
   if (!modal) return;
   modal.querySelectorAll('[data-intake-entry-form], [data-intake-edit-form]').forEach(function(form) {
@@ -263,14 +283,28 @@ function flowershowRefreshResultButtons(form) {
   form.querySelectorAll('[data-intake-placement-button]').forEach(function(button) {
     const active = button.dataset.intakePlacementButton === placementValue && placementValue !== '0';
     const baseLabel = button.dataset.intakeBaseLabel || button.textContent.trim();
+    const confirmToken = 'placement:' + button.dataset.intakePlacementButton;
+    const revokeToken = 'revoke:placement:' + button.dataset.intakePlacementButton;
     button.dataset.intakeBaseLabel = baseLabel;
-    button.textContent = pendingConfirm === ('placement:' + button.dataset.intakePlacementButton) ? ('Confirm ' + baseLabel) : baseLabel;
+    if (pendingConfirm === confirmToken) {
+      button.textContent = 'Confirm ' + baseLabel;
+    } else if (pendingConfirm === revokeToken) {
+      button.textContent = 'Confirm remove ' + baseLabel;
+    } else {
+      button.textContent = baseLabel;
+    }
     button.classList.toggle('is-dimmed', anyActive && !active);
   });
   if (awardToggle) {
     const awardBaseLabel = awardToggle.dataset.intakeBaseLabel || awardToggle.textContent.trim();
     awardToggle.dataset.intakeBaseLabel = awardBaseLabel;
-    awardToggle.textContent = pendingConfirm === 'special:true' ? ('Confirm ' + awardBaseLabel) : awardBaseLabel;
+    if (pendingConfirm === 'special:true') {
+      awardToggle.textContent = 'Confirm ' + awardBaseLabel;
+    } else if (pendingConfirm === 'revoke:special') {
+      awardToggle.textContent = 'Confirm remove ' + awardBaseLabel;
+    } else {
+      awardToggle.textContent = awardBaseLabel;
+    }
     awardToggle.classList.toggle('is-dimmed', anyActive && !awardActive);
   }
 }
@@ -316,12 +350,33 @@ function flowershowIntakeConfirmMessage(form, token) {
   if (token.indexOf('placement:') === 0) {
     const placement = token.split(':')[1];
     resultLabel = placement === '1' ? '1st place' : placement === '2' ? '2nd place' : placement === '3' ? '3rd place' : 'result';
+  } else if (token.indexOf('revoke:placement:') === 0) {
+    const placement = token.split(':')[2];
+    resultLabel = placement === '1' ? 'removing 1st place' : placement === '2' ? 'removing 2nd place' : placement === '3' ? 'removing 3rd place' : 'removing the result';
   } else if (token === 'special:true') {
     resultLabel = 'special status';
+  } else if (token === 'revoke:special') {
+    resultLabel = 'removing special status';
   } else {
     resultLabel = 'result';
   }
   return classNumber ? ('Confirm ' + resultLabel + ' for ' + entrant + ' in Class ' + classNumber + '.') : ('Confirm ' + resultLabel + ' for ' + entrant + '.');
+}
+
+function flowershowIntakeIdleMessage(form) {
+  if (!form) return '';
+  return form.dataset.intakeResultIdleMessage || '';
+}
+
+function flowershowEntrantLabelForPerson(input, personID) {
+  if (!input || !personID) return '';
+  const listId = input.dataset.intakeEntrantList || input.getAttribute('list');
+  const list = listId ? document.getElementById(listId) : null;
+  if (!list) return '';
+  const match = Array.from(list.options).find(function(option) {
+    return (option.dataset.personId || '') === personID;
+  });
+  return match ? (match.value || '').trim() : '';
 }
 
 function flowershowOpenIntakeModal(modal, trigger) {
@@ -381,13 +436,14 @@ function flowershowOpenIntakeModal(modal, trigger) {
       if (awardSelect) {
         awardSelect.value = trigger.dataset.intakeAwardId || '';
       }
+      const selectedPersonID = trigger.dataset.intakePersonId || '';
+      if (personIDInput) {
+        personIDInput.value = selectedPersonID;
+      }
       if (entrantInput) {
-        entrantInput.value = trigger.dataset.intakeEntrant || '';
+        entrantInput.value = flowershowEntrantLabelForPerson(entrantInput, selectedPersonID) || trigger.dataset.intakeEntrant || '';
         flowershowRenderEntrantResults(entrantInput);
         editForm.dataset.intakeEntrantDisplay = flowershowIntakeInitials(trigger.dataset.intakeEntrant || '');
-      }
-      if (personIDInput) {
-        personIDInput.value = trigger.dataset.intakePersonId || '';
       }
       if (classSelect) {
         classSelect.value = trigger.dataset.intakeClassId || '';
@@ -975,6 +1031,26 @@ function flowershowBindIntakeCaptureInput(input) {
       }));
       if (form && form.dataset.intakeAutosave === 'true' && hasReadyItems) {
         await flowershowSubmitAutosaveForm(form, { keepMessage: true, closeModal: false });
+      } else if (form && form.hasAttribute('data-intake-entry-form') && hasReadyItems) {
+        const entrantInput = form.querySelector('[data-intake-entrant-input]');
+        if (!flowershowSyncEntrantLookup(entrantInput)) {
+          flowershowToast('Choose an entrant first, then media will upload immediately.', true);
+          return;
+        }
+        await new Promise(function(resolve, reject) {
+          flowershowSubmitIntakeForm(form, {
+            closeModal: false,
+            onSuccess: function() {
+              const modal = form.closest('[data-intake-modal]');
+              const createdTrigger = flowershowFindExistingIntakeTrigger(form);
+              if (modal && createdTrigger) {
+                flowershowOpenIntakeModal(modal, createdTrigger);
+              }
+              resolve();
+            },
+            onError: reject
+          });
+        });
       }
     } catch (error) {
       flowershowToast(error && error.message ? error.message : 'Could not prepare media.', true);
@@ -994,6 +1070,28 @@ function flowershowSetAutosaveStatus(form, message, isError) {
   node.textContent = message || '';
   node.classList.toggle('is-error', !!(isError && message));
   node.classList.toggle('is-success', !!(!isError && message));
+}
+
+function flowershowFindExistingIntakeTrigger(form) {
+  if (!form) return null;
+  const classIDInput = form.querySelector('[data-intake-class-id-input]');
+  const personIDInput = form.querySelector('[data-intake-person-id-input]');
+  const nameInput = form.querySelector('input[name="name"]');
+  const classID = classIDInput ? classIDInput.value : '';
+  const personID = personIDInput ? personIDInput.value : '';
+  const entryName = nameInput ? nameInput.value.trim() : '';
+  if (!classID || !personID) return null;
+  const candidates = Array.from(document.querySelectorAll('[data-intake-modal-open][data-intake-mode="existing"]')).filter(function(node) {
+    return node.dataset.intakeClassId === classID && node.dataset.intakePersonId === personID;
+  });
+  if (candidates.length === 0) return null;
+  if (entryName !== '') {
+    const exact = candidates.find(function(node) {
+      return (node.dataset.intakeEntryName || '').trim() === entryName;
+    });
+    if (exact) return exact;
+  }
+  return candidates[candidates.length - 1];
 }
 
 function flowershowClearAutosaveTimer(form) {
@@ -1101,7 +1199,7 @@ function flowershowBindIntakeResultsForm(form) {
       if (token) {
         resultHelp.textContent = flowershowIntakeConfirmMessage(form, token);
       } else {
-        resultHelp.textContent = 'Select a placement or special status.';
+        resultHelp.textContent = flowershowIntakeIdleMessage(form);
       }
     }
     flowershowRefreshResultButtons(form);
@@ -1111,8 +1209,48 @@ function flowershowBindIntakeResultsForm(form) {
     button.addEventListener('click', function() {
       if (!placementInput) return;
       const next = button.dataset.intakePlacementButton || '0';
+      const current = String(parseInt(placementInput.value || '0', 10) || 0);
+      const isSameSelection = current === next;
       const token = 'placement:' + next;
+      const revokeToken = 'revoke:placement:' + next;
       const isConfirm = form.dataset.intakePendingConfirm === token;
+      const isRevokeConfirm = form.dataset.intakePendingConfirm === revokeToken;
+      if (isConfirm) {
+        placementInput.value = next;
+        if (specialInput) {
+          specialInput.value = 'false';
+        }
+        if (awardInput) awardInput.value = '';
+        if (awardSelect) awardSelect.value = '';
+        if (awardToggle) awardToggle.dataset.forceOpen = '';
+        flowershowRefreshPlacementButtons(form);
+        flowershowRefreshAwardState(form);
+        setPendingConfirm('');
+        if (form.dataset.intakeAutosave === 'true') {
+          flowershowSubmitAutosaveForm(form, { keepMessage: true });
+        } else {
+          form.requestSubmit();
+        }
+        return;
+      }
+      if (isSameSelection) {
+        if (isRevokeConfirm) {
+          placementInput.value = '0';
+          flowershowRefreshPlacementButtons(form);
+          flowershowRefreshAwardState(form);
+          setPendingConfirm('');
+          if (form.dataset.intakeAutosave === 'true') {
+            flowershowSubmitAutosaveForm(form, { keepMessage: true });
+          } else {
+            form.requestSubmit();
+          }
+          return;
+        }
+        flowershowRefreshPlacementButtons(form);
+        flowershowRefreshAwardState(form);
+        setPendingConfirm(revokeToken);
+        return;
+      }
       placementInput.value = next;
       if (specialInput) {
         specialInput.value = 'false';
@@ -1122,7 +1260,23 @@ function flowershowBindIntakeResultsForm(form) {
       if (awardToggle) awardToggle.dataset.forceOpen = '';
       flowershowRefreshPlacementButtons(form);
       flowershowRefreshAwardState(form);
-      if (isConfirm) {
+      setPendingConfirm(token);
+    });
+  });
+  if (awardToggle) {
+    awardToggle.addEventListener('click', function() {
+      const token = 'special:true';
+      const revokeToken = 'revoke:special';
+      const nextActive = awardToggle.getAttribute('aria-pressed') !== 'true';
+      const isConfirm = nextActive && form.dataset.intakePendingConfirm === token;
+      const isRevokeConfirm = !nextActive && form.dataset.intakePendingConfirm === revokeToken;
+      if (form.dataset.intakePendingConfirm === token) {
+        awardToggle.dataset.forceOpen = 'true';
+        if (specialInput) {
+          specialInput.value = 'true';
+        }
+        if (placementInput) placementInput.value = '0';
+        flowershowRefreshAwardState(form);
         setPendingConfirm('');
         if (form.dataset.intakeAutosave === 'true') {
           flowershowSubmitAutosaveForm(form, { keepMessage: true });
@@ -1131,35 +1285,15 @@ function flowershowBindIntakeResultsForm(form) {
         }
         return;
       }
-      setPendingConfirm(token);
-    });
-  });
-  if (awardToggle) {
-    awardToggle.addEventListener('click', function() {
-      const token = 'special:true';
-      const nextActive = awardToggle.getAttribute('aria-pressed') !== 'true';
-      const isConfirm = nextActive && form.dataset.intakePendingConfirm === token;
-      awardToggle.dataset.forceOpen = nextActive ? 'true' : '';
-      if (specialInput) {
-        specialInput.value = nextActive ? 'true' : 'false';
-      }
       if (!nextActive) {
-        if (placementInput) placementInput.value = '0';
-        if (awardInput) awardInput.value = '';
-        if (awardSelect) awardSelect.value = '';
-        setPendingConfirm('');
-        if (form.dataset.intakeAutosave === 'true') {
-          flowershowScheduleAutosave(form, 0);
-        } else {
-          form.requestSubmit();
-        }
-      }
-      flowershowRefreshAwardState(form);
-      if (nextActive && awardSelect) {
-        awardSelect.focus();
-      }
-      if (nextActive) {
-        if (isConfirm) {
+        if (isRevokeConfirm) {
+          awardToggle.dataset.forceOpen = '';
+          if (specialInput) {
+            specialInput.value = 'false';
+          }
+          if (awardInput) awardInput.value = '';
+          if (awardSelect) awardSelect.value = '';
+          flowershowRefreshAwardState(form);
           setPendingConfirm('');
           if (form.dataset.intakeAutosave === 'true') {
             flowershowSubmitAutosaveForm(form, { keepMessage: true });
@@ -1168,6 +1302,20 @@ function flowershowBindIntakeResultsForm(form) {
           }
           return;
         }
+        flowershowRefreshAwardState(form);
+        setPendingConfirm(revokeToken);
+        return;
+      }
+      awardToggle.dataset.forceOpen = nextActive ? 'true' : '';
+      if (specialInput) {
+        specialInput.value = nextActive ? 'true' : 'false';
+      }
+      if (placementInput) placementInput.value = '0';
+      flowershowRefreshAwardState(form);
+      if (nextActive && awardSelect) {
+        awardSelect.focus();
+      }
+      if (nextActive) {
         setPendingConfirm(token);
       }
     });
@@ -1607,6 +1755,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-countdown-seconds]').forEach(flowershowBindCountdownButton);
   scope.querySelectorAll('[data-agent-widget]').forEach(flowershowBindAgentWidget);
   scope.querySelectorAll('[data-person-filter-input]').forEach(flowershowBindPersonFilter);
+  scope.querySelectorAll('[data-corrections-filter-input]').forEach(flowershowBindCorrectionsFilter);
   scope.querySelectorAll('[data-intake-modal-open]').forEach(flowershowBindIntakeTrigger);
   scope.querySelectorAll('[data-intake-modal]').forEach(flowershowBindIntakeModal);
   scope.querySelectorAll('[data-intake-results-form]').forEach(flowershowBindIntakeResultsForm);

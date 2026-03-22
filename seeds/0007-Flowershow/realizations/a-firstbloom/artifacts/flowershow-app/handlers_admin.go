@@ -1277,11 +1277,12 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	updated, err := a.store.updateEntry(entryID, EntryInput{
-		ShowID:   entry.ShowID,
-		ClassID:  r.FormValue("class_id"),
-		PersonID: r.FormValue("person_id"),
-		Name:     name,
-		Notes:    r.FormValue("notes"),
+		ShowID:    entry.ShowID,
+		ClassID:   r.FormValue("class_id"),
+		PersonID:  r.FormValue("person_id"),
+		Name:      name,
+		Notes:     r.FormValue("notes"),
+		TaxonRefs: append([]string(nil), entry.TaxonRefs...),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

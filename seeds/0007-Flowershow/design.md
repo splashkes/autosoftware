@@ -387,8 +387,10 @@ Examples:
 ### 13. Media
 
 - Multiple photos and videos per entry
-- Client sends optimized-but-still-large files
-- Server transcodes if exceeding size threshold
+- Client normalizes images before upload
+- Current realization normalizes photos up to 4096px max edge before upload
+- HEIC/HEIF is rejected explicitly in the client flow
+- Ingress/body limits must be sized for normalized photos and short videos
 - Stored in S3
 - Metadata: type, dimensions, duration, original filename
 
@@ -412,6 +414,15 @@ Rich control panel for show-night operations:
 - Set winners per class
 - Multiple operators work simultaneously via SSE push (no reload)
 
+Current working workspace model:
+
+- `Setup` handles show profile, judges, credits, and schedule governance
+- `Entries` is the intake grid rendered directly from class order
+- `Corrections` is the post-intake correction surface with search, in-place results, and revealed correction controls
+- `Scoring` handles rubrics and scorecards
+- `Board` shows the live show board
+- `Governance` exposes standards, rules, citations, and sources
+
 ---
 
 ### 16. Real-Time & Frontend
@@ -427,6 +438,31 @@ Rich control panel for show-night operations:
 - Cognito handles identity only (login, signup, token validation)
 - Roles (admin, judge, entrant, public) are managed in-app, not in Cognito
 - App-level role assignment per organization/show
+- Authority grants and effective access are materialized from kernel runtime authority history
+
+---
+
+### 18. Durability And Materialization
+
+The current realization is no longer allowed to treat in-memory state as
+durable truth in Postgres-backed mode.
+
+Current operating rule:
+
+- accepted Flowershow domain facts append through the kernel runtime registry boundary
+- Flowershow materializes `as_flowershow_m_*` projection tables from replayed registry history
+- startup can rebuild projections when those tables drift or are wiped
+- authority grants are also materialized from registry-backed runtime history
+
+This means the authoritative write path is:
+
+1. accept semantic command
+2. append accepted history through the kernel boundary
+3. materialize effective projection/runtime state
+4. serve public/admin/API reads from those projections
+
+Memory may still be used as a cache or working snapshot, but not as the sole
+authoritative store of accepted domain facts.
 
 ---
 
@@ -440,5 +476,5 @@ Rich control panel for show-night operations:
 - Graph-like taxonomy over rigid schema
 - Separate structured domains (horticulture vs design)
 - Organization-scoped everything
-- S3 for media, Cognito for identity (roles in-app), kernel-managed Postgres
+- S3 for media, Cognito for identity, kernel-managed Postgres/runtime registry
 - HTMX + SSE for real-time collaborative show admin

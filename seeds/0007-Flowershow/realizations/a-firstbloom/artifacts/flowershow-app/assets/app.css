@@ -500,6 +500,12 @@ a:hover {
 .show-admin-layout {
   align-items: start;
 }
+.show-admin-layout[data-show-admin-active-tab="floor"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.show-admin-layout[data-show-admin-active-tab="floor"] .show-admin-sidebar {
+  display: none;
+}
 .show-admin-sidebar .card-body {
   display: grid;
   gap: .9rem;
@@ -544,6 +550,22 @@ a:hover {
   margin: 0;
   color: var(--gray-500);
   font-size: .94rem;
+}
+.admin-corrections-toolbar {
+  display: flex;
+  justify-content: flex-start;
+}
+.admin-corrections-search {
+  display: grid;
+  gap: .35rem;
+  width: min(420px, 100%);
+}
+.admin-corrections-search span {
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
 }
 .admin-show-disclosure {
   background: linear-gradient(135deg, rgba(248, 249, 250, .92), rgba(216, 243, 220, .28));
@@ -1686,6 +1708,14 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
 .admin-entry-card-actions > * {
   margin: 0;
 }
+.admin-correction-disclosure {
+  width: 100%;
+}
+.admin-correction-grid {
+  display: grid;
+  gap: .9rem;
+  margin-top: .95rem;
+}
 
 .intake-division-stack {
   display: grid;
@@ -1886,8 +1916,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   outline: none;
 }
 .intake-capture-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .65rem;
 }
 .intake-media-rules {
@@ -1895,7 +1925,10 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   line-height: 1.45;
 }
 .intake-capture-button {
-  flex: 1 1 180px;
+  min-height: 2.75rem;
+  padding: .62rem .85rem;
+  font-size: .95rem;
+  border-radius: 14px;
   justify-content: center;
 }
 .intake-placement-actions {
@@ -2168,14 +2201,8 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
     min-width: 0;
     font-size: 1.7rem;
   }
-  .intake-capture-actions {
-    flex-direction: column;
-  }
   .intake-media-rules {
     font-size: .8rem;
-  }
-  .intake-capture-button {
-    width: 100%;
   }
   .intake-placement-actions {
     display: grid;
