@@ -1164,12 +1164,18 @@ body.body-lightbox-open {
 
 /* Buttons */
 .btn { display: inline-block; padding: .5rem 1.25rem; border-radius: var(--radius); font-size: .9rem; font-weight: 500; cursor: pointer; text-decoration: none; border: none; transition: all .2s; white-space: nowrap; }
-.btn-primary { background: var(--green); color: white; }
-.btn-primary:hover { background: var(--green-light); }
+.btn-primary,
+.btn-primary:visited { background: var(--green); color: white; -webkit-text-fill-color: white; }
+.btn-primary:hover,
+.btn-primary:focus-visible,
+.btn-primary:active { background: var(--green-light); color: white; -webkit-text-fill-color: white; }
 .btn-secondary { background: var(--pink-pale); color: var(--gray-900); border: 1px solid var(--pink-light); }
 .btn-secondary:hover { background: var(--pink-light); }
-.btn-outline { background: transparent; color: var(--green); border: 1px solid var(--green); }
-.btn-outline:hover { background: var(--green-pale); }
+.btn-outline,
+.btn-outline:visited { background: transparent; color: var(--green); -webkit-text-fill-color: var(--green); border: 1px solid var(--green); }
+.btn-outline:hover,
+.btn-outline:focus-visible,
+.btn-outline:active { background: var(--green-pale); color: var(--green); -webkit-text-fill-color: var(--green); }
 .btn-sm { padding: .3rem .75rem; font-size: .8rem; }
 
 /* Forms */
