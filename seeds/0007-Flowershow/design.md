@@ -466,6 +466,23 @@ authoritative store of accepted domain facts.
 
 ---
 
+### 18. Schedule Authoring Workflow (API)
+
+The canonical command chain for building a show schedule:
+
+1. **`shows.create`** `{ organization_id, name, location, date, season }` → returns show with `id`
+2. **`schedules.upsert`** `{ show_id }` → returns schedule with `id` (this is the `show_schedule_id` for divisions)
+3. **`divisions.create`** `{ show_schedule_id, title, domain, sort_order, code? }` → returns division with `id`
+   - `domain` must be one of: `horticulture`, `design`, `special`, `other`
+4. **`sections.create`** `{ division_id, title, sort_order, code? }` → returns section with `id`
+5. **`classes.create`** `{ section_id, class_number, title, domain, description?, specimen_count?, unit?, schedule_notes?, taxon_refs?[] }` → returns class with `id`
+
+Each step requires the `id` returned by the previous step. After authoring, read the result back via `GET /v1/projections/0007-Flowershow/shows/{id}`.
+
+The `schedules.upsert` command uses upsert semantics: if a schedule already exists for the given `show_id`, it updates it; otherwise it creates one. Optional fields on schedule: `source_document_id`, `effective_standard_edition_id`, `notes`.
+
+---
+
 ## Key Design Decisions
 
 - API-first ingestion with show admin UI for live operations

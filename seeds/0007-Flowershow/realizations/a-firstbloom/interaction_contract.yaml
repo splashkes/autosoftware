@@ -110,6 +110,21 @@ domain_objects:
           - name: notes
             type: string
             summary: Private or operator-facing notes.
+  - kind: show_schedule
+    summary: A schedule governing divisions and classes for a show.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: division
+    summary: A major grouping within a show schedule (e.g., Horticulture, Design).
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: section
+    summary: A section within a division containing classes.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
   - kind: show_class
     summary: A class within a section of a division in a show schedule.
     schema_ref: ../../design.md#3-show-schedule--class-hierarchy
@@ -514,6 +529,51 @@ commands:
       - state_transitions
       - activity_events
     projection: entries.detail
+    consistency: read_your_writes
+  - name: schedules.upsert
+    summary: Create or update the schedule for a show.
+    path: /v1/commands/0007-Flowershow/schedules.upsert
+    object_kinds:
+      - show_schedule
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: shows.detail
+    consistency: read_your_writes
+  - name: divisions.create
+    summary: Create a division within a show schedule.
+    path: /v1/commands/0007-Flowershow/divisions.create
+    object_kinds:
+      - division
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
+    consistency: read_your_writes
+  - name: sections.create
+    summary: Create a section within a division.
+    path: /v1/commands/0007-Flowershow/sections.create
+    object_kinds:
+      - section
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md
+    result_schema_ref: README.md
+    capabilities:
+      - activity_events
+    projection: classes.list
     consistency: read_your_writes
   - name: classes.create
     summary: Add a class to a section in the schedule.
