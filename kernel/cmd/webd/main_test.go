@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	jsontransport "as/kernel/internal/http/json"
 	"as/kernel/internal/interactions"
 	registrycatalog "as/kernel/internal/registry"
 )
@@ -261,6 +262,31 @@ func TestExecutionSessionProjectionPath(t *testing.T) {
 	want := "/boot/projections/realization-execution/sessions/exec_demo_123"
 	if got != want {
 		t.Fatalf("execution session projection path = %q, want %q", got, want)
+	}
+}
+
+func TestFeedbackIncidentsGETDoesNotFallThroughToHomepage(t *testing.T) {
+	mux := http.NewServeMux()
+	incidentHandler := jsontransport.NewIncidentIngestHandler(nil)
+	mux.Handle("POST /feedback/incidents", incidentHandler)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("boot homepage"))
+	})
+	handler := exactPathHandler("/feedback/incidents", incidentHandler, mux)
+
+	req := httptest.NewRequest(http.MethodGet, "http://autosoftware.app/feedback/incidents", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d body=%q", rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+	}
+	if allow := rec.Header().Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+	if strings.Contains(rec.Body.String(), "boot homepage") {
+		t.Fatalf("feedback GET fell through to homepage body %q", rec.Body.String())
 	}
 }
 

@@ -1238,7 +1238,8 @@ func main() {
 	bootExecutionEnabled := runtimeService != nil && boolEnv("AS_BOOT_EXECUTION_ENABLED", false)
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /feedback/incidents", jsontransport.NewIncidentIngestHandler(store))
+	incidentIngestHandler := jsontransport.NewIncidentIngestHandler(store)
+	mux.Handle("POST /feedback/incidents", incidentIngestHandler)
 	mux.Handle("GET /assets/", sproutAssetHandler())
 	mux.Handle("GET /__sprout-assets/", sproutAssetHandler())
 	jsontransport.NewGrowthAPI(repoRoot, runtimeService).Register(mux)
@@ -1424,7 +1425,8 @@ func main() {
 
 	baseDomain := config.EnvOrDefault("AS_BASE_DOMAIN", "localhost")
 	registryHost := config.EnvOrDefault("AS_REGISTRY_HOST", "")
-	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, registryHost, http.Handler(mux))
+	fallback := exactPathHandler("/feedback/incidents", incidentIngestHandler, mux)
+	handler := buildRoutingHandler(ctx, repoRoot, service, runtimeService, baseDomain, registryHost, fallback)
 	if runtimeService != nil {
 		handler = server.SessionResolutionMiddleware(server.RuntimeSessionResolver{Lookup: runtimeService},
 			server.RateLimitMiddleware(runtimeService, rateLimitOptions(runtimeConfig), handler),
@@ -1719,6 +1721,16 @@ func buildRoutingHandler(
 		log.Printf("realization suspensions: %d active", len(suspensions))
 	}
 	return dynamicRealizationRoutingMiddleware(routeSource, suspensionSource, runtimeService, repoRoot, catalogService, baseDomain, registryHost, fallback)
+}
+
+func exactPathHandler(path string, target, fallback http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == path {
+			target.ServeHTTP(w, r)
+			return
+		}
+		fallback.ServeHTTP(w, r)
+	})
 }
 
 // --- Realization routing (subdomain + path prefix) ---
