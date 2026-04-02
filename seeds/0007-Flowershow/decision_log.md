@@ -50,3 +50,6 @@ UI built with HTMX for partial page updates. SSE push fits naturally with HTMX's
 
 ## 15. Kernel-Managed Postgres
 Database connection via `AS_RUNTIME_DATABASE_URL` injected by the kernel. Append-only claim ledger + materialized views.
+
+## 18. Schedule Hierarchy Commands in the API
+`schedules.upsert`, `divisions.create`, and `sections.create` are promoted to `/v1/commands/` endpoints. Previously these were only reachable through admin HTML form handlers (`POST /admin/shows/{showID}/schedule`, etc.), which meant agents authoring a full show schedule had to mix JSON commands with form-encoded admin POSTs. The store layer already supported these operations — only the command routing and contract entries were missing.

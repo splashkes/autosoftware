@@ -4199,3 +4199,122 @@ func containsTestString(items []string, want string) bool {
 	}
 	return false
 }
+
+func TestScheduleHierarchyAPI(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/shows.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/schedules.upsert", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/divisions.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/sections.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
+
+	auth := "Bearer test-token"
+
+	// Create a fresh show (seed data already has a schedule for show_spring2025)
+	req := httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/shows.create",
+		strings.NewReader(`{"name":"Hierarchy Test","organization_id":"org_demo1","season":"2026"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create show: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var show Show
+	json.Unmarshal(w.Body.Bytes(), &show)
+
+	// Create schedule (new show, so this is a create — upsert always returns 200)
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert",
+		strings.NewReader(`{"show_id":"`+show.ID+`","notes":"Test schedule"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("create schedule: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var sched ShowSchedule
+	json.Unmarshal(w.Body.Bytes(), &sched)
+	if sched.ID == "" {
+		t.Fatal("expected schedule id")
+	}
+
+	// Upsert same schedule (update path)
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert",
+		strings.NewReader(`{"show_id":"`+show.ID+`","notes":"Updated"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("upsert schedule: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Create division
+	body := `{"show_schedule_id":"` + sched.ID + `","title":"Horticulture","domain":"horticulture","sort_order":1}`
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/divisions.create",
+		strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create division: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var div Division
+	json.Unmarshal(w.Body.Bytes(), &div)
+	if div.ID == "" {
+		t.Fatal("expected division id")
+	}
+
+	// Create section
+	body = `{"division_id":"` + div.ID + `","title":"Roses","sort_order":1}`
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/sections.create",
+		strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create section: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var sec Section
+	json.Unmarshal(w.Body.Bytes(), &sec)
+	if sec.ID == "" {
+		t.Fatal("expected section id")
+	}
+
+	// Create class in the new section
+	body = `{"section_id":"` + sec.ID + `","class_number":"101","title":"Hybrid Tea Rose","domain":"horticulture","specimen_count":1}`
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/classes.create",
+		strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create class: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify no auth = rejected
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert",
+		strings.NewReader(`{"show_id":"`+show.ID+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", w.Code)
+	}
+
+	// Verify missing show_id = rejected
+	req = httptest.NewRequest("POST", "/v1/commands/0007-Flowershow/schedules.upsert",
+		strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 without show_id, got %d", w.Code)
+	}
+}

@@ -265,6 +265,38 @@ Idempotency values:
 - `recommended`
 - `none`
 
+### Authoring Workflows
+
+When a seed's domain requires commands to be issued in a specific order because
+each step produces an ID consumed by the next, the seed's `design.md` should
+document the canonical authoring workflow as an ordered chain:
+
+```
+command_a → returns id_a
+command_b { id_a } → returns id_b
+command_c { id_b } → returns id_c
+```
+
+This chain should list:
+
+- the command name
+- the required input fields (especially which IDs come from prior steps)
+- which ID the response returns for use in the next step
+
+The interaction contract declares commands individually but does not express
+ordering. An agent discovering commands through `GET /v1/contracts` or
+`GET /v1/registry/commands` has no way to infer which commands must precede
+others without reading the seed's design documentation.
+
+Rules:
+
+- if a seed has a multi-step authoring workflow, document the dependency chain
+  in `design.md` with concrete field names and the expected order
+- do not force agents to reverse-engineer the workflow from foreign-key
+  relationships in projection data
+- every command that produces an ID consumed by a later command should name
+  that field explicitly in the workflow documentation
+
 ## Projections
 
 Projections are the public read surface for normal app usage.

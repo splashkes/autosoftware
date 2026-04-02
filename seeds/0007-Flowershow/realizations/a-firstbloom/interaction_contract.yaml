@@ -110,6 +110,21 @@ domain_objects:
           - name: notes
             type: string
             summary: Private or operator-facing notes.
+  - kind: show_schedule
+    summary: A schedule governing divisions and classes for a show.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: division
+    summary: A major grouping within a show schedule (e.g., Horticulture, Design).
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
+  - kind: section
+    summary: A section within a division containing classes.
+    schema_ref: ../../design.md
+    capabilities:
+      - activity_events
   - kind: show_class
     summary: A class within a section of a division in a show schedule.
     schema_ref: ../../design.md#3-show-schedule--class-hierarchy
