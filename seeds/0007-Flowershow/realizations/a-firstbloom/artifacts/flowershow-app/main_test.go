@@ -335,6 +335,7 @@ func TestHomePagePrefixesAgentWidgetLinksWhenBasePathIsSet(t *testing.T) {
 		`/flowershow/v1/commands/0007-Flowershow/shows.create`,
 		`/flowershow/v1/commands/0007-Flowershow/schedules.upsert`,
 		`/flowershow/v1/projections/0007-Flowershow/shows/{id}`,
+		`/flowershow/v1/projections/0007-Flowershow/organizations`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("home page missing base-prefixed widget content %s", expected)
@@ -1649,6 +1650,9 @@ func TestContractsEndpointsReturnLocalContract(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"ui_surfaces"`) {
 		t.Fatal("contract detail missing ui surface declarations")
+	}
+	if !strings.Contains(w.Body.String(), `"base_url"`) {
+		t.Fatal("contract detail missing base_url field")
 	}
 }
 

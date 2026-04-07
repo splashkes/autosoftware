@@ -105,6 +105,7 @@ func (a *app) handleContractsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
+		"base_url": globalBasePath,
 		"contracts": []map[string]any{{
 			"reference":      summary.SeedID + "/" + summary.RealizationID,
 			"seed_id":        summary.SeedID,
@@ -138,6 +139,7 @@ func (a *app) handleContractDetail(w http.ResponseWriter, r *http.Request) {
 		"seed_id":        summary.SeedID,
 		"realization_id": summary.RealizationID,
 		"contract_file":  "interaction_contract.yaml",
+		"base_url":       globalBasePath,
 		"discovery": map[string]string{
 			"self": flowershowContractSelf,
 		},

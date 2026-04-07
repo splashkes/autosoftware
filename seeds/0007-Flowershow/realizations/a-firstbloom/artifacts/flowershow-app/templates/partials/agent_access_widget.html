@@ -42,7 +42,13 @@
             <div>
               <h3>Show Authoring Workflow</h3>
               <p>To author a complete show schedule, issue commands in this order. Each step requires the id returned by the previous step.</p>
-              <pre>POST {{$.BasePath}}/v1/commands/0007-Flowershow/shows.create
+              <pre>Discovery (anonymous):
+GET {{$.BasePath}}/v1/projections/0007-Flowershow/organizations
+GET {{$.BasePath}}/v1/projections/0007-Flowershow/shows
+
+Authoring (requires "Manage shows" token scope):
+
+POST {{$.BasePath}}/v1/commands/0007-Flowershow/shows.create
   { organization_id, name, location, date, season }
   => returns show with id
 
@@ -60,7 +66,7 @@ POST {{$.BasePath}}/v1/commands/0007-Flowershow/sections.create
   => returns section with id
 
 POST {{$.BasePath}}/v1/commands/0007-Flowershow/classes.create
-  { section_id, class_number, title, domain,
+  { section_id, class_number, sort_order, title, domain,
     description?, specimen_count?, unit?, schedule_notes? }
   => returns class with id
 
