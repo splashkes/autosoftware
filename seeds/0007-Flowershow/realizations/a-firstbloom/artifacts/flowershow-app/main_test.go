@@ -332,10 +332,12 @@ func TestHomePagePrefixesAgentWidgetLinksWhenBasePathIsSet(t *testing.T) {
 	for _, expected := range []string{
 		`href="/flowershow/v1/contracts"`,
 		`href="/flowershow/v1/contracts/0007-Flowershow/a-firstbloom"`,
-		`href="/flowershow/v1/projections/0007-Flowershow/shows"`,
+		`/flowershow/v1/commands/0007-Flowershow/shows.create`,
+		`/flowershow/v1/commands/0007-Flowershow/schedules.upsert`,
+		`/flowershow/v1/projections/0007-Flowershow/shows/{id}`,
 	} {
 		if !strings.Contains(body, expected) {
-			t.Fatalf("home page missing base-prefixed widget link %s", expected)
+			t.Fatalf("home page missing base-prefixed widget content %s", expected)
 		}
 	}
 }
