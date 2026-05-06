@@ -1,0 +1,30 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Show Admin · Helpers</div>
+      <h1>Share link ready</h1>
+      <p class="section-desc">Copy and send this link to a helper now. The token is shown only once — once you leave this page, only the hash remains.</p>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Share with helpers</h2>
+      <p class="card-meta">Anyone with this link can set up a helper badge for {{.Show.Name}}. Pair it with a quick text or email: "can you help add photos? open this and put your name + email."</p>
+      <div class="form-group">
+        <label>Full link</label>
+        <input class="form-input" type="text" value="{{.ShareURL}}" readonly onclick="this.select()">
+      </div>
+      <div class="form-group">
+        <label>Bare token</label>
+        <input class="form-input" type="text" value="{{.Token}}" readonly onclick="this.select()">
+      </div>
+      <p class="card-meta">Expires {{.Invite.ExpiresAt.Format "2006-01-02 15:04"}}. Revoke any time from the helpers page.</p>
+      <div class="form-actions">
+        <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/helpers" class="btn btn-primary">Back to helpers</a>
+      </div>
+    </div>
+  </section>
+</section>
+{{end}}

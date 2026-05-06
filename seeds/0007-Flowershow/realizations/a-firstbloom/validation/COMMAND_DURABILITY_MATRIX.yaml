@@ -304,3 +304,21 @@ commands:
     claim_types: []
     projection_tables: [runtime_authority_grants]
     replay_covered: false
+  - command: show_helper_invites.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createShowHelperInvite
+    claim_types: [show_helper_invite.created]
+    projection_tables: [as_flowershow_m_show_helper_invites]
+    replay_covered: true
+  - command: show_helper_invites.revoke
+    durability_class: domain_fact_claim_backed_projection
+    store_method: revokeShowHelperInvite
+    claim_types: [show_helper_invite.revoked]
+    projection_tables: [as_flowershow_m_show_helper_invites]
+    replay_covered: true
+  - command: show_badge_sessions.end
+    durability_class: domain_fact_claim_backed_projection
+    store_method: revokeShowBadgeSession
+    claim_types: [show_badge_session.ended]
+    projection_tables: [as_flowershow_m_show_badge_sessions]
+    replay_covered: true

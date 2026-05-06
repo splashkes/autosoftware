@@ -1088,6 +1088,70 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusCreated, role)
 
+	case "show_helper_invites.create":
+		var input ShowHelperInviteInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		if !a.isServiceToken(r) {
+			user, ok := a.currentUser(r)
+			if !ok {
+				a.writeAPIError(w, r, http.StatusUnauthorized, "unauthorized", "A signed-in show admin account is required to create helper share links.", "Sign in with an account that currently manages this show, then retry.", nil)
+				return
+			}
+			input.CreatedBy = strings.TrimSpace(user.SubjectID)
+			if input.CreatedBy == "" {
+				input.CreatedBy = strings.TrimSpace(user.CognitoSub)
+			}
+		}
+		issued, err := a.store.createShowHelperInvite(input)
+		if err != nil || issued == nil {
+			msg := "could not create helper share link"
+			if err != nil {
+				msg = err.Error()
+			}
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_helper_invite_create_failed", msg, "Pass show_id and an optional label to create a one-time share link for show helpers.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"invite": issued.Invite,
+			"token":  issued.Token,
+		})
+
+	case "show_helper_invites.revoke":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_helper_invite_revoke_failed", "id is required.", "Pass the stable share-link id surfaced when the invite was created.", []apiFieldError{{Field: "id", Message: "required stable invite id"}})
+			return
+		}
+		if err := a.store.revokeShowHelperInvite(strings.TrimSpace(req.ID)); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_helper_invite_revoke_failed", err.Error(), "Pass the stable share-link id surfaced when the invite was created.", []apiFieldError{{Field: "id", Message: "required stable invite id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	case "show_badge_sessions.end":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_badge_session_end_failed", "id is required.", "Pass the stable badge session id from the show helpers projection.", []apiFieldError{{Field: "id", Message: "required stable badge session id"}})
+			return
+		}
+		if err := a.store.revokeShowBadgeSession(strings.TrimSpace(req.ID)); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "show_badge_session_end_failed", err.Error(), "Pass the stable badge session id from the show helpers projection.", []apiFieldError{{Field: "id", Message: "required stable badge session id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
 	default:
 		a.writeAPIError(w, r, http.StatusNotFound, "unknown_command", "Unknown command.", "Inspect the contract detail endpoint for supported command names in this realization.", []apiFieldError{{Field: "command", Message: command}})
 	}

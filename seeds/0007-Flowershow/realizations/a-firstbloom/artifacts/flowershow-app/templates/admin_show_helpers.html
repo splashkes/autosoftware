@@ -1,0 +1,90 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Show Admin · Helpers</div>
+      <h1>{{.Show.Name}} · Helper Share Links</h1>
+      <p class="section-desc">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}}{{if .Show.Date}} · {{.Show.Date}}{{end}}</p>
+    </div>
+  </div>
+
+  {{if .Notice}}<div class="alert alert-info">{{.Notice}}</div>{{end}}
+  {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Create a new share link</h2>
+      <p class="card-meta">Hand this link to volunteers ("can you help add photos?"). They&apos;ll redeem it once with name + email — no password needed. Links default to a 7-day lifetime; revoke any time below.</p>
+      <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/helpers/create" class="form">
+        <div class="form-group">
+          <label for="helper_label">Label (optional)</label>
+          <input id="helper_label" name="label" class="form-input" placeholder="Saturday volunteers, Sunday photographers, ...">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Create share link</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Active and recent share links</h2>
+      {{if .Invites}}
+      <table class="data-table">
+        <thead>
+          <tr><th>Label</th><th>Created</th><th>Expires</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Invites}}
+          <tr>
+            <td>{{if .Label}}{{.Label}}{{else}}(no label){{end}}</td>
+            <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+            <td>{{.ExpiresAt.Format "2006-01-02 15:04"}}</td>
+            <td><span class="badge badge-gray">{{.StatusLabel}}</span></td>
+            <td>
+              {{if .Active}}
+              <form method="POST" action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/helpers/{{.ID}}/revoke" style="display:inline">
+                <button type="submit" class="btn btn-outline">Revoke</button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="empty-state">No share links yet. Create one above to start onboarding helpers.</p>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Recent helper sessions</h2>
+      <p class="card-meta">Helpers who have redeemed a share link for this show. They can also end their own session from /shows/{{.Show.Slug}}/help.</p>
+      {{if .BadgeSessions}}
+      <table class="data-table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Linked person</th><th>First seen</th><th>Last seen</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {{range .BadgeSessions}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Email}}</td>
+            <td>{{if .MatchedPerson}}{{.MatchedPerson}}{{else}}—{{end}}</td>
+            <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+            <td>{{.LastSeenAt.Format "2006-01-02 15:04"}}</td>
+            <td><span class="badge badge-gray">{{.StatusLabel}}</span></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="empty-state">No helper sessions yet.</p>
+      {{end}}
+    </div>
+  </section>
+</section>
+{{end}}

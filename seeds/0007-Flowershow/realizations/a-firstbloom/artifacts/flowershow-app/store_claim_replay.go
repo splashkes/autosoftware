@@ -18,6 +18,9 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"person.organization_linked":     {},
 	"organization.invite_created":    {},
 	"organization.invite_claimed":    {},
+	"show_helper_invite.created":     {},
+	"show_helper_invite.revoked":     {},
+	"show_badge_session.ended":       {},
 	"schedule.created":               {},
 	"schedule.updated":               {},
 	"division.created":               {},
@@ -170,6 +173,21 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 			}
 			item.PermissionRoles = append([]string(nil), item.PermissionRoles...)
 			fresh.orgInvites[item.ID] = &item
+		case "show_helper_invite.created", "show_helper_invite.revoked":
+			item, err := decodeFlowershowClaimPayload[ShowHelperInvite](claim)
+			if err != nil {
+				return nil, err
+			}
+			// plaintext token never travels through claims
+			item.Token = ""
+			fresh.showHelperInvites[item.ID] = &item
+		case "show_badge_session.ended":
+			item, err := decodeFlowershowClaimPayload[ShowBadgeSession](claim)
+			if err != nil {
+				return nil, err
+			}
+			item.SessionToken = ""
+			fresh.showBadgeSessions[item.ID] = &item
 		case "schedule.created", "schedule.updated":
 			item, err := decodeFlowershowClaimPayload[ShowSchedule](claim)
 			if err != nil {
