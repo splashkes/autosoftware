@@ -130,6 +130,18 @@ commands:
     claim_types: [media.deleted]
     projection_tables: [as_flowershow_m_media]
     replay_covered: true
+  - command: media.set_cover
+    durability_class: domain_fact_claim_backed_projection
+    store_method: setMediaCover
+    claim_types: [media.cover_set]
+    projection_tables: [as_flowershow_m_media]
+    replay_covered: true
+  - command: media.attach_to_class
+    durability_class: domain_fact_claim_backed_projection
+    store_method: attachMediaToClass
+    claim_types: [media.attached]
+    projection_tables: [as_flowershow_m_media]
+    replay_covered: true
   - command: standards.create
     durability_class: domain_fact_claim_backed_projection
     store_method: createStandardDocument
