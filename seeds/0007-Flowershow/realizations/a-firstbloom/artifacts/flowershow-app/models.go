@@ -235,22 +235,43 @@ type ShowClassInput struct {
 	TaxonRefs         []string `json:"taxon_refs,omitempty"`
 }
 
+// ClassSplit represents an on-the-day partition of a class for placement
+// scoping. Splits are auto-coded a/b/c (in creation order) within each class
+// and may carry an optional human label such as "Yellow" or "Double".
+type ClassSplit struct {
+	ID        string    `json:"id"`
+	ClassID   string    `json:"class_id"`
+	SplitCode string    `json:"split_code"` // "a", "b", "c", auto-assigned in order
+	Label     string    `json:"label,omitempty"`
+	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ClassSplitInput is the user-supplied payload for class_splits.create. The
+// split code is assigned by the store based on existing splits for the class.
+type ClassSplitInput struct {
+	ClassID string `json:"class_id"`
+	Label   string `json:"label,omitempty"`
+}
+
 // --- Entries ---
 
 type Entry struct {
-	ID             string    `json:"id"`
-	ShowID         string    `json:"show_id"`
-	ClassID        string    `json:"class_id"`
-	PersonID       string    `json:"person_id"`
-	Name           string    `json:"name"`
-	Notes          string    `json:"notes,omitempty"`
-	Suppressed     bool      `json:"suppressed,omitempty"`
-	Placement      int       `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
-	Points         float64   `json:"points,omitempty"`
-	SpecialStatus  bool      `json:"special_status,omitempty"`
-	SpecialAwardID string    `json:"special_award_id,omitempty"`
-	TaxonRefs      []string  `json:"taxon_refs,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             string     `json:"id"`
+	ShowID         string     `json:"show_id"`
+	ClassID        string     `json:"class_id"`
+	SplitID        string     `json:"split_id,omitempty"`
+	PersonID       string     `json:"person_id"`
+	Name           string     `json:"name"`
+	Notes          string     `json:"notes,omitempty"`
+	Suppressed     bool       `json:"suppressed,omitempty"`
+	ArchivedAt     *time.Time `json:"archived_at,omitempty"`
+	Placement      int        `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
+	Points         float64    `json:"points,omitempty"`
+	SpecialStatus  bool       `json:"special_status,omitempty"`
+	SpecialAwardID string     `json:"special_award_id,omitempty"`
+	TaxonRefs      []string   `json:"taxon_refs,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type EntryInput struct {

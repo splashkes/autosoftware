@@ -113,6 +113,8 @@ func main() {
 	mux.HandleFunc("POST /shows/{slug}/help/end", a.handlePublicShowHelpEnd)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
+	mux.HandleFunc("GET /shows/{slug}/entries", a.handlePublicShowEntries)
+	mux.HandleFunc("GET /shows/{slug}/exhibitors", a.handlePublicShowExhibitors)
 	mux.HandleFunc("GET /shows/{slug}/summary", a.handleShowSummary)
 	mux.HandleFunc("GET /shows/{slug}/summary/stream", a.handleShowSummaryStream)
 	mux.HandleFunc("GET /shows/{slug}/rules", a.handleShowRules)
@@ -242,6 +244,11 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_placement", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_special_status", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.archive", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.restore", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.move_to_split", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/class_splits.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/class_splits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.update", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.reorder", a.handleAPICommand)
@@ -787,6 +794,8 @@ func parseTemplates() map[string]*template.Template {
 		"templates/club_detail.html",
 		"templates/classes.html",
 		"templates/show_detail.html",
+		"templates/show_entries.html",
+		"templates/show_exhibitors.html",
 		"templates/show_summary.html",
 		"templates/class_browse.html",
 		"templates/class_detail.html",

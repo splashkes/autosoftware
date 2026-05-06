@@ -636,6 +636,71 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "special_status": req.SpecialStatus, "award_id": req.AwardID})
 
+	case "entries.archive":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.archiveEntry(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_archive_failed", err.Error(), "Pass a stable entry id. Archived entries are hidden from default lists but can be restored.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	case "entries.restore":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.restoreEntry(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_restore_failed", err.Error(), "Pass a stable entry id that was previously archived.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	case "entries.move_to_split":
+		var req struct {
+			EntryID string `json:"entry_id"`
+			SplitID string `json:"split_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.moveEntryToSplit(req.EntryID, req.SplitID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_move_to_split_failed", err.Error(), "Pass a stable entry_id and split_id (or empty split_id to clear the assignment).", []apiFieldError{{Field: "entry_id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "entry_id": req.EntryID, "split_id": req.SplitID})
+
+	case "class_splits.create":
+		var input ClassSplitInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		split, err := a.store.createClassSplit(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "class_split_create_failed", err.Error(), "Pass a stable class_id and an optional human label. The split letter is auto-assigned in order.", []apiFieldError{{Field: "class_id", Message: "required stable class id"}})
+			return
+		}
+		writeJSON(w, http.StatusCreated, split)
+
+	case "class_splits.delete":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.deleteClassSplit(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "class_split_delete_failed", err.Error(), "Pass a stable split id. Splits with assigned entries cannot be deleted directly; move the entries out first.", []apiFieldError{{Field: "id", Message: "required stable class split id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
 	case "classes.create":
 		var input ShowClassInput
 		if !a.decodeAPIJSON(w, r, &input) {

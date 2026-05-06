@@ -22,6 +22,7 @@ var flowershowProjectionTables = []string{
 	"as_flowershow_m_divisions",
 	"as_flowershow_m_sections",
 	"as_flowershow_m_classes",
+	"as_flowershow_m_class_splits",
 	"as_flowershow_m_entries",
 	"as_flowershow_m_show_credits",
 	"as_flowershow_m_media",
@@ -56,6 +57,7 @@ func flowershowProjectionExpectedCounts(mem *memoryStore) map[string]int {
 		"as_flowershow_m_divisions":            len(mem.divisions),
 		"as_flowershow_m_sections":             len(mem.sections),
 		"as_flowershow_m_classes":              len(mem.classes),
+		"as_flowershow_m_class_splits":         len(mem.classSplits),
 		"as_flowershow_m_entries":              len(mem.entries),
 		"as_flowershow_m_show_credits":         len(mem.showCredits),
 		"as_flowershow_m_media":                len(mem.media),
@@ -243,10 +245,21 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 			return fmt.Errorf("insert class projection %s: %w", item.ID, err)
 		}
 	}
+	for _, id := range sortedMapKeys(mem.classSplits) {
+		item := mem.classSplits[id]
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_class_splits (id, class_id, split_code, label, sort_order, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+			item.ID, item.ClassID, item.SplitCode, item.Label, item.SortOrder, item.CreatedAt); err != nil {
+			return fmt.Errorf("insert class split projection %s: %w", item.ID, err)
+		}
+	}
 	for _, id := range sortedMapKeys(mem.entries) {
 		item := mem.entries[id]
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, notes, suppressed, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-			item.ID, item.ShowID, item.ClassID, item.PersonID, item.Name, item.Notes, item.Suppressed, item.Placement, item.Points, item.SpecialStatus, item.SpecialAwardID, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
+		var archivedAt any
+		if item.ArchivedAt != nil {
+			archivedAt = *item.ArchivedAt
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, split_id, person_id, name, notes, suppressed, archived_at, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+			item.ID, item.ShowID, item.ClassID, nullableString(item.SplitID), item.PersonID, item.Name, item.Notes, item.Suppressed, archivedAt, item.Placement, item.Points, item.SpecialStatus, item.SpecialAwardID, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
 			return fmt.Errorf("insert entry projection %s: %w", item.ID, err)
 		}
 	}

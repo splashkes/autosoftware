@@ -192,6 +192,13 @@ type flowershowStore interface {
 	classByID(id string) (*ShowClass, bool)
 	classesByShowID(showID string) []*ShowClass
 
+	// Class splits
+	createClassSplit(ClassSplitInput) (*ClassSplit, error)
+	classSplitsByClass(classID string) []*ClassSplit
+	classSplitByID(id string) (*ClassSplit, bool)
+	deleteClassSplit(id string) error
+	moveEntryToSplit(entryID, splitID string) error
+
 	// Entries
 	createEntry(EntryInput) (*Entry, error)
 	updateEntry(id string, input EntryInput) (*Entry, error)
@@ -202,10 +209,15 @@ type flowershowStore interface {
 	setPlacement(entryID string, placement int, points float64) error
 	setEntrySpecialStatus(entryID string, special bool, awardID string) error
 	setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error
+	archiveEntry(entryID string) error
+	restoreEntry(entryID string) error
 	entryByID(id string) (*Entry, bool)
 	entriesByShow(showID string) []*Entry
+	entriesByShowIncludeArchived(showID string) []*Entry
 	entriesByClass(classID string) []*Entry
+	entriesByClassIncludeArchived(classID string) []*Entry
 	entriesByPerson(personID string) []*Entry
+	entriesByPersonIncludeArchived(personID string) []*Entry
 
 	// Show credits
 	createShowCredit(ShowCreditInput) (*ShowCredit, error)
@@ -307,6 +319,7 @@ type memoryStore struct {
 	divisions      map[string]*Division
 	sections       map[string]*Section
 	classes        map[string]*ShowClass
+	classSplits    map[string]*ClassSplit
 	entries        map[string]*Entry
 	showCredits    map[string]*ShowCredit
 	media          map[string]*Media
@@ -349,6 +362,7 @@ func newEmptyMemoryStore() *memoryStore {
 		divisions:      make(map[string]*Division),
 		sections:       make(map[string]*Section),
 		classes:        make(map[string]*ShowClass),
+		classSplits:    make(map[string]*ClassSplit),
 		entries:        make(map[string]*Entry),
 		showCredits:    make(map[string]*ShowCredit),
 		media:          make(map[string]*Media),
@@ -1293,6 +1307,18 @@ func (s *memoryStore) entriesByShow(showID string) []*Entry {
 	defer s.mu.RUnlock()
 	var out []*Entry
 	for _, e := range s.entries {
+		if e.ShowID == showID && e.ArchivedAt == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) entriesByShowIncludeArchived(showID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
 		if e.ShowID == showID {
 			out = append(out, e)
 		}
@@ -1301,6 +1327,18 @@ func (s *memoryStore) entriesByShow(showID string) []*Entry {
 }
 
 func (s *memoryStore) entriesByClass(classID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
+		if e.ClassID == classID && e.ArchivedAt == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) entriesByClassIncludeArchived(classID string) []*Entry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []*Entry
@@ -1317,11 +1355,192 @@ func (s *memoryStore) entriesByPerson(personID string) []*Entry {
 	defer s.mu.RUnlock()
 	var out []*Entry
 	for _, e := range s.entries {
+		if e.PersonID == personID && e.ArchivedAt == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *memoryStore) entriesByPersonIncludeArchived(personID string) []*Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Entry
+	for _, e := range s.entries {
 		if e.PersonID == personID {
 			out = append(out, e)
 		}
 	}
 	return out
+}
+
+func (s *memoryStore) archiveEntry(entryID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	now := time.Now().UTC()
+	e.ArchivedAt = &now
+	s.appendClaim(e.ID, "entry", "entry.archived", map[string]any{
+		"archived_at": now,
+	})
+	return nil
+}
+
+func (s *memoryStore) restoreEntry(entryID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	e.ArchivedAt = nil
+	s.appendClaim(e.ID, "entry", "entry.restored", map[string]any{})
+	return nil
+}
+
+// --- Class splits ---
+
+// nextClassSplitCodeLocked returns the next available split code (a, b, c,
+// ...) for the given class. Caller must already hold s.mu. Codes from deleted
+// splits become re-usable, so the next letter is the lowest letter not in use.
+func (s *memoryStore) nextClassSplitCodeLocked(classID string) string {
+	used := make(map[string]struct{})
+	for _, split := range s.classSplits {
+		if split.ClassID == classID {
+			used[split.SplitCode] = struct{}{}
+		}
+	}
+	for letter := 'a'; letter <= 'z'; letter++ {
+		code := string(letter)
+		if _, ok := used[code]; !ok {
+			return code
+		}
+	}
+	// Fall back to numeric codes if every letter is taken (extreme edge).
+	return fmt.Sprintf("z%d", len(used)+1)
+}
+
+func (s *memoryStore) createClassSplit(input ClassSplitInput) (*ClassSplit, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	classID := strings.TrimSpace(input.ClassID)
+	if classID == "" {
+		return nil, errors.New("class_id is required")
+	}
+	if _, ok := s.classes[classID]; !ok {
+		return nil, errors.New("class not found")
+	}
+	code := s.nextClassSplitCodeLocked(classID)
+	sortOrder := 0
+	for _, split := range s.classSplits {
+		if split.ClassID == classID && split.SortOrder >= sortOrder {
+			sortOrder = split.SortOrder + 1
+		}
+	}
+	split := &ClassSplit{
+		ID:        newID("split"),
+		ClassID:   classID,
+		SplitCode: code,
+		Label:     strings.TrimSpace(input.Label),
+		SortOrder: sortOrder,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.classSplits[split.ID] = split
+	s.appendClaim(split.ID, "class_split", "class_split.created", split)
+	return split, nil
+}
+
+func (s *memoryStore) classSplitsByClass(classID string) []*ClassSplit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*ClassSplit
+	for _, split := range s.classSplits {
+		if split.ClassID == classID {
+			out = append(out, split)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder == out[j].SortOrder {
+			return out[i].SplitCode < out[j].SplitCode
+		}
+		return out[i].SortOrder < out[j].SortOrder
+	})
+	return out
+}
+
+func (s *memoryStore) classSplitByID(id string) (*ClassSplit, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	split, ok := s.classSplits[id]
+	return split, ok
+}
+
+func (s *memoryStore) deleteClassSplitLocked(id string) error {
+	split, ok := s.classSplits[id]
+	if !ok {
+		return errors.New("class split not found")
+	}
+	for _, entry := range s.entries {
+		if entry.SplitID == id {
+			return errors.New("cannot delete split with entries assigned")
+		}
+	}
+	delete(s.classSplits, id)
+	s.appendClaim(id, "class_split", "class_split.deleted", map[string]any{
+		"id":         id,
+		"class_id":   split.ClassID,
+		"split_code": split.SplitCode,
+	})
+	return nil
+}
+
+func (s *memoryStore) deleteClassSplit(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deleteClassSplitLocked(id)
+}
+
+func (s *memoryStore) moveEntryToSplit(entryID, splitID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.entries[entryID]
+	if !ok {
+		return errors.New("entry not found")
+	}
+	splitID = strings.TrimSpace(splitID)
+	previousSplitID := entry.SplitID
+	if splitID != "" {
+		split, ok := s.classSplits[splitID]
+		if !ok {
+			return errors.New("class split not found")
+		}
+		if split.ClassID != entry.ClassID {
+			return errors.New("split does not belong to entry's class")
+		}
+	}
+	entry.SplitID = splitID
+	s.appendClaim(entry.ID, "entry", "entry.split_changed", map[string]any{
+		"previous_split_id": previousSplitID,
+		"split_id":          splitID,
+	})
+	if previousSplitID != "" && previousSplitID != splitID {
+		stillUsed := false
+		for _, e := range s.entries {
+			if e.SplitID == previousSplitID {
+				stillUsed = true
+				break
+			}
+		}
+		if !stillUsed {
+			if _, ok := s.classSplits[previousSplitID]; ok {
+				_ = s.deleteClassSplitLocked(previousSplitID)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *memoryStore) createShowCredit(input ShowCreditInput) (*ShowCredit, error) {
@@ -2007,21 +2226,22 @@ func (s *memoryStore) computePlacementsFromScores(classID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find entries in class
-	var classEntries []*Entry
-	for _, e := range s.entries {
-		if e.ClassID == classID {
-			classEntries = append(classEntries, e)
-		}
-	}
-
-	// Average score per entry
 	type entryScore struct {
 		entry    *Entry
 		avgScore float64
 	}
-	var scored []entryScore
-	for _, e := range classEntries {
+	rankAndApply := func(scored []entryScore) {
+		sort.Slice(scored, func(i, j int) bool { return scored[i].avgScore > scored[j].avgScore })
+		pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
+		for i, es := range scored {
+			placement := i + 1
+			if placement <= 3 {
+				es.entry.Placement = placement
+				es.entry.Points = pointsMap[placement]
+			}
+		}
+	}
+	scoreOf := func(e *Entry) (float64, bool) {
 		var total float64
 		var count int
 		for _, sc := range s.scorecards {
@@ -2030,24 +2250,69 @@ func (s *memoryStore) computePlacementsFromScores(classID string) error {
 				count++
 			}
 		}
-		if count > 0 {
-			scored = append(scored, entryScore{entry: e, avgScore: total / float64(count)})
+		if count == 0 {
+			return 0, false
+		}
+		return total / float64(count), true
+	}
+
+	// Collect splits for this class.
+	splits := make(map[string]struct{})
+	for _, split := range s.classSplits {
+		if split.ClassID == classID {
+			splits[split.ID] = struct{}{}
 		}
 	}
 
-	sort.Slice(scored, func(i, j int) bool { return scored[i].avgScore > scored[j].avgScore })
-
-	pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
-	for i, es := range scored {
-		placement := i + 1
-		if placement <= 3 {
-			es.entry.Placement = placement
-			es.entry.Points = pointsMap[placement]
+	// Collect entries in the class (skip archived; they don't place).
+	var classEntries []*Entry
+	for _, e := range s.entries {
+		if e.ClassID == classID && e.ArchivedAt == nil {
+			classEntries = append(classEntries, e)
 		}
 	}
+
+	totalScored := 0
+	if len(splits) == 0 {
+		// No splits: rank across the whole class.
+		var scored []entryScore
+		for _, e := range classEntries {
+			if avg, ok := scoreOf(e); ok {
+				scored = append(scored, entryScore{entry: e, avgScore: avg})
+			}
+		}
+		rankAndApply(scored)
+		totalScored = len(scored)
+	} else {
+		// Rank within each split independently. Entries with no split assignment
+		// are skipped and need to be placed into a split first.
+		grouped := make(map[string][]entryScore)
+		var orphans int
+		for _, e := range classEntries {
+			if e.SplitID == "" {
+				orphans++
+				continue
+			}
+			if _, ok := splits[e.SplitID]; !ok {
+				orphans++
+				continue
+			}
+			if avg, ok := scoreOf(e); ok {
+				grouped[e.SplitID] = append(grouped[e.SplitID], entryScore{entry: e, avgScore: avg})
+			}
+		}
+		for _, scored := range grouped {
+			rankAndApply(scored)
+			totalScored += len(scored)
+		}
+		if orphans > 0 {
+			log.Printf("computePlacementsFromScores: class %s has %d entries with no split assignment; they were not placed", classID, orphans)
+		}
+	}
+
 	s.appendClaim(classID, "show_class", "show_class.placements_computed", map[string]any{
 		"class_id": classID,
-		"scored":   len(scored),
+		"scored":   totalScored,
 	})
 	return nil
 }
@@ -2643,14 +2908,26 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_classes (
   taxon_refs TEXT[] NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS as_flowershow_m_class_splits (
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL,
+  split_code TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (class_id, split_code)
+);
+
 CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
   id TEXT PRIMARY KEY,
   show_id TEXT NOT NULL,
   class_id TEXT NOT NULL,
+  split_id TEXT,
   person_id TEXT NOT NULL,
   name TEXT NOT NULL,
   notes TEXT NOT NULL DEFAULT '',
   suppressed BOOLEAN NOT NULL DEFAULT FALSE,
+  archived_at TIMESTAMPTZ,
   placement INTEGER NOT NULL DEFAULT 0,
   points DOUBLE PRECISION NOT NULL DEFAULT 0,
   special_status BOOLEAN NOT NULL DEFAULT FALSE,
@@ -2947,15 +3224,24 @@ ALTER TABLE as_flowershow_m_classes
 ALTER TABLE as_flowershow_m_entries
   ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS class_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS split_id TEXT,
   ADD COLUMN IF NOT EXISTS person_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS placement INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS points DOUBLE PRECISION NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS special_status BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS special_award_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS taxon_refs TEXT[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE as_flowershow_m_class_splits
+  ADD COLUMN IF NOT EXISTS class_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS split_code TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 ALTER TABLE as_flowershow_m_show_credits
@@ -3553,6 +3839,52 @@ func (s *postgresFlowershowStore) classByID(id string) (*ShowClass, bool) {
 func (s *postgresFlowershowStore) classesByShowID(showID string) []*ShowClass {
 	return s.currentMem().classesByShowID(showID)
 }
+func (s *postgresFlowershowStore) createClassSplit(input ClassSplitInput) (*ClassSplit, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.createClassSplit(input)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+func (s *postgresFlowershowStore) classSplitsByClass(classID string) []*ClassSplit {
+	return s.currentMem().classSplitsByClass(classID)
+}
+func (s *postgresFlowershowStore) classSplitByID(id string) (*ClassSplit, bool) {
+	return s.currentMem().classSplitByID(id)
+}
+func (s *postgresFlowershowStore) deleteClassSplit(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.deleteClassSplit(id); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
+func (s *postgresFlowershowStore) moveEntryToSplit(entryID, splitID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.moveEntryToSplit(entryID, splitID); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
 func (s *postgresFlowershowStore) createEntry(input EntryInput) (*Entry, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3685,11 +4017,44 @@ func (s *postgresFlowershowStore) entryByID(id string) (*Entry, bool) {
 func (s *postgresFlowershowStore) entriesByShow(showID string) []*Entry {
 	return s.currentMem().entriesByShow(showID)
 }
+func (s *postgresFlowershowStore) entriesByShowIncludeArchived(showID string) []*Entry {
+	return s.currentMem().entriesByShowIncludeArchived(showID)
+}
 func (s *postgresFlowershowStore) entriesByClass(classID string) []*Entry {
 	return s.currentMem().entriesByClass(classID)
 }
+func (s *postgresFlowershowStore) entriesByClassIncludeArchived(classID string) []*Entry {
+	return s.currentMem().entriesByClassIncludeArchived(classID)
+}
 func (s *postgresFlowershowStore) entriesByPerson(personID string) []*Entry {
 	return s.currentMem().entriesByPerson(personID)
+}
+func (s *postgresFlowershowStore) entriesByPersonIncludeArchived(personID string) []*Entry {
+	return s.currentMem().entriesByPersonIncludeArchived(personID)
+}
+func (s *postgresFlowershowStore) archiveEntry(entryID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.archiveEntry(entryID); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
+func (s *postgresFlowershowStore) restoreEntry(entryID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.restoreEntry(entryID); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 func (s *postgresFlowershowStore) createShowCredit(input ShowCreditInput) (*ShowCredit, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
