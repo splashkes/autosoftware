@@ -3019,8 +3019,13 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 		resetClass     ShowClass
 		entryKept      Entry
 		entryDeleted   Entry
+		entryArchived  Entry
+		entryRestored  Entry
+		entrySplit     Entry
 		resetEntry     Entry
 		uploadEntry    Entry
+		splitA         ClassSplit
+		splitB         ClassSplit
 		invite         OrganizationInvite
 		media          Media
 		uploadedMedia  Media
@@ -3248,6 +3253,24 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"notes": "secondary entrant",
 				"taxon_refs": [%q]
 			}`, state.show.ID, state.classPrimary.ID, state.entrant.ID, state.taxon.ID), http.StatusCreated)
+			state.entryArchived = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Archived"
+			}`, state.show.ID, state.classPrimary.ID, state.entrant.ID), http.StatusCreated)
+			state.entryRestored = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Restored"
+			}`, state.show.ID, state.classPrimary.ID, state.entrant.ID), http.StatusCreated)
+			state.entrySplit = executeAPICommand[Entry](t, a, "entries.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"class_id": %q,
+				"person_id": %q,
+				"name": "Calendula Split-Bound"
+			}`, state.show.ID, state.classSecondary.ID, state.entrant.ID), http.StatusCreated)
 		},
 		"entries.update": func(t *testing.T) {
 			state.entryKept = executeAPICommand[Entry](t, a, "entries.update", fmt.Sprintf(`{
@@ -3455,6 +3478,45 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"id": %q,
 				"special_status": true
 			}`, state.entryKept.ID), http.StatusOK)
+		},
+		"entries.archive": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "entries.archive", fmt.Sprintf(`{
+				"id": %q
+			}`, state.entryArchived.ID), http.StatusOK)
+		},
+		"entries.restore": func(t *testing.T) {
+			// Archive then restore so we can assert the restored state survives.
+			_ = executeAPICommand[map[string]string](t, a, "entries.archive", fmt.Sprintf(`{
+				"id": %q
+			}`, state.entryRestored.ID), http.StatusOK)
+			_ = executeAPICommand[map[string]string](t, a, "entries.restore", fmt.Sprintf(`{
+				"id": %q
+			}`, state.entryRestored.ID), http.StatusOK)
+		},
+		"class_splits.create": func(t *testing.T) {
+			state.splitA = executeAPICommand[ClassSplit](t, a, "class_splits.create", fmt.Sprintf(`{
+				"class_id": %q,
+				"label": "Yellow"
+			}`, state.classSecondary.ID), http.StatusCreated)
+			state.splitB = executeAPICommand[ClassSplit](t, a, "class_splits.create", fmt.Sprintf(`{
+				"class_id": %q,
+				"label": "Pink"
+			}`, state.classSecondary.ID), http.StatusCreated)
+		},
+		"class_splits.delete": func(t *testing.T) {
+			scratch := executeAPICommand[ClassSplit](t, a, "class_splits.create", fmt.Sprintf(`{
+				"class_id": %q,
+				"label": "Scratch"
+			}`, state.classSecondary.ID), http.StatusCreated)
+			_ = executeAPICommand[map[string]string](t, a, "class_splits.delete", fmt.Sprintf(`{
+				"id": %q
+			}`, scratch.ID), http.StatusOK)
+		},
+		"entries.move_to_split": func(t *testing.T) {
+			_ = executeAPICommand[map[string]any](t, a, "entries.move_to_split", fmt.Sprintf(`{
+				"entry_id": %q,
+				"split_id": %q
+			}`, state.entrySplit.ID, state.splitA.ID), http.StatusOK)
 		},
 		"show_credits.create": func(t *testing.T) {
 			state.credit = executeAPICommand[ShowCredit](t, a, "show_credits.create", fmt.Sprintf(`{
@@ -4462,5 +4524,209 @@ func TestShowDetailHasWinnersByClass(t *testing.T) {
 	// Nav tiles
 	if !strings.Contains(body, "All entries") || !strings.Contains(body, "Exhibitors") {
 		t.Fatal("show detail missing nav tiles")
+	}
+}
+
+// TestClassSplitsLifecycle exercises split creation, the entries-blocking
+// guard on delete, and the auto-purge of empty splits.
+func TestClassSplitsLifecycle(t *testing.T) {
+	s := newMemoryStore()
+
+	// Use the seeded class_01 + show_spring2025.
+	classID := "class_01"
+	showID := "show_spring2025"
+
+	splitA, err := s.createClassSplit(ClassSplitInput{ClassID: classID, Label: "Yellow"})
+	if err != nil {
+		t.Fatalf("create split a: %v", err)
+	}
+	if splitA.SplitCode != "a" {
+		t.Fatalf("expected first split code 'a', got %q", splitA.SplitCode)
+	}
+	splitB, err := s.createClassSplit(ClassSplitInput{ClassID: classID, Label: "Pink"})
+	if err != nil {
+		t.Fatalf("create split b: %v", err)
+	}
+	if splitB.SplitCode != "b" {
+		t.Fatalf("expected second split code 'b', got %q", splitB.SplitCode)
+	}
+
+	// Create three entries: 2 in split a, 1 in split b.
+	e1, err := s.createEntry(EntryInput{ShowID: showID, ClassID: classID, PersonID: "person_01", Name: "Yellow 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e2, err := s.createEntry(EntryInput{ShowID: showID, ClassID: classID, PersonID: "person_02", Name: "Yellow 2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e3, err := s.createEntry(EntryInput{ShowID: showID, ClassID: classID, PersonID: "person_03", Name: "Pink 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.moveEntryToSplit(e1.ID, splitA.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.moveEntryToSplit(e2.ID, splitA.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.moveEntryToSplit(e3.ID, splitB.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Direct delete must fail because split a still has entries.
+	if err := s.deleteClassSplit(splitA.ID); err == nil {
+		t.Fatalf("expected delete to fail while split a has entries")
+	}
+
+	// Move both entries out of split a; that should auto-purge split a.
+	if err := s.moveEntryToSplit(e1.ID, splitB.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.moveEntryToSplit(e2.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.classSplitByID(splitA.ID); ok {
+		t.Fatalf("split a should have been auto-deleted after the last entry moved out")
+	}
+
+	// Split b should still exist (e1 + e3 there).
+	if _, ok := s.classSplitByID(splitB.ID); !ok {
+		t.Fatalf("split b unexpectedly missing")
+	}
+
+	// New split should re-use the freed letter "a".
+	splitA2, err := s.createClassSplit(ClassSplitInput{ClassID: classID, Label: "Apricot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if splitA2.SplitCode != "a" {
+		t.Fatalf("expected freed letter 'a' to be reused, got %q", splitA2.SplitCode)
+	}
+}
+
+// TestSplitPlacementsAreScopedPerSplit verifies that placements compute
+// independently within each split when splits exist for a class.
+func TestSplitPlacementsAreScopedPerSplit(t *testing.T) {
+	s := newMemoryStore()
+
+	classID := "class_01"
+	showID := "show_spring2025"
+
+	splitA, err := s.createClassSplit(ClassSplitInput{ClassID: classID, Label: "Yellow"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	splitB, err := s.createClassSplit(ClassSplitInput{ClassID: classID, Label: "Pink"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reuse the seeded rubric_hort.
+	rubricID := "rubric_hort"
+
+	type entryScore struct {
+		entry Entry
+		score float64
+	}
+	makeEntry := func(name string, splitID string, score float64) entryScore {
+		e, err := s.createEntry(EntryInput{ShowID: showID, ClassID: classID, PersonID: "person_01", Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.moveEntryToSplit(e.ID, splitID); err != nil {
+			t.Fatal(err)
+		}
+		// submitScorecard sums criterion scores into TotalScore, so pass the
+		// score via a single criterion entry rather than relying on the input
+		// TotalScore field (which is overwritten).
+		if _, err := s.submitScorecard(EntryScorecard{
+			EntryID:  e.ID,
+			JudgeID:  "person_03",
+			RubricID: rubricID,
+		}, []EntryCriterionScore{{CriterionID: "crit_form", Score: score}}); err != nil {
+			t.Fatal(err)
+		}
+		return entryScore{entry: *e, score: score}
+	}
+
+	a1 := makeEntry("Yellow 1", splitA.ID, 90)
+	a2 := makeEntry("Yellow 2", splitA.ID, 85)
+	b1 := makeEntry("Pink 1", splitB.ID, 80)
+	b2 := makeEntry("Pink 2", splitB.ID, 70)
+
+	if err := s.computePlacementsFromScores(classID); err != nil {
+		t.Fatal(err)
+	}
+
+	gotA1, _ := s.entryByID(a1.entry.ID)
+	gotA2, _ := s.entryByID(a2.entry.ID)
+	gotB1, _ := s.entryByID(b1.entry.ID)
+	gotB2, _ := s.entryByID(b2.entry.ID)
+
+	if gotA1.Placement != 1 || gotA2.Placement != 2 {
+		t.Fatalf("split a placements wrong: a1=%d a2=%d", gotA1.Placement, gotA2.Placement)
+	}
+	if gotB1.Placement != 1 || gotB2.Placement != 2 {
+		t.Fatalf("split b placements wrong: b1=%d b2=%d", gotB1.Placement, gotB2.Placement)
+	}
+}
+
+// TestEntryArchiveRestoreFiltersDefault verifies archived entries are hidden
+// from the default reads and visible via the IncludeArchived variant.
+func TestEntryArchiveRestoreFiltersDefault(t *testing.T) {
+	s := newMemoryStore()
+	classID := "class_01"
+	showID := "show_spring2025"
+
+	e, err := s.createEntry(EntryInput{ShowID: showID, ClassID: classID, PersonID: "person_01", Name: "Archive Me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Default lists should include the entry before archive.
+	containsID := func(list []*Entry, id string) bool {
+		for _, item := range list {
+			if item.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !containsID(s.entriesByShow(showID), e.ID) {
+		t.Fatalf("expected entriesByShow to include freshly created entry before archive")
+	}
+
+	if err := s.archiveEntry(e.ID); err != nil {
+		t.Fatal(err)
+	}
+	if containsID(s.entriesByShow(showID), e.ID) {
+		t.Fatalf("entriesByShow must not include archived entry by default")
+	}
+	if containsID(s.entriesByClass(classID), e.ID) {
+		t.Fatalf("entriesByClass must not include archived entry by default")
+	}
+	if containsID(s.entriesByPerson("person_01"), e.ID) {
+		t.Fatalf("entriesByPerson must not include archived entry by default")
+	}
+	if !containsID(s.entriesByShowIncludeArchived(showID), e.ID) {
+		t.Fatalf("entriesByShowIncludeArchived must include archived entry")
+	}
+	if !containsID(s.entriesByClassIncludeArchived(classID), e.ID) {
+		t.Fatalf("entriesByClassIncludeArchived must include archived entry")
+	}
+	if !containsID(s.entriesByPersonIncludeArchived("person_01"), e.ID) {
+		t.Fatalf("entriesByPersonIncludeArchived must include archived entry")
+	}
+
+	if err := s.restoreEntry(e.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !containsID(s.entriesByShow(showID), e.ID) {
+		t.Fatalf("entriesByShow must include the restored entry")
+	}
+	got, ok := s.entryByID(e.ID)
+	if !ok || got.ArchivedAt != nil {
+		t.Fatalf("restored entry must clear ArchivedAt: %#v", got)
 	}
 }
