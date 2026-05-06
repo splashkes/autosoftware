@@ -214,6 +214,36 @@ commands:
     claim_types: [entry.visibility_set]
     projection_tables: [as_flowershow_m_entries]
     replay_covered: true
+  - command: entries.archive
+    durability_class: domain_fact_claim_backed_projection
+    store_method: archiveEntry
+    claim_types: [entry.archived]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.restore
+    durability_class: domain_fact_claim_backed_projection
+    store_method: restoreEntry
+    claim_types: [entry.restored]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
+  - command: entries.move_to_split
+    durability_class: domain_fact_claim_backed_projection
+    store_method: moveEntryToSplit
+    claim_types: [entry.split_changed, class_split.deleted]
+    projection_tables: [as_flowershow_m_entries, as_flowershow_m_class_splits]
+    replay_covered: true
+  - command: class_splits.create
+    durability_class: domain_fact_claim_backed_projection
+    store_method: createClassSplit
+    claim_types: [class_split.created]
+    projection_tables: [as_flowershow_m_class_splits]
+    replay_covered: true
+  - command: class_splits.delete
+    durability_class: domain_fact_claim_backed_projection
+    store_method: deleteClassSplit
+    claim_types: [class_split.deleted]
+    projection_tables: [as_flowershow_m_class_splits]
+    replay_covered: true
   - command: show_credits.create
     durability_class: domain_fact_claim_backed_projection
     store_method: createShowCredit

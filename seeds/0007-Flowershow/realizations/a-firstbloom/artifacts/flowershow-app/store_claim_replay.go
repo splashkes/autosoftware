@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 )
 
 var replayableFlowershowClaimTypes = map[string]struct{}{
@@ -24,6 +25,8 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"class.created":                  {},
 	"class.updated":                  {},
 	"class.reordered":                {},
+	"class_split.created":            {},
+	"class_split.deleted":            {},
 	"entry.created":                  {},
 	"entry.updated":                  {},
 	"entry.moved":                    {},
@@ -32,6 +35,9 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"entry.visibility_set":           {},
 	"entry.placement_set":            {},
 	"entry.special_status_set":       {},
+	"entry.archived":                 {},
+	"entry.restored":                 {},
+	"entry.split_changed":            {},
 	"show_credit.created":            {},
 	"show_credit.deleted":            {},
 	"media.attached":                 {},
@@ -261,6 +267,39 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 				item.SpecialStatus = payload.SpecialStatus
 				item.SpecialAwardID = payload.AwardID
 			}
+		case "entry.archived":
+			payload, err := decodeFlowershowClaimPayload[struct {
+				ArchivedAt time.Time `json:"archived_at"`
+			}](claim)
+			if err != nil {
+				return nil, err
+			}
+			if item, ok := fresh.entries[claim.ObjectID]; ok {
+				ts := payload.ArchivedAt
+				item.ArchivedAt = &ts
+			}
+		case "entry.restored":
+			if item, ok := fresh.entries[claim.ObjectID]; ok {
+				item.ArchivedAt = nil
+			}
+		case "entry.split_changed":
+			payload, err := decodeFlowershowClaimPayload[struct {
+				SplitID string `json:"split_id"`
+			}](claim)
+			if err != nil {
+				return nil, err
+			}
+			if item, ok := fresh.entries[claim.ObjectID]; ok {
+				item.SplitID = payload.SplitID
+			}
+		case "class_split.created":
+			item, err := decodeFlowershowClaimPayload[ClassSplit](claim)
+			if err != nil {
+				return nil, err
+			}
+			fresh.classSplits[item.ID] = &item
+		case "class_split.deleted":
+			delete(fresh.classSplits, claim.ObjectID)
 		case "show_credit.created":
 			item, err := decodeFlowershowClaimPayload[ShowCredit](claim)
 			if err != nil {
