@@ -854,16 +854,57 @@ func (a *app) handleClassesIndex(w http.ResponseWriter, r *http.Request) {
 // --- Show Detail ---
 
 type showDetailData struct {
-	Title       string
-	CurrentPath string
-	ShowID      string
-	Show        *Show
-	Schedule    *ShowSchedule
-	Divisions   []*divisionView
-	Entries     []*entryView
-	Awards      []*AwardDefinition
-	ShowCredits []*showCreditView
-	Org         *Organization
+	Title             string
+	CurrentPath       string
+	ShowID            string
+	Show              *Show
+	Schedule          *ShowSchedule
+	Divisions         []*divisionView
+	Entries           []*entryView
+	Awards            []*AwardDefinition
+	ShowCredits       []*showCreditView
+	Org               *Organization
+	StatusLabel       string
+	HeroSubtitle      string
+	HeroCoverPath     string
+	WinnersByClass    []*classWinnersView
+	NavTiles          []*showNavTile
+	EntryCount        int
+	ExhibitorCount    int
+	ClassCount        int
+	ClassWithEntries  int
+}
+
+type classWinnersView struct {
+	Class            *ShowClass
+	SectionTitle     string
+	DivisionTitle    string
+	EntryCount       int
+	HasEntries       bool
+	First            *winnerCellView
+	Second           *winnerCellView
+	Third            *winnerCellView
+	Specials         []*winnerCellView
+	HonorableMention []*winnerCellView
+}
+
+type winnerCellView struct {
+	Entry           *Entry
+	Person          *Person
+	PublicEntryName string
+	EntrantLabel    string
+	BadgeLabel      string
+	BadgeClass      string
+	AwardName       string
+}
+
+type showNavTile struct {
+	Href     string
+	Title    string
+	Count    string
+	Tease    string
+	Glyph    string
+	Modifier string
 }
 
 type divisionView struct {
@@ -910,9 +951,17 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 	org, _ := a.store.organizationByID(show.OrganizationID)
 	sched, _ := a.store.scheduleByShowID(show.ID)
 	entryCountByClass := map[string]int{}
+	exhibitorSet := map[string]struct{}{}
+	hasAnonymousExhibitor := false
 
 	var divisions []*divisionView
 	var entries []*entryView
+	awardLookup := map[string]*AwardDefinition{}
+	for _, def := range a.store.awardsByOrganization(show.OrganizationID) {
+		if def != nil {
+			awardLookup[def.ID] = def
+		}
+	}
 	for _, e := range a.store.entriesByShow(show.ID) {
 		if !isPublicEntry(e) {
 			continue
@@ -927,11 +976,21 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		if cls != nil {
 			entryCountByClass[cls.ID]++
 		}
+		if strings.TrimSpace(e.PersonID) == "" {
+			hasAnonymousExhibitor = true
+		} else {
+			exhibitorSet[e.PersonID] = struct{}{}
+		}
+		var specialAward *AwardDefinition
+		if e.SpecialAwardID != "" {
+			specialAward = awardLookup[e.SpecialAwardID]
+		}
 		classTaxons := a.classTaxons(cls)
 		entries = append(entries, &entryView{
 			Entry:                e,
 			Person:               person,
 			Class:                cls,
+			SpecialAward:         specialAward,
 			Media:                media,
 			LeadMedia:            leadMedia,
 			PublicEntryName:      publicEntryName(e, person),
@@ -942,6 +1001,8 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 			LightboxShowLabel:    entryLightboxShowLabel(show, e),
 		})
 	}
+	classCount := 0
+	classWithEntries := 0
 	if sched != nil {
 		for _, div := range a.store.divisionsBySchedule(sched.ID) {
 			dv := &divisionView{Division: div}
@@ -951,6 +1012,10 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 					Classes: a.store.classesBySection(sec.ID),
 				}
 				for _, class := range sv.Classes {
+					classCount++
+					if entryCountByClass[class.ID] > 0 {
+						classWithEntries++
+					}
 					sv.ClassCards = append(sv.ClassCards, &publicClassListItem{
 						Class:        class,
 						EntryCount:   entryCountByClass[class.ID],
@@ -974,17 +1039,584 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 
 	awards := a.store.awardsByOrganization(show.OrganizationID)
 
+	winnersByClass := buildClassWinnersViews(divisions, entries)
+	hero := buildShowHeroFields(show, org)
+	heroCoverPath := a.classCoverImagePath(show, divisions)
+
+	exhibitorCount := len(exhibitorSet)
+	if hasAnonymousExhibitor {
+		exhibitorCount++
+	}
+	entryCount := len(entries)
+	navTiles := buildShowNavTiles(slug, entryCount, classCount, exhibitorCount)
+
 	a.render(w, r, "show_detail.html", showDetailData{
-		Title:       show.Name,
-		CurrentPath: "/shows/" + slug,
-		ShowID:      show.ID,
-		Show:        show,
-		Schedule:    sched,
-		Divisions:   divisions,
-		Entries:     entries,
-		Awards:      awards,
-		ShowCredits: showCredits,
-		Org:         org,
+		Title:            show.Name,
+		CurrentPath:      "/shows/" + slug,
+		ShowID:           show.ID,
+		Show:             show,
+		Schedule:         sched,
+		Divisions:        divisions,
+		Entries:          entries,
+		Awards:           awards,
+		ShowCredits:      showCredits,
+		Org:              org,
+		StatusLabel:      hero.StatusLabel,
+		HeroSubtitle:     hero.Subtitle,
+		HeroCoverPath:    heroCoverPath,
+		WinnersByClass:   winnersByClass,
+		NavTiles:         navTiles,
+		EntryCount:       entryCount,
+		ExhibitorCount:   exhibitorCount,
+		ClassCount:       classCount,
+		ClassWithEntries: classWithEntries,
+	})
+}
+
+type showHeroFields struct {
+	StatusLabel string
+	Subtitle    string
+}
+
+func buildShowHeroFields(show *Show, org *Organization) showHeroFields {
+	if show == nil {
+		return showHeroFields{}
+	}
+	parts := make([]string, 0, 3)
+	if loc := strings.TrimSpace(show.Location); loc != "" {
+		parts = append(parts, loc)
+	}
+	if date := strings.TrimSpace(show.Date); date != "" {
+		parts = append(parts, date)
+	}
+	if season := strings.TrimSpace(show.Season); season != "" {
+		parts = append(parts, "Season "+season)
+	}
+	return showHeroFields{
+		StatusLabel: showStatusDisplayLabel(show.Status),
+		Subtitle:    strings.Join(parts, " · "),
+	}
+}
+
+func showStatusDisplayLabel(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case "draft":
+		return "Draft"
+	case "published":
+		return "In progress"
+	case "completed":
+		return "Completed"
+	case "archived":
+		return "Archived"
+	case "":
+		return ""
+	default:
+		return strings.Title(status)
+	}
+}
+
+// classCoverImagePath defensively surfaces a cover image attached to a class
+// in this show, if a future feature provides one. Today this is best-effort:
+// it walks media on entries within scheduled classes and returns the first
+// usable image. If nothing is found, it returns an empty string and the
+// template falls back to the gradient hero.
+func (a *app) classCoverImagePath(show *Show, divisions []*divisionView) string {
+	if show == nil {
+		return ""
+	}
+	for _, div := range divisions {
+		for _, sec := range div.Sections {
+			for _, card := range sec.ClassCards {
+				if card == nil || card.Class == nil {
+					continue
+				}
+				for _, entry := range a.store.entriesByClass(card.Class.ID) {
+					if !isPublicEntry(entry) {
+						continue
+					}
+					media := a.store.mediaByEntry(entry.ID)
+					for _, item := range media {
+						if item == nil {
+							continue
+						}
+						if strings.TrimSpace(item.MediaType) == "" || strings.EqualFold(item.MediaType, "photo") {
+							return "/media/" + item.ID
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func buildShowNavTiles(slug string, entryCount, classCount, exhibitorCount int) []*showNavTile {
+	entriesTease := "Lead photo, class, entrant, placement"
+	if entryCount == 0 {
+		entriesTease = "Entries appear once exhibitors register"
+	}
+	classesTease := "Sections, divisions, schedule notes"
+	if classCount == 0 {
+		classesTease = "Schedule will publish here"
+	}
+	exhibitorsTease := "Stories, history, totals per entrant"
+	if exhibitorCount == 0 {
+		exhibitorsTease = "Exhibitors will appear once entries are placed"
+	}
+	return []*showNavTile{
+		{
+			Href:     "/shows/" + slug + "/entries",
+			Title:    "All entries",
+			Count:    pluralCount(entryCount, "entry", "entries"),
+			Tease:    entriesTease,
+			Glyph:    "✿", // floral
+			Modifier: "show-nav-tile-rose",
+		},
+		{
+			Href:     "/shows/" + slug + "/classes",
+			Title:    "Classes & schedule",
+			Count:    pluralCount(classCount, "class", "classes"),
+			Tease:    classesTease,
+			Glyph:    "❖", // diamond bullet
+			Modifier: "show-nav-tile-fern",
+		},
+		{
+			Href:     "/clubs?show=" + slug,
+			Title:    "Hosting clubs",
+			Count:    "",
+			Tease:    "Society, district, member affiliations",
+			Glyph:    "❀", // florette
+			Modifier: "show-nav-tile-pink",
+		},
+		{
+			Href:     "/shows/" + slug + "/exhibitors",
+			Title:    "Exhibitors",
+			Count:    pluralCount(exhibitorCount, "exhibitor", "exhibitors"),
+			Tease:    exhibitorsTease,
+			Glyph:    "✯", // pinwheel
+			Modifier: "show-nav-tile-gold",
+		},
+	}
+}
+
+func pluralCount(n int, singular, plural string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, singular)
+	}
+	return fmt.Sprintf("%d %s", n, plural)
+}
+
+// buildClassWinnersViews groups public entries by class, then walks the
+// schedule (divisions -> sections -> classes) so the resulting order matches
+// what the rest of the show pages use. Even classes with no placements are
+// emitted so the user can see "Awaiting judging".
+func buildClassWinnersViews(divisions []*divisionView, entries []*entryView) []*classWinnersView {
+	byClass := map[string][]*entryView{}
+	for _, e := range entries {
+		if e == nil || e.Entry == nil || e.Class == nil {
+			continue
+		}
+		byClass[e.Class.ID] = append(byClass[e.Class.ID], e)
+	}
+	var out []*classWinnersView
+	for _, div := range divisions {
+		divTitle := ""
+		if div != nil && div.Division != nil {
+			divTitle = strings.TrimSpace(div.Division.Title)
+		}
+		for _, sec := range div.Sections {
+			secTitle := ""
+			if sec != nil && sec.Section != nil {
+				secTitle = strings.TrimSpace(sec.Section.Title)
+			}
+			for _, card := range sec.ClassCards {
+				if card == nil || card.Class == nil {
+					continue
+				}
+				view := &classWinnersView{
+					Class:         card.Class,
+					SectionTitle:  secTitle,
+					DivisionTitle: divTitle,
+					EntryCount:    len(byClass[card.Class.ID]),
+				}
+				for _, entry := range byClass[card.Class.ID] {
+					if entry == nil || entry.Entry == nil {
+						continue
+					}
+					cell := buildWinnerCell(entry)
+					switch entry.Entry.Placement {
+					case 1:
+						if view.First == nil {
+							view.First = cell
+						}
+					case 2:
+						if view.Second == nil {
+							view.Second = cell
+						}
+					case 3:
+						if view.Third == nil {
+							view.Third = cell
+						}
+					}
+					if entry.Entry.SpecialStatus || strings.TrimSpace(entry.Entry.SpecialAwardID) != "" {
+						special := *cell
+						if entry.SpecialAward != nil && strings.TrimSpace(entry.SpecialAward.Name) != "" {
+							special.AwardName = strings.TrimSpace(entry.SpecialAward.Name)
+							special.BadgeLabel = "Special"
+							special.BadgeClass = "placement-badge-special"
+						} else {
+							special.BadgeLabel = "Honorable Mention"
+							special.BadgeClass = "placement-badge-hm"
+							view.HonorableMention = append(view.HonorableMention, &special)
+							continue
+						}
+						view.Specials = append(view.Specials, &special)
+					}
+				}
+				view.HasEntries = view.First != nil || view.Second != nil || view.Third != nil ||
+					len(view.Specials) > 0 || len(view.HonorableMention) > 0
+				out = append(out, view)
+			}
+		}
+	}
+	return out
+}
+
+func buildWinnerCell(entry *entryView) *winnerCellView {
+	if entry == nil || entry.Entry == nil {
+		return nil
+	}
+	cell := &winnerCellView{
+		Entry:           entry.Entry,
+		Person:          entry.Person,
+		PublicEntryName: entry.PublicEntryName,
+		EntrantLabel:    publicPersonLabel(entry.Person),
+	}
+	switch entry.Entry.Placement {
+	case 1:
+		cell.BadgeLabel = "1st"
+		cell.BadgeClass = "placement-badge-first"
+	case 2:
+		cell.BadgeLabel = "2nd"
+		cell.BadgeClass = "placement-badge-second"
+	case 3:
+		cell.BadgeLabel = "3rd"
+		cell.BadgeClass = "placement-badge-third"
+	}
+	return cell
+}
+
+// --- Public Show Entries (per-show entries listing) ---
+
+type showEntriesData struct {
+	Title          string
+	CurrentPath    string
+	ShowID         string
+	Show           *Show
+	Org            *Organization
+	Entries        []*entryView
+	ClassFilters   []*entryClassFilter
+	SelectedClass  string
+	OnlyPlaced     bool
+	EntryCount     int
+	FilteredCount  int
+}
+
+type entryClassFilter struct {
+	ClassID    string
+	Label      string
+	EntryCount int
+	Selected   bool
+}
+
+func (a *app) handlePublicShowEntries(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	show, ok := a.store.showBySlug(slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	org, _ := a.store.organizationByID(show.OrganizationID)
+	classFilter := strings.TrimSpace(r.URL.Query().Get("class"))
+	onlyPlaced := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("placed")), "true")
+
+	awardLookup := map[string]*AwardDefinition{}
+	for _, def := range a.store.awardsByOrganization(show.OrganizationID) {
+		if def != nil {
+			awardLookup[def.ID] = def
+		}
+	}
+
+	var allEntries []*entryView
+	classCounts := map[string]int{}
+	classNames := map[string]*ShowClass{}
+	classOrder := []string{}
+	totalPublic := 0
+	for _, e := range a.store.entriesByShow(show.ID) {
+		if !isPublicEntry(e) {
+			continue
+		}
+		totalPublic++
+		person, _ := a.store.personByID(e.PersonID)
+		cls, _ := a.store.classByID(e.ClassID)
+		media := a.store.mediaByEntry(e.ID)
+		var leadMedia *Media
+		if len(media) > 0 {
+			leadMedia = media[0]
+		}
+		var specialAward *AwardDefinition
+		if e.SpecialAwardID != "" {
+			specialAward = awardLookup[e.SpecialAwardID]
+		}
+		if cls != nil {
+			classCounts[cls.ID]++
+			if _, exists := classNames[cls.ID]; !exists {
+				classNames[cls.ID] = cls
+				classOrder = append(classOrder, cls.ID)
+			}
+		}
+		classTaxons := a.classTaxons(cls)
+		allEntries = append(allEntries, &entryView{
+			Entry:                e,
+			Person:               person,
+			Class:                cls,
+			SpecialAward:         specialAward,
+			Media:                media,
+			LeadMedia:            leadMedia,
+			PublicEntryName:      publicEntryName(e, person),
+			ClassTableDetails:    entryClassTableDetails(cls, classTaxons),
+			LightboxEntrantLabel: publicPersonLabel(person),
+			LightboxClassLabel:   entryLightboxClassLabel(cls),
+			LightboxClassDetail:  entryLightboxClassDetail(cls, classTaxons),
+			LightboxShowLabel:    entryLightboxShowLabel(show, e),
+		})
+	}
+
+	// Apply filters
+	filtered := make([]*entryView, 0, len(allEntries))
+	for _, ev := range allEntries {
+		if classFilter != "" && (ev.Class == nil || ev.Class.ID != classFilter) {
+			continue
+		}
+		if onlyPlaced && !(ev.Entry.Placement > 0 || ev.Entry.SpecialStatus || strings.TrimSpace(ev.Entry.SpecialAwardID) != "") {
+			continue
+		}
+		filtered = append(filtered, ev)
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		left := filtered[i]
+		right := filtered[j]
+		var leftClass, rightClass string
+		if left.Class != nil {
+			leftClass = left.Class.ClassNumber
+		}
+		if right.Class != nil {
+			rightClass = right.Class.ClassNumber
+		}
+		if leftClass != rightClass {
+			return leftClass < rightClass
+		}
+		if left.Entry.Placement != right.Entry.Placement {
+			if left.Entry.Placement == 0 {
+				return false
+			}
+			if right.Entry.Placement == 0 {
+				return true
+			}
+			return left.Entry.Placement < right.Entry.Placement
+		}
+		return left.PublicEntryName < right.PublicEntryName
+	})
+
+	classFilters := make([]*entryClassFilter, 0, len(classOrder))
+	for _, classID := range classOrder {
+		cls := classNames[classID]
+		if cls == nil {
+			continue
+		}
+		label := strings.TrimSpace(cls.ClassNumber)
+		title := strings.TrimSpace(cls.Title)
+		switch {
+		case label != "" && title != "":
+			label = label + " · " + title
+		case label == "":
+			label = title
+		}
+		classFilters = append(classFilters, &entryClassFilter{
+			ClassID:    classID,
+			Label:      label,
+			EntryCount: classCounts[classID],
+			Selected:   classID == classFilter,
+		})
+	}
+	sort.SliceStable(classFilters, func(i, j int) bool {
+		return classFilters[i].Label < classFilters[j].Label
+	})
+
+	a.render(w, r, "show_entries.html", showEntriesData{
+		Title:         "Entries — " + show.Name,
+		CurrentPath:   "/shows/" + slug + "/entries",
+		ShowID:        show.ID,
+		Show:          show,
+		Org:           org,
+		Entries:       filtered,
+		ClassFilters:  classFilters,
+		SelectedClass: classFilter,
+		OnlyPlaced:    onlyPlaced,
+		EntryCount:    totalPublic,
+		FilteredCount: len(filtered),
+	})
+}
+
+// --- Public Show Exhibitors (per-show exhibitors listing) ---
+
+type showExhibitorsData struct {
+	Title             string
+	CurrentPath       string
+	ShowID            string
+	Show              *Show
+	Org               *Organization
+	Exhibitors        []*exhibitorCardView
+	Anonymous         *exhibitorCardView
+	TotalExhibitors   int
+	TotalEntryCount   int
+	TotalPlacedCount  int
+}
+
+type exhibitorCardView struct {
+	Person       *Person
+	Label        string
+	Href         string
+	EntryCount   int
+	PlacedCount  int
+	SpecialCount int
+	ClassLabels  []string
+}
+
+func (a *app) handlePublicShowExhibitors(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	show, ok := a.store.showBySlug(slug)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	org, _ := a.store.organizationByID(show.OrganizationID)
+
+	type bucket struct {
+		person       *Person
+		entryCount   int
+		placedCount  int
+		specialCount int
+		classes      map[string]string
+	}
+	byPerson := map[string]*bucket{}
+	var anon *bucket
+	totalEntries := 0
+	totalPlaced := 0
+	for _, e := range a.store.entriesByShow(show.ID) {
+		if !isPublicEntry(e) {
+			continue
+		}
+		totalEntries++
+		isPlaced := e.Placement > 0 || e.SpecialStatus || strings.TrimSpace(e.SpecialAwardID) != ""
+		if isPlaced {
+			totalPlaced++
+		}
+		var b *bucket
+		if strings.TrimSpace(e.PersonID) == "" {
+			if anon == nil {
+				anon = &bucket{classes: map[string]string{}}
+			}
+			b = anon
+		} else {
+			b = byPerson[e.PersonID]
+			if b == nil {
+				person, _ := a.store.personByID(e.PersonID)
+				b = &bucket{person: person, classes: map[string]string{}}
+				byPerson[e.PersonID] = b
+			}
+		}
+		b.entryCount++
+		if isPlaced {
+			b.placedCount++
+		}
+		if e.SpecialStatus || strings.TrimSpace(e.SpecialAwardID) != "" {
+			b.specialCount++
+		}
+		if cls, ok := a.store.classByID(e.ClassID); ok && cls != nil {
+			label := strings.TrimSpace(cls.ClassNumber)
+			if title := strings.TrimSpace(cls.Title); title != "" {
+				if label != "" {
+					label = label + " · " + title
+				} else {
+					label = title
+				}
+			}
+			if label != "" {
+				b.classes[cls.ID] = label
+			}
+		}
+	}
+
+	exhibitors := make([]*exhibitorCardView, 0, len(byPerson))
+	for personID, b := range byPerson {
+		card := &exhibitorCardView{
+			Person:       b.person,
+			Label:        publicPersonLabel(b.person),
+			Href:         "/people/" + personID,
+			EntryCount:   b.entryCount,
+			PlacedCount:  b.placedCount,
+			SpecialCount: b.specialCount,
+		}
+		if card.Label == "" {
+			card.Label = "Exhibitor"
+		}
+		for _, label := range b.classes {
+			card.ClassLabels = append(card.ClassLabels, label)
+		}
+		sort.Strings(card.ClassLabels)
+		exhibitors = append(exhibitors, card)
+	}
+	sort.SliceStable(exhibitors, func(i, j int) bool {
+		if exhibitors[i].PlacedCount != exhibitors[j].PlacedCount {
+			return exhibitors[i].PlacedCount > exhibitors[j].PlacedCount
+		}
+		if exhibitors[i].EntryCount != exhibitors[j].EntryCount {
+			return exhibitors[i].EntryCount > exhibitors[j].EntryCount
+		}
+		return exhibitors[i].Label < exhibitors[j].Label
+	})
+
+	var anonCard *exhibitorCardView
+	if anon != nil {
+		anonCard = &exhibitorCardView{
+			Label:        "Anonymous entrants",
+			EntryCount:   anon.entryCount,
+			PlacedCount:  anon.placedCount,
+			SpecialCount: anon.specialCount,
+		}
+		for _, label := range anon.classes {
+			anonCard.ClassLabels = append(anonCard.ClassLabels, label)
+		}
+		sort.Strings(anonCard.ClassLabels)
+	}
+
+	totalExhibitors := len(byPerson)
+	if anon != nil {
+		totalExhibitors++
+	}
+
+	a.render(w, r, "show_exhibitors.html", showExhibitorsData{
+		Title:            "Exhibitors — " + show.Name,
+		CurrentPath:      "/shows/" + slug + "/exhibitors",
+		ShowID:           show.ID,
+		Show:             show,
+		Org:              org,
+		Exhibitors:       exhibitors,
+		Anonymous:        anonCard,
+		TotalExhibitors:  totalExhibitors,
+		TotalEntryCount:  totalEntries,
+		TotalPlacedCount: totalPlaced,
 	})
 }
 

@@ -4330,3 +4330,119 @@ func TestScheduleHierarchyAPI(t *testing.T) {
 		t.Fatalf("expected 400 without show_id, got %d", w.Code)
 	}
 }
+
+// --- PR 5: show landing redesign ---
+
+func TestPublicShowEntriesPageRenders(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}/entries", a.handlePublicShowEntries)
+
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025/entries", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	for _, want := range []string{
+		"Entries — Spring Rose Show 2025",
+		"Peace",        // entry 1st place
+		"Mr. Lincoln",  // entry 2nd place
+		"Iceberg Spray",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("show entries page missing %q in body", want)
+		}
+	}
+
+	// Filter by class — class_01 should keep Peace and Mr. Lincoln but drop Iceberg.
+	reqFiltered := httptest.NewRequest("GET", "/shows/spring-rose-show-2025/entries?class=class_01", nil)
+	wFiltered := httptest.NewRecorder()
+	mux.ServeHTTP(wFiltered, reqFiltered)
+	if wFiltered.Code != http.StatusOK {
+		t.Fatalf("expected 200 for filter, got %d", wFiltered.Code)
+	}
+	filtered := wFiltered.Body.String()
+	if !strings.Contains(filtered, "Peace") {
+		t.Fatal("class filter should still include Peace")
+	}
+	if strings.Contains(filtered, "Iceberg Spray") {
+		t.Fatal("class filter should hide entries from other classes (Iceberg Spray)")
+	}
+}
+
+func TestPublicShowExhibitorsPageRenders(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}/exhibitors", a.handlePublicShowExhibitors)
+
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025/exhibitors", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Exhibitors — Spring Rose Show 2025") {
+		t.Fatal("exhibitors page missing heading")
+	}
+	// Three seeded exhibitors: MC, RW, SP via initials.
+	for _, want := range []string{"MC", "RW", "SP"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("exhibitors page missing exhibitor initials %q", want)
+		}
+	}
+	// Each exhibitor card links to /people/<id>
+	if !strings.Contains(body, "/people/person_01") {
+		t.Fatal("exhibitors page should link top exhibitor to person detail")
+	}
+	// Total counts in the meta line: 3 exhibitors, 8 entries, 6 placed (entry_08 is unplaced; entry_06 placement=2).
+	// Spec only requires entrant rendering and counts being correct; assert exhibitor count appears.
+	if !strings.Contains(body, "3 exhibitors") {
+		t.Fatal("exhibitors page should report 3 exhibitors in meta")
+	}
+}
+
+func TestShowDetailHasWinnersByClass(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	// New centerpiece section header
+	if !strings.Contains(body, "Winners by class") {
+		t.Fatal("show detail missing 'Winners by class' section")
+	}
+	// 1st/2nd placement badges should both render for class_01 (Peace 1st, Mr. Lincoln 2nd).
+	if !strings.Contains(body, "placement-badge-first") {
+		t.Fatal("show detail missing first-place badge")
+	}
+	if !strings.Contains(body, "placement-badge-second") {
+		t.Fatal("show detail missing second-place badge")
+	}
+	// Both seeded class_01 winners should appear
+	peaceIdx := strings.Index(body, "Peace")
+	lincolnIdx := strings.Index(body, "Mr. Lincoln")
+	if peaceIdx < 0 || lincolnIdx < 0 {
+		t.Fatal("show detail missing class_01 winners (Peace and/or Mr. Lincoln)")
+	}
+	// The 1st-place winner should appear before the 2nd-place winner in the rendered row.
+	if peaceIdx > lincolnIdx {
+		t.Fatal("expected Peace (1st) to render before Mr. Lincoln (2nd) within class_01 row")
+	}
+	// Hero status pill (status="published" -> "In progress") should render.
+	if !strings.Contains(body, "In progress") {
+		t.Fatal("show detail hero missing status pill")
+	}
+	// Nav tiles
+	if !strings.Contains(body, "All entries") || !strings.Contains(body, "Exhibitors") {
+		t.Fatal("show detail missing nav tiles")
+	}
+}

@@ -109,6 +109,8 @@ func main() {
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
+	mux.HandleFunc("GET /shows/{slug}/entries", a.handlePublicShowEntries)
+	mux.HandleFunc("GET /shows/{slug}/exhibitors", a.handlePublicShowExhibitors)
 	mux.HandleFunc("GET /shows/{slug}/summary", a.handleShowSummary)
 	mux.HandleFunc("GET /shows/{slug}/summary/stream", a.handleShowSummaryStream)
 	mux.HandleFunc("GET /shows/{slug}/rules", a.handleShowRules)
@@ -773,6 +775,8 @@ func parseTemplates() map[string]*template.Template {
 		"templates/club_detail.html",
 		"templates/classes.html",
 		"templates/show_detail.html",
+		"templates/show_entries.html",
+		"templates/show_exhibitors.html",
 		"templates/show_summary.html",
 		"templates/class_browse.html",
 		"templates/class_detail.html",
