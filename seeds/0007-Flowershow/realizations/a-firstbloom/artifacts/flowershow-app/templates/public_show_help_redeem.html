@@ -1,0 +1,55 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Helper Sign-Up</div>
+      <h1>Join {{.Show.Name}} as a helper</h1>
+      <p class="section-desc">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}}{{if .Show.Date}} · {{.Show.Date}}{{end}}</p>
+    </div>
+  </div>
+
+  {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+  {{if .Notice}}<div class="alert alert-info">{{.Notice}}</div>{{end}}
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Tell us who you are</h2>
+      <p class="card-meta">No password — just your name and email plus the share link from your show admin. Admins can see and end your badge any time.</p>
+      <form method="POST" action="{{$.BasePath}}/shows/{{.Show.Slug}}/help-redeem" class="form login-form">
+        <div class="form-group">
+          <label for="help_token">Share token</label>
+          <input id="help_token" name="token" class="form-input" value="{{.Token}}" required>
+        </div>
+        <div class="form-group">
+          <label for="help_name">Your name</label>
+          <input id="help_name" name="name" class="form-input" value="{{.PrefillName}}" required autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="help_email">Email</label>
+          <input id="help_email" name="email" class="form-input" type="email" value="{{.PrefillEmail}}" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label>I am</label>
+          <label class="checkbox-row"><input type="radio" name="role" value="helper" {{if not .IsExhibitor}}checked{{end}}> Just helping out</label>
+          <label class="checkbox-row"><input type="radio" name="role" value="exhibitor" {{if .IsExhibitor}}checked{{end}}> An exhibitor at this show</label>
+        </div>
+        {{if .PersonOptions}}
+        <div class="form-group">
+          <label for="matched_person_id">If you already have an entrant record, link it</label>
+          <select id="matched_person_id" name="matched_person_id" class="form-input">
+            <option value="">— No match / skip —</option>
+            {{range .PersonOptions}}
+            <option value="{{.Person.ID}}" {{if eq .Person.ID $.MatchedPerson}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        {{end}}
+        {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary">Set up my helper badge</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</section>
+{{end}}

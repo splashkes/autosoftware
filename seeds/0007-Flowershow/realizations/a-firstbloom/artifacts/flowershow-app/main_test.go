@@ -3037,6 +3037,9 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 		award          AwardDefinition
 		taxon          Taxon
 		scorecard      EntryScorecard
+		helperInvite   ShowHelperInvite
+		helperRevoke   ShowHelperInvite
+		badgeSession   ShowBadgeSession
 	}
 
 	a := testApp()
@@ -3481,6 +3484,52 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"min_entries": 1
 			}`, state.org.ID, state.taxon.ID), http.StatusCreated)
 		},
+		"show_helper_invites.create": func(t *testing.T) {
+			created := executeAPICommand[map[string]any](t, a, "show_helper_invites.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"label": "Replay weekend volunteers"
+			}`, state.show.ID), http.StatusCreated)
+			invitePayload, ok := created["invite"].(map[string]any)
+			if !ok {
+				t.Fatalf("show_helper_invites.create response missing invite: %#v", created)
+			}
+			state.helperInvite.ID = fmt.Sprintf("%v", invitePayload["id"])
+			state.helperInvite.ShowID = fmt.Sprintf("%v", invitePayload["show_id"])
+			state.helperInvite.Label = fmt.Sprintf("%v", invitePayload["label"])
+
+			toRevoke := executeAPICommand[map[string]any](t, a, "show_helper_invites.create", fmt.Sprintf(`{
+				"show_id": %q,
+				"label": "Replay revoke target"
+			}`, state.show.ID), http.StatusCreated)
+			toRevokePayload, ok := toRevoke["invite"].(map[string]any)
+			if !ok {
+				t.Fatalf("show_helper_invites.create (revoke target) response missing invite: %#v", toRevoke)
+			}
+			state.helperRevoke.ID = fmt.Sprintf("%v", toRevokePayload["id"])
+		},
+		"show_helper_invites.revoke": func(t *testing.T) {
+			_ = executeAPICommand[map[string]string](t, a, "show_helper_invites.revoke", fmt.Sprintf(`{
+				"id": %q
+			}`, state.helperRevoke.ID), http.StatusOK)
+		},
+		"show_badge_sessions.end": func(t *testing.T) {
+			// Seed a badge session at the store layer (no public command for
+			// creation — the public help-redeem flow does that). Then end it
+			// via the public command so the claim is recorded.
+			issued, err := a.store.createShowBadgeSession(ShowBadgeSessionInput{
+				ShowID:   state.show.ID,
+				InviteID: state.helperInvite.ID,
+				Name:     "Replay Helper",
+				Email:    "helper.replay@example.com",
+			})
+			if err != nil || issued == nil {
+				t.Fatalf("seed badge session: %v", err)
+			}
+			state.badgeSession = *issued.Session
+			_ = executeAPICommand[map[string]string](t, a, "show_badge_sessions.end", fmt.Sprintf(`{
+				"id": %q
+			}`, issued.Session.ID), http.StatusOK)
+		},
 	}
 
 	for _, item := range matrix.Commands {
@@ -3577,6 +3626,25 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 	}
 	if got := replayed.judgesByShow(state.show.ID); len(got) != 1 || got[0].PersonID != state.judge.ID {
 		t.Fatalf("replayed judge assignment mismatch: %#v", got)
+	}
+	helperInvites := replayed.listShowHelperInvitesByShow(state.show.ID)
+	if len(helperInvites) != 2 {
+		t.Fatalf("expected 2 replayed helper invites, got %d", len(helperInvites))
+	}
+	for _, item := range helperInvites {
+		if item.ID == state.helperRevoke.ID && item.RevokedAt == nil {
+			t.Fatalf("replayed helper invite %s should be revoked", item.ID)
+		}
+		if item.ID == state.helperInvite.ID && item.RevokedAt != nil {
+			t.Fatalf("replayed helper invite %s should remain active", item.ID)
+		}
+	}
+	badgeSessions := replayed.listShowBadgeSessionsByShow(state.show.ID)
+	if len(badgeSessions) != 1 {
+		t.Fatalf("expected 1 replayed badge session, got %d", len(badgeSessions))
+	}
+	if badgeSessions[0].RevokedAt == nil {
+		t.Fatalf("replayed badge session should be revoked, got %#v", badgeSessions[0])
 	}
 }
 

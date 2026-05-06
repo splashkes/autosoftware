@@ -155,6 +155,20 @@ type flowershowStore interface {
 	organizationInvitesByOrganization(organizationID string) []*OrganizationInvite
 	claimOrganizationInvites(email, subjectID, cognitoSub string, assignRole func(UserRoleInput) error) ([]*OrganizationInvite, error)
 
+	// Show helper invites (PR 7)
+	createShowHelperInvite(ShowHelperInviteInput) (*IssuedShowHelperInvite, error)
+	findShowHelperInviteByToken(plaintext string) (*ShowHelperInvite, bool)
+	showHelperInviteByID(id string) (*ShowHelperInvite, bool)
+	revokeShowHelperInvite(id string) error
+	listShowHelperInvitesByShow(showID string) []*ShowHelperInvite
+
+	// Show badge sessions (PR 7)
+	createShowBadgeSession(ShowBadgeSessionInput) (*IssuedShowBadgeSession, error)
+	findShowBadgeSessionByToken(plaintext string) (*ShowBadgeSession, bool)
+	touchShowBadgeSession(id string) error
+	revokeShowBadgeSession(id string) error
+	listShowBadgeSessionsByShow(showID string) []*ShowBadgeSession
+
 	// Schedule
 	createSchedule(ShowSchedule) (*ShowSchedule, error)
 	updateSchedule(showID string, input ShowSchedule) (*ShowSchedule, error)
@@ -277,13 +291,15 @@ type effectiveRule struct {
 // ============================================================================
 
 type memoryStore struct {
-	mu             sync.RWMutex
-	organizations  map[string]*Organization
-	shows          map[string]*Show
-	persons        map[string]*Person
-	personOrgs     map[string]*PersonOrganization
-	orgInvites     map[string]*OrganizationInvite
-	showJudges     map[string]*ShowJudgeAssignment
+	mu                sync.RWMutex
+	organizations     map[string]*Organization
+	shows             map[string]*Show
+	persons           map[string]*Person
+	personOrgs        map[string]*PersonOrganization
+	orgInvites        map[string]*OrganizationInvite
+	showHelperInvites map[string]*ShowHelperInvite
+	showBadgeSessions map[string]*ShowBadgeSession
+	showJudges        map[string]*ShowJudgeAssignment
 	schedules      map[string]*ShowSchedule
 	divisions      map[string]*Division
 	sections       map[string]*Section
@@ -318,12 +334,14 @@ func newMemoryStore() *memoryStore {
 
 func newEmptyMemoryStore() *memoryStore {
 	s := &memoryStore{
-		organizations:  make(map[string]*Organization),
-		shows:          make(map[string]*Show),
-		persons:        make(map[string]*Person),
-		personOrgs:     make(map[string]*PersonOrganization),
-		orgInvites:     make(map[string]*OrganizationInvite),
-		showJudges:     make(map[string]*ShowJudgeAssignment),
+		organizations:     make(map[string]*Organization),
+		shows:             make(map[string]*Show),
+		persons:           make(map[string]*Person),
+		personOrgs:        make(map[string]*PersonOrganization),
+		orgInvites:        make(map[string]*OrganizationInvite),
+		showHelperInvites: make(map[string]*ShowHelperInvite),
+		showBadgeSessions: make(map[string]*ShowBadgeSession),
+		showJudges:        make(map[string]*ShowJudgeAssignment),
 		schedules:      make(map[string]*ShowSchedule),
 		divisions:      make(map[string]*Division),
 		sections:       make(map[string]*Section),
@@ -2478,6 +2496,37 @@ CREATE INDEX IF NOT EXISTS as_flowershow_org_invites_org_idx
 CREATE INDEX IF NOT EXISTS as_flowershow_org_invites_email_idx
   ON as_flowershow_m_organization_invites ((lower(email)), status);
 
+CREATE TABLE IF NOT EXISTS as_flowershow_m_show_helper_invites (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_show_helper_invites_show_idx
+  ON as_flowershow_m_show_helper_invites (show_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS as_flowershow_m_show_badge_sessions (
+  id TEXT PRIMARY KEY,
+  show_id TEXT NOT NULL,
+  invite_id TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  matched_person_id TEXT NOT NULL DEFAULT '',
+  session_hash TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS as_flowershow_show_badge_sessions_show_idx
+  ON as_flowershow_m_show_badge_sessions (show_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS as_flowershow_m_schedules (
   id TEXT PRIMARY KEY,
   show_id TEXT NOT NULL,
@@ -2762,6 +2811,27 @@ ALTER TABLE as_flowershow_m_organization_invites
   ADD COLUMN IF NOT EXISTS claimed_subject_id TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS claimed_cognito_sub TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+
+ALTER TABLE as_flowershow_m_show_helper_invites
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS token_hash TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+
+ALTER TABLE as_flowershow_m_show_badge_sessions
+  ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS invite_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS matched_person_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS session_hash TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
 
 ALTER TABLE as_flowershow_m_schedules
   ADD COLUMN IF NOT EXISTS show_id TEXT NOT NULL DEFAULT '',

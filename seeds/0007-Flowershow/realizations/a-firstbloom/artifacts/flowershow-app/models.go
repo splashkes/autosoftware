@@ -107,6 +107,57 @@ type OrganizationInviteInput struct {
 	InvitedByName    string   `json:"invited_by_name,omitempty"`
 }
 
+// ShowHelperInvite is a show-scoped, low-privilege share link that lets an
+// admin hand out a token to volunteers ("can you help add photos?"). Holders
+// of the token can redeem it for a ShowBadgeSession that gates lightweight
+// helper-only flows in the show. The token is shown ONCE on creation and
+// only its sha256 hash is persisted.
+type ShowHelperInvite struct {
+	ID        string     `json:"id"`
+	ShowID    string     `json:"show_id"`
+	Token     string     `json:"-"` // 32-byte URL-safe random; never serialized
+	TokenHash string     `json:"-"` // sha256 of token, what's stored in DB
+	Label     string     `json:"label,omitempty"`
+	CreatedBy string     `json:"created_by"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+
+type ShowHelperInviteInput struct {
+	ShowID        string `json:"show_id"`
+	Label         string `json:"label,omitempty"`
+	CreatedBy     string `json:"created_by"`
+	ExpiresInDays int    `json:"expires_in_days,omitempty"`
+}
+
+// ShowBadgeSession is a lightweight identity attached to a helper after they
+// redeem a ShowHelperInvite token. It has no Cognito coupling — just name,
+// email, optional matched person, and the show id it belongs to.
+type ShowBadgeSession struct {
+	ID              string     `json:"id"`
+	ShowID          string     `json:"show_id"`
+	InviteID        string     `json:"invite_id"`
+	Name            string     `json:"name"`
+	Email           string     `json:"email"`
+	MatchedPersonID string     `json:"matched_person_id,omitempty"`
+	SessionToken    string     `json:"-"` // signed cookie value, never serialized
+	SessionHash     string     `json:"-"` // sha256 of session token, what's stored
+	CreatedAt       time.Time  `json:"created_at"`
+	LastSeenAt      time.Time  `json:"last_seen_at"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	RevokedAt       *time.Time `json:"revoked_at,omitempty"`
+}
+
+type ShowBadgeSessionInput struct {
+	ShowID          string `json:"show_id"`
+	InviteID        string `json:"invite_id"`
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	MatchedPersonID string `json:"matched_person_id,omitempty"`
+	ExpiresInHours  int    `json:"expires_in_hours,omitempty"`
+}
+
 // --- Schedule Hierarchy ---
 
 type ShowSchedule struct {
