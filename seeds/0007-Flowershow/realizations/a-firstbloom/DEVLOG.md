@@ -79,3 +79,108 @@
 - **Go tests**: All 18 pass locally
 - **`kernel-go-tests` failure**: Was caused by malformed `interaction_contract.yaml` — fixed in second commit
 - **`kernel-stack-smoke` failure**: Likely unrelated to our changes (infrastructure check), needs investigation if it persists after contract fix
+
+---
+
+## Session: 2026-04-01 through 2026-04-07
+
+### Context
+
+An agent authoring a full show schedule via the Flowershow API took ~8 minutes
+and ~12 discovery round-trips. Post-mortem feedback identified five concrete
+gaps in the agent-facing surface. This session validated that feedback against
+the codebase and implemented fixes across the seed and kernel.
+
+### Work Completed
+
+**Phase 1 — New command endpoints (PR #156)**
+
+The schedule hierarchy (show → schedule → division → section → class) previously
+required mixing JSON command endpoints with admin HTML form POSTs. Three store
+methods already existed but had no command routing:
+
+- `schedules.upsert` — upsert semantics (create or update by show_id)
+- `divisions.create` — takes show_schedule_id, title, domain, sort_order
+- `sections.create` — takes division_id, title, sort_order
+
+Added: handler cases in `handlers_api.go`, route registrations in `main.go`,
+command + domain object entries in `interaction_contract.yaml`, authoring
+workflow section 18 in `design.md`, decision log entry 18, and
+`TestScheduleHierarchyAPI` covering the full chain plus auth/validation.
+
+Also closed a pre-existing gap: `ingestions.import` was in code but missing
+from the interaction contract.
+
+Updated `kernel/protocol/v1/interactions.md` with cross-seed guidance that
+multi-step authoring workflows must document the command dependency chain.
+
+**Phase 2 — Kernel fix (PR #157)**
+
+Shipped a pre-existing fix: Go 1.22 ServeMux only matches `POST /feedback/incidents`
+for POST — GET fell through to the bootloader homepage (200 instead of 405).
+Added `exactPathHandler` wrapper in `kernel/cmd/webd/main.go`.
+
+**Phase 3 — Production incident (PR #158)**
+
+Flowershow failed to launch after the #156 merge — `exit status 2` on every
+attempt. Diagnosed via `kubectl -n as-system exec as-webd-... -c execd -- cat`
+of the process log on the server. Root cause: squash merge left duplicate
+`HandleFunc` registrations for `schedules.upsert`, `divisions.create`,
+`sections.create`. Go 1.22+ ServeMux panics on duplicate patterns. Also had
+duplicate command entries in `interaction_contract.yaml` causing kernel contract
+validation failures.
+
+Key debugging path: `doctl kubernetes cluster kubeconfig save as-prod` →
+`kubectl get pods -n as-system` → exec into `execd` sidecar container (not
+`webd`) to read `/tmp/as-executions/.../process.log`.
+
+**Phase 4 — Agent widget improvements (PR #159)**
+
+The agent access widget (`templates/partials/agent_access_widget.html`) had:
+- Wrong displayed paths (`GET /v1/contracts` instead of mounted `GET /flowershow/v1/contracts`)
+- No authoring workflow documentation
+- No token scope guidance
+- No command field names or dependency chain
+
+Rewrote the "Agent + access" tab with:
+- Correct mounted paths using `{{$.BasePath}}`
+- Full 5-step authoring workflow block with command paths and field names
+- Token scope guidance ("Manage shows" scope, permission_denied recovery)
+- Consolidated API Surface, Contribution, Workflow, and Registry Docs
+
+**Phase 5 — Second-round agent feedback fixes (PR #160)**
+
+Three issues identified from re-testing:
+
+1. Contract JSON at `/v1/contracts/0007-Flowershow/a-firstbloom` returned
+   paths without mount prefix. Added `base_url` field to both contract list
+   and detail responses in `contract_api.go` so agents can resolve relative
+   paths programmatically.
+
+2. Authoring workflow started at `shows.create` requiring `organization_id`
+   with no hint about where to find it. Added discovery preamble with
+   `GET .../organizations` and `GET .../shows` projections.
+
+3. `sort_order` was missing from `classes.create` field list in the widget.
+
+### PRs
+
+| PR | Title | Status |
+|----|-------|--------|
+| [#156](https://github.com/splashkes/autosoftware/pull/156) | Add schedule hierarchy command endpoints to Flowershow API | Merged |
+| [#157](https://github.com/splashkes/autosoftware/pull/157) | Fix GET /feedback/incidents falling through to homepage | Merged |
+| [#158](https://github.com/splashkes/autosoftware/pull/158) | Fix duplicate route registrations that panic on startup | Merged |
+| [#159](https://github.com/splashkes/autosoftware/pull/159) | Add authoring workflow and fix paths in agent access widget | Merged |
+| [#160](https://github.com/splashkes/autosoftware/pull/160) | Add base_url to contract, discovery preamble, and sort_order | Merged |
+
+### Lessons
+
+- Squash merges of rebased branches can leave duplicate entries when upstream
+  already added the same content. Always check for duplicates after merge
+  resolution, not just conflicts.
+- The `execd` sidecar container holds execution logs, not the `webd` container.
+- Go 1.22+ ServeMux panics on duplicate route patterns at startup — this is a
+  hard crash (exit 2), not a graceful error.
+- The kernel-injected widget (`data-agent-widget-source="kernel"`) takes
+  priority over the app widget via CSS, but both are visible to curl/fetch.
+  Widget changes belong in the app template, not the kernel.

@@ -202,6 +202,12 @@ commands:
     claim_types: [entry.placement_set]
     projection_tables: [as_flowershow_m_entries]
     replay_covered: true
+  - command: entries.set_special_status
+    durability_class: domain_fact_claim_backed_projection
+    store_method: setEntrySpecialStatus
+    claim_types: [entry.special_status_set]
+    projection_tables: [as_flowershow_m_entries]
+    replay_covered: true
   - command: entries.set_visibility
     durability_class: domain_fact_claim_backed_projection
     store_method: setEntrySuppressed

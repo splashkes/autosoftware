@@ -1,5 +1,16 @@
 # Design
 
+## Terminology: two meanings of "capability"
+
+This codebase uses the word "capability" for two unrelated concepts. Both are spelled `capabilities` in YAML and Go, so context determines meaning.
+
+| Sense | Where | Vocabulary | Validated by |
+|---|---|---|---|
+| Kernel primitive | `interaction_contract.yaml` (top-level `capabilities:` and per-command/projection/object lists) | Closed allowlist of ~23 store kinds: `state_transitions`, `uploads`, `sessions`, `messages`, ... | `kernel/internal/realizations/contracts.go` `allowedCapabilities` |
+| RBAC permission | `artifacts/flowershow-app/authority.go` `authorityBundleDef.Capabilities`; kernel column `runtime_authority_bundles.capabilities` | Open-ended seed-defined permission strings: `entries.manage`, `shows.workspace.read`, `awards.manage`, ... | Seed authorization layer; kernel does not enforce membership |
+
+When reading or writing contract YAML, "capability" always means the kernel-primitive sense. When reading or writing authority/role/bundle code, "capability" always means the RBAC sense.
+
 ## Core Structure
 
 ### 1. Organization Hierarchy
@@ -235,6 +246,10 @@ Organization ancestry is not authority inheritance by default.
 If any future cross-org authority is introduced, it must be explicitly granted
 and explicitly evaluated, not inferred from parent-child organization links.
 
+#### Implementation status (current realization)
+
+The grant record format (bundle, scope, grantor, status) and effective-access materialization are implemented in `realizations/a-firstbloom`. Today only `roles.assign` is exposed, and it always writes status `accepted`. The remaining lifecycle transitions (`proposed`, `revoked`, `expired`, `superseded`) and per-role delegation policy enforcement (e.g. judges may not delegate judge power) are designed but not yet exercised by any command. Operationally, the only grant in production is the bootstrap admin.
+
 ---
 
 ### 8. Entries
@@ -286,6 +301,10 @@ Beyond placement — criterion-level scoring.
 
 Placements and awards are computed from scorecards when present.
 
+#### Special status
+
+Entries can carry a special status (e.g. award winner, honorable mention) independently of their numeric placement, optionally linked to a special award. The canonical command for setting or clearing this is `entries.set_special_status`. The admin "results" form is a UI convenience that fires both `entries.set_placement` and `entries.set_special_status` against the same entry; the contract surface remains the two separate semantic commands.
+
 ---
 
 ### 10. Domains
@@ -325,8 +344,8 @@ Required interface expectations:
 - command authorization should resolve through system-native authority over the
   relevant organization, show, or narrower scope, not through hidden
   seed-local-only checks that alternate clients cannot inspect
-- authority changes should become ledger-visible history and effective-access
-  projections once the seed adopts the kernel-native authority model
+- authority changes are ledger-visible history and effective-access
+  projections via the kernel-native authority model (see §7A "Implementation status (current realization)" for the subset of the lifecycle that is currently exercised)
 
 Runtime-only assistant instructions may accompany authoring requests, for
 example guidance about how to interpret a cited schedule or which standard

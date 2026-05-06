@@ -258,6 +258,7 @@ var commandCapabilityMap = map[string]string{
 	"entries.delete":             "entries.manage",
 	"entries.reassign_entrant":   "entries.manage",
 	"entries.set_placement":      "entries.manage",
+	"entries.set_special_status": "entries.manage",
 	"entries.set_visibility":     "entries.manage",
 	"persons.create":             "persons.manage",
 	"persons.update":             "persons.manage",

@@ -3432,6 +3432,12 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 				"suppressed": true
 			}`, state.entryKept.ID), http.StatusOK)
 		},
+		"entries.set_special_status": func(t *testing.T) {
+			_ = executeAPICommand[map[string]any](t, a, "entries.set_special_status", fmt.Sprintf(`{
+				"id": %q,
+				"special_status": true
+			}`, state.entryKept.ID), http.StatusOK)
+		},
 		"show_credits.create": func(t *testing.T) {
 			state.credit = executeAPICommand[ShowCredit](t, a, "show_credits.create", fmt.Sprintf(`{
 				"show_id": %q,

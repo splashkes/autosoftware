@@ -53,3 +53,10 @@ Database connection via `AS_RUNTIME_DATABASE_URL` injected by the kernel. Append
 
 ## 18. Schedule Hierarchy Commands in the API
 `schedules.upsert`, `divisions.create`, and `sections.create` are promoted to `/v1/commands/` endpoints. Previously these were only reachable through admin HTML form handlers (`POST /admin/shows/{showID}/schedule`, etc.), which meant agents authoring a full show schedule had to mix JSON commands with form-encoded admin POSTs. The store layer already supported these operations — only the command routing and contract entries were missing.
+
+## 19. Authority Lifecycle: Designed Surface vs Current Realization
+design.md §7A describes a five-state grant lifecycle (proposed, accepted, revoked, expired, superseded) and per-role delegation policy. The kernel-side bundle/grant tables, scope tracking, grantor capture, and effective-access materialization are all implemented in `realizations/a-firstbloom`.
+
+For now, only `roles.assign` is exposed and it always writes status `accepted`. The other four lifecycle states are SQL-recognized but unreachable from any command. Per-role delegation policy enforcement (e.g. "judges may not delegate judge power") is also deferred. The only grant currently in production is the bootstrap admin (`grant_restore_simon_admin`).
+
+The delegation surface remains usable in single-admin operation. When operational need for multi-grant delegation arises, the work is to add `roles.revoke` / `roles.propose` / `roles.supersede` commands, the corresponding handler logic, and a delegation-policy gate in the assign path. Until then, the docs in design.md §7A "Implementation status (current realization)" record the current operational state so the docs do not read as if delegation is operationally live.
