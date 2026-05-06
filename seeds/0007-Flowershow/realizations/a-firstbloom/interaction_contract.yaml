@@ -212,6 +212,49 @@ domain_objects:
           - name: level
             type: string
             summary: Organization level such as club, district, or society.
+  - kind: media
+    summary: A photo or video attached to an entry or to a class for show-page presentation.
+    schema_ref: ../../design.md#8-entries
+    capabilities:
+      - uploads
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable media identity and parent linkage.
+        fields:
+          - name: id
+            type: string
+            summary: Stable media id.
+          - name: entity_kind
+            type: string
+            summary: Discriminator — "entry" (default) or "class".
+          - name: entry_id
+            type: string
+            summary: Parent entry id when entity_kind is "entry".
+          - name: class_id
+            type: string
+            summary: Parent class id when entity_kind is "class".
+          - name: media_type
+            type: string
+            summary: Media kind such as photo or video.
+      public_payload:
+        summary: Public media metadata used for display.
+        fields:
+          - name: url
+            type: string
+            summary: Public URL to fetch the rendered media.
+          - name: thumbnail_url
+            type: string
+            summary: Public URL to the generated thumbnail when present.
+          - name: is_cover
+            type: boolean
+            summary: True when this media is the chosen cover for its parent entry or class.
+          - name: width
+            type: integer
+            summary: Pixel width after orientation normalization.
+          - name: height
+            type: integer
+            summary: Pixel height after orientation normalization.
   - kind: show_credit
     summary: A free-form show page credit, separate from permissions.
     schema_ref: ../../design.md#7-people
