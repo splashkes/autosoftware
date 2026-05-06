@@ -231,6 +231,7 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.reassign_entrant", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_placement", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_special_status", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/entries.set_visibility", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/classes.update", a.handleAPICommand)

@@ -1,0 +1,12 @@
+AS 
+
+User and agent driven rapid software evolution
+
+The code may self optimize
+The purpose and design docs as well as legacy decisions made are the guides
+Users can click sprout icon bottom right anytime to understand the purpose of the page; to request improvements; or to fork their own - running on the same data, or a new data set
+Security and scale is centrally maintained (and continiously improved)
+Evolution credit cost can be crowdsourced from user fees or paid outright or executed with coding agents directly
+All AS software is automatically accessible by agent scoped APIs so you dont even need to use the interface - just provide your key
+Immutable object registry + evolving claims and schema ledger allows the system / UI to be rolled back or replayed at any time (if you have access to the objects themselves)
+the realizations can be re-run as technology emerges as goals and contracts are defined  - meaning the software evolves outside and inside

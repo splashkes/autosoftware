@@ -530,6 +530,22 @@ commands:
       - activity_events
     projection: entries.detail
     consistency: read_your_writes
+  - name: entries.set_special_status
+    summary: Mark or clear an entry's special status, optionally linking to a special award.
+    path: /v1/commands/0007-Flowershow/entries.set_special_status
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#9-judging--rubric-scoring
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
   - name: classes.create
     summary: Add a class to a section in the schedule.
     path: /v1/commands/0007-Flowershow/classes.create
@@ -965,6 +981,29 @@ commands:
     projection: clubs.workspace
     consistency: read_your_writes
 projections:
+  - name: account
+    summary: Authenticated principal's account projection — identity, role assignments, managed clubs, agent-token profiles, and issued tokens.
+    path: /v1/projections/0007-Flowershow/account
+    object_kinds:
+      - person
+      - organization
+      - show
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - sessions
+      - activity_events
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+          - runtime_only
+        summary: Authenticated user or agent token sees their own identity, roles, managed clubs, agent-token profiles, and issued agent tokens.
   - name: organizations.directory
     summary: List of all organizations/clubs known to the flower-show realization.
     path: /v1/projections/0007-Flowershow/organizations
@@ -1328,6 +1367,7 @@ ui_surfaces:
       - classes.create
       - entries.create
       - entries.set_placement
+      - entries.set_special_status
       - entries.set_visibility
       - media.attach
       - media.delete

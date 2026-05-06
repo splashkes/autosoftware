@@ -1,0 +1,901 @@
+{
+  "schemaVersion": 1,
+  "program": "live-anonymous-red-team",
+  "defaultRunWindow": {
+    "timezone": "America/Toronto",
+    "startHour": 1,
+    "endHour": 5
+  },
+  "safetyGuards": {
+    "discoveryMaxRequestsPerHost": 50,
+    "adversarialMaxRequestsPerScenario": 300,
+    "maxConcurrency": 10,
+    "maxStreamConnections": 3,
+    "maxLaunchScenariosInFlight": 1,
+    "successfulLaunchCooldownMinutes": 10
+  },
+  "owners": {
+    "boot-surface": {
+      "subsystem": "Boot surface and public shell",
+      "repoPaths": [
+        "kernel/cmd/webd/main.go",
+        "kernel/cmd/webd/bootloader.go"
+      ]
+    },
+    "public-api-surface": {
+      "subsystem": "Public contracts and registry APIs",
+      "repoPaths": [
+        "kernel/internal/http/json/contracts.go",
+        "kernel/internal/http/json/registry.go",
+        "kernel/cmd/apid/main.go"
+      ]
+    },
+    "csrf-browser-writes": {
+      "subsystem": "Same-origin write enforcement",
+      "repoPaths": [
+        "kernel/internal/http/server/security.go",
+        "kernel/internal/http/server/request_context.go"
+      ]
+    },
+    "feedback-loop-public-post": {
+      "subsystem": "Public incident ingest path",
+      "repoPaths": [
+        "kernel/internal/http/json/feedback_loop.go",
+        "kernel/internal/feedback_loop/reporter.go",
+        "kernel/cmd/webd/main.go"
+      ]
+    },
+    "boot-execution-public": {
+      "subsystem": "Anonymous launch and preview routing",
+      "repoPaths": [
+        "kernel/internal/http/json/execution.go",
+        "kernel/cmd/webd/bootloader.go",
+        "kernel/cmd/webd/main.go"
+      ]
+    },
+    "mounted-routing-rewrite": {
+      "subsystem": "Mounted route rewriting and proxying",
+      "repoPaths": [
+        "kernel/cmd/webd/main.go"
+      ]
+    },
+    "registry-permalinks": {
+      "subsystem": "Registry permalink and share-hash routing",
+      "repoPaths": [
+        "kernel/cmd/webd/main.go",
+        "kernel/internal/runtime/registry_hash_index.go"
+      ]
+    },
+    "rate-limits": {
+      "subsystem": "Anonymous rate limiting",
+      "repoPaths": [
+        "kernel/internal/http/server/rate_limit.go",
+        "kernel/cmd/webd/main.go",
+        "kernel/cmd/apid/main.go"
+      ]
+    },
+    "growth-surface": {
+      "subsystem": "Public growth and partial rendering",
+      "repoPaths": [
+        "kernel/internal/http/json/growth.go",
+        "kernel/internal/realizations/growth.go",
+        "kernel/cmd/webd/main.go"
+      ]
+    },
+    "remote-registry-dependency": {
+      "subsystem": "Remote registry dependency handling",
+      "repoPaths": [
+        "kernel/internal/materializer/service.go",
+        "kernel/cmd/webd/main.go"
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "wave1-homepage-baseline",
+      "wave": 1,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "surface-mapping",
+      "ownerKey": "boot-surface",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Run during the default low-traffic window unless explicitly overridden."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses or any broad availability loss on the main host.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Homepage stays reachable.",
+        "Security headers are present and non-empty.",
+        "CSP nonce changes between repeated baseline runs."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response headers",
+        "x-as-request-id",
+        "cf-ray",
+        "response hash"
+      ]
+    },
+    {
+      "id": "wave1-launch-state-asset-cache",
+      "wave": 1,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "surface-mapping",
+      "ownerKey": "boot-surface",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/assets/launch-state.js",
+        "headers": {
+          "accept": "text/javascript",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Anonymous asset fetch only."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Shared launch asset remains cacheable and reachable.",
+        "No unexpected redirect or content-type drift occurs."
+      ],
+      "evidenceRequirements": [
+        "cache headers",
+        "content-type",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave1-api-contracts-baseline",
+      "wave": 1,
+      "driver": "http",
+      "host": "api.autosoftware.app",
+      "class": "surface-mapping",
+      "ownerKey": "public-api-surface",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://api.autosoftware.app/v1/contracts",
+        "headers": {
+          "accept": "application/json",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Anonymous GET only."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses on the API host.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Public contracts index remains readable without redirect loops.",
+        "Response stays JSON and does not leak internal transport details."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "content-type",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave1-registry-host-availability",
+      "wave": 1,
+      "driver": "http",
+      "host": "registry.autosoftware.app",
+      "class": "surface-mapping",
+      "ownerKey": "remote-registry-dependency",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://registry.autosoftware.app/",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "redirect": "manual",
+        "requestCount": 1
+      },
+      "preconditions": [
+        "This scenario records registry-host health and does not require the host to be healthy."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses from the registry host.",
+      "expectedStatuses": [
+        200,
+        302,
+        503
+      ],
+      "expectedSafeBehavior": [
+        "Registry host availability is captured explicitly.",
+        "If degraded, the state is recorded for later wave gating."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "retry-after",
+        "location",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave1-invalid-preview-path",
+      "wave": 1,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "surface-mapping",
+      "ownerKey": "boot-execution-public",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/__runs/not-a-real-execution/",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Use only obviously invalid preview execution identifiers."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        404
+      ],
+      "expectedSafeBehavior": [
+        "Invalid preview paths do not expose internal execution state.",
+        "No redirect to a stable route occurs."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-feedback-method-mismatch",
+      "wave": 2,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "feedback-loop-public-post",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/feedback/incidents",
+        "headers": {
+          "accept": "application/json",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "This probe must not send a body."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        405
+      ],
+      "expectedSafeBehavior": [
+        "The feedback endpoint rejects non-POST methods and advertises the correct Allow header."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "allow header",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-feedback-origin-mismatch",
+      "wave": 2,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "csrf-browser-writes",
+      "requestTemplate": {
+        "method": "POST",
+        "url": "https://autosoftware.app/feedback/incidents",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "origin": "https://evil.example",
+          "sec-fetch-site": "cross-site"
+        },
+        "jsonBody": {
+          "kind": "live.redteam.origin-mismatch",
+          "severity": "error",
+          "message": "cross-site JSON probe"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "No credentials or cookies are sent."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        403
+      ],
+      "expectedSafeBehavior": [
+        "Cross-site browser-style POSTs are rejected before the incident handler processes the payload."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-feedback-invalid-json",
+      "wave": 2,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "feedback-loop-public-post",
+      "requestTemplate": {
+        "method": "POST",
+        "url": "https://autosoftware.app/feedback/incidents",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{\"kind\":",
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Use invalid JSON so the handler does not persist an incident."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        400
+      ],
+      "expectedSafeBehavior": [
+        "Malformed incident payloads fail fast and do not create runtime rows."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-partials-grow-traversal-probe",
+      "wave": 2,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "growth-surface",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/partials/grow?reference=../../../../etc/passwd",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Probe only through the public partial endpoint."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        400
+      ],
+      "expectedSafeBehavior": [
+        "Traversal-like realization references are rejected without exposing local file paths."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-api-forwarded-header-confusion",
+      "wave": 2,
+      "driver": "http",
+      "host": "api.autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "public-api-surface",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://api.autosoftware.app/v1/contracts",
+        "headers": {
+          "accept": "application/json",
+          "x-forwarded-host": "evil.example",
+          "x-forwarded-proto": "http",
+          "forwarded": "for=203.0.113.9;host=evil.example;proto=http"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "This is a read-only header confusion probe."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Public API responses do not redirect or mutate behavior based on attacker-controlled forwarding headers."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-registry-short-share-invalid",
+      "wave": 2,
+      "driver": "http",
+      "host": "registry.autosoftware.app",
+      "class": "anonymous-request-abuse",
+      "ownerKey": "registry-permalinks",
+      "healthGate": {
+        "url": "https://registry.autosoftware.app/",
+        "healthyStatuses": [
+          200,
+          302
+        ]
+      },
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://registry.autosoftware.app/r/abcdef",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "redirect": "manual",
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Only run when the registry host is healthy."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        404,
+        302
+      ],
+      "expectedSafeBehavior": [
+        "Short share-hash routing either resolves cleanly or returns a bounded not-found response without error detail."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "location",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave2-boot-launch-anonymous-probe",
+      "wave": 2,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "launch-cost",
+      "ownerKey": "boot-execution-public",
+      "manualOnly": true,
+      "launchScenario": true,
+      "requestTemplate": {
+        "method": "POST",
+        "url": "https://autosoftware.app/boot/commands/realizations.launch",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "jsonBody": {
+          "reference": "0007-Flowershow/a-firstbloom"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Run only with operator approval.",
+        "Only one launch scenario may run at a time."
+      ],
+      "maxRequests": 1,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort immediately on any unexpected 5xx or on a successful launch outside the approved window.",
+      "expectedStatuses": [
+        200,
+        400,
+        401,
+        403,
+        429,
+        503
+      ],
+      "expectedSafeBehavior": [
+        "Anonymous launch exposure is measured without repeated retries.",
+        "Any successful launch triggers a 10-minute cooldown before the next launch probe."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "response hash",
+        "open_path when present",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave3-clickjacking-homepage",
+      "wave": 3,
+      "driver": "browser",
+      "host": "autosoftware.app",
+      "class": "browser-origin",
+      "ownerKey": "csrf-browser-writes",
+      "requestTemplate": {
+        "browserAction": "frame-deny",
+        "attackerUrl": "http://127.0.0.1:40123/",
+        "targetUrl": "https://autosoftware.app/"
+      },
+      "preconditions": [
+        "Attacker page must be served from a different origin."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort if the target becomes unavailable or the browser reports repeated unexpected navigation errors.",
+      "expectedSafeBehavior": [
+        "The homepage cannot be embedded inside an attacker-controlled iframe."
+      ],
+      "evidenceRequirements": [
+        "screenshot",
+        "HAR",
+        "frame URLs",
+        "console errors"
+      ]
+    },
+    {
+      "id": "wave3-csrf-form-post-feedback",
+      "wave": 3,
+      "driver": "browser",
+      "host": "autosoftware.app",
+      "class": "browser-origin",
+      "ownerKey": "csrf-browser-writes",
+      "requestTemplate": {
+        "browserAction": "csrf-form-post",
+        "attackerUrl": "http://127.0.0.1:40123/",
+        "targetUrl": "https://autosoftware.app/feedback/incidents",
+        "formFields": {
+          "kind": "csrf.form.probe",
+          "severity": "error",
+          "message": "cross-origin form post probe"
+        }
+      },
+      "preconditions": [
+        "The attacker page submits a simple browser form and does not try to read the cross-origin response."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort if the response stream becomes unstable or the target returns repeated unexpected 5xx responses.",
+      "expectedSafeBehavior": [
+        "Cross-origin form POSTs are rejected with a same-origin enforcement response."
+      ],
+      "evidenceRequirements": [
+        "screenshot",
+        "HAR",
+        "response status",
+        "console errors"
+      ]
+    },
+    {
+      "id": "wave3-cross-origin-fetch-contracts",
+      "wave": 3,
+      "driver": "browser",
+      "host": "api.autosoftware.app",
+      "class": "browser-origin",
+      "ownerKey": "public-api-surface",
+      "requestTemplate": {
+        "browserAction": "cross-origin-fetch",
+        "attackerUrl": "http://127.0.0.1:40123/",
+        "targetUrl": "https://api.autosoftware.app/v1/contracts"
+      },
+      "preconditions": [
+        "Use the real browser CORS model instead of curl semantics."
+      ],
+      "maxRequests": 5,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort on repeated unexpected 5xx responses from the API host.",
+      "expectedSafeBehavior": [
+        "Attacker-origin JavaScript cannot read the contracts index unless the API intentionally opts into cross-origin reads."
+      ],
+      "evidenceRequirements": [
+        "screenshot",
+        "HAR",
+        "JavaScript fetch result",
+        "response status",
+        "console errors"
+      ]
+    },
+    {
+      "id": "wave4-flowershow-mounted-scan",
+      "wave": 4,
+      "driver": "browser",
+      "host": "autosoftware.app",
+      "class": "mounted-route-abuse",
+      "ownerKey": "mounted-routing-rewrite",
+      "requestTemplate": {
+        "browserAction": "mounted-scan",
+        "targetUrl": "https://autosoftware.app/flowershow/",
+        "mountPrefix": "/flowershow/",
+        "maxLinks": 6
+      },
+      "preconditions": [
+        "Scan only the mounted public Flowershow route tree discovered from the live shell."
+      ],
+      "maxRequests": 25,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort if the mounted route starts returning repeated unexpected 5xx responses or shows broad availability loss.",
+      "expectedSafeBehavior": [
+        "Mounted pages do not produce double-prefixed links.",
+        "Reserved root paths stay rooted where intended.",
+        "HTMX and SSE references are recorded when present."
+      ],
+      "evidenceRequirements": [
+        "screenshot",
+        "HAR",
+        "link scan JSON",
+        "script and attribute inventory"
+      ]
+    },
+    {
+      "id": "wave4-flowershow-mounted-asset",
+      "wave": 4,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "mounted-route-abuse",
+      "ownerKey": "mounted-routing-rewrite",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/flowershow/assets/app.js",
+        "headers": {
+          "accept": "text/javascript",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Mounted asset fetch only."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Mounted assets resolve through the intended prefix and do not redirect into a double-prefixed namespace."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "content-type",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave4-flowershow-mounted-root-api-linkage",
+      "wave": 4,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "mounted-route-abuse",
+      "ownerKey": "mounted-routing-rewrite",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/flowershow/v1/contracts",
+        "headers": {
+          "accept": "application/json",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 1
+      },
+      "preconditions": [
+        "This probe records whether mounted prefixes can reach root API paths."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        200
+      ],
+      "expectedSafeBehavior": [
+        "Mounted prefix routing is explicit and stable.",
+        "If root API paths are reachable through a mount, the response is recorded for review."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "content-type",
+        "response hash",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave4-registry-reading-room-redirect",
+      "wave": 4,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "mounted-route-abuse",
+      "ownerKey": "registry-permalinks",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/registry/reading-room/",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "redirect": "manual",
+        "requestCount": 1
+      },
+      "preconditions": [
+        "Probe the public redirect path only."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 1,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses.",
+      "expectedStatuses": [
+        302
+      ],
+      "expectedSafeBehavior": [
+        "The mounted registry reading-room route redirects cleanly to the registry host without path corruption."
+      ],
+      "evidenceRequirements": [
+        "status line",
+        "location",
+        "x-as-request-id",
+        "cf-ray"
+      ]
+    },
+    {
+      "id": "wave5-api-contracts-read-concurrency",
+      "wave": 5,
+      "driver": "http",
+      "host": "api.autosoftware.app",
+      "class": "rate-limit-resilience",
+      "ownerKey": "rate-limits",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://api.autosoftware.app/v1/contracts",
+        "headers": {
+          "accept": "application/json",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 20
+      },
+      "preconditions": [
+        "Keep concurrency capped and do not escalate if rate limiting is observed."
+      ],
+      "maxRequests": 20,
+      "maxConcurrency": 5,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses or if recent p95 latency exceeds 3x the Wave 1 baseline for 5 minutes.",
+      "expectedStatuses": [
+        200,
+        429
+      ],
+      "expectedSafeBehavior": [
+        "Cheap public reads remain stable under a small capped burst.",
+        "If rate limiting engages, the system returns bounded throttling responses."
+      ],
+      "evidenceRequirements": [
+        "status histogram",
+        "latency summary",
+        "x-as-request-id samples",
+        "cf-ray samples"
+      ]
+    },
+    {
+      "id": "wave5-feedback-invalid-json-rate-limit",
+      "wave": 5,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "rate-limit-resilience",
+      "ownerKey": "rate-limits",
+      "requestTemplate": {
+        "method": "POST",
+        "url": "https://autosoftware.app/feedback/incidents",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": "{\"kind\":",
+        "requestCount": 20
+      },
+      "preconditions": [
+        "Use invalid JSON so the scenario does not create incident records."
+      ],
+      "maxRequests": 20,
+      "maxConcurrency": 2,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses or if recent p95 latency exceeds 3x the Wave 1 baseline for 5 minutes.",
+      "expectedStatuses": [
+        400,
+        429
+      ],
+      "expectedSafeBehavior": [
+        "Invalid public writes stay bounded and can be throttled without broad service loss."
+      ],
+      "evidenceRequirements": [
+        "status histogram",
+        "latency summary",
+        "x-as-request-id samples",
+        "cf-ray samples"
+      ]
+    },
+    {
+      "id": "wave5-invalid-preview-concurrency",
+      "wave": 5,
+      "driver": "http",
+      "host": "autosoftware.app",
+      "class": "rate-limit-resilience",
+      "ownerKey": "boot-execution-public",
+      "requestTemplate": {
+        "method": "GET",
+        "url": "https://autosoftware.app/__runs/not-a-real-execution/",
+        "headers": {
+          "accept": "text/html",
+          "cache-control": "no-cache"
+        },
+        "requestCount": 10
+      },
+      "preconditions": [
+        "Use only invalid preview execution identifiers."
+      ],
+      "maxRequests": 10,
+      "maxConcurrency": 3,
+      "abortCondition": "Abort after 2 consecutive unexpected 5xx responses or if recent p95 latency exceeds 3x the Wave 1 baseline for 5 minutes.",
+      "expectedStatuses": [
+        404,
+        429
+      ],
+      "expectedSafeBehavior": [
+        "Invalid preview-path requests stay cheap and bounded under small concurrency."
+      ],
+      "evidenceRequirements": [
+        "status histogram",
+        "latency summary",
+        "x-as-request-id samples",
+        "cf-ray samples"
+      ]
+    }
+  ]
+}

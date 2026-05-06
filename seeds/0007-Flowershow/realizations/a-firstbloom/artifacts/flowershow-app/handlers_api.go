@@ -621,6 +621,21 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "suppressed": req.Suppressed})
 
+	case "entries.set_special_status":
+		var req struct {
+			ID            string `json:"id"`
+			SpecialStatus bool   `json:"special_status"`
+			AwardID       string `json:"award_id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if err := a.store.setEntrySpecialStatus(req.ID, req.SpecialStatus, req.AwardID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "entry_special_status_failed", err.Error(), "Pass a stable entry id and the desired special_status boolean; award_id is optional and cleared when special_status is false.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "special_status": req.SpecialStatus, "award_id": req.AwardID})
+
 	case "classes.create":
 		var input ShowClassInput
 		if !a.decodeAPIJSON(w, r, &input) {
