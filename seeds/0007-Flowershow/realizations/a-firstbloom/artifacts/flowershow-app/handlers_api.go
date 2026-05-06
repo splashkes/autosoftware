@@ -789,6 +789,44 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
+	case "media.set_cover":
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !a.decodeAPIJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(req.ID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_id_missing", "id is required.", "Pass the stable media id of the photo you want marked as cover.", []apiFieldError{{Field: "id", Message: "required stable media id"}})
+			return
+		}
+		if err := a.store.setMediaCover(req.ID); err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_set_cover_failed", err.Error(), "Pass an existing media id from the entry or class detail projection.", []apiFieldError{{Field: "id", Message: "media not found"}})
+			return
+		}
+		media, _ := a.store.mediaByID(req.ID)
+		writeJSON(w, http.StatusOK, media)
+
+	case "media.attach_to_class":
+		var input AttachClassMediaInput
+		if !a.decodeAPIJSON(w, r, &input) {
+			return
+		}
+		if strings.TrimSpace(input.ClassID) == "" {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_class_missing", "class_id is required.", "Pass the stable class id this media belongs to.", []apiFieldError{{Field: "class_id", Message: "required stable class id"}})
+			return
+		}
+		if _, ok := a.store.classByID(input.ClassID); !ok {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_class_missing", "class_id must reference an existing class.", "Use a stable class id from a classes list or workspace projection before attaching media metadata.", []apiFieldError{{Field: "class_id", Message: "must reference an existing class"}})
+			return
+		}
+		media, err := a.store.attachMediaToClass(input)
+		if err != nil {
+			a.writeAPIError(w, r, http.StatusBadRequest, "media_attach_failed", err.Error(), "Pass class_id, media_type, url, and file_name when attaching media metadata.", nil)
+			return
+		}
+		writeJSON(w, http.StatusCreated, media)
+
 	case "rubrics.create":
 		var input JudgingRubric
 		if !a.decodeAPIJSON(w, r, &input) {

@@ -742,6 +742,38 @@ commands:
       - activity_events
     projection: entries.detail
     consistency: read_your_writes
+  - name: media.set_cover
+    summary: Mark a single media item as the cover photo for its parent entry or class, clearing any sibling cover.
+    path: /v1/commands/0007-Flowershow/media.set_cover
+    object_kinds:
+      - media
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: media.attach_to_class
+    summary: Attach external or already-uploaded media metadata to a class (rather than to a specific entry).
+    path: /v1/commands/0007-Flowershow/media.attach_to_class
+    object_kinds:
+      - media
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - uploads
+      - activity_events
+    projection: classes.detail
+    consistency: read_your_writes
   - name: rubrics.create
     summary: Create a judging rubric.
     path: /v1/commands/0007-Flowershow/rubrics.create
@@ -1370,7 +1402,9 @@ ui_surfaces:
       - entries.set_special_status
       - entries.set_visibility
       - media.attach
+      - media.attach_to_class
       - media.delete
+      - media.set_cover
       - rubrics.create
       - criteria.create
       - scorecards.submit

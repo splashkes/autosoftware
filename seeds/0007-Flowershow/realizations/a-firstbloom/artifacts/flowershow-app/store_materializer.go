@@ -233,8 +233,12 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 	}
 	for _, id := range sortedMapKeys(mem.media) {
 		item := mem.media[id]
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-			item.ID, item.EntryID, item.MediaType, item.URL, item.ContentType, item.ThumbnailURL, item.FileName, item.StorageKey, item.FileSize, item.Width, item.Height, item.CreatedAt); err != nil {
+		entityKind := item.EntityKind
+		if entityKind == "" {
+			entityKind = "entry"
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, is_cover, entity_kind, class_id, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+			item.ID, item.EntryID, item.MediaType, item.URL, item.ContentType, item.ThumbnailURL, item.FileName, item.StorageKey, item.FileSize, item.Width, item.Height, item.IsCover, entityKind, nullableString(item.ClassID), item.CreatedAt); err != nil {
 			return fmt.Errorf("insert media projection %s: %w", item.ID, err)
 		}
 	}
