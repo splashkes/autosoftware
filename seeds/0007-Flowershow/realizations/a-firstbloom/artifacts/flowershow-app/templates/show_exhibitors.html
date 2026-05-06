@@ -1,0 +1,69 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="{{$.BasePath}}/">Home</a> &rsaquo;
+  <a href="{{$.BasePath}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;
+  <span>Exhibitors</span>
+</div>
+
+<header class="show-subpage-header">
+  <h1>Exhibitors — {{.Show.Name}}</h1>
+  <p class="show-subpage-meta">
+    {{if .Org}}<a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a> &middot; {{end}}
+    {{if .Show.Location}}{{.Show.Location}} &middot; {{end}}
+    {{.Show.Date}}
+    <span class="show-subpage-meta-count">{{.TotalExhibitors}} exhibitor{{if ne .TotalExhibitors 1}}s{{end}} &middot; {{.TotalEntryCount}} entries &middot; {{.TotalPlacedCount}} placed</span>
+  </p>
+</header>
+
+<section class="section">
+  {{if or .Exhibitors .Anonymous}}
+  <div class="exhibitor-card-grid">
+    {{range .Exhibitors}}
+    <a href="{{$.BasePath}}{{.Href}}" class="exhibitor-card">
+      <div class="exhibitor-card-head">
+        <span class="exhibitor-card-avatar" aria-hidden="true">{{if .Person}}{{.Person.Initials}}{{else}}?{{end}}</span>
+        <div class="exhibitor-card-name-block">
+          <strong class="exhibitor-card-name">{{.Label}}</strong>
+          <span class="exhibitor-card-counts">
+            {{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}}
+            {{if gt .PlacedCount 0}} &middot; <span class="exhibitor-card-placed">{{.PlacedCount}} placed</span>{{end}}
+            {{if gt .SpecialCount 0}} &middot; <span class="exhibitor-card-special">{{.SpecialCount}} special</span>{{end}}
+          </span>
+        </div>
+      </div>
+      {{if .ClassLabels}}
+      <ul class="exhibitor-card-classes">
+        {{range .ClassLabels}}
+        <li>{{.}}</li>
+        {{end}}
+      </ul>
+      {{end}}
+    </a>
+    {{end}}
+    {{with .Anonymous}}
+    <div class="exhibitor-card exhibitor-card-anon">
+      <div class="exhibitor-card-head">
+        <span class="exhibitor-card-avatar" aria-hidden="true">?</span>
+        <div class="exhibitor-card-name-block">
+          <strong class="exhibitor-card-name">{{.Label}}</strong>
+          <span class="exhibitor-card-counts">
+            {{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}}
+            {{if gt .PlacedCount 0}} &middot; <span class="exhibitor-card-placed">{{.PlacedCount}} placed</span>{{end}}
+          </span>
+        </div>
+      </div>
+      {{if .ClassLabels}}
+      <ul class="exhibitor-card-classes">
+        {{range .ClassLabels}}
+        <li>{{.}}</li>
+        {{end}}
+      </ul>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No exhibitors yet for this show.</p>
+  {{end}}
+</section>
+{{end}}

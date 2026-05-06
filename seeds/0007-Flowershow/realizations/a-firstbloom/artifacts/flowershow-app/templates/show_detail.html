@@ -3,22 +3,152 @@
   <a href="{{$.BasePath}}/">Home</a> &rsaquo; <span>{{.Show.Name}}</span>
 </div>
 
-<div class="show-header">
-  <h1>{{.Show.Name}}</h1>
-  <p class="show-meta">
-    {{with showContextMeta .Show .Org}}{{if $.Org}}<a href="{{$.BasePath}}/clubs/{{$.Org.ID}}">{{$.Org.Name}}</a>{{if showLocationDateMeta $.Show}} &middot; {{showLocationDateMeta $.Show}}{{end}}{{else}}{{.}}{{end}}{{end}}
-    {{statusBadge .Show.Status}}
-  </p>
-  <div class="show-actions">
-    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary">Live Winners</a>
-    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline">Browse Classes</a>
-    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline">View Rules</a>
+<section class="show-hero{{if .HeroCoverPath}} show-hero-cover{{end}}"{{if .HeroCoverPath}} style="background-image:url('{{$.BasePath}}{{.HeroCoverPath}}');"{{end}}>
+  <div class="show-hero-scrim"></div>
+  <div class="show-hero-body">
+    {{with .StatusLabel}}<span class="show-hero-status">{{.}}</span>{{end}}
+    <h1 class="show-hero-title">{{.Show.Name}}</h1>
+    {{with .HeroSubtitle}}<p class="show-hero-subtitle">{{.}}</p>{{end}}
+    {{if .Org}}
+    <p class="show-hero-org">
+      Hosted by <a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a>
+    </p>
+    {{end}}
+    <div class="show-hero-actions">
+      <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/summary" class="btn btn-primary show-hero-action-primary">View live winners</a>
+      <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline show-hero-action-secondary">Browse classes</a>
+      <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline show-hero-action-secondary">Show rules</a>
+    </div>
   </div>
-</div>
+</section>
+
+<section class="section show-winners-section">
+  <div class="show-section-head">
+    <h2>Winners by class</h2>
+    <p class="section-desc">Every class — placements, special awards, and a route into the full entries list.</p>
+  </div>
+  {{if .WinnersByClass}}
+  {{$basePath := $.BasePath}}
+  {{$slug := $.Show.Slug}}
+  <ol class="winners-table" role="list">
+    {{range .WinnersByClass}}
+    <li class="winners-row{{if not .HasEntries}} winners-row-empty{{end}}">
+      <div class="winners-row-class">
+        <a class="winners-row-class-link" href="{{$basePath}}/shows/{{$slug}}/classes/{{.Class.ID}}">
+          <span class="winners-row-class-number">Class {{.Class.ClassNumber}}</span>
+          <span class="winners-row-class-title">{{.Class.Title}}</span>
+        </a>
+        <p class="winners-row-class-context">
+          {{with .DivisionTitle}}<span>{{.}}</span>{{end}}
+          {{with .SectionTitle}}<span>{{.}}</span>{{end}}
+        </p>
+      </div>
+      <div class="winners-row-cells">
+        {{if .HasEntries}}
+          {{with .First}}
+          <div class="winners-cell">
+            <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
+            <div class="winners-cell-copy">
+              <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
+              {{if .EntrantLabel}}
+              <span class="winners-cell-entrant">
+                {{if .Person}}<a href="{{$basePath}}/people/{{.Person.ID}}">{{.EntrantLabel}}</a>{{else}}{{.EntrantLabel}}{{end}}
+              </span>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+          {{with .Second}}
+          <div class="winners-cell">
+            <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
+            <div class="winners-cell-copy">
+              <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
+              {{if .EntrantLabel}}
+              <span class="winners-cell-entrant">
+                {{if .Person}}<a href="{{$basePath}}/people/{{.Person.ID}}">{{.EntrantLabel}}</a>{{else}}{{.EntrantLabel}}{{end}}
+              </span>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+          {{with .Third}}
+          <div class="winners-cell">
+            <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
+            <div class="winners-cell-copy">
+              <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
+              {{if .EntrantLabel}}
+              <span class="winners-cell-entrant">
+                {{if .Person}}<a href="{{$basePath}}/people/{{.Person.ID}}">{{.EntrantLabel}}</a>{{else}}{{.EntrantLabel}}{{end}}
+              </span>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+          {{range .Specials}}
+          <div class="winners-cell">
+            <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
+            <div class="winners-cell-copy">
+              <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
+              {{if .EntrantLabel}}
+              <span class="winners-cell-entrant">
+                {{if .Person}}<a href="{{$basePath}}/people/{{.Person.ID}}">{{.EntrantLabel}}</a>{{else}}{{.EntrantLabel}}{{end}}
+              </span>
+              {{end}}
+              {{with .AwardName}}<span class="winners-cell-award">{{.}}</span>{{end}}
+            </div>
+          </div>
+          {{end}}
+          {{range .HonorableMention}}
+          <div class="winners-cell">
+            <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
+            <div class="winners-cell-copy">
+              <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
+              {{if .EntrantLabel}}
+              <span class="winners-cell-entrant">
+                {{if .Person}}<a href="{{$basePath}}/people/{{.Person.ID}}">{{.EntrantLabel}}</a>{{else}}{{.EntrantLabel}}{{end}}
+              </span>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        {{else}}
+        <p class="winners-row-empty-note">Awaiting judging</p>
+        {{end}}
+      </div>
+      {{if gt .EntryCount 0}}
+      <div class="winners-row-foot">
+        <a href="{{$basePath}}/shows/{{$slug}}/entries?class={{.Class.ID}}" class="winners-row-link">View all {{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}} in this class &rsaquo;</a>
+      </div>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  {{else}}
+  <p class="empty-state">The schedule for this show has not been published yet.</p>
+  {{end}}
+</section>
+
+{{if .NavTiles}}
+<section class="section show-nav-section">
+  <h2 class="sr-only">Explore this show</h2>
+  <div class="show-nav-tiles">
+    {{range .NavTiles}}
+    <a href="{{$.BasePath}}{{.Href}}" class="show-nav-tile {{.Modifier}}">
+      <span class="show-nav-tile-glyph" aria-hidden="true">{{.Glyph}}</span>
+      <span class="show-nav-tile-body">
+        <span class="show-nav-tile-title">{{.Title}}</span>
+        {{with .Count}}<span class="tile-count">{{.}}</span>{{end}}
+        <span class="show-nav-tile-tease">{{.Tease}}</span>
+      </span>
+    </a>
+    {{end}}
+  </div>
+</section>
+{{end}}
 
 {{if .ShowCredits}}
 <section class="section">
-  <h2>Show Credits</h2>
+  <h2>Show credits</h2>
   <div class="card-grid">
     {{range .ShowCredits}}
     <div class="card">
@@ -31,99 +161,6 @@
     {{end}}
   </div>
 </section>
-{{end}}
-
-{{if .Schedule}}
-<section class="section">
-  <h2>Schedule</h2>
-  {{range .Divisions}}
-  <div class="schedule-division">
-    <h3>{{divisionDisplay .Division}}{{with divisionDomainLabel .Division}} <span class="badge badge-muted">{{.}}</span>{{end}}</h3>
-    {{range .Sections}}
-    <div class="schedule-section">
-      <h4>{{.Section.Title}}</h4>
-      <div class="class-list">
-        {{range .ClassCards}}
-        <a href="{{$.BasePath}}/shows/{{$.Show.Slug}}/classes/{{.Class.ID}}" class="class-item">
-          <span class="class-number">{{.Class.ClassNumber}}</span>
-          <span class="class-title">{{.Class.Title}}{{if .Class.Description}} <span class="card-meta">· {{.Class.Description}}</span>{{end}}</span>
-          <span class="class-specimens">{{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}}</span>
-        </a>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-  </div>
-  {{end}}
-</section>
-{{end}}
-
-<section class="section">
-  <h2>Entries ({{len .Entries}})</h2>
-  {{if .Entries}}
-  <table class="table">
-    <thead>
-      <tr><th>Entry</th><th>Class</th><th>Entrant</th><th>Placement</th></tr>
-    </thead>
-    <tbody>
-      {{range .Entries}}
-      <tr class="{{placementClass .Entry.Placement}}">
-        <td>
-          <div class="entry-row-link">
-            {{if .LeadMedia}}
-            <button type="button" class="entry-row-thumb-button" aria-label="Preview entry image" data-media-open data-media-type="image" data-media-src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" data-media-label="{{.PublicEntryName}}" data-media-entry="{{.PublicEntryName}}" data-media-entrant="{{.LightboxEntrantLabel}}" data-media-class="{{.LightboxClassLabel}}" data-media-class-detail="{{.LightboxClassDetail}}" data-media-show="{{.LightboxShowLabel}}">
-              <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.PublicEntryName}}" class="entry-row-thumb">
-            </button>
-            {{else}}
-            <span class="entry-row-thumb entry-row-thumb-placeholder">No image</span>
-            {{end}}
-            <span class="entry-row-copy">
-              <strong><a href="{{$.BasePath}}/entries/{{.Entry.ID}}">{{.PublicEntryName}}</a></strong>
-              {{if gt .Entry.Placement 0}}<span class="entry-row-placement">{{placementLabel .Entry.Placement}}</span>{{end}}
-            </span>
-          </div>
-        </td>
-        <td>
-          {{if .Class}}
-          <div class="entry-class-cell">
-            <strong>{{.Class.ClassNumber}}: {{.Class.Title}}</strong>
-            {{range .ClassTableDetails}}
-            <div class="card-meta">{{.}}</div>
-            {{end}}
-          </div>
-          {{end}}
-        </td>
-        <td>{{if .Person}}<a href="{{$.BasePath}}/people/{{.Person.ID}}">{{publicPersonLabel .Person}}</a>{{end}}</td>
-        <td>{{placementLabel .Entry.Placement}}</td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p class="empty-state">No entries yet.</p>
-  {{end}}
-</section>
-
-{{if .Entries}}
-<div class="media-lightbox" data-media-lightbox hidden>
-  <div class="media-lightbox-backdrop" data-media-close></div>
-  <div class="media-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Show entry media viewer">
-    <button type="button" class="media-lightbox-nav media-lightbox-nav-prev" aria-label="Previous image" data-media-prev>&larr;</button>
-    <button type="button" class="media-lightbox-nav media-lightbox-nav-next" aria-label="Next image" data-media-next>&rarr;</button>
-    <button type="button" class="media-lightbox-close" aria-label="Close image viewer" data-media-close>&times;</button>
-    <div class="media-lightbox-stage" data-media-lightbox-stage></div>
-    <div class="media-lightbox-meta" data-media-lightbox-meta hidden>
-      <div class="media-lightbox-meta-scrim"></div>
-      <div class="media-lightbox-meta-copy">
-        <span data-media-lightbox-entrant></span>
-        <strong data-media-lightbox-entry></strong>
-        <span data-media-lightbox-class></span>
-        <span data-media-lightbox-class-detail></span>
-        <span data-media-lightbox-show></span>
-      </div>
-    </div>
-  </div>
-</div>
 {{end}}
 
 {{if .Awards}}

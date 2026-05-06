@@ -1,0 +1,76 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="{{$.BasePath}}/">Home</a> &rsaquo;
+  <a href="{{$.BasePath}}/shows/{{.Show.Slug}}">{{.Show.Name}}</a> &rsaquo;
+  <span>Entries</span>
+</div>
+
+<header class="show-subpage-header">
+  <h1>Entries — {{.Show.Name}}</h1>
+  <p class="show-subpage-meta">
+    {{if .Org}}<a href="{{$.BasePath}}/clubs/{{.Org.ID}}">{{.Org.Name}}</a> &middot; {{end}}
+    {{if .Show.Location}}{{.Show.Location}} &middot; {{end}}
+    {{.Show.Date}}
+    {{if eq .EntryCount .FilteredCount}}
+      <span class="show-subpage-meta-count">{{.EntryCount}} public entr{{if eq .EntryCount 1}}y{{else}}ies{{end}}</span>
+    {{else}}
+      <span class="show-subpage-meta-count">{{.FilteredCount}} of {{.EntryCount}} entr{{if eq .EntryCount 1}}y{{else}}ies{{end}} shown</span>
+    {{end}}
+  </p>
+</header>
+
+<section class="section show-entries-filters">
+  <form method="get" action="{{$.BasePath}}/shows/{{.Show.Slug}}/entries" class="filter-bar">
+    <label class="filter-label">
+      <span>Class</span>
+      <select name="class" class="filter-select">
+        <option value="">All classes</option>
+        {{range .ClassFilters}}
+        <option value="{{.ClassID}}"{{if .Selected}} selected{{end}}>{{.Label}} ({{.EntryCount}})</option>
+        {{end}}
+      </select>
+    </label>
+    <label class="filter-checkbox">
+      <input type="checkbox" name="placed" value="true"{{if .OnlyPlaced}} checked{{end}}>
+      <span>Placed only</span>
+    </label>
+    <button type="submit" class="btn btn-outline filter-submit">Apply</button>
+    {{if or .SelectedClass .OnlyPlaced}}
+    <a class="filter-reset" href="{{$.BasePath}}/shows/{{.Show.Slug}}/entries">Reset</a>
+    {{end}}
+  </form>
+</section>
+
+<section class="section">
+  {{if .Entries}}
+  <div class="entry-card-grid">
+    {{range .Entries}}
+    <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-card">
+      <div class="entry-card-media">
+        {{if .LeadMedia}}
+        <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.PublicEntryName}}">
+        {{else}}
+        <span class="entry-card-media-placeholder" aria-hidden="true">No image</span>
+        {{end}}
+        {{if gt .Entry.Placement 0}}
+        <span class="placement-badge {{if eq .Entry.Placement 1}}placement-badge-first{{else if eq .Entry.Placement 2}}placement-badge-second{{else if eq .Entry.Placement 3}}placement-badge-third{{end}} entry-card-badge">
+          {{placementLabel .Entry.Placement}}
+        </span>
+        {{else if or .Entry.SpecialStatus .Entry.SpecialAwardID}}
+        <span class="placement-badge placement-badge-special entry-card-badge">Special</span>
+        {{end}}
+      </div>
+      <div class="entry-card-body">
+        <strong class="entry-card-name">{{.PublicEntryName}}</strong>
+        {{if .Class}}<span class="entry-card-class">Class {{.Class.ClassNumber}} · {{.Class.Title}}</span>{{end}}
+        {{if .Person}}<span class="entry-card-entrant">{{publicPersonLabel .Person}}</span>{{end}}
+        {{if .SpecialAward}}<span class="entry-card-award">{{.SpecialAward.Name}}</span>{{end}}
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="empty-state">No entries match these filters.</p>
+  {{end}}
+</section>
+{{end}}
