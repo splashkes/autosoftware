@@ -164,6 +164,33 @@ domain_objects:
           - name: schedule_notes
             type: string
             summary: Public schedule note text for the class.
+  - kind: class_split
+    summary: An on-the-day partition of a class for placement scoping (e.g. a, b, c).
+    schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    capabilities:
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable split addressing fields.
+        fields:
+          - name: id
+            type: string
+            summary: Stable split id.
+          - name: class_id
+            type: string
+            summary: Parent class id.
+          - name: split_code
+            type: string
+            summary: Auto-assigned letter code (a, b, c, ...) within the class.
+      public_payload:
+        summary: Optional human label exposed to viewers.
+        fields:
+          - name: label
+            type: string
+            summary: Optional human label such as "Yellow" or "Double".
+          - name: sort_order
+            type: integer
+            summary: Display order within the class.
   - kind: person
     summary: An entrant, judge, or member with private identity.
     schema_ref: ../../design.md#7-people
@@ -588,6 +615,87 @@ commands:
       - state_transitions
       - activity_events
     projection: entries.detail
+    consistency: read_your_writes
+  - name: entries.archive
+    summary: Soft-archive an entry so it is hidden from default lists without losing history.
+    path: /v1/commands/0007-Flowershow/entries.archive
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: entries.restore
+    summary: Restore a previously archived entry back into active lists.
+    path: /v1/commands/0007-Flowershow/entries.restore
+    object_kinds:
+      - entry
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: entries.move_to_split
+    summary: Move an entry into a class split (or clear its split assignment).
+    path: /v1/commands/0007-Flowershow/entries.move_to_split
+    object_kinds:
+      - entry
+      - class_split
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#8-entries
+    result_schema_ref: README.md#realization
+    capabilities:
+      - state_transitions
+      - activity_events
+    projection: entries.detail
+    consistency: read_your_writes
+  - name: class_splits.create
+    summary: Create a class split (auto-coded a/b/c) for placement scoping during judging.
+    path: /v1/commands/0007-Flowershow/class_splits.create
+    object_kinds:
+      - class_split
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+    projection: classes.detail
+    consistency: read_your_writes
+  - name: class_splits.delete
+    summary: Delete an empty class split. Splits with assigned entries cannot be deleted directly.
+    path: /v1/commands/0007-Flowershow/class_splits.delete
+    object_kinds:
+      - class_split
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#3-show-schedule--class-hierarchy
+    result_schema_ref: README.md#realization
+    capabilities:
+      - activity_events
+      - state_transitions
+    projection: classes.detail
     consistency: read_your_writes
   - name: classes.create
     summary: Add a class to a section in the schedule.
