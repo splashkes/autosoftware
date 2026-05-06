@@ -3024,6 +3024,8 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 		invite         OrganizationInvite
 		media          Media
 		uploadedMedia  Media
+		coverMedia     Media
+		classMedia     Media
 		standard       StandardDocument
 		edition        StandardEdition
 		rule           StandardRule
@@ -3308,6 +3310,22 @@ func TestFlowershowPublishedDomainFactCommandsSurviveClaimReplay(t *testing.T) {
 			_ = executeAPICommand[map[string]string](t, a, "media.delete", fmt.Sprintf(`{
 				"media_id": %q
 			}`, state.media.ID), http.StatusOK)
+		},
+		"media.set_cover": func(t *testing.T) {
+			// Toggle cover on the already-uploaded media so replay assertions
+			// about media counts stay stable (no new sibling row created here).
+			state.coverMedia = executeAPICommand[Media](t, a, "media.set_cover", fmt.Sprintf(`{
+				"id": %q
+			}`, state.uploadedMedia.ID), http.StatusOK)
+		},
+		"media.attach_to_class": func(t *testing.T) {
+			state.classMedia = executeAPICommand[Media](t, a, "media.attach_to_class", fmt.Sprintf(`{
+				"class_id": %q,
+				"media_type": "photo",
+				"url": "https://example.com/class.jpg",
+				"content_type": "image/jpeg",
+				"file_name": "class.jpg"
+			}`, state.classPrimary.ID), http.StatusCreated)
 		},
 		"standards.create": func(t *testing.T) {
 			state.standard = executeAPICommand[StandardDocument](t, a, "standards.create", fmt.Sprintf(`{

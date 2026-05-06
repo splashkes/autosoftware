@@ -39,6 +39,7 @@ var replayableFlowershowClaimTypes = map[string]struct{}{
 	"show_credit.deleted":            {},
 	"media.attached":                 {},
 	"media.deleted":                  {},
+	"media.cover_set":                {},
 	"taxon.created":                  {},
 	"award.created":                  {},
 	"standard_document.created":      {},
@@ -292,9 +293,33 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 			if err != nil {
 				return nil, err
 			}
+			if item.EntityKind == "" {
+				item.EntityKind = "entry"
+			}
 			fresh.media[item.ID] = &item
 		case "media.deleted":
 			delete(fresh.media, claim.ObjectID)
+		case "media.cover_set":
+			item, err := decodeFlowershowClaimPayload[Media](claim)
+			if err != nil {
+				return nil, err
+			}
+			// Clear sibling covers in the same group, then set the target.
+			for _, sibling := range fresh.media {
+				switch {
+				case item.EntityKind == "class" && sibling.EntityKind == "class" && sibling.ClassID == item.ClassID:
+					sibling.IsCover = false
+				case (item.EntityKind == "" || item.EntityKind == "entry") && (sibling.EntityKind == "" || sibling.EntityKind == "entry") && sibling.EntryID == item.EntryID:
+					sibling.IsCover = false
+				}
+			}
+			if existing, ok := fresh.media[item.ID]; ok {
+				existing.IsCover = true
+			} else {
+				cp := item
+				cp.IsCover = true
+				fresh.media[item.ID] = &cp
+			}
 		case "taxon.created":
 			item, err := decodeFlowershowClaimPayload[Taxon](claim)
 			if err != nil {

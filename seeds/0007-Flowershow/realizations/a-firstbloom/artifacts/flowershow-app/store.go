@@ -215,9 +215,12 @@ type flowershowStore interface {
 
 	// Media
 	attachMedia(Media) (*Media, error)
+	attachMediaToClass(AttachClassMediaInput) (*Media, error)
 	mediaByEntry(entryID string) []*Media
+	mediaByClass(classID string) []*Media
 	mediaByID(id string) (*Media, bool)
 	deleteMedia(id string) error
+	setMediaCover(mediaID string) error
 
 	// Taxonomy
 	createTaxon(TaxonInput) (*Taxon, error)
@@ -1403,7 +1406,43 @@ func (s *memoryStore) attachMedia(m Media) (*Media, error) {
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = time.Now().UTC()
 	}
+	if m.EntityKind == "" {
+		m.EntityKind = "entry"
+	}
 	cp := m
+	s.media[cp.ID] = &cp
+	s.appendClaim(cp.ID, "media", "media.attached", cp)
+	return &cp, nil
+}
+
+func (s *memoryStore) attachMediaToClass(input AttachClassMediaInput) (*Media, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	classID := strings.TrimSpace(input.ClassID)
+	if classID == "" {
+		return nil, errors.New("class_id is required")
+	}
+	mediaType := strings.TrimSpace(input.MediaType)
+	if mediaType == "" {
+		mediaType = "photo"
+	}
+	m := &Media{
+		ID:           newID("media"),
+		EntryID:      "",
+		EntityKind:   "class",
+		ClassID:      classID,
+		MediaType:    mediaType,
+		URL:          input.URL,
+		ContentType:  input.ContentType,
+		ThumbnailURL: input.ThumbnailURL,
+		FileName:     input.FileName,
+		StorageKey:   input.StorageKey,
+		FileSize:     input.FileSize,
+		Width:        input.Width,
+		Height:       input.Height,
+		CreatedAt:    time.Now().UTC(),
+	}
+	cp := *m
 	s.media[cp.ID] = &cp
 	s.appendClaim(cp.ID, "media", "media.attached", cp)
 	return &cp, nil
@@ -1414,7 +1453,20 @@ func (s *memoryStore) mediaByEntry(entryID string) []*Media {
 	defer s.mu.RUnlock()
 	var out []*Media
 	for _, m := range s.media {
-		if m.EntryID == entryID {
+		if m.EntryID == entryID && (m.EntityKind == "" || m.EntityKind == "entry") {
+			out = append(out, m)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
+}
+
+func (s *memoryStore) mediaByClass(classID string) []*Media {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Media
+	for _, m := range s.media {
+		if m.EntityKind == "class" && m.ClassID == classID {
 			out = append(out, m)
 		}
 	}
@@ -1438,6 +1490,27 @@ func (s *memoryStore) deleteMedia(id string) error {
 	}
 	delete(s.media, id)
 	s.appendClaim(id, "media", "media.deleted", m)
+	return nil
+}
+
+func (s *memoryStore) setMediaCover(mediaID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	target, ok := s.media[mediaID]
+	if !ok {
+		return errors.New("media not found")
+	}
+	// Determine the sibling group: same entry (entry-attached) or same class.
+	for _, m := range s.media {
+		switch {
+		case target.EntityKind == "class" && m.EntityKind == "class" && m.ClassID == target.ClassID:
+			m.IsCover = false
+		case (target.EntityKind == "" || target.EntityKind == "entry") && (m.EntityKind == "" || m.EntityKind == "entry") && m.EntryID == target.EntryID:
+			m.IsCover = false
+		}
+	}
+	target.IsCover = true
+	s.appendClaim(target.ID, "media", "media.cover_set", target)
 	return nil
 }
 
@@ -2609,6 +2682,9 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_media (
   file_size BIGINT NOT NULL DEFAULT 0,
   width INTEGER NOT NULL DEFAULT 0,
   height INTEGER NOT NULL DEFAULT 0,
+  is_cover BOOLEAN NOT NULL DEFAULT false,
+  entity_kind TEXT NOT NULL DEFAULT 'entry',
+  class_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -2902,6 +2978,9 @@ ALTER TABLE as_flowershow_m_media
   ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS width INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS height INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS is_cover BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS entity_kind TEXT NOT NULL DEFAULT 'entry',
+  ADD COLUMN IF NOT EXISTS class_id TEXT,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 ALTER TABLE as_flowershow_m_taxons
@@ -3054,9 +3133,13 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			credit.ID, credit.ShowID, credit.PersonID, credit.DisplayName, credit.CreditLabel, credit.Notes, credit.SortOrder, credit.CreatedAt)
 	}
 	for _, media := range mem.media {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, created_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
-			media.ID, media.EntryID, media.MediaType, media.URL, media.ContentType, media.ThumbnailURL, media.FileName, media.StorageKey, media.FileSize, media.Width, media.Height, media.CreatedAt)
+		entityKind := media.EntityKind
+		if entityKind == "" {
+			entityKind = "entry"
+		}
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_media (id, entry_id, media_type, url, content_type, thumbnail_url, file_name, storage_key, file_size, width, height, is_cover, entity_kind, class_id, created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT DO NOTHING`,
+			media.ID, media.EntryID, media.MediaType, media.URL, media.ContentType, media.ThumbnailURL, media.FileName, media.StorageKey, media.FileSize, media.Width, media.Height, media.IsCover, entityKind, nullableString(media.ClassID), media.CreatedAt)
 	}
 	for _, t := range mem.taxons {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_taxons (id, taxon_type, name, scientific_name, description, parent_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
@@ -3658,8 +3741,27 @@ func (s *postgresFlowershowStore) attachMedia(m Media) (*Media, error) {
 	}
 	return item, nil
 }
+func (s *postgresFlowershowStore) attachMediaToClass(input AttachClassMediaInput) (*Media, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	item, err := mem.attachMediaToClass(input)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.commitDomainMutation(ctx, mem, claimStart); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
 func (s *postgresFlowershowStore) mediaByEntry(entryID string) []*Media {
 	return s.currentMem().mediaByEntry(entryID)
+}
+func (s *postgresFlowershowStore) mediaByClass(classID string) []*Media {
+	return s.currentMem().mediaByClass(classID)
 }
 func (s *postgresFlowershowStore) mediaByID(id string) (*Media, bool) {
 	return s.currentMem().mediaByID(id)
@@ -3672,6 +3774,18 @@ func (s *postgresFlowershowStore) deleteMedia(id string) error {
 		return err
 	}
 	if err := mem.deleteMedia(id); err != nil {
+		return err
+	}
+	return s.commitDomainMutation(ctx, mem, claimStart)
+}
+func (s *postgresFlowershowStore) setMediaCover(mediaID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mem, claimStart, err := s.prepareMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mem.setMediaCover(mediaID); err != nil {
 		return err
 	}
 	return s.commitDomainMutation(ctx, mem, claimStart)
