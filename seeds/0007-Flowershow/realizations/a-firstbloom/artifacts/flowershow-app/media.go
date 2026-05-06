@@ -5,7 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -18,7 +23,66 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/disintegration/imaging"
 )
+
+const (
+	thumbnailMaxEdge      = 512
+	thumbnailJPEGQuality  = 80
+	rotatedJPEGQuality    = 90
+	thumbnailContentType  = "image/jpeg"
+)
+
+// normalizeImageOrientation reads JPEG bytes that may carry EXIF orientation
+// metadata, applies the rotation/flip, and returns re-encoded JPEG bytes with
+// orientation reset. For non-JPEG inputs or any decode failure the original
+// bytes are returned unchanged so an upload is never failed by this step.
+func normalizeImageOrientation(data []byte, contentType string) ([]byte, error) {
+	if !strings.EqualFold(strings.TrimSpace(contentType), "image/jpeg") {
+		return data, nil
+	}
+	img, err := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
+	if err != nil {
+		log.Printf("media: skip EXIF auto-rotate, decode failed: %v", err)
+		return data, nil
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: rotatedJPEGQuality}); err != nil {
+		log.Printf("media: skip EXIF auto-rotate, encode failed: %v", err)
+		return data, nil
+	}
+	return buf.Bytes(), nil
+}
+
+// generateThumbnail produces a max-512px-edge JPEG preview for image content.
+// For non-image inputs or decode failure the helper returns (nil, nil) and the
+// caller skips emitting a thumbnail (the upload still succeeds).
+func generateThumbnail(data []byte, contentType string) ([]byte, error) {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, nil
+	}
+	img, err := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
+	if err != nil {
+		return nil, err
+	}
+	thumb := imaging.Fit(img, thumbnailMaxEdge, thumbnailMaxEdge, imaging.Lanczos)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, thumb, &jpeg.Options{Quality: thumbnailJPEGQuality}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// imageDimensions returns width and height of the supplied image bytes.
+// Returns (0, 0) when the data cannot be decoded as an image.
+func imageDimensions(data []byte) (int, int) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
+}
 
 const (
 	maxPhotoSize = 20 << 20
@@ -185,29 +249,53 @@ func (m *localMediaStore) Store(_ context.Context, entryID string, header *multi
 		return nil, err
 	}
 
-	id := newID("media")
-	name := sanitizeFileName(header.Filename)
-	path := filepath.Join(m.dir, id+"_"+name)
-	dst, err := os.Create(path)
+	body, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, file); err != nil {
+
+	rotated, err := normalizeImageOrientation(body, contentType)
+	if err != nil {
+		log.Printf("media: orientation normalize error for %s: %v", header.Filename, err)
+		rotated = body
+	}
+
+	id := newID("media")
+	name := sanitizeFileName(header.Filename)
+	path := filepath.Join(m.dir, id+"_"+name)
+	if err := os.WriteFile(path, rotated, 0644); err != nil {
 		return nil, err
 	}
 
-	return &Media{
+	width, height := imageDimensions(rotated)
+
+	media := &Media{
 		ID:          id,
 		EntryID:     entryID,
+		EntityKind:  "entry",
 		MediaType:   mediaType,
 		URL:         globalBasePath + "/media/" + id,
 		ContentType: contentType,
 		FileName:    name,
 		StorageKey:  path,
-		FileSize:    header.Size,
+		FileSize:    int64(len(rotated)),
+		Width:       width,
+		Height:      height,
 		CreatedAt:   time.Now().UTC(),
-	}, nil
+	}
+
+	if thumb, err := generateThumbnail(rotated, contentType); err == nil && len(thumb) > 0 {
+		thumbPath := filepath.Join(m.dir, id+"_thumb.jpg")
+		if werr := os.WriteFile(thumbPath, thumb, 0644); werr == nil {
+			media.ThumbnailURL = globalBasePath + "/media/" + id + "?thumb=1"
+		} else {
+			log.Printf("media: thumbnail write failed for %s: %v", id, werr)
+		}
+	} else if err != nil {
+		log.Printf("media: thumbnail generation failed for %s: %v", id, err)
+	}
+
+	return media, nil
 }
 
 func (m *localMediaStore) GetURL(_ context.Context, media *Media) (string, error) {
@@ -232,7 +320,26 @@ func (m *localMediaStore) Delete(_ context.Context, media *Media) error {
 	if err := os.Remove(media.StorageKey); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	thumbPath := localThumbPath(m.dir, media.ID)
+	if err := os.Remove(thumbPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("media: thumbnail remove failed for %s: %v", media.ID, err)
+	}
 	return nil
+}
+
+// localThumbPath returns the on-disk path of a thumbnail given the storage
+// directory and the media id.
+func localThumbPath(dir, mediaID string) string {
+	return filepath.Join(dir, mediaID+"_thumb.jpg")
+}
+
+// localThumbExists is a small helper used by handleMediaOpen to decide whether
+// the thumbnail file is available on disk.
+func localThumbExists(dir, mediaID string) bool {
+	if _, err := os.Stat(localThumbPath(dir, mediaID)); err == nil {
+		return true
+	}
+	return false
 }
 
 func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multipart.FileHeader) (*Media, error) {
@@ -254,30 +361,64 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 	if err != nil {
 		return nil, err
 	}
+
+	rotated, err := normalizeImageOrientation(body, contentType)
+	if err != nil {
+		log.Printf("media: orientation normalize error for %s: %v", header.Filename, err)
+		rotated = body
+	}
+
 	id := newID("media")
 	name := sanitizeFileName(header.Filename)
 	key := fmt.Sprintf("entries/%s/%s_%s", entryID, id, name)
 	_, err = m.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      &m.bucket,
 		Key:         &key,
-		Body:        bytes.NewReader(body),
+		Body:        bytes.NewReader(rotated),
 		ContentType: &contentType,
 		ACL:         types.ObjectCannedACLPrivate,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &Media{
+
+	width, height := imageDimensions(rotated)
+
+	media := &Media{
 		ID:          id,
 		EntryID:     entryID,
+		EntityKind:  "entry",
 		MediaType:   mediaType,
 		URL:         globalBasePath + "/media/" + id,
 		ContentType: contentType,
 		FileName:    name,
 		StorageKey:  key,
-		FileSize:    int64(len(body)),
+		FileSize:    int64(len(rotated)),
+		Width:       width,
+		Height:      height,
 		CreatedAt:   time.Now().UTC(),
-	}, nil
+	}
+
+	if thumb, terr := generateThumbnail(rotated, contentType); terr == nil && len(thumb) > 0 {
+		thumbKey := key + "_thumb.jpg"
+		thumbType := thumbnailContentType
+		_, uerr := m.uploader.Upload(ctx, &s3.PutObjectInput{
+			Bucket:      &m.bucket,
+			Key:         &thumbKey,
+			Body:        bytes.NewReader(thumb),
+			ContentType: &thumbType,
+			ACL:         types.ObjectCannedACLPrivate,
+		})
+		if uerr == nil {
+			media.ThumbnailURL = globalBasePath + "/media/" + id + "?thumb=1"
+		} else {
+			log.Printf("media: thumbnail upload failed for %s: %v", id, uerr)
+		}
+	} else if terr != nil {
+		log.Printf("media: thumbnail generation failed for %s: %v", id, terr)
+	}
+
+	return media, nil
 }
 
 func (m *s3MediaStore) GetURL(ctx context.Context, media *Media) (string, error) {
@@ -315,7 +456,17 @@ func (m *s3MediaStore) Delete(ctx context.Context, media *Media) error {
 		Bucket: &m.bucket,
 		Key:    &media.StorageKey,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	thumbKey := media.StorageKey + "_thumb.jpg"
+	if _, derr := m.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &m.bucket,
+		Key:    &thumbKey,
+	}); derr != nil {
+		log.Printf("media: s3 thumbnail delete failed for %s: %v", media.ID, derr)
+	}
+	return nil
 }
 
 func awsString(v string) *string { return &v }
@@ -327,7 +478,18 @@ func (a *app) handleMediaOpen(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, ok := a.media.(*localMediaStore); ok {
+	wantThumb := strings.EqualFold(r.URL.Query().Get("thumb"), "1")
+	if local, isLocal := a.media.(*localMediaStore); isLocal {
+		if wantThumb && localThumbExists(local.dir, media.ID) {
+			f, err := os.Open(localThumbPath(local.dir, media.ID))
+			if err == nil {
+				defer f.Close()
+				w.Header().Set("Content-Type", thumbnailContentType)
+				http.ServeContent(w, r, media.FileName+".thumb.jpg", media.CreatedAt, f)
+				return
+			}
+			log.Printf("media: thumbnail open failed for %s: %v", media.ID, err)
+		}
 		body, contentType, err := a.media.Open(r.Context(), media)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
@@ -342,6 +504,25 @@ func (a *app) handleMediaOpen(w http.ResponseWriter, r *http.Request) {
 		}
 		http.ServeContent(w, r, media.FileName, media.CreatedAt, readSeekNopCloser{body})
 		return
+	}
+
+	if wantThumb && media.ThumbnailURL != "" {
+		if s3store, ok := a.media.(*s3MediaStore); ok {
+			thumbKey := media.StorageKey + "_thumb.jpg"
+			thumbType := thumbnailContentType
+			out, err := s3store.presigner.PresignGetObject(r.Context(), &s3.GetObjectInput{
+				Bucket:              &s3store.bucket,
+				Key:                 &thumbKey,
+				ResponseContentType: &thumbType,
+			}, func(opts *s3.PresignOptions) {
+				opts.Expires = 15 * time.Minute
+			})
+			if err == nil {
+				http.Redirect(w, r, out.URL, http.StatusTemporaryRedirect)
+				return
+			}
+			log.Printf("media: thumbnail presign failed for %s: %v", media.ID, err)
+		}
 	}
 
 	url, err := a.media.GetURL(r.Context(), media)

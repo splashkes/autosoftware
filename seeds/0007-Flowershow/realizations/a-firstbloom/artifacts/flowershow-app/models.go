@@ -260,6 +260,9 @@ type Media struct {
 	MediaType    string    `json:"media_type"` // photo, video
 	URL          string    `json:"url"`
 	ContentType  string    `json:"content_type,omitempty"`
+	IsCover      bool      `json:"is_cover,omitempty"`
+	EntityKind   string    `json:"entity_kind,omitempty"` // "entry" (default) or "class"
+	ClassID      string    `json:"class_id,omitempty"`
 	ThumbnailURL string    `json:"thumbnail_url,omitempty"`
 	FileName     string    `json:"file_name"`
 	StorageKey   string    `json:"storage_key,omitempty"`
@@ -267,6 +270,22 @@ type Media struct {
 	Width        int       `json:"width,omitempty"`
 	Height       int       `json:"height,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AttachClassMediaInput carries the metadata needed to record media that is
+// attached to a class rather than to an entry. EntryID stays empty for these
+// rows.
+type AttachClassMediaInput struct {
+	ClassID      string `json:"class_id"`
+	MediaType    string `json:"media_type"`
+	URL          string `json:"url"`
+	ContentType  string `json:"content_type,omitempty"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	FileName     string `json:"file_name"`
+	StorageKey   string `json:"storage_key,omitempty"`
+	FileSize     int64  `json:"file_size,omitempty"`
+	Width        int    `json:"width,omitempty"`
+	Height       int    `json:"height,omitempty"`
 }
 
 // --- Taxonomy ---
