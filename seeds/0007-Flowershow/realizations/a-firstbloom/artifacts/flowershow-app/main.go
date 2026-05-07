@@ -285,6 +285,11 @@ func main() {
 	mux.HandleFunc("POST /admin/shows/{showID}/intake/photos/anon-entry", a.requireCapabilityPage("entries.manage", a.handleIntakeNewAnonymousEntry))
 	// === /PR: intake flow ===
 
+	// === PR: splits UI + mode toggle ===
+	registerSplitsRenderStore(a.store)
+	mux.HandleFunc("GET /admin/classes/{classID}/splits/fragment", a.requireCapabilityPage("shows.workspace.read", a.handleAdminClassSplitsFragment))
+	// === /PR: splits UI + mode toggle ===
+
 	handler := requestLog(a.storeRefreshMiddleware(mux))
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {

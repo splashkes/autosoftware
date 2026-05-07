@@ -8,7 +8,7 @@
 <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
 <link rel="stylesheet" href="{{$.BasePath}}/assets/app.css?v={{assetVersion}}">
 </head>
-<body>
+<body data-base-path="{{$.BasePath}}" data-mode="fast">
 <nav class="nav" data-nav-shell>
   <div class="container nav-shell">
     <div class="nav-topline">
@@ -52,6 +52,8 @@
 </footer>
 {{template "agent_access_widget" .}}
 <script src="{{$.BasePath}}/assets/app.js?v={{assetVersion}}"></script>
+<script src="{{$.BasePath}}/assets/js/admin-mode-toggle.js?v={{assetVersion}}"></script>
+<script src="{{$.BasePath}}/assets/js/class-splits-ui.js?v={{assetVersion}}"></script>
 </body>
 </html>
 {{end}}
