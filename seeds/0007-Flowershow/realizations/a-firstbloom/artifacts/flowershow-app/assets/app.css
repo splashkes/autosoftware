@@ -3644,3 +3644,75 @@ body[data-mode="update"] [data-mode-fast-only] {
 }
 /* === /Fix: show-landing imagery === */
 
+/* === Fix: intake fast-add CTA + optional entrant === */
+.intake-fast-add-cta {
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--green);
+  background: linear-gradient(135deg, rgba(38, 119, 75, 0.08), rgba(38, 119, 75, 0.02));
+  color: var(--ink);
+  text-decoration: none;
+  transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.intake-fast-add-cta:hover {
+  background: linear-gradient(135deg, rgba(38, 119, 75, 0.16), rgba(38, 119, 75, 0.06));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(38, 119, 75, 0.12);
+}
+.intake-fast-add-cta:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.intake-fast-add-cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  flex: 0 0 auto;
+}
+.intake-fast-add-cta-icon svg { display: block; }
+.intake-fast-add-cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.intake-fast-add-cta-body strong {
+  font-size: 1rem;
+  color: var(--ink);
+}
+.intake-fast-add-cta-meta {
+  font-size: .85rem;
+  color: var(--ink-muted, #555);
+}
+.intake-fast-add-cta-arrow {
+  font-size: 1.4rem;
+  color: var(--green);
+  flex: 0 0 auto;
+}
+.form-label-hint {
+  margin-left: .35rem;
+  font-weight: 400;
+  color: var(--ink-muted, #777);
+  font-size: .85em;
+}
+@media (max-width: 640px) {
+  .intake-fast-add-cta {
+    padding: .85rem 1rem;
+    gap: .7rem;
+  }
+  .intake-fast-add-cta-icon { width: 38px; height: 38px; }
+  .intake-fast-add-cta-body strong { font-size: .95rem; }
+  .intake-fast-add-cta-meta { font-size: .8rem; }
+}
+/* === /Fix: intake fast-add CTA + optional entrant === */
+
