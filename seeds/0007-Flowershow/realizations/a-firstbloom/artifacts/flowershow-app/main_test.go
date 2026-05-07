@@ -4595,6 +4595,129 @@ func TestShowDetailHasWinnersByClass(t *testing.T) {
 	}
 }
 
+// TestShowDetailRendersImagery verifies the image-led landing page: when a
+// show has photos attached to its entries, the rendered HTML must include a
+// hero <img>, per-winner thumbnail <img> tags pointing at /media/{id}?thumb=1,
+// and a Highlights strip. Regression test for the "no flowers on the flower
+// show page" report.
+func TestShowDetailRendersImagery(t *testing.T) {
+	a := testApp()
+
+	// Attach a cover photo to the 1st-place winner (entry_01 = Peace) and a
+	// non-cover photo to the 2nd-place winner (entry_02 = Mr. Lincoln). Both
+	// thumbnails should appear on the landing page; entry_02's first photo
+	// should be picked via the implicit-cover fallback.
+	peaceCover, err := a.store.attachMedia(Media{
+		EntryID:   "entry_01",
+		MediaType: "photo",
+		URL:       "https://example.com/peace.jpg",
+		FileName:  "peace.jpg",
+		IsCover:   true,
+	})
+	if err != nil {
+		t.Fatalf("attach peace cover: %v", err)
+	}
+	lincolnImplicit, err := a.store.attachMedia(Media{
+		EntryID:   "entry_02",
+		MediaType: "photo",
+		URL:       "https://example.com/lincoln.jpg",
+		FileName:  "lincoln.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach lincoln photo: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+
+	// Hero must contain a real <img> element with a thumbnailed media URL.
+	if !strings.Contains(body, "show-hero-photo-img") {
+		t.Fatal("hero missing image element when imagery is available")
+	}
+	if !strings.Contains(body, "src=\"/media/"+peaceCover.ID+"?thumb=1\"") &&
+		!strings.Contains(body, "src=\"/media/"+lincolnImplicit.ID+"?thumb=1\"") {
+		t.Fatalf("hero image src does not reference any seeded media; body excerpt:\n%s",
+			bodyExcerptAround(body, "show-hero-photo-img"))
+	}
+
+	// Each placed winner row must lead with a thumbnail <img>.
+	if !strings.Contains(body, "winners-cell-thumb") {
+		t.Fatal("winners cell missing thumbnail element")
+	}
+	if !strings.Contains(body, "src=\"/media/"+peaceCover.ID+"?thumb=1\"") {
+		t.Fatal("winners table missing Peace cover thumbnail (?thumb=1)")
+	}
+	if !strings.Contains(body, "src=\"/media/"+lincolnImplicit.ID+"?thumb=1\"") {
+		t.Fatal("winners table missing Mr. Lincoln implicit-cover thumbnail (?thumb=1)")
+	}
+
+	// Highlights strip should render with at least the 1st-place winner.
+	if !strings.Contains(body, "show-highlights") {
+		t.Fatal("expected Highlights strip when 1st-place winners have photos")
+	}
+	if !strings.Contains(body, "show-highlight-photo-img") {
+		t.Fatal("highlights strip missing photo element")
+	}
+
+	// Page must contain at least 3 ?thumb=1 references (hero + at least two
+	// winner rows). This is the "image-led" smoke check.
+	count := strings.Count(body, "?thumb=1")
+	if count < 3 {
+		t.Fatalf("expected >=3 thumb=1 references for image-led layout, got %d", count)
+	}
+}
+
+// TestShowDetailEmptyStateWhenNoImagery verifies the empty-state fallback:
+// when no entry in the show has any photo attached, the page still renders
+// without <img> spam — it shows the "Photos pending" placeholder hero and
+// skips the Highlights strip entirely.
+func TestShowDetailEmptyStateWhenNoImagery(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+	req := httptest.NewRequest("GET", "/shows/spring-rose-show-2025", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "show-hero-photo-placeholder") {
+		t.Fatal("expected placeholder hero when no entry has photos")
+	}
+	if strings.Contains(body, "show-hero-photo-img") {
+		t.Fatal("did not expect a hero <img> when no entry has photos")
+	}
+	if strings.Contains(body, "show-highlights") {
+		t.Fatal("did not expect Highlights strip when no entry has photos")
+	}
+}
+
+// bodyExcerptAround returns a 200-char window around the first occurrence of
+// needle in body, for friendlier failure messages.
+func bodyExcerptAround(body, needle string) string {
+	idx := strings.Index(body, needle)
+	if idx < 0 {
+		return "(needle not found)"
+	}
+	start := idx - 80
+	if start < 0 {
+		start = 0
+	}
+	end := idx + 200
+	if end > len(body) {
+		end = len(body)
+	}
+	return body[start:end]
+}
+
 // TestClassSplitsLifecycle exercises split creation, the entries-blocking
 // guard on delete, and the auto-purge of empty splits.
 func TestClassSplitsLifecycle(t *testing.T) {
