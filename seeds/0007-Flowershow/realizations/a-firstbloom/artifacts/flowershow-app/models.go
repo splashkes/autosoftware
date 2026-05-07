@@ -46,31 +46,33 @@ type ShowJudgeAssignment struct {
 }
 
 type Person struct {
-	ID                string `json:"id"`
-	FirstName         string `json:"first_name"`
-	LastName          string `json:"last_name"`
-	Initials          string `json:"initials"`
-	Email             string `json:"email,omitempty"`
-	Phone             string `json:"phone,omitempty"`
-	Specialties       string `json:"specialties,omitempty"`
-	Qualifications    string `json:"qualifications,omitempty"`
-	Notes             string `json:"notes,omitempty"`
-	IsJudge           bool   `json:"is_judge,omitempty"`
-	PublicDisplayMode string `json:"public_display_mode,omitempty"`
+	ID                 string `json:"id"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+	Initials           string `json:"initials"`
+	Email              string `json:"email,omitempty"`
+	Phone              string `json:"phone,omitempty"`
+	Specialties        string `json:"specialties,omitempty"`
+	Qualifications     string `json:"qualifications,omitempty"`
+	Notes              string `json:"notes,omitempty"`
+	IsJudge            bool   `json:"is_judge,omitempty"`
+	JudgingStartedYear int    `json:"judging_started_year,omitempty"`
+	PublicDisplayMode  string `json:"public_display_mode,omitempty"`
 }
 
 type PersonInput struct {
-	FirstName         string `json:"first_name"`
-	LastName          string `json:"last_name"`
-	Email             string `json:"email,omitempty"`
-	Phone             string `json:"phone,omitempty"`
-	Specialties       string `json:"specialties,omitempty"`
-	Qualifications    string `json:"qualifications,omitempty"`
-	Notes             string `json:"notes,omitempty"`
-	IsJudge           bool   `json:"is_judge,omitempty"`
-	PublicDisplayMode string `json:"public_display_mode,omitempty"`
-	OrganizationID    string `json:"organization_id,omitempty"`
-	OrganizationRole  string `json:"organization_role,omitempty"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+	Email              string `json:"email,omitempty"`
+	Phone              string `json:"phone,omitempty"`
+	Specialties        string `json:"specialties,omitempty"`
+	Qualifications     string `json:"qualifications,omitempty"`
+	Notes              string `json:"notes,omitempty"`
+	IsJudge            bool   `json:"is_judge,omitempty"`
+	JudgingStartedYear int    `json:"judging_started_year,omitempty"`
+	PublicDisplayMode  string `json:"public_display_mode,omitempty"`
+	OrganizationID     string `json:"organization_id,omitempty"`
+	OrganizationRole   string `json:"organization_role,omitempty"`
 }
 
 type PersonOrganization struct {

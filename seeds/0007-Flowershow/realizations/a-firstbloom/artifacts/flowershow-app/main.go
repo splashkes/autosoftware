@@ -165,6 +165,12 @@ func main() {
 	mux.HandleFunc("POST /admin/shows/{showID}/helpers/create", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelperCreate))
 	mux.HandleFunc("POST /admin/shows/{showID}/helpers/{inviteID}/revoke", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelperRevoke))
 
+	// People roster CTAs (above intake grid)
+	mux.HandleFunc("GET /admin/shows/{showID}/people/search", a.requireCapabilityPage("entries.manage", a.handlePeopleRosterSearch))
+	mux.HandleFunc("POST /admin/shows/{showID}/people/judge", a.requireCapabilityPage("entries.manage", a.handleAdminAddJudgeForm))
+	mux.HandleFunc("POST /admin/shows/{showID}/people/show-admin", a.requireCapabilityPage("entries.manage", a.handleAdminAddShowHelperAdminForm))
+	mux.HandleFunc("POST /admin/shows/{showID}/people/member", a.requireCapabilityPage("entries.manage", a.handleAdminAddMemberEntrantForm))
+
 	// Admin schedule management
 	mux.HandleFunc("POST /admin/shows/{showID}/schedule", a.requireCapabilityPage("schedule.manage", a.handleAdminScheduleCreate))
 	mux.HandleFunc("POST /admin/shows/{showID}/divisions", a.requireCapabilityPage("schedule.manage", a.handleAdminDivisionCreate))

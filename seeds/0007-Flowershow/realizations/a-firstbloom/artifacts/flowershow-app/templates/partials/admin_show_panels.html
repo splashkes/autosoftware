@@ -206,6 +206,127 @@
       <span class="intake-fast-add-cta-arrow" aria-hidden="true">→</span>
     </a>
   </section>
+  <section class="admin-show-section" id="intake-people-roster"
+    data-people-roster
+    data-people-search-url="{{$.BasePath}}/admin/shows/{{.Show.ID}}/people/search"
+    data-show-name="{{.Show.Name}}">
+    <div class="people-roster-cta-cluster">
+      <button type="button" class="people-roster-cta people-roster-cta-judge" data-people-modal-open="judge">
+        <span class="people-roster-cta-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 13l-7.5 7.5a2.121 2.121 0 0 1-3-3L11 10"></path><path d="M16 9l3-3"></path><path d="M13 6l5-5 5 5-5 5z"></path><path d="M2 22h20"></path></svg>
+        </span>
+        <span class="people-roster-cta-body">
+          <strong>Add Judge</strong>
+          <span class="people-roster-cta-meta">Name, accreditation, years experience</span>
+        </span>
+        <span class="people-roster-cta-arrow" aria-hidden="true">→</span>
+      </button>
+      <button type="button" class="people-roster-cta people-roster-cta-helper" data-people-modal-open="show_admin">
+        <span class="people-roster-cta-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </span>
+        <span class="people-roster-cta-body">
+          <strong>Add Show Helper Admin</strong>
+          <span class="people-roster-cta-meta">Grants this show's intake operator badge</span>
+        </span>
+        <span class="people-roster-cta-arrow" aria-hidden="true">→</span>
+      </button>
+      <button type="button" class="people-roster-cta people-roster-cta-member" data-people-modal-open="member">
+        <span class="people-roster-cta-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+        </span>
+        <span class="people-roster-cta-body">
+          <strong>Add Member / Entrant</strong>
+          <span class="people-roster-cta-meta">Default Entrant; promote to show admin if needed</span>
+        </span>
+        <span class="people-roster-cta-arrow" aria-hidden="true">→</span>
+      </button>
+    </div>
+
+    <div class="intake-modal people-roster-modal" data-people-roster-modal hidden role="dialog" aria-modal="true" aria-labelledby="people-roster-modal-title">
+      <div class="intake-modal-backdrop" data-people-modal-dismiss></div>
+      <div class="intake-modal-dialog">
+        <div class="intake-modal-shell">
+          <div class="intake-modal-header">
+            <h3 id="people-roster-modal-title" data-people-modal-title>Add person</h3>
+            <button type="button" class="intake-modal-close" data-people-modal-dismiss aria-label="Close">×</button>
+          </div>
+
+          <p class="people-roster-modal-banner" data-people-modal-banner hidden></p>
+
+          <form method="post" data-people-roster-form
+            data-action-judge="{{$.BasePath}}/admin/shows/{{.Show.ID}}/people/judge"
+            data-action-show_admin="{{$.BasePath}}/admin/shows/{{.Show.ID}}/people/show-admin"
+            data-action-member="{{$.BasePath}}/admin/shows/{{.Show.ID}}/people/member">
+            <input type="hidden" name="person_id" value="" data-people-person-id>
+            <input type="hidden" name="role" value="" data-people-role-hidden>
+
+            <div class="form-group">
+              <label>Name <span class="form-label-hint">(start typing — we'll match existing people to avoid duplicates)</span></label>
+              <input type="text" class="form-input" data-people-search-input placeholder="First Last" autocomplete="off">
+              <div class="people-search-results" data-people-search-results hidden></div>
+              <div class="people-search-selected" data-people-search-selected hidden>
+                <span class="people-search-selected-pill">
+                  Using: <strong data-people-search-selected-name></strong>
+                  <span class="people-search-selected-meta" data-people-search-selected-meta></span>
+                </span>
+                <button type="button" class="people-search-change" data-people-search-change>Change</button>
+              </div>
+            </div>
+
+            <div class="people-roster-edit-fields" data-people-edit-fields>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="people-roster-first-name">First name</label>
+                  <input id="people-roster-first-name" type="text" class="form-input" name="first_name" data-people-first-name>
+                </div>
+                <div class="form-group">
+                  <label for="people-roster-last-name">Last name</label>
+                  <input id="people-roster-last-name" type="text" class="form-input" name="last_name" data-people-last-name>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="people-roster-email">Email</label>
+                  <input id="people-roster-email" type="email" class="form-input" name="email">
+                </div>
+                <div class="form-group">
+                  <label for="people-roster-phone">Phone</label>
+                  <input id="people-roster-phone" type="tel" class="form-input" name="phone">
+                </div>
+              </div>
+
+              <div class="people-roster-fields-judge" data-people-fields-judge hidden>
+                <div class="form-group">
+                  <label for="people-roster-qualifications">Accreditation / qualifications</label>
+                  <input id="people-roster-qualifications" type="text" class="form-input" name="qualifications" placeholder="ARS Master Judge, etc.">
+                </div>
+                <div class="form-group">
+                  <label for="people-roster-years">Years in flower shows</label>
+                  <input id="people-roster-years" type="number" min="0" max="80" class="form-input" name="years_in_flower_shows">
+                </div>
+              </div>
+
+              <div class="people-roster-fields-member" data-people-fields-member hidden>
+                <div class="form-group">
+                  <label for="people-roster-member-role">Role</label>
+                  <select id="people-roster-member-role" class="form-input" data-people-member-role>
+                    <option value="flowershow_entrant">Entrant</option>
+                    <option value="flowershow_show_intake_operator">Show admin (helper)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="people-roster-modal-actions">
+              <button type="button" class="btn btn-outline" data-people-modal-dismiss>Cancel</button>
+              <button type="submit" class="btn btn-primary" data-people-submit>Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
   <section class="admin-show-section" id="intake-grid">
     <div class="admin-show-section-header">
       <h3>Class intake grid</h3>

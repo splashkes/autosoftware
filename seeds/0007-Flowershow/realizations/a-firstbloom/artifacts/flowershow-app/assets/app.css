@@ -3716,3 +3716,208 @@ body[data-mode="update"] [data-mode-fast-only] {
 }
 /* === /Fix: intake fast-add CTA + optional entrant === */
 
+/* === Feature: people roster CTAs === */
+.people-roster-cta-cluster {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .75rem;
+}
+@media (min-width: 720px) {
+  .people-roster-cta-cluster {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.people-roster-cta {
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, .12);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0));
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  width: 100%;
+}
+.people-roster-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+.people-roster-cta:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.people-roster-cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: #fff;
+  flex: 0 0 auto;
+}
+.people-roster-cta-icon svg { display: block; }
+.people-roster-cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.people-roster-cta-body strong {
+  font-size: 1rem;
+  color: var(--ink);
+}
+.people-roster-cta-meta {
+  font-size: .85rem;
+  color: var(--ink-muted, #555);
+}
+.people-roster-cta-arrow {
+  font-size: 1.4rem;
+  flex: 0 0 auto;
+}
+
+.people-roster-cta-judge {
+  border-color: #a07b2c;
+  background: linear-gradient(135deg, rgba(160, 123, 44, 0.08), rgba(160, 123, 44, 0.02));
+}
+.people-roster-cta-judge .people-roster-cta-icon { background: #a07b2c; }
+.people-roster-cta-judge .people-roster-cta-arrow { color: #a07b2c; }
+.people-roster-cta-judge:hover {
+  background: linear-gradient(135deg, rgba(160, 123, 44, 0.16), rgba(160, 123, 44, 0.06));
+  box-shadow: 0 4px 10px rgba(160, 123, 44, 0.15);
+}
+
+.people-roster-cta-helper {
+  border-color: var(--green);
+  background: linear-gradient(135deg, rgba(38, 119, 75, 0.08), rgba(38, 119, 75, 0.02));
+}
+.people-roster-cta-helper .people-roster-cta-icon { background: var(--green); }
+.people-roster-cta-helper .people-roster-cta-arrow { color: var(--green); }
+.people-roster-cta-helper:hover {
+  background: linear-gradient(135deg, rgba(38, 119, 75, 0.16), rgba(38, 119, 75, 0.06));
+  box-shadow: 0 4px 10px rgba(38, 119, 75, 0.12);
+}
+
+.people-roster-cta-member {
+  border-color: #5e6bcf;
+  background: linear-gradient(135deg, rgba(94, 107, 207, 0.08), rgba(94, 107, 207, 0.02));
+}
+.people-roster-cta-member .people-roster-cta-icon { background: #5e6bcf; }
+.people-roster-cta-member .people-roster-cta-arrow { color: #5e6bcf; }
+.people-roster-cta-member:hover {
+  background: linear-gradient(135deg, rgba(94, 107, 207, 0.16), rgba(94, 107, 207, 0.06));
+  box-shadow: 0 4px 10px rgba(94, 107, 207, 0.15);
+}
+
+@media (max-width: 640px) {
+  .people-roster-cta {
+    padding: .85rem 1rem;
+    gap: .7rem;
+  }
+  .people-roster-cta-icon { width: 38px; height: 38px; }
+  .people-roster-cta-body strong { font-size: .95rem; }
+  .people-roster-cta-meta { font-size: .8rem; }
+}
+
+.people-roster-modal .intake-modal-shell {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+.people-roster-modal-banner {
+  margin: 0;
+  padding: .75rem .9rem;
+  border-radius: 10px;
+  background: rgba(38, 119, 75, 0.08);
+  border: 1px solid rgba(38, 119, 75, 0.18);
+  font-size: .9rem;
+  color: var(--ink);
+}
+.people-roster-modal-actions {
+  display: flex;
+  gap: .6rem;
+  justify-content: flex-end;
+  margin-top: .25rem;
+}
+.people-search-results {
+  display: grid;
+  gap: 4px;
+  margin-top: .5rem;
+  border: 1px solid rgba(0, 0, 0, .1);
+  border-radius: 10px;
+  padding: 4px;
+  background: #fff;
+  max-height: 240px;
+  overflow: auto;
+}
+.people-search-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: .55rem .7rem;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.people-search-row:hover,
+.people-search-row:focus-visible {
+  background: rgba(0, 0, 0, .05);
+}
+.people-search-row-name {
+  font-weight: 600;
+}
+.people-search-row-meta {
+  font-size: .8rem;
+  color: var(--ink-muted, #666);
+}
+.people-search-selected {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-top: .5rem;
+  padding: .5rem .7rem;
+  border-radius: 10px;
+  background: rgba(38, 119, 75, 0.06);
+  border: 1px solid rgba(38, 119, 75, 0.18);
+}
+.people-search-selected-pill {
+  flex: 1 1 auto;
+  font-size: .9rem;
+}
+.people-search-selected-meta {
+  color: var(--ink-muted, #555);
+}
+.people-search-change {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: .25rem .5rem;
+}
+.people-search-change:hover { color: var(--green-light, #2f8a55); }
+.people-roster-edit-fields {
+  display: grid;
+  gap: .9rem;
+}
+.people-roster-fields-judge,
+.people-roster-fields-member {
+  display: grid;
+  gap: .9rem;
+}
+/* === /Feature: people roster CTAs === */
+
