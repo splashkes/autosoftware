@@ -17,8 +17,183 @@
 </div>
 {{end}}
 
+{{define "admin_intake_entry_tile"}}
+{{$entry := .Entry}}
+{{$ctx := .}}
+<div class="intake-entry-tile-shell" data-entry-tile-shell data-entry-id="{{$entry.Entry.ID}}" data-entry-class-id="{{if $entry.Class}}{{$entry.Class.ID}}{{end}}" data-entry-split-id="{{$entry.Entry.SplitID}}">
+  <label class="intake-entry-select-label" data-split-select-only>
+    <input type="checkbox" data-split-checkbox data-entry-id="{{$entry.Entry.ID}}">
+  </label>
+  <button
+    type="button"
+    class="intake-entry-tile {{if $entry.Media}}has-photo{{else}}needs-photo{{end}}"
+    data-intake-modal-open
+    data-intake-mode="existing"
+    data-intake-entry-id="{{$entry.Entry.ID}}"
+    data-intake-entry-name="{{$entry.Entry.Name}}"
+    data-intake-entrant="{{if $entry.Person}}{{$entry.Person.FirstName}} {{$entry.Person.LastName}}{{end}}"
+    data-intake-person-id="{{$entry.Entry.PersonID}}"
+    data-intake-class-id="{{if $entry.Class}}{{$entry.Class.ID}}{{end}}"
+    data-intake-class-label="{{if $entry.Class}}{{$entry.Class.ClassNumber}} — {{$entry.Class.Title}}{{end}}"
+    data-intake-class-number="{{if $entry.Class}}{{$entry.Class.ClassNumber}}{{end}}"
+    data-intake-class-title="{{if $entry.Class}}{{$entry.Class.Title}}{{end}}"
+    data-intake-class-description="{{if $entry.Class}}{{$entry.Class.Description}}{{end}}"
+    data-intake-class-specimen-count="{{if $entry.Class}}{{$entry.Class.SpecimenCount}}{{end}}"
+    data-intake-class-unit="{{if $entry.Class}}{{$entry.Class.Unit}}{{end}}"
+    data-intake-class-measurement-rule="{{if $entry.Class}}{{$entry.Class.MeasurementRule}}{{end}}"
+    data-intake-class-naming-requirement="{{if $entry.Class}}{{$entry.Class.NamingRequirement}}{{end}}"
+    data-intake-class-container-rule="{{if $entry.Class}}{{$entry.Class.ContainerRule}}{{end}}"
+    data-intake-class-eligibility-rule="{{if $entry.Class}}{{$entry.Class.EligibilityRule}}{{end}}"
+    data-intake-class-schedule-notes="{{if $entry.Class}}{{$entry.Class.ScheduleNotes}}{{end}}"
+    data-intake-notes="{{$entry.Entry.Notes}}"
+    data-intake-placement="{{$entry.Entry.Placement}}"
+    data-intake-special-status="{{if $entry.Entry.SpecialStatus}}true{{else}}false{{end}}"
+    data-intake-award-id="{{if $entry.SpecialAward}}{{$entry.SpecialAward.ID}}{{end}}"
+    data-intake-upload-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/media"
+    data-intake-update-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}"
+    data-intake-results-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/results"
+    data-intake-entry-href="{{$ctx.BasePath}}/entries/{{$entry.Entry.ID}}">
+    <span class="intake-entry-visual">
+      {{with primaryMedia $entry.Media}}
+      <img src="{{$ctx.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="intake-entry-image">
+      {{else}}
+      <span class="intake-entry-initials">{{if $entry.Person}}{{$entry.Person.Initials}}{{else}}?{{end}}</span>
+      {{end}}
+    </span>
+    <span class="intake-entry-meta">
+      <strong>{{if $entry.Person}}{{$entry.Person.FirstName}} {{$entry.Person.LastName}}{{else}}{{$entry.Entry.Name}}{{end}}</strong>
+      <span class="card-meta">{{$entry.Entry.Name}}{{if not $entry.Media}} · needs photo{{end}}</span>
+      {{if entryWorkflowBadges $entry}}
+      <span class="tag-list admin-entry-status-row">
+        {{range entryWorkflowBadges $entry}}<span class="badge {{entryWorkflowBadgeClass .}} admin-entry-status-badge">{{.}}</span>{{end}}
+      </span>
+      {{end}}
+    </span>
+  </button>
+  {{if $ctx.Splits}}
+  <div class="intake-entry-update-controls" data-mode-update-only>
+    <label class="intake-entry-move-label">
+      <span class="card-meta">Move to</span>
+      <select class="form-input form-sm" data-split-move-select data-entry-id="{{$entry.Entry.ID}}">
+        <option value="" {{if eq $entry.Entry.SplitID ""}}selected{{end}}>(unassigned)</option>
+        {{range $ctx.Splits}}
+        <option value="{{.ID}}" {{if eq $entry.Entry.SplitID .ID}}selected{{end}}>{{splitDisplayLabel .}}</option>
+        {{end}}
+      </select>
+    </label>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "admin_intake_class_add_button"}}
+{{$class := .Class}}
+{{$ctx := .Ctx}}
+<button
+  type="button"
+  class="intake-entry-tile intake-entry-tile-add"
+  data-intake-modal-open
+  data-intake-mode="new"
+  data-intake-class-id="{{$class.ID}}"
+  data-intake-class-label="{{$class.ClassNumber}} — {{$class.Title}}"
+  data-intake-class-number="{{$class.ClassNumber}}"
+  data-intake-class-title="{{$class.Title}}"
+  data-intake-class-description="{{$class.Description}}"
+  data-intake-class-specimen-count="{{$class.SpecimenCount}}"
+  data-intake-class-unit="{{$class.Unit}}"
+  data-intake-class-measurement-rule="{{$class.MeasurementRule}}"
+  data-intake-class-naming-requirement="{{$class.NamingRequirement}}"
+  data-intake-class-container-rule="{{$class.ContainerRule}}"
+  data-intake-class-eligibility-rule="{{$class.EligibilityRule}}"
+  data-intake-class-schedule-notes="{{$class.ScheduleNotes}}"
+  data-intake-create-action="{{$ctx.BasePath}}/admin/shows/{{$ctx.Show.ID}}/entries">
+  <span class="intake-entry-visual intake-entry-plus-wrap">
+    <span class="intake-entry-plus">+</span>
+  </span>
+  <span class="intake-entry-meta">
+    <strong>Add entry</strong>
+    <span class="card-meta">Create directly in this class</span>
+  </span>
+</button>
+{{end}}
+
+{{define "admin_class_splits_fragment"}}
+{{$ctx := .}}
+{{$classView := .ClassEntry}}
+{{$class := $classView.Class}}
+{{$splits := splitsForClass $class.ID}}
+{{$entries := $classView.Entries}}
+<div class="card-body intake-class-card-body" data-splittable-class="{{$class.ID}}" data-class-id="{{$class.ID}}">
+  <div class="intake-class-header">
+    <div>
+      <strong>{{$class.ClassNumber}} — {{$class.Title}}</strong>
+      {{if $class.Description}}<div class="card-meta">{{$class.Description}}</div>{{end}}
+    </div>
+    <div class="intake-class-header-actions">
+      <span class="card-meta">{{$classView.EntryCount}} entries{{if gt $classView.MissingPhotoCount 0}} · {{$classView.MissingPhotoCount}} need photos{{end}}</span>
+      <button type="button" class="btn btn-outline btn-sm intake-class-split-button" data-split-button data-class-id="{{$class.ID}}" title="Group selected entries into a split" data-mode-update-only>
+        <span aria-hidden="true">⊟</span> Split
+      </button>
+    </div>
+  </div>
+
+  <div class="intake-split-action-bar" data-split-action-bar data-class-id="{{$class.ID}}" data-split-select-only>
+    <input type="text" class="form-input form-sm intake-split-label-input" placeholder="Optional label (Yellow, Double, ...)" data-split-label-input data-class-id="{{$class.ID}}">
+    <button type="button" class="btn btn-primary btn-sm" data-split-create-button data-class-id="{{$class.ID}}" disabled>
+      Split <span data-split-count-label>0</span> entries
+    </button>
+    <button type="button" class="btn btn-outline btn-sm" data-split-cancel-button data-class-id="{{$class.ID}}">Cancel</button>
+  </div>
+
+  {{if $splits}}
+  {{$unassigned := entriesWithoutSplit $entries}}
+  {{if $unassigned}}
+  <section class="intake-split-group" data-split-group="" data-split-group-name="(unassigned)">
+    <div class="intake-split-group-header">
+      <strong>(unassigned)</strong>
+      <span class="card-meta">{{len $unassigned}} entries</span>
+    </div>
+    <div class="intake-entry-grid">
+      {{range $unassigned}}
+      {{template "admin_intake_entry_tile" (dict "Entry" . "BasePath" $ctx.BasePath "Splits" $splits)}}
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+  {{range $splits}}
+  {{$split := .}}
+  {{$splitEntries := entriesInSplit $entries $split.ID}}
+  <section class="intake-split-group" data-split-group="{{$split.ID}}" data-split-code="{{$split.SplitCode}}" data-split-group-name="{{splitDisplayLabel $split}}">
+    <div class="intake-split-group-header">
+      <strong>{{splitDisplayLabel $split}}</strong>
+      <span class="card-meta">{{len $splitEntries}} entries</span>
+      <button type="button" class="btn btn-outline btn-sm intake-split-delete-button" data-split-delete-button data-split-id="{{$split.ID}}" data-mode-update-only title="Delete split">Delete split</button>
+    </div>
+    <div class="intake-entry-grid">
+      {{range $splitEntries}}
+      {{template "admin_intake_entry_tile" (dict "Entry" . "BasePath" $ctx.BasePath "Splits" $splits)}}
+      {{end}}
+      {{template "admin_intake_class_add_button" (dict "Class" $class "Ctx" $ctx)}}
+    </div>
+    <div class="intake-split-judging-row" data-split-judging-row data-split-id="{{$split.ID}}">
+      <span class="card-meta">Judging — {{splitDisplayLabel $split}}: use 1 / 2 / 3 / Special on each entry's tile (modal) to record placements within this split.</span>
+    </div>
+  </section>
+  {{end}}
+  {{else}}
+  <div class="intake-entry-grid">
+    {{range $entries}}
+    {{template "admin_intake_entry_tile" (dict "Entry" . "BasePath" $ctx.BasePath "Splits" $splits)}}
+    {{end}}
+    {{template "admin_intake_class_add_button" (dict "Class" $class "Ctx" $ctx)}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
 {{define "admin_intake_panel"}}
-<div class="admin-show-stack">
+<div class="admin-show-stack" data-admin-workspace>
+  {{template "admin_workspace_mode_toggle" .}}
   <section class="admin-show-section" id="intake-grid">
     <div class="admin-show-section-header">
       <h3>Class intake grid</h3>
@@ -38,92 +213,7 @@
           <div class="intake-class-grid">
             {{range .Classes}}
             <article class="card intake-class-card">
-              <div class="card-body">
-                <div class="intake-class-header">
-                  <div>
-                    <strong>{{.Class.ClassNumber}} — {{.Class.Title}}</strong>
-                    {{if .Class.Description}}<div class="card-meta">{{.Class.Description}}</div>{{end}}
-                  </div>
-                  <span class="card-meta">{{.EntryCount}} entries{{if gt .MissingPhotoCount 0}} · {{.MissingPhotoCount}} need photos{{end}}</span>
-                </div>
-                <div class="intake-entry-grid">
-                  {{range .Entries}}
-                  {{$entry := .}}
-                  <button
-                    type="button"
-                    class="intake-entry-tile {{if .Media}}has-photo{{else}}needs-photo{{end}}"
-                    data-intake-modal-open
-                    data-intake-mode="existing"
-                    data-intake-entry-id="{{.Entry.ID}}"
-                    data-intake-entry-name="{{.Entry.Name}}"
-                    data-intake-entrant="{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{end}}"
-                    data-intake-person-id="{{.Entry.PersonID}}"
-                    data-intake-class-id="{{if .Class}}{{.Class.ID}}{{end}}"
-                    data-intake-class-label="{{if .Class}}{{.Class.ClassNumber}} — {{.Class.Title}}{{end}}"
-                    data-intake-class-number="{{if .Class}}{{.Class.ClassNumber}}{{end}}"
-                    data-intake-class-title="{{if .Class}}{{.Class.Title}}{{end}}"
-                    data-intake-class-description="{{if .Class}}{{.Class.Description}}{{end}}"
-                    data-intake-class-specimen-count="{{if .Class}}{{.Class.SpecimenCount}}{{end}}"
-                    data-intake-class-unit="{{if .Class}}{{.Class.Unit}}{{end}}"
-                    data-intake-class-measurement-rule="{{if .Class}}{{.Class.MeasurementRule}}{{end}}"
-                    data-intake-class-naming-requirement="{{if .Class}}{{.Class.NamingRequirement}}{{end}}"
-                    data-intake-class-container-rule="{{if .Class}}{{.Class.ContainerRule}}{{end}}"
-                    data-intake-class-eligibility-rule="{{if .Class}}{{.Class.EligibilityRule}}{{end}}"
-                    data-intake-class-schedule-notes="{{if .Class}}{{.Class.ScheduleNotes}}{{end}}"
-                    data-intake-notes="{{.Entry.Notes}}"
-                    data-intake-placement="{{.Entry.Placement}}"
-                    data-intake-special-status="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}"
-                    data-intake-award-id="{{if .SpecialAward}}{{.SpecialAward.ID}}{{end}}"
-                    data-intake-upload-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/media"
-                    data-intake-update-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}"
-                    data-intake-results-action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/results"
-                    data-intake-entry-href="{{$.BasePath}}/entries/{{.Entry.ID}}">
-                    <span class="intake-entry-visual">
-                      {{with primaryMedia .Media}}
-                      <img src="{{$.BasePath}}/media/{{.ID}}" alt="{{$entry.Entry.Name}}" class="intake-entry-image">
-                      {{else}}
-                      <span class="intake-entry-initials">{{if .Person}}{{.Person.Initials}}{{else}}?{{end}}</span>
-                      {{end}}
-                    </span>
-                    <span class="intake-entry-meta">
-                      <strong>{{if .Person}}{{.Person.FirstName}} {{.Person.LastName}}{{else}}{{.Entry.Name}}{{end}}</strong>
-                      <span class="card-meta">{{.Entry.Name}}{{if not .Media}} · needs photo{{end}}</span>
-                      {{if entryWorkflowBadges .}}
-                      <span class="tag-list admin-entry-status-row">
-                        {{range entryWorkflowBadges .}}<span class="badge {{entryWorkflowBadgeClass .}} admin-entry-status-badge">{{.}}</span>{{end}}
-                      </span>
-                      {{end}}
-                    </span>
-                  </button>
-                  {{end}}
-                  <button
-                    type="button"
-                    class="intake-entry-tile intake-entry-tile-add"
-                    data-intake-modal-open
-                    data-intake-mode="new"
-                    data-intake-class-id="{{.Class.ID}}"
-                    data-intake-class-label="{{.Class.ClassNumber}} — {{.Class.Title}}"
-                    data-intake-class-number="{{.Class.ClassNumber}}"
-                    data-intake-class-title="{{.Class.Title}}"
-                    data-intake-class-description="{{.Class.Description}}"
-                    data-intake-class-specimen-count="{{.Class.SpecimenCount}}"
-                    data-intake-class-unit="{{.Class.Unit}}"
-                    data-intake-class-measurement-rule="{{.Class.MeasurementRule}}"
-                    data-intake-class-naming-requirement="{{.Class.NamingRequirement}}"
-                    data-intake-class-container-rule="{{.Class.ContainerRule}}"
-                    data-intake-class-eligibility-rule="{{.Class.EligibilityRule}}"
-                    data-intake-class-schedule-notes="{{.Class.ScheduleNotes}}"
-                    data-intake-create-action="{{$.BasePath}}/admin/shows/{{$.Show.ID}}/entries">
-                    <span class="intake-entry-visual intake-entry-plus-wrap">
-                      <span class="intake-entry-plus">+</span>
-                    </span>
-                    <span class="intake-entry-meta">
-                      <strong>Add entry</strong>
-                      <span class="card-meta">Create directly in this class</span>
-                    </span>
-                  </button>
-                </div>
-              </div>
+              {{template "admin_class_splits_fragment" (dict "BasePath" $.BasePath "Show" $.Show "ClassEntry" .)}}
             </article>
             {{end}}
           </div>
@@ -137,6 +227,28 @@
     {{end}}
   </section>
 </div>
+{{end}}
+
+{{define "admin_workspace_mode_toggle"}}
+<section class="admin-show-section admin-mode-toggle-section">
+  <div class="admin-mode-toggle" data-mode-toggle role="tablist" aria-label="Workspace mode">
+    <span class="admin-mode-toggle-label">Workspace mode</span>
+    <div class="admin-mode-toggle-buttons">
+      <button type="button" class="btn btn-outline btn-sm admin-mode-toggle-button is-active" data-mode-toggle-button="fast" aria-pressed="true">Fast add</button>
+      <button type="button" class="btn btn-outline btn-sm admin-mode-toggle-button" data-mode-toggle-button="update" aria-pressed="false">Update entries</button>
+    </div>
+    <a href="#" class="admin-mode-toggle-reset card-meta" data-mode-toggle-reset>Reset to defaults</a>
+  </div>
+  <p class="card-meta admin-mode-toggle-hint">Fast add keeps the grid lean. Update entries reveals splits, ranking, comments, and detail panels.</p>
+
+  <div class="admin-section-toggles" data-mode-update-only>
+    <span class="admin-section-toggles-label card-meta">Show on every entry:</span>
+    <button type="button" class="btn btn-outline btn-sm admin-section-toggle-button" data-entry-section-toggle="name_match" aria-expanded="false">Name match</button>
+    <button type="button" class="btn btn-outline btn-sm admin-section-toggle-button" data-entry-section-toggle="ranking" aria-expanded="false">Ranking</button>
+    <button type="button" class="btn btn-outline btn-sm admin-section-toggle-button" data-entry-section-toggle="comment" aria-expanded="false">Comment</button>
+    <button type="button" class="btn btn-outline btn-sm admin-section-toggle-button" data-entry-section-toggle="photo_detail" aria-expanded="false">Photo detail</button>
+  </div>
+</section>
 {{end}}
 
 {{define "admin_intake_modal"}}
@@ -297,7 +409,8 @@
 {{end}}
 
 {{define "admin_floor_panel"}}
-<div class="admin-show-stack">
+<div class="admin-show-stack" data-admin-workspace>
+  {{template "admin_workspace_mode_toggle" .}}
   <section class="admin-show-section" id="floor-corrections">
     <div class="admin-show-section-header">
       <h3>Corrections</h3>
@@ -804,6 +917,53 @@
               <button type="submit" class="btn btn-outline btn-sm">Delete</button>
             </form>
           </div>
+        </details>
+      </div>
+
+      <div class="admin-entry-update-sections" data-mode-update-only>
+        <details class="admin-entry-section" data-entry-section="name_match">
+          <summary>Name match</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+            <input type="hidden" name="section" value="floor">
+            <input type="hidden" name="placement" value="{{.Entry.Placement}}">
+            <input type="hidden" name="special_status" value="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}">
+            <label class="form-group">
+              <span>Entry name</span>
+              <input type="text" name="name" class="form-input" value="{{.Entry.Name}}" placeholder="Cultivar or display name">
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">Save name</button>
+          </form>
+        </details>
+        <details class="admin-entry-section" data-entry-section="ranking">
+          <summary>Ranking</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/placement" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}/placement" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-inline">
+            <select name="placement" class="form-input form-sm">
+              <option value="0" {{if eq .Entry.Placement 0}}selected{{end}}>—</option>
+              <option value="1" {{if eq .Entry.Placement 1}}selected{{end}}>1st</option>
+              <option value="2" {{if eq .Entry.Placement 2}}selected{{end}}>2nd</option>
+              <option value="3" {{if eq .Entry.Placement 3}}selected{{end}}>3rd</option>
+            </select>
+            <input type="number" name="points" value="{{.Entry.Points}}" class="form-input form-sm" step="0.5" placeholder="Pts">
+            <button type="submit" class="btn btn-primary btn-sm">Set</button>
+          </form>
+        </details>
+        <details class="admin-entry-section" data-entry-section="comment">
+          <summary>Comment / notes</summary>
+          <form method="POST" action="{{$.BasePath}}/admin/entries/{{.Entry.ID}}" hx-post="{{$.BasePath}}/admin/entries/{{.Entry.ID}}" hx-target="#admin-floor-panel" hx-swap="innerHTML" class="form form-compact">
+            <input type="hidden" name="section" value="floor">
+            <input type="hidden" name="placement" value="{{.Entry.Placement}}">
+            <input type="hidden" name="special_status" value="{{if .Entry.SpecialStatus}}true{{else}}false{{end}}">
+            <label class="form-group">
+              <span>Notes</span>
+              <input type="text" name="notes" class="form-input" value="{{.Entry.Notes}}" placeholder="Optional notes for judges or display">
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">Save notes</button>
+          </form>
+        </details>
+        <details class="admin-entry-section" data-entry-section="photo_detail">
+          <summary>Photo detail</summary>
+          <p class="card-meta">Open the entry's media gallery for cover, captions, and ordering.</p>
+          <a class="btn btn-outline btn-sm" href="{{$.BasePath}}/entries/{{.Entry.ID}}">Open entry detail</a>
         </details>
       </div>
     </div>

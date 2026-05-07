@@ -268,6 +268,11 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
+	// === PR: splits UI + mode toggle ===
+	registerSplitsRenderStore(a.store)
+	mux.HandleFunc("GET /admin/classes/{classID}/splits/fragment", a.requireCapabilityPage("shows.workspace.read", a.handleAdminClassSplitsFragment))
+	// === /PR: splits UI + mode toggle ===
+
 	handler := requestLog(a.storeRefreshMiddleware(mux))
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
