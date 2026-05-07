@@ -11,8 +11,11 @@ taxonomy, provenance tracking, and real-time collaborative show admin.
 - Kernel runtime registry boundary for accepted Flowershow domain history
 - Postgres-backed Flowershow projections rebuilt from replayed accepted history
 - Kernel runtime authority materialization for effective access
-- S3-backed entry media storage
-- Cognito-backed identity with app-native scoped authority
+- S3-backed entry media storage with EXIF auto-rotate and server-side thumbnails
+- Cognito-backed identity for admins; helper share-link onboarding via show-scoped
+  badge sessions (no Cognito for helpers)
+- Class splits as runtime structures with independent judging within a class
+- Fast/Update workspace mode toggle for shaping the intake surface to the operator's task
 
 ## Current Workspace Model
 
@@ -30,6 +33,22 @@ Operational intent:
 - `Entries` is the default show-night intake surface for existing shows
 - `Corrections` is the lightweight fix-up surface with search and revealed correction controls
 - connected operators receive SSE refreshes for intake, corrections, board, scoring, and governance panels
+- a top-of-workspace `Fast add` / `Update entries` segmented toggle reshapes the
+  workspace for either rapid creation or in-place editing; the choice is persisted
+  in `localStorage`
+- collapsible `<details>` sections on each entry (Name match, Ranking, Comment,
+  Photo detail) persist open/closed state per section type — flipping Comment open
+  opens it for every entry
+- each class panel exposes a Split button (Update mode only) plus a multi-select
+  activation flow and per-entry "Move to →" dropdown for sibling-split moves
+
+Sequential photo intake lives at `/admin/shows/{showID}/intake/photos`:
+
+- sticky class bar with prev/next arrows that wrap the schedule
+- large tap-to-capture surface; every shutter creates a fresh anonymous Entry
+  (PersonID="") so name lookup never blocks the camera
+- optimistic upload with an in-memory retry queue
+- entry detail page exposes a multi-photo gallery with delete and star-to-set-cover
 
 ## Import / Agent Surface
 
@@ -53,6 +72,39 @@ Current import-relevant commands include:
 - `judges.assign`
 - `citations.create`
 
+Media:
+
+- `media.set_cover`
+- `media.attach_to_class`
+
+Class splits:
+
+- `class_splits.create`
+- `class_splits.delete`
+- `entries.move_to_split`
+
+Entry lifecycle:
+
+- `entries.archive`
+- `entries.restore`
+- `entries.set_special_status`
+
+Helpers (badge-session onboarding):
+
+- `show_helper_invites.create`
+- `show_helper_invites.revoke`
+- `show_badge_sessions.end`
+
+New projections / pages on the public + admin surface:
+
+- `account` projection
+- `/shows/{slug}/entries`
+- `/shows/{slug}/exhibitors`
+- `/shows/{slug}/help`
+- `/shows/{slug}/help-redeem`
+- `/admin/shows/{showID}/intake/photos`
+- `/admin/shows/{showID}/helpers`
+
 Command body rule:
 
 - callers may send flat JSON command fields
@@ -69,6 +121,16 @@ Command body rule:
 - HEIC/HEIF is rejected explicitly in the client flow
 - admin intake keeps the modal open while media uploads and entry edits continue
 - upload queue tiles show preparation, upload, save, and error states inline
+- EXIF orientation is normalized at write time inside `mediaStore.Store` (local
+  and S3 backends) — no client-side rotation needed; all downstream consumers
+  read already-oriented bytes
+- a 512px JPEG thumbnail is generated server-side on the same write path
+- thumbnails are served via `?thumb=1` on the same `/media/{id}` route, with
+  full-image fallback when no thumbnail exists
+- cover photo: the explicit `is_cover` flag wins; otherwise the first
+  chronological photo is the implicit cover
+- media can attach to a class (`entity_kind=class` + `class_id`) for class
+  overview photos that aren't tied to an entry
 
 ## Local Development
 

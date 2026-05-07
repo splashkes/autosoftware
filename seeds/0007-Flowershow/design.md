@@ -93,6 +93,15 @@ Real fair books organize entries as Division → Section → Class.
 
 Replaces the earlier generic `category_id` on entries.
 
+#### class_split
+- id
+- show_class_id
+- code (auto-assigned letter: a, b, c, ...)
+- label (nullable, optional human label e.g. "Yellow", "Double")
+- sort_order
+
+A class may be divided into splits at any time during intake or judging. Splits are judged independently: every placement (1/2/3, Special, HM) is scoped to a single split, and splits never overlap within a class. An entry's `split_id` records membership; `null` means the entry is not in a split. When the last entry leaves a split, the split is auto-purged.
+
 ---
 
 ### 4. Standards & Editions
@@ -259,16 +268,31 @@ Entries are submissions into a class within a show.
 Each Entry:
 - belongs to a Show
 - belongs to a show_class
-- belongs to a Person
+- belongs to a Person (optional — see anonymous entries below)
+- optionally belongs to a class_split via `split_id`
 - has placement and points
 - has media (multiple photos/videos)
 - has taxonomy references
+
+#### Anonymous entries
+
+`person_id` may be empty. Anonymous entries are created during fast intake (typically the photo-first sequential intake flow) before the entrant has been identified, and they display as "Anonymous · N" in admin lists until matched to a person record. Naming an anonymous entry is a normal post-intake correction.
+
+#### Soft-archive
+
+Entries carry a nullable `archived_at` timestamp. Default `entriesByShow`, `entriesByClass`, and `entriesByPerson` projections exclude archived rows; `*IncludeArchived` variants exist for restore screens. Commands: `entries.archive` (set `archived_at` to now) and `entries.restore` (clear it). Archive is reversible and is distinct from `suppressed` (see §14).
+
+#### Cover photo
+
+Each entry's cover photo is the media row whose `is_cover` is true. If no media is explicitly marked, the read path falls back to the first chronological photo as an implicit cover. See §13.
 
 ---
 
 ### 9. Judging & Rubric Scoring
 
 Beyond placement — criterion-level scoring.
+
+When a class has splits, placements are scoped per `(show_class_id, split_id)`: each split runs its own 1/2/3/Special/HM independently, and the placement computation from scorecards groups entries by split before ranking. Entries with `split_id = null` in a class that also has splits are ranked among themselves as the unsplit residual.
 
 #### judging_rubric
 - id
@@ -405,13 +429,23 @@ Examples:
 
 ### 13. Media
 
-- Multiple photos and videos per entry
-- Client normalizes images before upload
-- Current realization normalizes photos up to 4096px max edge before upload
-- HEIC/HEIF is rejected explicitly in the client flow
-- Ingress/body limits must be sized for normalized photos and short videos
-- Stored in S3
-- Metadata: type, dimensions, duration, original filename
+Media is a first-class declared `domain_objects` kind. Each row carries `id`, `entity_kind`, the relevant entity foreign key, MIME type, dimensions, duration (for video), original filename, and `is_cover`.
+
+#### Storage
+
+Originals go to S3 in production and to local disk in dev. Both write paths apply EXIF orientation normalization at upload time: the stored file is rotated to orientation 1 and the EXIF tag is cleared, so downstream code never has to rotate. HEIC/HEIF is still rejected in the client flow; the client also normalizes large photos up to 4096px max edge before upload. Ingress/body limits must be sized for normalized photos and short videos.
+
+#### Thumbnails
+
+A 512px-max-edge JPEG thumbnail is generated server-side at upload. The public read path is `GET /media/{id}` for the original and `GET /media/{id}?thumb=1` for the thumbnail; if no thumbnail exists for a row, `?thumb=1` falls back to the original. Multi-photo galleries and admin grids read `?thumb=1`.
+
+#### Cover photo
+
+`is_cover` is a boolean per media row. The canonical command is `media.set_cover` (it un-sets any other cover for the same entity in the same call). When nothing is explicitly marked, the read path treats the first chronological photo as an implicit cover, so newly created entries always have something to render.
+
+#### Entity discriminator
+
+`entity_kind` is either `entry` (with `entry_id` set, the default) or `class` (with `class_id` set). Class-attached media is what powers class overview photos and the show landing page hero. The command to attach to a class is `media.attach_to_class`.
 
 ---
 
@@ -420,6 +454,8 @@ Examples:
 - System is append-only
 - Content can be suppressed (hidden)
 - Identity mapping is private
+
+`suppressed` and `archived_at` are different concepts. A suppressed entry is hidden from public views (board, public results, exhibitor pages) but remains active for show admin: it still has a place in its class, still appears in the workspace grid, can still receive scoring or corrections. An archived entry (`archived_at` non-null on `entries`) is soft-deleted: it is excluded from default `entriesByShow`/`entriesByClass`/`entriesByPerson` projections and from any UI that does not opt in via the `*IncludeArchived` variants. Restoring it via `entries.restore` returns it to the show.
 
 ---
 
@@ -442,6 +478,41 @@ Current working workspace model:
 - `Board` shows the live show board
 - `Governance` exposes standards, rules, citations, and sources
 
+#### Sequential photo intake
+
+`/admin/shows/{showID}/intake/photos` is a phone-first capture surface. A sticky class bar at the top has prev/next arrows and wraps around the schedule. The body is a large tap-to-capture area; every shutter click creates an anonymous Entry (`person_id = ""`) in the active class, attaches the photo, and renders a tile. Uploads are optimistic with an in-memory retry queue: failed tiles outline red and expose per-tile retry plus a global "Retry all failed". No new commands are needed — the page composes existing `entries.create`, `media.attach`, `media.delete`, and `media.set_cover`.
+
+#### Multi-photo gallery
+
+The entry detail page renders all attached media as `?thumb=1` thumbnails in a gallery. Each thumbnail supports click-to-enlarge, delete, and a star-as-cover affordance bound to `media.set_cover`.
+
+#### Fast / Update workspace mode and persistent collapsibles
+
+A segmented Fast / Update toggle sits at the top of the workspace and is persisted in `localStorage` under `as.flowershow.workspace.mode`. Update mode reveals controls (split actions, move-to dropdowns, correction widgets) that Fast mode hides. Per-entry sections (Name match, Ranking, Comment, Photo detail) are native `<details>` collapsibles whose open/closed state is persisted *per section type, not per entry*, under `as.flowershow.section.{name}` — opening Comment on one entry opens it for every entry at once.
+
+#### Class splits UI
+
+In Update mode, each class panel shows a Split button top-right. Activating it opens a multi-select flow with a floating "Split N entries" bar that creates a new auto-coded split (a, b, c, ...) and moves the selection into it. A per-entry "Move to →" dropdown lets operators reassign an entry to a sibling split. Each split renders its own judging surface with its own placement slots. New commands: `class_splits.create`, `class_splits.delete`, `entries.move_to_split`. New fragment endpoint: `GET /admin/classes/{classID}/splits/fragment`.
+
+---
+
+## Show Landing Page
+
+`/shows/{slug}` is the public-facing show page and is phone-first by design — event-day usage is heavily mobile, so layout, tap targets, and image sizing are tuned for small screens before any desktop polish.
+
+The page renders:
+
+- a hero band with show name, date/location, a status pill (upcoming / live / closed), and primary actions
+- a "Winners by class" table that lists every class with its 1/2/3, Special, and HM placements (split-aware: each split is its own row)
+- four navigation tiles: entries, classes, clubs, exhibitors
+
+Two sub-pages hang off it:
+
+- `/shows/{slug}/entries` is a filterable per-show entry directory
+- `/shows/{slug}/exhibitors` is a per-show exhibitor aggregate; anonymous entrants are grouped together rather than listed as individuals
+
+Class- and entry-level cover photos (see §13) drive the imagery on the landing page and tiles.
+
 ---
 
 ### 16. Real-Time & Frontend
@@ -458,6 +529,28 @@ Current working workspace model:
 - Roles (admin, judge, entrant, public) are managed in-app, not in Cognito
 - App-level role assignment per organization/show
 - Authority grants and effective access are materialized from kernel runtime authority history
+
+#### 17A. Show helper invites and badge sessions
+
+Show admins frequently need to bring on a one-day helper (a club member taking photos, a friend running a tablet at intake) without putting them through Cognito signup. Two domain objects support this:
+
+- `show_helper_invite` — a share-link record with token prefix `fshi_`, a sha256 hash of the secret, an `expires_at` (default 7 days), and the show it scopes to. Created via `show_helper_invites.create` and revoked via `show_helper_invites.revoke`.
+- `show_badge_session` — a runtime-only badge record with token prefix `fsbs_` and a sha256 hash of the secret, tied to a show, with an `expires_at` (default 24h) and the helper's claimed name + email. Ended via `show_badge_sessions.end`.
+
+A helper redeems an invite at `/shows/{slug}/help-redeem` by submitting name + email. If the email matches an existing person record the badge is linked; otherwise the badge stands alone. On success the server sets cookie `as_show_badge` (HttpOnly, SameSite=Lax, path=`/shows/`) and the helper is now authorized within that show.
+
+Badge sessions inherit the existing `show_intake_operator` authority bundle — that is, `entries.manage` and `media.manage` scoped to the badge's show. No new authority bundle was introduced.
+
+Public routes:
+
+- `GET /shows/{slug}/help` — landing page for an invite token
+- `GET /shows/{slug}/help-redeem` and `POST /shows/{slug}/help-redeem` — redemption form
+- `POST /shows/{slug}/help/end` — voluntary session end
+
+Admin routes:
+
+- `GET /admin/shows/{showID}/helpers` — list active invites and live badges
+- `POST` to the same path to create an invite; revoke via the per-row revoke action
 
 ---
 

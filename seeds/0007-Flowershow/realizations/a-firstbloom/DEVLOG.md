@@ -184,3 +184,119 @@ Three issues identified from re-testing:
 - The kernel-injected widget (`data-agent-widget-source="kernel"`) takes
   priority over the app widget via CSS, but both are visible to curl/fetch.
   Widget changes belong in the app template, not the kernel.
+
+---
+
+## Session: 2026-05-06
+
+### Context
+
+A real-event beta test of the Flowershow admin produced a list of UX, data-model, and pipeline gaps. This session worked through them across six PRs, building on top of the contract-gap closures already shipped earlier the same day (#161 — entries.set_special_status, account projection, capability-terminology table).
+
+### Work Completed
+
+**PR #162 — Image pipeline (EXIF + thumbnails + cover photo + class media)**
+
+Beta feedback reported sideways photos. Root cause: zero EXIF handling. Injected
+`disintegration/imaging` autorotate into `mediaStore.Store` for both local and
+S3 backends; rotation happens once at write time so all downstream consumers
+get oriented bytes. Server-side 512px JPEG thumbnails generated on the same
+write path, served via `/media/{id}?thumb=1`. New `Media.IsCover` flag with
+implicit-first-photo read fallback. New `Media.EntityKind` (entry|class) +
+nullable `Media.ClassID` for class overview photos. New commands:
+`media.set_cover`, `media.attach_to_class`. Also declared `media` as a
+`domain_objects` kind — the kernel validator rejected the new commands without it.
+
+**PR #163 — Class splits + soft-archive (data model)**
+
+New `class_split` object kind with auto-letter-coding (a/b/c) plus optional
+label. `Entry.SplitID` tracks membership. `computePlacementsFromScores` is now
+split-aware, grouping by split and ranking within each group. Empty splits
+auto-purge when the last entry moves out. Soft-archive: `Entry.ArchivedAt`
+excludes from default reads; `*IncludeArchived` variants exist for restore
+screens. New commands: `class_splits.create`, `class_splits.delete`,
+`entries.move_to_split`, `entries.archive`, `entries.restore`.
+
+**PR #164 — Show landing page redesign**
+
+`/shows/{slug}` rebuilt phone-first. Hero band with status pill + actions,
+"Winners by class" table covering every class with 1/2/3/Special/HM, four nav
+tiles (entries / classes / clubs / exhibitors). Two new sub-pages:
+`/shows/{slug}/entries` (filterable, mobile card grid) and
+`/shows/{slug}/exhibitors` (per-show aggregate; anonymous entrants grouped
+under one card). All CSS appended to existing `assets/app.css` using existing
+palette variables — no Tailwind, no new fonts.
+
+**PR #165 — Helper share-link onboarding**
+
+Two new domain objects (`show_helper_invite`, `show_badge_session`). Admin
+generates a share link from `/admin/shows/{showID}/helpers`; helper redeems on
+`/shows/{slug}/help-redeem` with name + email and optional person match. Badge
+session token in cookie `as_show_badge`, HttpOnly, SameSite=Lax, path-scoped to
+`/shows/`. NO Cognito for helpers. Badge sessions grant the existing
+`show_intake_operator` authority bundle. New `requireShowBadge` middleware.
+New commands: `show_helper_invites.create`, `show_helper_invites.revoke`,
+`show_badge_sessions.end`.
+
+**PR #166 — Sequential photo intake + retry queue + anon entries + gallery**
+
+New page `/admin/shows/{showID}/intake/photos` with sticky class bar (prev/next
+arrows wrap the schedule), big tap-to-capture surface, optimistic upload with
+in-memory retry queue. Every shutter creates a fresh anonymous Entry
+(PersonID="") to skip the name-lookup blocker. Multi-photo gallery on entry
+detail page with delete + star-to-set-cover. No new commands — uses existing
+`entries.create`, `media.attach`, `media.delete`, `media.set_cover`. Lazy
+template registration to avoid main.go conflicts with the parallel sibling PR.
+
+**PR #167 — Class splits UI + Fast/Update mode toggle + collapsibles**
+
+Drives the data model from #163. Split button in the top-right of each class
+panel (Update mode only); multi-select activation flow; per-entry "Move to →"
+dropdown for sibling moves; per-split judging surface. Top-of-workspace
+`Fast add` / `Update entries` segmented toggle persisted in `localStorage`.
+Native `<details>` collapsibles per entry section (Name match, Ranking,
+Comment, Photo detail), open/closed state persisted PER section type (not per
+entry) — flipping Comment open opens it for every entry. New fragment endpoint
+`GET /admin/classes/{classID}/splits/fragment` for refresh-after-mutation.
+
+### PRs
+
+- #161 Close Flowershow contract gaps; declare account projection and entries.set_special_status
+- #162 Image pipeline: EXIF auto-rotate, server thumbnails, cover photo, class-attached media
+- #163 Class splits + soft-archive (data model)
+- #164 Show landing redesign + /entries + /exhibitors sub-pages
+- #165 Helper share-link onboarding (show-scoped badge sessions)
+- #166 Sequential photo intake + retry queue + anonymous entries + gallery
+- #167 Class splits UI + Fast/Update mode toggle + collapsibles
+
+### Lessons
+
+- **Parallel agents on shared files cost more than they save when ownership
+  isn't truly disjoint.** The first parallel batch (PR 163/164/165 in
+  worktrees) hit a `main_test.go` conflict between PR 163 and PR 164 because
+  both inserted new test functions at the bottom of the file. Resolution was
+  clean (both blocks kept) but cost a manual round-trip per PR.
+- **Tests-in-a-new-file is the cheap fix.** The second parallel batch
+  (PR 166/167) put tests in dedicated `intake_flow_test.go` and
+  `class_splits_ui_test.go` files. Conflicts dropped to `main.go` and
+  `app.css` only, both append-only with marker comments — three-way merge was
+  trivial.
+- **Worktree-isolated agents push their own branches but the post-merge
+  `gh pr merge --delete-branch` cannot delete a worktree-held branch.** Need
+  to `git worktree remove -f -f` first. Ran into this twice.
+- **Git's three-way merge handles "we both added the same thing" gracefully.**
+  PR 163 and PR 162 both added `kind: media` to the contract YAML
+  `domain_objects`. GitHub flagged the PRs as MERGEABLE despite being BEHIND,
+  and post-update merge produced no conflict on that addition.
+
+### Post-batch fixes
+
+After the six-PR batch landed, eyes-on-page review surfaced three follow-ups:
+
+- **PR #169 — Show landing imagery.** The redesigned `/shows/{slug}` was technically rendering a class-attached cover via CSS `background-image`, but a darkening scrim over it made the page read as image-less. Replaced the background-image pattern with a real `<img>` element (CSS-grid hero on tablet+, stacked on phones) and added a "Highlights" horizontal strip plus 64-80px thumbnails next to every winner in the winners-by-class table. Used `?thumb=1` everywhere so the page doesn't pull multi-MB originals. The page is now image-led, as a flower show landing should be.
+- **PR #170 — HM badge label.** The "HONORABLE MENTION" badge was forcing entry names to wrap awkwardly in winners-row cells. Shortened to "HM" to match the visual rhythm of 1ST / 2ND / 3RD / SPECIAL.
+- **PR #171 — Intake panel fast-add CTA + optional entrant.** Two related issues: the new-entry modal still required the Entrant name as the FIRST field (contradicting #166's photo-first anonymous-by-default flow), and the new sequential photo intake page from #166 had no entry point from the show workspace. Added a "Fast add photos" CTA card above the intake grid linking to `/admin/shows/{showID}/intake/photos`, reordered the new-entry modal so "Add media" is first with Capture as the primary action, dropped `required` from Entrant and labelled it "(optional — add later if unknown)". The server-side handler already accepted empty PersonID — the client-side `required` attribute was the only blocker.
+
+### Lesson — eyes-on-page beats green CI
+
+All six batch PRs were green on CI, deployed cleanly, and verified live via curl-grepping the HTML. None of those automated checks caught: a hero that looked dark, a badge that wrapped, or a modal that asked for the wrong field first. A short visual pass on the production page surfaced all three. The cheap fix is to bake "open the live page on a phone before declaring done" into the post-deploy workflow, not just contract probes and pod health.
