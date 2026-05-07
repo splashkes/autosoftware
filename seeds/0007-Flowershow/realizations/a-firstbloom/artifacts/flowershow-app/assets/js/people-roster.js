@@ -34,6 +34,18 @@
     var editFieldsEl = form.querySelector("[data-people-edit-fields]");
     var judgeFields = form.querySelector("[data-people-fields-judge]");
     var memberFields = form.querySelector("[data-people-fields-member]");
+    var roleHelpEl = form.querySelector("[data-people-role-help]");
+
+    var roleHelpCopy = {
+      flowershow_entrant: "Entrant — can view their own entries and account. No admin permissions.",
+      flowershow_show_intake_operator: "Show admin (helper) — can upload photos, edit entries, set names, mark winners, and view the private show workspace.",
+    };
+
+    function updateRoleHelp() {
+      if (!roleHelpEl || !memberRoleSelect) return;
+      var copy = roleHelpCopy[memberRoleSelect.value] || "";
+      roleHelpEl.textContent = copy;
+    }
 
     var currentMode = "judge";
 
@@ -56,7 +68,13 @@
       if (mode === "show_admin") {
         roleHiddenInput.value = "flowershow_show_intake_operator";
       } else if (mode === "member") {
-        roleHiddenInput.value = memberRoleSelect ? memberRoleSelect.value : "flowershow_entrant";
+        // Default the member-mode role to "Show admin (helper)" so the most
+        // common admin-add path doesn't require an extra click.
+        if (memberRoleSelect && !memberRoleSelect.value) {
+          memberRoleSelect.value = "flowershow_show_intake_operator";
+        }
+        roleHiddenInput.value = memberRoleSelect ? memberRoleSelect.value : "flowershow_show_intake_operator";
+        updateRoleHelp();
       } else {
         roleHiddenInput.value = "";
       }
@@ -176,6 +194,7 @@
         if (currentMode === "member") {
           roleHiddenInput.value = memberRoleSelect.value;
         }
+        updateRoleHelp();
       });
     }
 

@@ -38,6 +38,11 @@ type app struct {
 	media         mediaStore
 	sessions      authStateStore
 	allowTestAuth bool
+	// inviteEmailSender is nil in tests / when SES is unconfigured. When nil
+	// at call time, sendInvitationEmail lazily constructs a real sesv2 client
+	// from FLOWERSHOW_INVITE_FROM_EMAIL + AWS_REGION. Tests can set this to a
+	// mock to assert the SendEmail call shape without hitting AWS.
+	inviteEmailSender sesSender
 }
 
 type refreshingStore interface {

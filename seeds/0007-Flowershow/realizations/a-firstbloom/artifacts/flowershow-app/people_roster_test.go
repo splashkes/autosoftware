@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 )
 
 // TestPeopleRosterCTAsRenderInIntakePanel — the admin show detail page
@@ -366,5 +369,221 @@ func TestAllFormsReuseExistingPersonByID(t *testing.T) {
 	}
 	if !hasEntrant {
 		t.Fatalf("expected entrant grant for person_03, got %+v", roles)
+	}
+}
+
+// TestModalHelperAdminHidesJudgeAndMemberFields — when the people-roster
+// modal HTML renders, both the judge-mode-only block and the member-mode-only
+// block must carry the `hidden` attribute on the wrapper. The Helper-Admin
+// mode (default banner-driven) leaves both wrappers hidden client-side, but
+// even the initial server render needs them hidden so JS can opt them in.
+func TestModalHelperAdminHidesJudgeAndMemberFields(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowDetail))
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, marker := range []string{
+		`data-people-fields-judge hidden`,
+		`data-people-fields-member hidden`,
+	} {
+		if !strings.Contains(body, marker) {
+			t.Fatalf("expected modal markup to include %q so initial render hides the block", marker)
+		}
+	}
+}
+
+// TestMemberRoleDefaultsToShowAdmin — the Member-mode role select should
+// default to flowershow_show_intake_operator (Show admin (helper)).
+func TestMemberRoleDefaultsToShowAdmin(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowDetail))
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	want := `<option value="flowershow_show_intake_operator" selected>Show admin (helper)</option>`
+	if !strings.Contains(body, want) {
+		t.Fatalf("expected default-selected show admin option %q in member role select", want)
+	}
+}
+
+// TestMemberRoleHelpTextIsPresent — the role help paragraph element must
+// exist directly under the role dropdown and start with the show-admin copy
+// (matching the default selection).
+func TestMemberRoleHelpTextIsPresent(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowDetail))
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025", nil)
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `class="form-help-text people-roster-role-help"`) {
+		t.Fatalf("expected .people-roster-role-help element on initial render")
+	}
+	if !strings.Contains(body, "Show admin (helper) — can upload photos") {
+		t.Fatalf("expected role help text to default to show-admin copy")
+	}
+}
+
+// fakeSESSender records SendEmail calls for assertions.
+type fakeSESSender struct {
+	mu    sync.Mutex
+	calls int
+	last  *sesv2.SendEmailInput
+}
+
+func (f *fakeSESSender) SendEmail(ctx context.Context, in *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	f.last = in
+	return &sesv2.SendEmailOutput{}, nil
+}
+
+// TestEmailInvitationSentWhenSESConfigured — when AWS_REGION + the from-email
+// env var are set and a new person with email is added via Add Show Helper
+// Admin, the SES sender should receive a SendEmail call whose body embeds the
+// help-redeem URL and the show name.
+func TestEmailInvitationSentWhenSESConfigured(t *testing.T) {
+	a := testApp()
+	fake := &fakeSESSender{}
+	a.inviteEmailSender = fake
+
+	t.Setenv("AWS_REGION", "us-east-2")
+	t.Setenv("FLOWERSHOW_INVITE_FROM_EMAIL", "noreply@flowershow.test")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/people/show-admin", a.requireCapabilityPage("entries.manage", a.handleAdminAddShowHelperAdminForm))
+
+	body := "first_name=Nina&last_name=Newcomer&email=nina%40example.com"
+	req := httptest.NewRequest("POST", "/admin/shows/show_spring2025/people/show-admin", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	if fake.calls != 1 {
+		t.Fatalf("expected exactly 1 SES SendEmail call, got %d", fake.calls)
+	}
+	if fake.last == nil || fake.last.Content == nil || fake.last.Content.Simple == nil {
+		t.Fatalf("expected Simple-mode email content, got %+v", fake.last)
+	}
+	if fake.last.FromEmailAddress == nil || *fake.last.FromEmailAddress != "noreply@flowershow.test" {
+		t.Fatalf("expected From=noreply@flowershow.test, got %+v", fake.last.FromEmailAddress)
+	}
+	if fake.last.Destination == nil || len(fake.last.Destination.ToAddresses) != 1 || fake.last.Destination.ToAddresses[0] != "nina@example.com" {
+		t.Fatalf("expected To=nina@example.com, got %+v", fake.last.Destination)
+	}
+
+	subject := ""
+	if fake.last.Content.Simple.Subject != nil && fake.last.Content.Simple.Subject.Data != nil {
+		subject = *fake.last.Content.Simple.Subject.Data
+	}
+	if !strings.Contains(subject, "added to") {
+		t.Fatalf("expected subject to mention adding to show, got %q", subject)
+	}
+
+	htmlBody := ""
+	if fake.last.Content.Simple.Body != nil && fake.last.Content.Simple.Body.Html != nil && fake.last.Content.Simple.Body.Html.Data != nil {
+		htmlBody = *fake.last.Content.Simple.Body.Html.Data
+	}
+	textBody := ""
+	if fake.last.Content.Simple.Body != nil && fake.last.Content.Simple.Body.Text != nil && fake.last.Content.Simple.Body.Text.Data != nil {
+		textBody = *fake.last.Content.Simple.Body.Text.Data
+	}
+	if !strings.Contains(htmlBody, "/help-redeem?token=") {
+		t.Fatalf("expected redeem URL embedded in HTML body, got:\n%s", htmlBody)
+	}
+	if !strings.Contains(textBody, "/help-redeem?token=") {
+		t.Fatalf("expected redeem URL in text body, got:\n%s", textBody)
+	}
+	if !strings.Contains(textBody, "/admin/login") {
+		t.Fatalf("expected admin/login fallback URL in text body, got:\n%s", textBody)
+	}
+
+	var nina *Person
+	for _, p := range a.store.allPersons() {
+		if p.FirstName == "Nina" && p.LastName == "Newcomer" {
+			nina = p
+			break
+		}
+	}
+	if nina == nil {
+		t.Fatal("expected nina to be created")
+	}
+}
+
+// TestEmailInvitationSkippedWhenSESUnconfigured — when env vars are unset, the
+// handler runs cleanly without panic and never calls SendEmail; the person and
+// role grant still land.
+func TestEmailInvitationSkippedWhenSESUnconfigured(t *testing.T) {
+	a := testApp()
+	fake := &fakeSESSender{}
+	a.inviteEmailSender = fake
+
+	t.Setenv("FLOWERSHOW_INVITE_FROM_EMAIL", "")
+	t.Setenv("AWS_REGION", "")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/people/show-admin", a.requireCapabilityPage("entries.manage", a.handleAdminAddShowHelperAdminForm))
+
+	body := "first_name=Quinn&last_name=Quiet&email=quinn%40example.com"
+	req := httptest.NewRequest("POST", "/admin/shows/show_spring2025/people/show-admin", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d body=%s", w.Code, w.Body.String())
+	}
+	if fake.calls != 0 {
+		t.Fatalf("expected 0 SES calls when env unset, got %d", fake.calls)
+	}
+
+	var quinn *Person
+	for _, p := range a.store.allPersons() {
+		if p.FirstName == "Quinn" && p.LastName == "Quiet" {
+			quinn = p
+			break
+		}
+	}
+	if quinn == nil {
+		t.Fatal("expected quinn to be created even when SES is unconfigured")
+	}
+	roles, err := a.authority.AllRoleAssignments(context.Background())
+	if err != nil {
+		t.Fatalf("list roles: %v", err)
+	}
+	found := false
+	for _, role := range roles {
+		if role.SubjectID == quinn.ID && role.Role == "show_intake_operator" && role.ShowID == "show_spring2025" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected show_intake_operator grant for quinn even when SES is unconfigured, got %+v", roles)
 	}
 }

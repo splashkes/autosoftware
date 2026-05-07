@@ -3921,3 +3921,24 @@ body[data-mode="update"] [data-mode-fast-only] {
 }
 /* === /Feature: people roster CTAs === */
 
+/* === Fix: people roster modal modes + help text ===
+   Bug: the mode-toggle JS sets `hidden = mode !== "judge"` etc. on the field
+   wrappers, but the rules above (`display: grid;`) and `.people-search-selected
+   { display: flex; }` outranked the user-agent `[hidden] { display: none; }`
+   stylesheet, so judge/member fields and the empty Using-pill all stayed
+   visible regardless of mode. Force [hidden] to win for these selectors. */
+.people-roster-fields-judge[hidden],
+.people-roster-fields-member[hidden],
+.people-search-selected[hidden],
+.people-search-results[hidden],
+.people-roster-modal-banner[hidden] {
+  display: none !important;
+}
+.form-help-text.people-roster-role-help {
+  margin: .35rem 0 0;
+  font-size: .85rem;
+  color: var(--ink-muted, #555);
+  line-height: 1.4;
+}
+/* === /Fix: people roster modal modes + help text === */
+

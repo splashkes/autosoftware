@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,8 +65,10 @@ func (a *app) handlePeopleRosterSearch(w http.ResponseWriter, r *http.Request) {
 // person_id is set and refers to an existing person, that person is returned
 // (and the optional follow-up update fields are applied). Otherwise a new
 // person is created from the form fields. firstName + lastName must be
-// present when no person_id is provided.
-func (a *app) peopleRosterResolveOrCreate(r *http.Request, makeJudge bool) (*Person, error) {
+// present when no person_id is provided. The second return value is true
+// when the form referenced (or matched) a person that already existed in
+// the store; false when this call resulted in a fresh createPerson.
+func (a *app) peopleRosterResolveOrCreate(r *http.Request, makeJudge bool) (*Person, bool, error) {
 	personID := strings.TrimSpace(r.FormValue("person_id"))
 	firstName := strings.TrimSpace(r.FormValue("first_name"))
 	lastName := strings.TrimSpace(r.FormValue("last_name"))
@@ -86,7 +89,7 @@ func (a *app) peopleRosterResolveOrCreate(r *http.Request, makeJudge bool) (*Per
 	if personID != "" {
 		existing, ok := a.store.personByID(personID)
 		if !ok {
-			return nil, errPersonRosterMissing
+			return nil, false, errPersonRosterMissing
 		}
 		// Optional incremental updates: judge promotion, qualifications,
 		// years experience. Don't clobber unrelated fields.
@@ -118,15 +121,15 @@ func (a *app) peopleRosterResolveOrCreate(r *http.Request, makeJudge bool) (*Per
 		if needsUpdate {
 			updated, err := a.store.updatePerson(existing.ID, next)
 			if err != nil {
-				return nil, err
+				return nil, true, err
 			}
-			return updated, nil
+			return updated, true, nil
 		}
-		return existing, nil
+		return existing, true, nil
 	}
 
 	if firstName == "" || lastName == "" {
-		return nil, errPersonRosterNameRequired
+		return nil, false, errPersonRosterNameRequired
 	}
 	person, err := a.store.createPerson(PersonInput{
 		FirstName:          firstName,
@@ -139,9 +142,9 @@ func (a *app) peopleRosterResolveOrCreate(r *http.Request, makeJudge bool) (*Per
 		JudgingStartedYear: judgingStartedYear,
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return person, nil
+	return person, false, nil
 }
 
 var (
@@ -171,7 +174,7 @@ func (a *app) handleAdminAddJudgeForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	person, err := a.peopleRosterResolveOrCreate(r, true)
+	person, wasExisting, err := a.peopleRosterResolveOrCreate(r, true)
 	if err != nil {
 		writePeopleRosterError(w, err)
 		return
@@ -180,6 +183,9 @@ func (a *app) handleAdminAddJudgeForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.maybeSendPeopleRosterInvitation(r, showID, person, wasExisting,
+		"Judge", "Judge — invited to score entries at this flower show.",
+		"Invited via Add Judge")
 	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Judge added</div>`)
 	a.publishAdminSections(showID, "intake", "setup", "scoring")
 	a.respondAdminSectionOrRedirect(w, r, showID, "intake")
@@ -193,7 +199,7 @@ func (a *app) handleAdminAddShowHelperAdminForm(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	person, err := a.peopleRosterResolveOrCreate(r, false)
+	person, wasExisting, err := a.peopleRosterResolveOrCreate(r, false)
 	if err != nil {
 		writePeopleRosterError(w, err)
 		return
@@ -202,6 +208,10 @@ func (a *app) handleAdminAddShowHelperAdminForm(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.maybeSendPeopleRosterInvitation(r, showID, person, wasExisting,
+		"Show admin (helper)",
+		"Show admin (helper) — can upload photos, edit entries, set names, mark winners, and view the private show workspace.",
+		"Invited via Add Show Helper Admin")
 	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Show helper admin added</div>`)
 	a.publishAdminSections(showID, "intake", "setup", "governance")
 	a.respondAdminSectionOrRedirect(w, r, showID, "intake")
@@ -221,7 +231,7 @@ func (a *app) handleAdminAddMemberEntrantForm(w http.ResponseWriter, r *http.Req
 		http.Error(w, "unsupported role", http.StatusBadRequest)
 		return
 	}
-	person, err := a.peopleRosterResolveOrCreate(r, false)
+	person, wasExisting, err := a.peopleRosterResolveOrCreate(r, false)
 	if err != nil {
 		writePeopleRosterError(w, err)
 		return
@@ -230,9 +240,77 @@ func (a *app) handleAdminAddMemberEntrantForm(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	roleLabel, roleSummary, inviteLabel := memberRoleEmailCopy(roleKey)
+	a.maybeSendPeopleRosterInvitation(r, showID, person, wasExisting, roleLabel, roleSummary, inviteLabel)
 	a.sseBroker.publish(showID, "show-updated", `<div class="toast">Member added</div>`)
 	a.publishAdminSections(showID, "intake", "setup", "governance")
 	a.respondAdminSectionOrRedirect(w, r, showID, "intake")
+}
+
+func memberRoleEmailCopy(roleKey string) (label, summary, inviteLabel string) {
+	switch roleKey {
+	case "show_intake_operator":
+		return "Show admin (helper)",
+			"Show admin (helper) — can upload photos, edit entries, set names, mark winners, and view the private show workspace.",
+			"Invited via Add Member with show admin role"
+	default:
+		return "Entrant",
+			"Entrant — can view their own entries and account. No admin permissions.",
+			"Invited via Add Member"
+	}
+}
+
+// maybeSendPeopleRosterInvitation issues a show-helper invite token + dispatches
+// a zero-touch invite email when the freshly added person is eligible (had an
+// email, was not already in the store). Failures are logged and never surface
+// to the admin — the role grant has already landed and the page should still
+// respond cleanly.
+func (a *app) maybeSendPeopleRosterInvitation(r *http.Request, showID string, person *Person, wasExisting bool, roleLabel, roleSummary, inviteLabel string) {
+	if !invitationEmailEligible(person, wasExisting) {
+		return
+	}
+	show, ok := a.store.showByID(showID)
+	if !ok || show == nil {
+		return
+	}
+
+	createdBy := ""
+	inviterName := ""
+	inviterEmail := ""
+	if user, ok := a.currentUser(r); ok && user != nil {
+		createdBy = strings.TrimSpace(user.SubjectID)
+		if createdBy == "" {
+			createdBy = strings.TrimSpace(user.CognitoSub)
+		}
+		inviterName = strings.TrimSpace(user.Name)
+		inviterEmail = strings.TrimSpace(user.Email)
+	}
+
+	issued, err := a.store.createShowHelperInvite(ShowHelperInviteInput{
+		ShowID:        show.ID,
+		Label:         inviteLabel,
+		CreatedBy:     createdBy,
+		ExpiresInDays: defaultShowHelperInviteDays,
+	})
+	if err != nil || issued == nil {
+		log.Printf("flowershow invite email: createShowHelperInvite for %s/%s failed: %v", show.ID, person.ID, err)
+		return
+	}
+
+	params := invitationEmailParams{
+		Recipient:    person,
+		Show:         show,
+		RoleLabel:    roleLabel,
+		RoleSummary:  roleSummary,
+		InviterName:  inviterName,
+		InviterEmail: inviterEmail,
+		RedeemURL:    buildPeopleRosterRedeemURL(r, show, issued.Token),
+		LoginURL:     buildPeopleRosterLoginURL(r),
+	}
+	env := loadInvitationEmailEnv()
+	if err := sendInvitationEmail(r.Context(), a.inviteEmailSender, env, params); err != nil {
+		log.Printf("flowershow invite email: send to %s failed: %v", person.Email, err)
+	}
 }
 
 // normalizePeopleRosterRole accepts both the bundle id (flowershow_*) and the
