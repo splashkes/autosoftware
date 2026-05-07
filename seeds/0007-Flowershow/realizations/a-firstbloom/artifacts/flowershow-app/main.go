@@ -268,6 +268,11 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
 
+	// === PR: intake flow ===
+	mux.HandleFunc("GET /admin/shows/{showID}/intake/photos", a.requireCapabilityPage("entries.manage", a.handleIntakeSequentialPhotos))
+	mux.HandleFunc("POST /admin/shows/{showID}/intake/photos/anon-entry", a.requireCapabilityPage("entries.manage", a.handleIntakeNewAnonymousEntry))
+	// === /PR: intake flow ===
+
 	handler := requestLog(a.storeRefreshMiddleware(mux))
 
 	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, ".") {
