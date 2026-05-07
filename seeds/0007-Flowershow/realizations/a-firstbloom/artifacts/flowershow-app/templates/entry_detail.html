@@ -41,6 +41,89 @@
   </div>
 </section>
 
+<!-- intake-flow:gallery start -->
+{{if and .Media .NavShowAdmin}}
+<section class="section entry-photo-gallery" data-entry-photo-gallery data-entry-id="{{.EntryID}}">
+  <h2>Photos</h2>
+  <p class="section-desc">All photos attached to this entry. Star one as the cover, or remove ones you do not want.</p>
+  <div class="entry-photo-gallery-grid">
+    {{range .Media}}
+    <figure class="entry-photo-tile{{if .IsCover}} entry-photo-tile-cover{{end}}" data-entry-photo-tile data-media-id="{{.ID}}">
+      <a class="entry-photo-tile-link" href="{{$.BasePath}}/media/{{.ID}}" target="_blank" rel="noopener" aria-label="Open photo full size">
+        <img class="entry-photo-tile-img" src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$.PublicEntryName}}" loading="lazy">
+      </a>
+      <figcaption class="entry-photo-tile-actions">
+        <button
+          type="button"
+          class="entry-photo-tile-star{{if .IsCover}} entry-photo-tile-star-active{{end}}"
+          data-entry-photo-cover
+          data-media-id="{{.ID}}"
+          aria-pressed="{{if .IsCover}}true{{else}}false{{end}}"
+          aria-label="{{if .IsCover}}Cover photo{{else}}Make cover photo{{end}}"
+          title="{{if .IsCover}}Cover photo{{else}}Make cover photo{{end}}"
+        >{{if .IsCover}}&#9733;{{else}}&#9734;{{end}}</button>
+        <button
+          type="button"
+          class="entry-photo-tile-delete"
+          data-entry-photo-delete
+          data-media-id="{{.ID}}"
+          aria-label="Delete photo"
+          title="Delete photo"
+        >Delete</button>
+      </figcaption>
+    </figure>
+    {{end}}
+  </div>
+</section>
+<script>
+(function () {
+  var gallery = document.querySelector('[data-entry-photo-gallery]');
+  if (!gallery) return;
+  function postCommand(command, body) {
+    return fetch('{{$.BasePath}}/v1/commands/0007-Flowershow/' + command, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+  }
+  gallery.addEventListener('click', function (ev) {
+    var del = ev.target.closest('[data-entry-photo-delete]');
+    if (del) {
+      ev.preventDefault();
+      var mid = del.getAttribute('data-media-id');
+      if (!mid) return;
+      if (!window.confirm('Delete this photo?')) return;
+      del.disabled = true;
+      postCommand('media.delete', { media_id: mid }).then(function (r) {
+        if (r.ok) window.location.reload();
+        else { del.disabled = false; window.alert('Could not delete photo.'); }
+      }).catch(function () {
+        del.disabled = false;
+        window.alert('Could not delete photo.');
+      });
+      return;
+    }
+    var star = ev.target.closest('[data-entry-photo-cover]');
+    if (star) {
+      ev.preventDefault();
+      var mid2 = star.getAttribute('data-media-id');
+      if (!mid2) return;
+      star.disabled = true;
+      postCommand('media.set_cover', { id: mid2 }).then(function (r) {
+        if (r.ok) window.location.reload();
+        else { star.disabled = false; window.alert('Could not set cover.'); }
+      }).catch(function () {
+        star.disabled = false;
+        window.alert('Could not set cover.');
+      });
+    }
+  });
+})();
+</script>
+{{end}}
+<!-- intake-flow:gallery end -->
+
 <div class="media-lightbox" data-media-lightbox hidden>
   <div class="media-lightbox-backdrop" data-media-close></div>
   <div class="media-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Entry media viewer">

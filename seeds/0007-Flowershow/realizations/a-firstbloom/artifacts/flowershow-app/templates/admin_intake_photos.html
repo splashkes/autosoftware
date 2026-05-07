@@ -1,0 +1,97 @@
+{{define "content"}}
+<div class="intake-anon-banner" role="status">
+  <div class="intake-anon-banner-text">
+    Add names to anonymous entries before judging.
+  </div>
+  <a class="intake-anon-banner-link" href="{{$.BasePath}}{{.WorkspaceURL}}">Open names panel</a>
+</div>
+
+{{if .Class}}
+<div
+  class="intake-shell"
+  data-intake-shell
+  data-intake-show-id="{{.ShowID}}"
+  data-intake-class-id="{{.ClassID}}"
+  data-intake-anon-url="{{$.BasePath}}{{.AnonEntryURL}}?class={{.ClassID}}"
+  data-intake-base-url="{{$.BasePath}}{{.IntakeBaseURL}}"
+  data-intake-class-title="{{.ClassTitle}}"
+  data-intake-class-number="{{.ClassNumber}}"
+  data-intake-prev-href="{{if .PrevClass}}{{$.BasePath}}{{$.IntakeBaseURL}}?class={{.PrevClass.ID}}{{end}}"
+  data-intake-next-href="{{if .NextClass}}{{$.BasePath}}{{$.IntakeBaseURL}}?class={{.NextClass.ID}}{{end}}"
+  data-intake-next-class-title="{{if .NextClass}}{{.NextClass.Title}}{{end}}"
+  data-intake-next-class-number="{{if .NextClass}}{{.NextClass.ClassNumber}}{{end}}"
+>
+  <header class="intake-class-bar" data-intake-classbar>
+    <a
+      class="intake-class-arrow{{if not .PrevClass}} intake-class-arrow-disabled{{end}}"
+      href="{{if .PrevClass}}{{$.BasePath}}{{$.IntakeBaseURL}}?class={{.PrevClass.ID}}{{end}}"
+      aria-label="Previous class{{if .PrevClass}}: {{.PrevClass.Title}}{{end}}"
+    >&larr;</a>
+    <div class="intake-class-bar-text">
+      <span class="intake-class-bar-eyebrow">Class {{.ClassNumber}} · {{.ClassPosition}} of {{.ClassCount}}</span>
+      <strong class="intake-class-bar-title">{{.ClassTitle}}</strong>
+    </div>
+    <a
+      class="intake-class-arrow{{if not .NextClass}} intake-class-arrow-disabled{{end}}"
+      href="{{if .NextClass}}{{$.BasePath}}{{$.IntakeBaseURL}}?class={{.NextClass.ID}}{{end}}"
+      aria-label="Next class{{if .NextClass}}: {{.NextClass.Title}}{{end}}"
+    >&rarr;</a>
+  </header>
+
+  <section class="intake-capture">
+    <h1 class="sr-only">Sequential photo intake</h1>
+    <label class="intake-capture-button" data-intake-capture-label>
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        class="intake-capture-input"
+        data-intake-capture-input
+      >
+      <span class="intake-capture-icon" aria-hidden="true">+</span>
+      <span class="intake-capture-text">Add photo to next entry</span>
+      <span class="intake-capture-hint">Each photo creates a new anonymous entry in this class.</span>
+    </label>
+  </section>
+
+  <section class="intake-grid-section">
+    <h2 class="intake-grid-heading">Recent photos this class</h2>
+    <div class="intake-grid" data-intake-grid>
+      <p class="intake-grid-empty" data-intake-empty>No photos yet. Tap the button above to start.</p>
+    </div>
+  </section>
+
+  {{if .NextClass}}
+  <section class="intake-next-class" data-intake-next-cta hidden>
+    <p class="intake-next-class-copy">Done with this class? Move on when ready.</p>
+    <a
+      class="intake-next-class-button"
+      href="{{$.BasePath}}{{.IntakeBaseURL}}?class={{.NextClass.ID}}"
+    >&rarr; Next class: Class {{.NextClass.ClassNumber}} · {{.NextClass.Title}}</a>
+  </section>
+  {{end}}
+
+  <aside class="intake-status-tray" data-intake-tray hidden>
+    <div class="intake-status-tray-row">
+      <span class="intake-status-pill intake-status-uploaded" data-intake-tray-uploaded>0 uploaded</span>
+      <span class="intake-status-pill intake-status-uploading" data-intake-tray-uploading>0 uploading</span>
+      <span class="intake-status-pill intake-status-failed" data-intake-tray-failed>0 failed</span>
+    </div>
+    <button
+      type="button"
+      class="intake-status-retry"
+      data-intake-retry
+      hidden
+    >Retry all failed</button>
+  </aside>
+</div>
+{{else}}
+<div class="empty-state">
+  <h1>No classes yet</h1>
+  <p>Add a schedule with at least one class before starting photo intake.</p>
+  <p><a class="button" href="{{$.BasePath}}{{.WorkspaceURL}}">Back to show workspace</a></p>
+</div>
+{{end}}
+
+<script src="{{$.BasePath}}/assets/js/intake-photos.js?v={{assetVersion}}" defer></script>
+{{end}}

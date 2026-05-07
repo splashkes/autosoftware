@@ -280,6 +280,11 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_helper_invites.revoke", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_badge_sessions.end", a.handleAPICommand)
 
+	// === PR: intake flow ===
+	mux.HandleFunc("GET /admin/shows/{showID}/intake/photos", a.requireCapabilityPage("entries.manage", a.handleIntakeSequentialPhotos))
+	mux.HandleFunc("POST /admin/shows/{showID}/intake/photos/anon-entry", a.requireCapabilityPage("entries.manage", a.handleIntakeNewAnonymousEntry))
+	// === /PR: intake flow ===
+
 	// === PR: splits UI + mode toggle ===
 	registerSplitsRenderStore(a.store)
 	mux.HandleFunc("GET /admin/classes/{classID}/splits/fragment", a.requireCapabilityPage("shows.workspace.read", a.handleAdminClassSplitsFragment))
