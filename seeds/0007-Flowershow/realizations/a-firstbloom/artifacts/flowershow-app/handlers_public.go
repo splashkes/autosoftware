@@ -1324,7 +1324,7 @@ func buildClassWinnersViews(divisions []*divisionView, entries []*entryView) []*
 							special.BadgeLabel = "Special"
 							special.BadgeClass = "placement-badge-special"
 						} else {
-							special.BadgeLabel = "Honorable Mention"
+							special.BadgeLabel = "HM"
 							special.BadgeClass = "placement-badge-hm"
 							view.HonorableMention = append(view.HonorableMention, &special)
 							continue
