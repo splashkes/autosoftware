@@ -3440,3 +3440,207 @@ body[data-mode="update"] [data-mode-fast-only] {
 }
 .entry-photo-tile-delete:hover { background: #fee2e2; }
 /* === /PR: intake flow === */
+
+/* === Fix: show-landing imagery === */
+/* Hero rebuilt as image-first: a real <img> tile sits above the gradient
+   text panel rather than being hidden behind a heavy scrim. On wide
+   viewports we put them side-by-side; on phones we stack image-on-top so
+   the photo is the first thing in view. */
+.show-hero {
+  background: linear-gradient(135deg, var(--green), var(--green-light));
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  overflow: hidden;
+}
+.show-hero .show-hero-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(0,0,0,0.10));
+  overflow: hidden;
+}
+.show-hero .show-hero-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.show-hero-photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, .85);
+  gap: .35rem;
+  background: linear-gradient(135deg, var(--green-deep, #1f513d), var(--green));
+}
+.show-hero-photo-glyph {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.show-hero-photo-note {
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 600;
+}
+.show-hero .show-hero-body {
+  padding: 1.4rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.show-hero-empty {
+  /* When there's no real photo, keep the previous visual weight by giving
+     the placeholder a sane min-height instead of a 16:9 aspect ratio. */
+}
+.show-hero-empty .show-hero-photo {
+  aspect-ratio: auto;
+  min-height: 140px;
+}
+@media (min-width: 720px) {
+  .show-hero {
+    grid-template-columns: 1.1fr 1fr;
+  }
+  .show-hero .show-hero-photo {
+    aspect-ratio: auto;
+    min-height: 280px;
+    height: 100%;
+  }
+}
+
+/* Highlights strip: horizontal scrolling tiles of 1st-place + special-award
+   winners. Gives the page an image-led "wall of winners" feel right under
+   the hero without forcing the user to dig into the per-class table. */
+.show-highlights-section {
+  margin-top: 1.5rem;
+}
+.show-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 .5rem;
+  display: flex;
+  gap: .65rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.show-highlight {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: 160px;
+}
+.show-highlight-link {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  text-decoration: none;
+  color: inherit;
+}
+.show-highlight-photo {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--gray-100);
+  box-shadow: var(--shadow);
+}
+.show-highlight-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .18s ease;
+}
+.show-highlight-link:hover .show-highlight-photo-img,
+.show-highlight-link:focus-visible .show-highlight-photo-img {
+  transform: scale(1.04);
+}
+.show-highlight-badge {
+  position: absolute;
+  top: .4rem;
+  left: .4rem;
+  font-size: .68rem !important;
+  min-width: 36px;
+  height: 1.35rem;
+  padding: 0 .45rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.show-highlight-body {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  padding: 0 .15rem;
+}
+.show-highlight-name {
+  font-weight: 600;
+  font-size: .9rem;
+  color: var(--gray-900);
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.show-highlight-class {
+  font-size: .72rem;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.show-highlight-entrant {
+  font-size: .78rem;
+  color: var(--gray-700);
+}
+@media (min-width: 720px) {
+  .show-highlight {
+    width: 180px;
+  }
+}
+
+/* Winners cells: each placement now leads with a thumbnail tile so the
+   table reads as photos-with-names rather than a dry text list. */
+.winners-cell {
+  grid-template-columns: 64px auto 1fr;
+  align-items: center;
+}
+.winners-cell-thumb-link {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--gray-100);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.winners-cell-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.winners-cell-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  color: var(--gray-400);
+  font-size: 1.6rem;
+}
+@media (min-width: 720px) {
+  .winners-cell {
+    grid-template-columns: 80px auto 1fr;
+  }
+  .winners-cell-thumb-link,
+  .winners-cell-thumb-placeholder {
+    width: 80px;
+    height: 80px;
+  }
+}
+/* === /Fix: show-landing imagery === */
+

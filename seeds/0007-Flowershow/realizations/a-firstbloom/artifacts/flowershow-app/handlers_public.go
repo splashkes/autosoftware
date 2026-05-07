@@ -867,6 +867,9 @@ type showDetailData struct {
 	StatusLabel       string
 	HeroSubtitle      string
 	HeroCoverPath     string
+	HeroImagePath     string
+	HeroImageAlt      string
+	Highlights        []*highlightView
 	WinnersByClass    []*classWinnersView
 	NavTiles          []*showNavTile
 	EntryCount        int
@@ -896,6 +899,19 @@ type winnerCellView struct {
 	BadgeLabel      string
 	BadgeClass      string
 	AwardName       string
+	ThumbPath       string
+	ThumbAlt        string
+}
+
+type highlightView struct {
+	Entry           *Entry
+	PublicEntryName string
+	EntrantLabel    string
+	ClassLabel      string
+	BadgeLabel      string
+	BadgeClass      string
+	ThumbPath       string
+	ThumbAlt        string
 }
 
 type showNavTile struct {
@@ -1042,6 +1058,13 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 	winnersByClass := buildClassWinnersViews(divisions, entries)
 	hero := buildShowHeroFields(show, org)
 	heroCoverPath := a.classCoverImagePath(show, divisions)
+	heroImagePath := ""
+	if heroCoverPath != "" {
+		// Use the thumbnail-served route so the hero image is fetched at a
+		// reasonable resolution rather than the original full-size file.
+		heroImagePath = heroCoverPath + "?thumb=1"
+	}
+	highlights := buildShowHighlights(entries, awardLookup)
 
 	exhibitorCount := len(exhibitorSet)
 	if hasAnonymousExhibitor {
@@ -1064,6 +1087,9 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		StatusLabel:      hero.StatusLabel,
 		HeroSubtitle:     hero.Subtitle,
 		HeroCoverPath:    heroCoverPath,
+		HeroImagePath:    heroImagePath,
+		HeroImageAlt:     show.Name + " — featured photo",
+		Highlights:       highlights,
 		WinnersByClass:   winnersByClass,
 		NavTiles:         navTiles,
 		EntryCount:       entryCount,
@@ -1113,6 +1139,39 @@ func showStatusDisplayLabel(status string) string {
 	default:
 		return strings.Title(status)
 	}
+}
+
+// pickEntryCoverMedia returns the best photo to represent an entry. Preference
+// order: explicit IsCover, then the first photo (chronologically first since
+// mediaByEntry returns them in CreatedAt order), then nil. Videos and other
+// non-photo media types are skipped.
+func pickEntryCoverMedia(media []*Media) *Media {
+	var firstPhoto *Media
+	for _, m := range media {
+		if m == nil {
+			continue
+		}
+		if strings.TrimSpace(m.MediaType) != "" && !strings.EqualFold(m.MediaType, "photo") {
+			continue
+		}
+		if m.IsCover {
+			return m
+		}
+		if firstPhoto == nil {
+			firstPhoto = m
+		}
+	}
+	return firstPhoto
+}
+
+// entryThumbPath returns a /media/{id}?thumb=1 path for the entry's cover, or
+// an empty string when no usable photo is attached.
+func entryThumbPath(media []*Media) string {
+	cover := pickEntryCoverMedia(media)
+	if cover == nil {
+		return ""
+	}
+	return "/media/" + cover.ID + "?thumb=1"
 }
 
 // classCoverImagePath defensively surfaces a cover image attached to a class
@@ -1291,6 +1350,8 @@ func buildWinnerCell(entry *entryView) *winnerCellView {
 		Person:          entry.Person,
 		PublicEntryName: entry.PublicEntryName,
 		EntrantLabel:    publicPersonLabel(entry.Person),
+		ThumbPath:       entryThumbPath(entry.Media),
+		ThumbAlt:        entry.PublicEntryName,
 	}
 	switch entry.Entry.Placement {
 	case 1:
@@ -1304,6 +1365,118 @@ func buildWinnerCell(entry *entryView) *winnerCellView {
 		cell.BadgeClass = "placement-badge-third"
 	}
 	return cell
+}
+
+// buildShowHighlights surfaces a horizontal "wall of winners" feed: 1st-place
+// finishers plus special-award winners across every class in the show. If
+// fewer than 4 such entries have photos, we backfill with any other public
+// entry that has a photo so the strip never looks scrawny. Returns up to 12
+// entries; the slice is empty when no entry in the show has any photo.
+func buildShowHighlights(entries []*entryView, awardLookup map[string]*AwardDefinition) []*highlightView {
+	const maxHighlights = 12
+	const minHighlights = 4
+
+	classLabel := func(cls *ShowClass) string {
+		if cls == nil {
+			return ""
+		}
+		title := strings.TrimSpace(cls.Title)
+		num := strings.TrimSpace(cls.ClassNumber)
+		if num != "" {
+			if title != "" {
+				return fmt.Sprintf("Class %s · %s", num, title)
+			}
+			return "Class " + num
+		}
+		return title
+	}
+
+	toHighlight := func(ev *entryView) *highlightView {
+		thumb := entryThumbPath(ev.Media)
+		if thumb == "" {
+			return nil
+		}
+		h := &highlightView{
+			Entry:           ev.Entry,
+			PublicEntryName: ev.PublicEntryName,
+			EntrantLabel:    publicPersonLabel(ev.Person),
+			ClassLabel:      classLabel(ev.Class),
+			ThumbPath:       thumb,
+			ThumbAlt:        ev.PublicEntryName,
+		}
+		switch ev.Entry.Placement {
+		case 1:
+			h.BadgeLabel = "1st"
+			h.BadgeClass = "placement-badge-first"
+		case 2:
+			h.BadgeLabel = "2nd"
+			h.BadgeClass = "placement-badge-second"
+		case 3:
+			h.BadgeLabel = "3rd"
+			h.BadgeClass = "placement-badge-third"
+		default:
+			if ev.Entry.SpecialStatus || strings.TrimSpace(ev.Entry.SpecialAwardID) != "" {
+				if ev.SpecialAward != nil && strings.TrimSpace(ev.SpecialAward.Name) != "" {
+					h.BadgeLabel = "Special"
+					h.BadgeClass = "placement-badge-special"
+				} else {
+					h.BadgeLabel = "HM"
+					h.BadgeClass = "placement-badge-hm"
+				}
+			}
+		}
+		return h
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]*highlightView, 0, maxHighlights)
+
+	// Pass 1: 1st-place + special-award winners with photos.
+	for _, ev := range entries {
+		if len(out) >= maxHighlights {
+			break
+		}
+		if ev == nil || ev.Entry == nil {
+			continue
+		}
+		isSpecial := ev.Entry.SpecialStatus || strings.TrimSpace(ev.Entry.SpecialAwardID) != ""
+		if ev.Entry.Placement != 1 && !isSpecial {
+			continue
+		}
+		h := toHighlight(ev)
+		if h == nil {
+			continue
+		}
+		if _, dup := seen[ev.Entry.ID]; dup {
+			continue
+		}
+		seen[ev.Entry.ID] = struct{}{}
+		out = append(out, h)
+	}
+
+	// Pass 2: backfill with any other public entry that has a photo so the
+	// strip looks intentional even on lightly-judged shows.
+	if len(out) < minHighlights {
+		for _, ev := range entries {
+			if len(out) >= maxHighlights {
+				break
+			}
+			if ev == nil || ev.Entry == nil {
+				continue
+			}
+			if _, dup := seen[ev.Entry.ID]; dup {
+				continue
+			}
+			h := toHighlight(ev)
+			if h == nil {
+				continue
+			}
+			seen[ev.Entry.ID] = struct{}{}
+			out = append(out, h)
+		}
+	}
+	_ = awardLookup // kept on signature so callers can pass through the map
+	return out
 }
 
 // --- Public Show Entries (per-show entries listing) ---

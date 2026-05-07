@@ -3,8 +3,17 @@
   <a href="{{$.BasePath}}/">Home</a> &rsaquo; <span>{{.Show.Name}}</span>
 </div>
 
-<section class="show-hero{{if .HeroCoverPath}} show-hero-cover{{end}}"{{if .HeroCoverPath}} style="background-image:url('{{$.BasePath}}{{.HeroCoverPath}}');"{{end}}>
-  <div class="show-hero-scrim"></div>
+<section class="show-hero{{if .HeroImagePath}} show-hero-has-image{{else}} show-hero-empty{{end}}">
+  {{if .HeroImagePath}}
+  <div class="show-hero-photo">
+    <img class="show-hero-photo-img" src="{{$.BasePath}}{{.HeroImagePath}}" alt="{{.HeroImageAlt}}" loading="eager">
+  </div>
+  {{else}}
+  <div class="show-hero-photo show-hero-photo-placeholder" aria-hidden="true">
+    <span class="show-hero-photo-glyph">&#x2698;</span>
+    <span class="show-hero-photo-note">Photos pending</span>
+  </div>
+  {{end}}
   <div class="show-hero-body">
     {{with .StatusLabel}}<span class="show-hero-status">{{.}}</span>{{end}}
     <h1 class="show-hero-title">{{.Show.Name}}</h1>
@@ -21,6 +30,32 @@
     </div>
   </div>
 </section>
+
+{{if .Highlights}}
+<section class="section show-highlights-section">
+  <div class="show-section-head">
+    <h2>Highlights</h2>
+    <p class="section-desc">First-place and special-award winners — tap any photo to see the full entry.</p>
+  </div>
+  <ul class="show-highlights" role="list">
+    {{range .Highlights}}
+    <li class="show-highlight">
+      <a class="show-highlight-link" href="{{$.BasePath}}/entries/{{.Entry.ID}}">
+        <span class="show-highlight-photo">
+          <img class="show-highlight-photo-img" src="{{$.BasePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+          {{if .BadgeLabel}}<span class="placement-badge {{.BadgeClass}} show-highlight-badge">{{.BadgeLabel}}</span>{{end}}
+        </span>
+        <span class="show-highlight-body">
+          <span class="show-highlight-name">{{.PublicEntryName}}</span>
+          {{with .ClassLabel}}<span class="show-highlight-class">{{.}}</span>{{end}}
+          {{with .EntrantLabel}}<span class="show-highlight-entrant">{{.}}</span>{{end}}
+        </span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
 
 <section class="section show-winners-section">
   <div class="show-section-head">
@@ -47,6 +82,13 @@
         {{if .HasEntries}}
           {{with .First}}
           <div class="winners-cell">
+            <a class="winners-cell-thumb-link" href="{{$basePath}}/entries/{{.Entry.ID}}" aria-label="{{.PublicEntryName}}">
+              {{if .ThumbPath}}
+              <img class="winners-cell-thumb" src="{{$basePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+              {{else}}
+              <span class="winners-cell-thumb winners-cell-thumb-placeholder" aria-hidden="true">&#x273F;</span>
+              {{end}}
+            </a>
             <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
             <div class="winners-cell-copy">
               <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
@@ -60,6 +102,13 @@
           {{end}}
           {{with .Second}}
           <div class="winners-cell">
+            <a class="winners-cell-thumb-link" href="{{$basePath}}/entries/{{.Entry.ID}}" aria-label="{{.PublicEntryName}}">
+              {{if .ThumbPath}}
+              <img class="winners-cell-thumb" src="{{$basePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+              {{else}}
+              <span class="winners-cell-thumb winners-cell-thumb-placeholder" aria-hidden="true">&#x273F;</span>
+              {{end}}
+            </a>
             <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
             <div class="winners-cell-copy">
               <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
@@ -73,6 +122,13 @@
           {{end}}
           {{with .Third}}
           <div class="winners-cell">
+            <a class="winners-cell-thumb-link" href="{{$basePath}}/entries/{{.Entry.ID}}" aria-label="{{.PublicEntryName}}">
+              {{if .ThumbPath}}
+              <img class="winners-cell-thumb" src="{{$basePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+              {{else}}
+              <span class="winners-cell-thumb winners-cell-thumb-placeholder" aria-hidden="true">&#x273F;</span>
+              {{end}}
+            </a>
             <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
             <div class="winners-cell-copy">
               <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
@@ -86,6 +142,13 @@
           {{end}}
           {{range .Specials}}
           <div class="winners-cell">
+            <a class="winners-cell-thumb-link" href="{{$basePath}}/entries/{{.Entry.ID}}" aria-label="{{.PublicEntryName}}">
+              {{if .ThumbPath}}
+              <img class="winners-cell-thumb" src="{{$basePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+              {{else}}
+              <span class="winners-cell-thumb winners-cell-thumb-placeholder" aria-hidden="true">&#x273F;</span>
+              {{end}}
+            </a>
             <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
             <div class="winners-cell-copy">
               <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
@@ -100,6 +163,13 @@
           {{end}}
           {{range .HonorableMention}}
           <div class="winners-cell">
+            <a class="winners-cell-thumb-link" href="{{$basePath}}/entries/{{.Entry.ID}}" aria-label="{{.PublicEntryName}}">
+              {{if .ThumbPath}}
+              <img class="winners-cell-thumb" src="{{$basePath}}{{.ThumbPath}}" alt="{{.ThumbAlt}}" loading="lazy">
+              {{else}}
+              <span class="winners-cell-thumb winners-cell-thumb-placeholder" aria-hidden="true">&#x273F;</span>
+              {{end}}
+            </a>
             <span class="placement-badge {{.BadgeClass}}">{{.BadgeLabel}}</span>
             <div class="winners-cell-copy">
               <a href="{{$basePath}}/entries/{{.Entry.ID}}" class="winners-cell-entry">{{.PublicEntryName}}</a>
