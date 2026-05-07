@@ -16,6 +16,8 @@ var flowershowProjectionTables = []string{
 	"as_flowershow_m_persons",
 	"as_flowershow_m_person_organizations",
 	"as_flowershow_m_organization_invites",
+	"as_flowershow_m_show_helper_invites",
+	"as_flowershow_m_show_badge_sessions",
 	"as_flowershow_m_schedules",
 	"as_flowershow_m_divisions",
 	"as_flowershow_m_sections",
@@ -49,6 +51,8 @@ func flowershowProjectionExpectedCounts(mem *memoryStore) map[string]int {
 		"as_flowershow_m_persons":              len(mem.persons),
 		"as_flowershow_m_person_organizations": len(mem.personOrgs),
 		"as_flowershow_m_organization_invites": len(mem.orgInvites),
+		"as_flowershow_m_show_helper_invites":  len(mem.showHelperInvites),
+		"as_flowershow_m_show_badge_sessions":  len(mem.showBadgeSessions),
 		"as_flowershow_m_schedules":            len(mem.schedules),
 		"as_flowershow_m_divisions":            len(mem.divisions),
 		"as_flowershow_m_sections":             len(mem.sections),
@@ -189,6 +193,28 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_organization_invites (id, organization_id, first_name, last_name, email, organization_role, permission_roles, status, invited_by_subject, invited_by_name, invited_at, claimed_subject_id, claimed_cognito_sub, claimed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 			item.ID, item.OrganizationID, item.FirstName, item.LastName, item.Email, item.OrganizationRole, stringSliceOrEmpty(item.PermissionRoles), item.Status, item.InvitedBySubject, item.InvitedByName, item.InvitedAt, item.ClaimedSubjectID, item.ClaimedCognitoSub, claimedAt); err != nil {
 			return fmt.Errorf("insert organization invite projection %s: %w", item.ID, err)
+		}
+	}
+	for _, id := range sortedMapKeys(mem.showHelperInvites) {
+		item := mem.showHelperInvites[id]
+		var revokedAt any
+		if item.RevokedAt != nil {
+			revokedAt = *item.RevokedAt
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_show_helper_invites (id, show_id, token_hash, label, created_by, created_at, expires_at, revoked_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+			item.ID, item.ShowID, item.TokenHash, item.Label, item.CreatedBy, item.CreatedAt, item.ExpiresAt, revokedAt); err != nil {
+			return fmt.Errorf("insert show helper invite projection %s: %w", item.ID, err)
+		}
+	}
+	for _, id := range sortedMapKeys(mem.showBadgeSessions) {
+		item := mem.showBadgeSessions[id]
+		var revokedAt any
+		if item.RevokedAt != nil {
+			revokedAt = *item.RevokedAt
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_show_badge_sessions (id, show_id, invite_id, name, email, matched_person_id, session_hash, created_at, last_seen_at, expires_at, revoked_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+			item.ID, item.ShowID, item.InviteID, item.Name, item.Email, item.MatchedPersonID, item.SessionHash, item.CreatedAt, item.LastSeenAt, item.ExpiresAt, revokedAt); err != nil {
+			return fmt.Errorf("insert show badge session projection %s: %w", item.ID, err)
 		}
 	}
 	for _, id := range sortedMapKeys(mem.schedules) {

@@ -288,6 +288,9 @@ var commandCapabilityMap = map[string]string{
 	"show_credits.create":        "show_credits.manage",
 	"show_credits.delete":        "show_credits.manage",
 	"roles.assign":               "roles.manage",
+	"show_helper_invites.create": "entries.manage",
+	"show_helper_invites.revoke": "entries.manage",
+	"show_badge_sessions.end":    "entries.manage",
 }
 
 func newAgentTokenSecret() (string, string, error) {
