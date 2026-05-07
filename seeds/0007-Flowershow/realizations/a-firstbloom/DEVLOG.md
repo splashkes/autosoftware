@@ -288,3 +288,15 @@ entry) — flipping Comment open opens it for every entry. New fragment endpoint
   PR 163 and PR 162 both added `kind: media` to the contract YAML
   `domain_objects`. GitHub flagged the PRs as MERGEABLE despite being BEHIND,
   and post-update merge produced no conflict on that addition.
+
+### Post-batch fixes
+
+After the six-PR batch landed, eyes-on-page review surfaced three follow-ups:
+
+- **PR #169 — Show landing imagery.** The redesigned `/shows/{slug}` was technically rendering a class-attached cover via CSS `background-image`, but a darkening scrim over it made the page read as image-less. Replaced the background-image pattern with a real `<img>` element (CSS-grid hero on tablet+, stacked on phones) and added a "Highlights" horizontal strip plus 64-80px thumbnails next to every winner in the winners-by-class table. Used `?thumb=1` everywhere so the page doesn't pull multi-MB originals. The page is now image-led, as a flower show landing should be.
+- **PR #170 — HM badge label.** The "HONORABLE MENTION" badge was forcing entry names to wrap awkwardly in winners-row cells. Shortened to "HM" to match the visual rhythm of 1ST / 2ND / 3RD / SPECIAL.
+- **PR #171 — Intake panel fast-add CTA + optional entrant.** Two related issues: the new-entry modal still required the Entrant name as the FIRST field (contradicting #166's photo-first anonymous-by-default flow), and the new sequential photo intake page from #166 had no entry point from the show workspace. Added a "Fast add photos" CTA card above the intake grid linking to `/admin/shows/{showID}/intake/photos`, reordered the new-entry modal so "Add media" is first with Capture as the primary action, dropped `required` from Entrant and labelled it "(optional — add later if unknown)". The server-side handler already accepted empty PersonID — the client-side `required` attribute was the only blocker.
+
+### Lesson — eyes-on-page beats green CI
+
+All six batch PRs were green on CI, deployed cleanly, and verified live via curl-grepping the HTML. None of those automated checks caught: a hero that looked dark, a badge that wrapped, or a modal that asked for the wrong field first. A short visual pass on the production page surfaced all three. The cheap fix is to bake "open the live page on a phone before declaring done" into the post-deploy workflow, not just contract probes and pod health.
