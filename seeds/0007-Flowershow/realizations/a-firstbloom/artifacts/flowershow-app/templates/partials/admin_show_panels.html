@@ -194,6 +194,18 @@
 {{define "admin_intake_panel"}}
 <div class="admin-show-stack" data-admin-workspace>
   {{template "admin_workspace_mode_toggle" .}}
+  <section class="admin-show-section" id="intake-fast-add">
+    <a class="intake-fast-add-cta" href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/intake/photos">
+      <span class="intake-fast-add-cta-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+      </span>
+      <span class="intake-fast-add-cta-body">
+        <strong>Fast add photos</strong>
+        <span class="intake-fast-add-cta-meta">Photo-first sequential intake — names can be added later.</span>
+      </span>
+      <span class="intake-fast-add-cta-arrow" aria-hidden="true">→</span>
+    </a>
+  </section>
   <section class="admin-show-section" id="intake-grid">
     <div class="admin-show-section-header">
       <h3>Class intake grid</h3>
@@ -281,15 +293,25 @@
           data-intake-entry-form>
           <input type="hidden" name="class_id" value="" data-intake-class-id-input>
           <div class="form-group">
-            <label>Entrant</label>
+            <label>Add media</label>
+            <div class="intake-capture-actions">
+              <button type="button" class="btn btn-primary intake-capture-button" data-intake-media-button="capture">Capture</button>
+              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
+            </div>
+            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 4096px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+            <div class="intake-upload-queue" data-intake-upload-queue></div>
+          </div>
+          <div class="form-group">
+            <label>Entrant <span class="form-label-hint">(optional — add later if unknown)</span></label>
             <input
               type="text"
               class="form-input"
-              placeholder="Start typing a full name"
+              placeholder="Start typing a full name, or leave blank for now"
               data-intake-entrant-list="intake-entrant-options"
               data-intake-entrant-input
-              autocomplete="off"
-              required>
+              autocomplete="off">
             <input type="hidden" name="person_id" value="" data-intake-person-id-input>
             <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
             <datalist id="intake-entrant-options">
@@ -299,23 +321,12 @@
             </datalist>
           </div>
           <div class="form-group">
-            <label>Entry name</label>
-            <input type="text" name="name" class="form-input" placeholder="Optional cultivar or display name">
+            <label>Entry name <span class="form-label-hint">(optional)</span></label>
+            <input type="text" name="name" class="form-input" placeholder="Cultivar or display name (optional)">
           </div>
           <div class="form-group">
-            <label>Notes</label>
+            <label>Notes <span class="form-label-hint">(optional)</span></label>
             <input type="text" name="notes" class="form-input" placeholder="Optional notes">
-          </div>
-          <div class="form-group">
-            <label>Add media</label>
-            <div class="intake-capture-actions">
-              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
-              <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
-            </div>
-            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 4096px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
-            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
-            <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
-            <div class="intake-upload-queue" data-intake-upload-queue></div>
           </div>
           <button type="submit" class="btn btn-primary">Save Entry</button>
         </form>
