@@ -708,17 +708,18 @@ func (s *memoryStore) createPerson(input PersonInput) (*Person, error) {
 		publicDisplayMode = "initials"
 	}
 	p := &Person{
-		ID:                newID("person"),
-		FirstName:         input.FirstName,
-		LastName:          input.LastName,
-		Initials:          initials,
-		Email:             input.Email,
-		Phone:             strings.TrimSpace(input.Phone),
-		Specialties:       strings.TrimSpace(input.Specialties),
-		Qualifications:    strings.TrimSpace(input.Qualifications),
-		Notes:             strings.TrimSpace(input.Notes),
-		IsJudge:           input.IsJudge,
-		PublicDisplayMode: publicDisplayMode,
+		ID:                 newID("person"),
+		FirstName:          input.FirstName,
+		LastName:           input.LastName,
+		Initials:           initials,
+		Email:              input.Email,
+		Phone:              strings.TrimSpace(input.Phone),
+		Specialties:        strings.TrimSpace(input.Specialties),
+		Qualifications:     strings.TrimSpace(input.Qualifications),
+		Notes:              strings.TrimSpace(input.Notes),
+		IsJudge:            input.IsJudge,
+		JudgingStartedYear: input.JudgingStartedYear,
+		PublicDisplayMode:  publicDisplayMode,
 	}
 	s.persons[p.ID] = p
 	s.appendClaim(p.ID, "person", "person.created", p)
@@ -753,6 +754,9 @@ func (s *memoryStore) updatePerson(id string, input PersonInput) (*Person, error
 	p.Qualifications = strings.TrimSpace(input.Qualifications)
 	p.Notes = strings.TrimSpace(input.Notes)
 	p.IsJudge = input.IsJudge
+	if input.JudgingStartedYear != 0 {
+		p.JudgingStartedYear = input.JudgingStartedYear
+	}
 	if strings.TrimSpace(input.PublicDisplayMode) != "" {
 		p.PublicDisplayMode = strings.TrimSpace(input.PublicDisplayMode)
 	}
@@ -2793,6 +2797,7 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_persons (
   qualifications TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
   is_judge BOOLEAN NOT NULL DEFAULT FALSE,
+  judging_started_year INTEGER NOT NULL DEFAULT 0,
   public_display_mode TEXT NOT NULL DEFAULT 'initials'
 );
 
@@ -2802,6 +2807,7 @@ ALTER TABLE as_flowershow_m_persons
   ADD COLUMN IF NOT EXISTS qualifications TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS is_judge BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS judging_started_year INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_person_organizations (
@@ -3144,6 +3150,7 @@ ALTER TABLE as_flowershow_m_persons
   ADD COLUMN IF NOT EXISTS qualifications TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS is_judge BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS judging_started_year INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS public_display_mode TEXT NOT NULL DEFAULT 'initials';
 
 ALTER TABLE as_flowershow_m_person_organizations
@@ -3383,8 +3390,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			show.ID, show.Slug, show.OrganizationID, show.Name, show.Location, show.Date, show.Season, show.Status, show.CreatedAt, show.UpdatedAt)
 	}
 	for _, p := range mem.persons {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, phone, specialties, qualifications, notes, is_judge, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT DO NOTHING`,
-			p.ID, p.FirstName, p.LastName, p.Initials, p.Email, p.Phone, p.Specialties, p.Qualifications, p.Notes, p.IsJudge, p.PublicDisplayMode)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_persons (id, first_name, last_name, initials, email, phone, specialties, qualifications, notes, is_judge, judging_started_year, public_display_mode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
+			p.ID, p.FirstName, p.LastName, p.Initials, p.Email, p.Phone, p.Specialties, p.Qualifications, p.Notes, p.IsJudge, p.JudgingStartedYear, p.PublicDisplayMode)
 	}
 	for _, po := range mem.personOrgs {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_person_organizations (person_id, organization_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
