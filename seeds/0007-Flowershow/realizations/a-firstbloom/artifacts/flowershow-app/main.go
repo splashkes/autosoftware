@@ -107,6 +107,10 @@ func main() {
 	mux.HandleFunc("POST /account/agent-tokens", a.requireSignedInPage(a.handleAccountTokenCreate))
 	mux.HandleFunc("POST /account/agent-tokens/{tokenID}/revoke", a.requireSignedInPage(a.handleAccountTokenRevoke))
 	mux.HandleFunc("GET /shows/{slug}", a.handleShowDetail)
+	mux.HandleFunc("GET /shows/{slug}/help", a.handlePublicShowHelpLanding)
+	mux.HandleFunc("GET /shows/{slug}/help-redeem", a.handlePublicShowHelpRedeem)
+	mux.HandleFunc("POST /shows/{slug}/help-redeem", a.handlePublicShowHelpRedeem)
+	mux.HandleFunc("POST /shows/{slug}/help/end", a.handlePublicShowHelpEnd)
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 	mux.HandleFunc("GET /shows/{slug}/classes/{classID}", a.handleClassDetail)
 	mux.HandleFunc("GET /shows/{slug}/entries", a.handlePublicShowEntries)
@@ -155,6 +159,11 @@ func main() {
 	mux.HandleFunc("POST /admin/shows/{showID}", a.requireCapabilityPage("shows.manage", a.handleAdminShowUpdate))
 	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireCapabilityPage("judges.manage", a.handleAdminJudgeAssign))
 	mux.HandleFunc("GET /admin/shows/{showID}/stream", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowStream))
+
+	// Admin show helpers (PR 7 share-link onboarding)
+	mux.HandleFunc("GET /admin/shows/{showID}/helpers", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelpers))
+	mux.HandleFunc("POST /admin/shows/{showID}/helpers/create", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelperCreate))
+	mux.HandleFunc("POST /admin/shows/{showID}/helpers/{inviteID}/revoke", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelperRevoke))
 
 	// Admin schedule management
 	mux.HandleFunc("POST /admin/shows/{showID}/schedule", a.requireCapabilityPage("schedule.manage", a.handleAdminScheduleCreate))
@@ -267,6 +276,9 @@ func main() {
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.create", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_credits.delete", a.handleAPICommand)
 	mux.HandleFunc("POST /v1/commands/0007-Flowershow/roles.assign", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_helper_invites.create", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_helper_invites.revoke", a.handleAPICommand)
+	mux.HandleFunc("POST /v1/commands/0007-Flowershow/show_badge_sessions.end", a.handleAPICommand)
 
 	// === PR: splits UI + mode toggle ===
 	registerSplitsRenderStore(a.store)
@@ -810,6 +822,10 @@ func parseTemplates() map[string]*template.Template {
 		"templates/admin_show_new.html",
 		"templates/admin_persons.html",
 		"templates/admin_roles.html",
+		"templates/admin_show_helpers.html",
+		"templates/admin_show_helper_created.html",
+		"templates/public_show_help_landing.html",
+		"templates/public_show_help_redeem.html",
 	}
 
 	base := template.Must(template.New("base").Funcs(templateFuncMap).ParseFS(

@@ -1,0 +1,28 @@
+{{define "content"}}
+<section class="section account-shell">
+  <div class="section-header account-page-header">
+    <div>
+      <div class="login-step-kicker">Helper Sign-Up</div>
+      <h1>Help out at {{.Show.Name}}</h1>
+      <p class="section-desc">{{if .Org}}{{.Org.Name}} · {{end}}{{.Show.Location}}{{if .Show.Date}} · {{.Show.Date}}{{end}}</p>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-body">
+      <h2 class="card-title">Want to help add photos or assist intake?</h2>
+      <p class="card-meta">Helpers join with a one-time share link from a show admin. The link drops you straight into a lightweight badge — no password, no full account. If an admin gave you a link, paste it below to redeem.</p>
+      <form method="GET" action="{{$.BasePath}}/shows/{{.Show.Slug}}/help-redeem" class="form login-form">
+        <div class="form-group">
+          <label for="help_token">Share token or full link</label>
+          <input id="help_token" name="token" class="form-input" placeholder="fshi_..." required>
+        </div>
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary">Continue</button>
+        </div>
+      </form>
+      <p class="card-meta">Don&apos;t have a link yet? Ask the show admin running this event for a fresh share link.</p>
+    </div>
+  </section>
+</section>
+{{end}}

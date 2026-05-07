@@ -320,6 +320,68 @@ domain_objects:
     capabilities:
       - state_transitions
       - activity_events
+  - kind: show_helper_invite
+    summary: A show-scoped, low-privilege share-link record. The plaintext token is shown once at creation; only its sha256 hash is persisted.
+    schema_ref: ../../design.md#7-people
+    capabilities:
+      - sessions
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable share-link identity and show linkage.
+        fields:
+          - name: id
+            type: string
+            summary: Stable show helper invite id.
+          - name: show_id
+            type: string
+            summary: Stable parent show id.
+      private_payload:
+        summary: Operator-only metadata about the share link.
+        fields:
+          - name: label
+            type: string
+            summary: Optional human-readable note for admins.
+          - name: created_by
+            type: string
+            summary: Subject id of the admin who created the link.
+          - name: expires_at
+            type: string
+            summary: ISO timestamp when the link stops accepting redemptions.
+  - kind: show_badge_session
+    summary: A redeemed helper badge session. Lightweight identity, name + email, no Cognito coupling.
+    schema_ref: ../../design.md#7-people
+    capabilities:
+      - sessions
+      - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable badge session identity and show linkage.
+        fields:
+          - name: id
+            type: string
+            summary: Stable badge session id.
+          - name: show_id
+            type: string
+            summary: Stable parent show id.
+          - name: invite_id
+            type: string
+            summary: Stable share-link id this session was redeemed against.
+      private_payload:
+        summary: Operator-only badge holder identity for this show.
+        fields:
+          - name: name
+            type: string
+            summary: Helper-supplied name.
+          - name: email
+            type: string
+            summary: Helper-supplied email.
+          - name: matched_person_id
+            type: string
+            summary: Optional person record the helper claimed to be.
+          - name: expires_at
+            type: string
+            summary: ISO timestamp when the badge session expires.
 commands:
   - name: organization.create
     summary: Create a new organization record that can later host shows and memberships.
@@ -1162,6 +1224,62 @@ commands:
       - sessions
       - activity_events
     projection: clubs.workspace
+    consistency: read_your_writes
+  - name: show_helper_invites.create
+    summary: Create a show-scoped share link that lets volunteers redeem a low-privilege helper badge for one show. Plaintext token is returned once.
+    path: /v1/commands/0007-Flowershow/show_helper_invites.create
+    object_kinds:
+      - show_helper_invite
+      - show
+    auth_modes:
+      - session
+      - service_token
+    idempotency: recommended
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - sessions
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+    error_codes:
+      - code: invalid_json
+        summary: Request body did not match the declared JSON schema.
+      - code: show_helper_invite_create_failed
+        summary: Share link could not be created. Check show_id and admin authority.
+      - code: unauthorized
+        summary: Caller did not satisfy the required auth mode for this command.
+  - name: show_helper_invites.revoke
+    summary: Revoke a show helper share link so it can no longer be redeemed. Existing badge sessions remain until they expire or end.
+    path: /v1/commands/0007-Flowershow/show_helper_invites.revoke
+    object_kinds:
+      - show_helper_invite
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - sessions
+      - activity_events
+    projection: shows.workspace
+    consistency: read_your_writes
+  - name: show_badge_sessions.end
+    summary: End a redeemed helper badge session by id. Used both by the helper themselves and by show admins.
+    path: /v1/commands/0007-Flowershow/show_badge_sessions.end
+    object_kinds:
+      - show_badge_session
+    auth_modes:
+      - session
+      - service_token
+    idempotency: required
+    input_schema_ref: ../../design.md#7-people
+    result_schema_ref: README.md#realization
+    capabilities:
+      - sessions
+      - activity_events
+    projection: shows.workspace
     consistency: read_your_writes
 projections:
   - name: account
