@@ -259,6 +259,42 @@ func (c *mediaVariantCache) do(ctx context.Context, key string, fn func() error)
 	return err
 }
 
+func (c *mediaVariantCache) tryDo(ctx context.Context, key string, fn func() error) (bool, error) {
+	if c == nil {
+		return true, fn()
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return true, errors.New("media variant key is required")
+	}
+
+	c.mu.Lock()
+	if existing := c.inFlight[key]; existing != nil {
+		c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-existing.done:
+			return true, existing.err
+		}
+	}
+
+	select {
+	case c.sem <- struct{}{}:
+	default:
+		c.mu.Unlock()
+		return false, nil
+	}
+	call := &mediaVariantCall{done: make(chan struct{})}
+	c.inFlight[key] = call
+	c.mu.Unlock()
+
+	err := fn()
+	c.finish(key, call, err)
+	<-c.sem
+	return true, err
+}
+
 func (c *mediaVariantCache) finish(key string, call *mediaVariantCall, err error) {
 	c.mu.Lock()
 	if c.inFlight[key] == call {
@@ -611,10 +647,14 @@ func (m *s3MediaStore) thumbnailURL(ctx context.Context, media *Media) (string, 
 		Bucket: &m.bucket,
 		Key:    &thumbKey,
 	}); err != nil {
-		if err := m.ensureGeneratedVariant(ctx, thumbKey, func() error {
-			return m.generateAndStoreThumbnail(ctx, media, thumbKey)
-		}); err != nil {
+		generated, err := m.ensureGeneratedVariant(ctx, thumbKey, func(generateCtx context.Context) error {
+			return m.generateAndStoreThumbnail(generateCtx, media, thumbKey)
+		})
+		if err != nil {
 			return "", err
+		}
+		if !generated {
+			return m.presignMediaObject(ctx, media.StorageKey, media.ContentType, media.FileName)
 		}
 	}
 	return m.presignMediaObject(ctx, thumbKey, thumbnailContentType, displayPhotoFileName(media.FileName))
@@ -629,28 +669,32 @@ func (m *s3MediaStore) displayURL(ctx context.Context, media *Media) (string, er
 		Bucket: &m.bucket,
 		Key:    &displayKey,
 	}); err != nil {
-		if err := m.ensureGeneratedVariant(ctx, displayKey, func() error {
-			return m.generateAndStoreDisplay(ctx, media, displayKey)
-		}); err != nil {
+		generated, err := m.ensureGeneratedVariant(ctx, displayKey, func(generateCtx context.Context) error {
+			return m.generateAndStoreDisplay(generateCtx, media, displayKey)
+		})
+		if err != nil {
 			return "", err
+		}
+		if !generated {
+			return m.presignMediaObject(ctx, media.StorageKey, media.ContentType, media.FileName)
 		}
 	}
 	return m.presignMediaObject(ctx, displayKey, thumbnailContentType, displayPhotoFileName(media.FileName))
 }
 
-func (m *s3MediaStore) ensureGeneratedVariant(ctx context.Context, key string, generate func() error) error {
+func (m *s3MediaStore) ensureGeneratedVariant(ctx context.Context, key string, generate func(context.Context) error) (bool, error) {
 	cache := m.variantCache
 	if cache == nil {
-		return generate()
+		return true, generate(ctx)
 	}
-	return cache.do(ctx, key, func() error {
+	return cache.tryDo(ctx, key, func() error {
 		if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
 			Bucket: &m.bucket,
 			Key:    &key,
 		}); err == nil {
 			return nil
 		}
-		return generate()
+		return generate(ctx)
 	})
 }
 
