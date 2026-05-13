@@ -57,7 +57,7 @@
     <article class="card show-card-rich browse-card">
       <div class="show-card-media browse-card-media">
         {{if .Media}}
-        <div class="show-visual-frame is-active theme-{{.MockTheme}}" style="background-image:url('{{$.BasePath}}/media/{{(index .Media 0).ID}}');">
+        <div class="show-visual-frame is-active theme-{{.MockTheme}}" style="background-image:url('{{$.BasePath}}/media/{{(index .Media 0).ID}}?thumb=1');">
           <span>{{.Entry.Name}}</span>
         </div>
         {{else}}

@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	thumbnailMaxEdge      = 512
-	thumbnailJPEGQuality  = 80
-	rotatedJPEGQuality    = 90
-	thumbnailContentType  = "image/jpeg"
+	thumbnailMaxEdge     = 512
+	thumbnailJPEGQuality = 80
+	rotatedJPEGQuality   = 90
+	thumbnailContentType = "image/jpeg"
 )
 
 // normalizeImageOrientation reads JPEG bytes that may carry EXIF orientation
@@ -451,6 +451,66 @@ func (m *s3MediaStore) Open(ctx context.Context, media *Media) (io.ReadCloser, s
 	return out.Body, contentType, nil
 }
 
+func (m *s3MediaStore) thumbnailURL(ctx context.Context, media *Media) (string, error) {
+	thumbKey := strings.TrimSpace(media.StorageKey) + "_thumb.jpg"
+	if strings.TrimSpace(media.StorageKey) == "" {
+		return "", errors.New("missing media storage key")
+	}
+	if mediaType := strings.TrimSpace(media.MediaType); mediaType != "" && !strings.EqualFold(mediaType, "photo") {
+		return "", errors.New("thumbnail unavailable for non-photo media")
+	}
+	if strings.TrimSpace(media.ThumbnailURL) == "" {
+		if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: &m.bucket,
+			Key:    &thumbKey,
+		}); err != nil {
+			if err := m.generateAndStoreThumbnail(ctx, media, thumbKey); err != nil {
+				return "", err
+			}
+		}
+	}
+	thumbType := thumbnailContentType
+	out, err := m.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket:              &m.bucket,
+		Key:                 &thumbKey,
+		ResponseContentType: &thumbType,
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 15 * time.Minute
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.URL, nil
+}
+
+func (m *s3MediaStore) generateAndStoreThumbnail(ctx context.Context, media *Media, thumbKey string) error {
+	body, contentType, err := m.Open(ctx, media)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	thumb, err := generateThumbnail(data, contentType)
+	if err != nil {
+		return err
+	}
+	if len(thumb) == 0 {
+		return errors.New("thumbnail unavailable for media")
+	}
+	thumbType := thumbnailContentType
+	_, err = m.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket:      &m.bucket,
+		Key:         &thumbKey,
+		Body:        bytes.NewReader(thumb),
+		ContentType: &thumbType,
+		ACL:         types.ObjectCannedACLPrivate,
+	})
+	return err
+}
+
 func (m *s3MediaStore) Delete(ctx context.Context, media *Media) error {
 	_, err := m.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: &m.bucket,
@@ -506,22 +566,14 @@ func (a *app) handleMediaOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if wantThumb && media.ThumbnailURL != "" {
+	if wantThumb {
 		if s3store, ok := a.media.(*s3MediaStore); ok {
-			thumbKey := media.StorageKey + "_thumb.jpg"
-			thumbType := thumbnailContentType
-			out, err := s3store.presigner.PresignGetObject(r.Context(), &s3.GetObjectInput{
-				Bucket:              &s3store.bucket,
-				Key:                 &thumbKey,
-				ResponseContentType: &thumbType,
-			}, func(opts *s3.PresignOptions) {
-				opts.Expires = 15 * time.Minute
-			})
-			if err == nil {
-				http.Redirect(w, r, out.URL, http.StatusTemporaryRedirect)
+			if url, err := s3store.thumbnailURL(r.Context(), media); err == nil {
+				http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 				return
+			} else {
+				log.Printf("media: thumbnail unavailable for %s: %v", media.ID, err)
 			}
-			log.Printf("media: thumbnail presign failed for %s: %v", media.ID, err)
 		}
 	}
 

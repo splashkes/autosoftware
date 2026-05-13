@@ -1411,6 +1411,15 @@ func TestCreatePersonWithOrganizationLinkAppearsInShowLookup(t *testing.T) {
 
 func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	a := testApp()
+	media, err := a.store.attachMedia(Media{
+		EntryID:   "entry_01",
+		MediaType: "photo",
+		URL:       "/media/admin-thumb.jpg",
+		FileName:  "admin-thumb.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach media: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/shows/{showID}", a.requireAdmin(a.handleAdminShowDetail))
 
@@ -1436,6 +1445,9 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	}
 	if !strings.Contains(body, `class="media-add-button admin-entry-media-button"`) {
 		t.Fatal("admin show missing floor media add control")
+	}
+	if !strings.Contains(body, `/media/`+media.ID+`?thumb=1`) {
+		t.Fatal("admin show should render entry preview images through the thumbnail route")
 	}
 	if !strings.Contains(body, `data-corrections-media-form`) {
 		t.Fatal("admin show missing corrections media form")
