@@ -4,14 +4,77 @@ const FLOWERSHOW_MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 const FLOWERSHOW_MAX_PHOTO_EDGE = 1000;
 const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
+const FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY = 4;
 const flowershowIntakeUploadStates = new WeakMap();
 const flowershowIntakeAutosaveTimers = new WeakMap();
+const flowershowDeferredMediaQueue = [];
+let flowershowDeferredMediaActive = 0;
 
 function flowershowQueryScope(root) {
   if (root && typeof root.querySelectorAll === 'function') {
     return root;
   }
   return document;
+}
+
+function flowershowDeferredMediaSrc(img) {
+  return img && img.dataset ? (img.dataset.deferredMediaSrc || '').trim() : '';
+}
+
+function flowershowQueueDeferredMediaImage(img) {
+  const src = flowershowDeferredMediaSrc(img);
+  if (!src || !img.isConnected) return;
+  if (img.dataset.deferredMediaState === 'queued' || img.dataset.deferredMediaState === 'loading' || img.dataset.deferredMediaState === 'loaded') return;
+  img.dataset.deferredMediaState = 'queued';
+  flowershowDeferredMediaQueue.push(img);
+  flowershowPumpDeferredMediaQueue();
+}
+
+function flowershowPumpDeferredMediaQueue() {
+  while (flowershowDeferredMediaActive < FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY && flowershowDeferredMediaQueue.length > 0) {
+    const img = flowershowDeferredMediaQueue.shift();
+    const src = flowershowDeferredMediaSrc(img);
+    if (!src || !img.isConnected) {
+      continue;
+    }
+    flowershowDeferredMediaActive += 1;
+    img.dataset.deferredMediaState = 'loading';
+
+    const finish = function(state) {
+      img.removeEventListener('load', onLoad);
+      img.removeEventListener('error', onError);
+      if (img.isConnected) {
+        img.dataset.deferredMediaState = state;
+      }
+      flowershowDeferredMediaActive -= 1;
+      flowershowPumpDeferredMediaQueue();
+    };
+    const onLoad = function() {
+      finish('loaded');
+    };
+    const onError = function() {
+      const attempts = parseInt(img.dataset.deferredMediaAttempts || '0', 10) + 1;
+      img.dataset.deferredMediaAttempts = String(attempts);
+      finish('error');
+      if (attempts < 3) {
+        setTimeout(function() {
+          if (!img.isConnected) return;
+          img.dataset.deferredMediaState = '';
+          flowershowQueueDeferredMediaImage(img);
+        }, 1200 * attempts);
+      }
+    };
+
+    img.addEventListener('load', onLoad, { once: true });
+    img.addEventListener('error', onError, { once: true });
+    img.src = src;
+  }
+}
+
+function flowershowBindDeferredMediaImage(img) {
+  if (!flowershowDeferredMediaSrc(img) || img.dataset.deferredMediaBound === 'true') return;
+  img.dataset.deferredMediaBound = 'true';
+  flowershowQueueDeferredMediaImage(img);
 }
 
 function flowershowActivateShowAdminTab(shell, name) {
@@ -1774,6 +1837,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
   scope.querySelectorAll('[data-media-lightbox]').forEach(flowershowBindLightbox);
   scope.querySelectorAll('[data-show-admin-shell]').forEach(flowershowBindShowAdminShell);
+  scope.querySelectorAll('img[data-deferred-media-src]').forEach(flowershowBindDeferredMediaImage);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

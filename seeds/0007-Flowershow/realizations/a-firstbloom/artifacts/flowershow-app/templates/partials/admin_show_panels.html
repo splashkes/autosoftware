@@ -55,7 +55,7 @@
     data-intake-entry-href="{{$ctx.BasePath}}/entries/{{$entry.Entry.ID}}">
     <span class="intake-entry-visual">
       {{with primaryMedia $entry.Media}}
-      <img src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image" loading="lazy" decoding="async">
       {{else}}
       <span class="intake-entry-initials">{{if $entry.Person}}{{$entry.Person.Initials}}{{else}}?{{end}}</span>
       {{end}}
@@ -603,7 +603,7 @@
                 <div class="board-entry-card {{placementClass .Entry.Placement}}">
                   <div class="board-entry-thumb">
                     {{with primaryMedia .Media}}
-                    <img src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="board-entry-image">
+                    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="board-entry-image" loading="lazy" decoding="async">
                     {{else}}
                     <div class="board-entry-placeholder">No photo</div>
                     {{end}}
@@ -956,7 +956,7 @@
             {{if .Media}}
               {{with index .Media 0}}
                 {{if eq .MediaType "photo"}}
-                <img src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$.Entry.Name}}" class="media-add-thumb">
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$.Entry.Name}}" class="media-add-thumb" loading="lazy" decoding="async">
                 {{else}}
                 <span class="media-add-plus">+</span>
                 {{end}}

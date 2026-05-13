@@ -33,7 +33,7 @@ const (
 	displayMaxEdge       = 1000
 	displayJPEGQuality   = 86
 	displayVariantSuffix = "_display.jpg"
-	mediaVariantWorkers  = 2
+	mediaVariantWorkers  = 6
 	thumbnailContentType = "image/jpeg"
 )
 
