@@ -2,13 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"image/color"
 	"image/jpeg"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/disintegration/imaging"
 )
@@ -174,6 +179,72 @@ func TestMediaUploadCapsDisplayPhotoAt1000Px(t *testing.T) {
 	}
 	if media[0].ThumbnailURL == "" {
 		t.Fatal("expected thumbnail URL to be populated for capped image upload")
+	}
+}
+
+func TestMediaVariantCacheDeduplicatesConcurrentGeneration(t *testing.T) {
+	cache := newMediaVariantCache(2)
+	var calls atomic.Int32
+	var wg sync.WaitGroup
+	errs := make(chan error, 20)
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- cache.do(context.Background(), "entries/e1/media_01_thumb.jpg", func() error {
+				calls.Add(1)
+				time.Sleep(10 * time.Millisecond)
+				return nil
+			})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("variant generation returned error: %v", err)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected one generator call for same variant key, got %d", got)
+	}
+}
+
+func TestMediaVariantCacheLimitsConcurrentGeneration(t *testing.T) {
+	cache := newMediaVariantCache(2)
+	var running atomic.Int32
+	var maxRunning atomic.Int32
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- cache.do(context.Background(), fmt.Sprintf("entries/e1/media_%02d_thumb.jpg", i), func() error {
+				current := running.Add(1)
+				for {
+					previous := maxRunning.Load()
+					if current <= previous || maxRunning.CompareAndSwap(previous, current) {
+						break
+					}
+				}
+				time.Sleep(10 * time.Millisecond)
+				running.Add(-1)
+				return nil
+			})
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("variant generation returned error: %v", err)
+		}
+	}
+	if got := maxRunning.Load(); got > 2 {
+		t.Fatalf("expected at most two concurrent variant generators, got %d", got)
 	}
 }
 
