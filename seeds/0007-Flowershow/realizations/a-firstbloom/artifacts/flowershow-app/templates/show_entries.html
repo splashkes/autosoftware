@@ -48,7 +48,7 @@
     <a href="{{$.BasePath}}/entries/{{.Entry.ID}}" class="entry-card">
       <div class="entry-card-media">
         {{if .LeadMedia}}
-        <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}" alt="{{.PublicEntryName}}">
+        <img src="{{$.BasePath}}/media/{{.LeadMedia.ID}}?thumb=1" alt="{{.PublicEntryName}}">
         {{else}}
         <span class="entry-card-media-placeholder" aria-hidden="true">No image</span>
         {{end}}

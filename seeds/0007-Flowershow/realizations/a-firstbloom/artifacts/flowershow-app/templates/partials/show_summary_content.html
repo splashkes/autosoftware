@@ -19,7 +19,7 @@
       <div class="winner-media-stage">
         {{if .Media}}
           {{range $i, $media := .Media}}
-          <img src="{{$.BasePath}}/media/{{$media.ID}}" alt="{{$media.FileName}}" class="winner-media-frame{{if gt (len $.HeroCards) 0}} cycle{{end}}" style="animation-delay: {{cycleDelay $i}};">
+          <img src="{{$.BasePath}}/media/{{$media.ID}}?thumb=1" alt="{{$media.FileName}}" class="winner-media-frame{{if gt (len $.HeroCards) 0}} cycle{{end}}" style="animation-delay: {{cycleDelay $i}};">
           {{end}}
         {{else}}
         <div class="winner-media-fallback">
