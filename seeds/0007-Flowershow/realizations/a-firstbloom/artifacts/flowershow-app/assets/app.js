@@ -1,7 +1,7 @@
 // Flowershow — minimal JS (HTMX handles most interactivity)
 
 const FLOWERSHOW_MAX_PHOTO_BYTES = 20 * 1024 * 1024;
-const FLOWERSHOW_MAX_PHOTO_EDGE = 4096;
+const FLOWERSHOW_MAX_PHOTO_EDGE = 1000;
 const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
 const flowershowIntakeUploadStates = new WeakMap();
@@ -800,7 +800,7 @@ async function flowershowPrepareCaptureItem(file) {
       const primary = await flowershowNormalizeImage(file, FLOWERSHOW_MAX_PHOTO_EDGE, 0.86);
       let normalized = primary;
       if (primary.file.size > FLOWERSHOW_MAX_PHOTO_BYTES) {
-        normalized = await flowershowNormalizeImage(file, 3072, 0.78);
+        normalized = await flowershowNormalizeImage(file, FLOWERSHOW_MAX_PHOTO_EDGE, 0.78);
       }
       return {
         id: 'upload_' + Math.random().toString(36).slice(2, 10),

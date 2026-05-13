@@ -120,6 +120,63 @@ func TestMediaUploadRotatesEXIF(t *testing.T) {
 	}
 }
 
+func TestMediaUploadCapsDisplayPhotoAt1000Px(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/entries/{entryID}/media", a.requireAdmin(a.handleMediaUpload))
+
+	img := imaging.New(1600, 1200, color.RGBA{180, 70, 90, 255})
+	var jpegBytes bytes.Buffer
+	if err := jpeg.Encode(&jpegBytes, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode jpeg: %v", err)
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("media", "large-rose.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(jpegBytes.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/admin/entries/entry_01/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	addAdminSession(t, a, req)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+
+	media := a.store.mediaByEntry("entry_01")
+	if len(media) != 1 {
+		t.Fatalf("expected 1 media record, got %d", len(media))
+	}
+	stored, err := os.ReadFile(media[0].StorageKey)
+	if err != nil {
+		t.Fatalf("read stored media: %v", err)
+	}
+	decoded, err := imaging.Decode(bytes.NewReader(stored))
+	if err != nil {
+		t.Fatalf("decode stored media: %v", err)
+	}
+	bounds := decoded.Bounds()
+	if bounds.Dx() != 1000 || bounds.Dy() != 750 {
+		t.Fatalf("expected 1600x1200 upload capped to 1000x750, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+	if media[0].Width != 1000 || media[0].Height != 750 {
+		t.Fatalf("expected media dimensions 1000x750, got %dx%d", media[0].Width, media[0].Height)
+	}
+	if media[0].ThumbnailURL == "" {
+		t.Fatal("expected thumbnail URL to be populated for capped image upload")
+	}
+}
+
 func TestMediaSetCoverIsExclusive(t *testing.T) {
 	a := testApp()
 	uploads := make([]*Media, 0, 3)
@@ -219,4 +276,3 @@ func coverIDs(items []*Media) []string {
 	}
 	return out
 }
-
