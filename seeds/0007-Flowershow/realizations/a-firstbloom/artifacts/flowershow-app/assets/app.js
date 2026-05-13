@@ -550,38 +550,7 @@ function flowershowBindIntakeModal(modal) {
     }
   });
 
-  modal.querySelectorAll('[data-intake-entrant-input]').forEach(function(entrantInput) {
-    entrantInput.addEventListener('input', function() {
-      flowershowSyncEntrantLookup(entrantInput);
-      flowershowRenderEntrantResults(entrantInput);
-      const form = entrantInput.closest('form');
-      if (form) {
-        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
-        flowershowRefreshResultButtons(form);
-      }
-    });
-    entrantInput.addEventListener('change', function() {
-      flowershowSyncEntrantLookup(entrantInput);
-      flowershowRenderEntrantResults(entrantInput);
-      const form = entrantInput.closest('form');
-      if (form) {
-        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
-        flowershowRefreshResultButtons(form);
-      }
-    });
-    entrantInput.addEventListener('focus', function() {
-      flowershowRenderEntrantResults(entrantInput);
-    });
-    entrantInput.addEventListener('blur', function() {
-      window.setTimeout(function() {
-        const formGroup = entrantInput.closest('.form-group');
-        const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
-        if (results) {
-          results.hidden = true;
-        }
-      }, 120);
-    });
-  });
+  modal.querySelectorAll('[data-intake-entrant-input]').forEach(flowershowBindIntakeEntrantInput);
   modal.querySelectorAll('[data-intake-existing-class-select]').forEach(function(classSelect) {
     classSelect.addEventListener('change', function() {
       const form = classSelect.closest('form');
@@ -601,6 +570,41 @@ function flowershowBindIntakeTrigger(button) {
   button.dataset.bound = 'true';
   button.addEventListener('click', function() {
     flowershowOpenIntakeModal(document.querySelector('[data-intake-modal]'), button);
+  });
+}
+
+function flowershowBindIntakeEntrantInput(entrantInput) {
+  if (!entrantInput || entrantInput.dataset.intakeEntrantBound === 'true') return;
+  entrantInput.dataset.intakeEntrantBound = 'true';
+  entrantInput.addEventListener('input', function() {
+    flowershowSyncEntrantLookup(entrantInput);
+    flowershowRenderEntrantResults(entrantInput);
+    const form = entrantInput.closest('form');
+    if (form) {
+      form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+      flowershowRefreshResultButtons(form);
+    }
+  });
+  entrantInput.addEventListener('change', function() {
+    flowershowSyncEntrantLookup(entrantInput);
+    flowershowRenderEntrantResults(entrantInput);
+    const form = entrantInput.closest('form');
+    if (form) {
+      form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+      flowershowRefreshResultButtons(form);
+    }
+  });
+  entrantInput.addEventListener('focus', function() {
+    flowershowRenderEntrantResults(entrantInput);
+  });
+  entrantInput.addEventListener('blur', function() {
+    window.setTimeout(function() {
+      const formGroup = entrantInput.closest('.form-group');
+      const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
+      if (results) {
+        results.hidden = true;
+      }
+    }, 120);
   });
 }
 
@@ -977,6 +981,12 @@ function flowershowSwapAdminTarget(targetSelector, html) {
   flowershowInit(target);
 }
 
+function flowershowEntryClassValue(form) {
+  if (!form) return '';
+  const classInput = form.querySelector('[name="class_id"]');
+  return classInput ? (classInput.value || '').trim() : '';
+}
+
 function flowershowSubmitIntakeForm(form, options) {
   const closeModal = !options || options.closeModal !== false;
   const onSuccess = options && typeof options.onSuccess === 'function' ? options.onSuccess : null;
@@ -1097,11 +1107,12 @@ function flowershowBindIntakeCaptureInput(input) {
       } else if (form && form.hasAttribute('data-corrections-media-form') && hasReadyItems) {
         await flowershowSubmitQueuedMediaForm(form);
       } else if (form && form.hasAttribute('data-intake-entry-form') && hasReadyItems) {
-        const entrantInput = form.querySelector('[data-intake-entrant-input]');
-        if (!flowershowSyncEntrantLookup(entrantInput)) {
-          flowershowToast('Choose an entrant first, then media will upload immediately.', true);
+        if (!flowershowEntryClassValue(form)) {
+          flowershowToast('Choose a class first, then media will upload immediately.', true);
           return;
         }
+        const entrantInput = form.querySelector('[data-intake-entrant-input]');
+        flowershowSyncEntrantLookup(entrantInput);
         await new Promise(function(resolve, reject) {
           flowershowSubmitIntakeForm(form, {
             closeModal: false,
@@ -1110,6 +1121,9 @@ function flowershowBindIntakeCaptureInput(input) {
               const createdTrigger = flowershowFindExistingIntakeTrigger(form);
               if (modal && createdTrigger) {
                 flowershowOpenIntakeModal(modal, createdTrigger);
+              } else if (modal) {
+                modal.hidden = true;
+                document.body.classList.remove('body-lightbox-open');
               }
               resolve();
             },
@@ -1256,10 +1270,7 @@ async function flowershowSubmitAutosaveForm(form, options) {
   const closeModal = !!(options && options.closeModal);
   const keepMessage = !!(options && options.keepMessage);
   const entrantInput = form.querySelector('[data-intake-entrant-input]');
-  if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
-    flowershowSetAutosaveStatus(form, 'Choose an entrant from the suggestions.', true);
-    return;
-  }
+  flowershowSyncEntrantLookup(entrantInput);
   flowershowClearAutosaveTimer(form);
   flowershowSetAutosaveStatus(form, 'Saving…', false);
   try {
@@ -1305,13 +1316,15 @@ function flowershowBindIntakeForm(form, options) {
   if (!form || form.dataset.intakeFormBound === 'true') return;
   form.dataset.intakeFormBound = 'true';
   flowershowRenderIntakeUploadQueue(form);
+  form.querySelectorAll('[data-intake-entrant-input]').forEach(flowershowBindIntakeEntrantInput);
   form.querySelectorAll('[data-intake-media-button]').forEach(flowershowBindIntakeCaptureButton);
   form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
   form.addEventListener('submit', function(event) {
     event.preventDefault();
     const entrantInput = form.querySelector('[data-intake-entrant-input]');
-    if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
-      flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
+    flowershowSyncEntrantLookup(entrantInput);
+    if (form.hasAttribute('data-intake-entry-form') && !flowershowEntryClassValue(form)) {
+      flowershowToast('Choose a class before saving.', true);
       return;
     }
     flowershowSubmitIntakeForm(form, options);
@@ -1830,6 +1843,9 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-corrections-filter-input]').forEach(flowershowBindCorrectionsFilter);
   scope.querySelectorAll('[data-intake-modal-open]').forEach(flowershowBindIntakeTrigger);
   scope.querySelectorAll('[data-intake-modal]').forEach(flowershowBindIntakeModal);
+  scope.querySelectorAll('[data-intake-entry-form]').forEach(function(form) {
+    flowershowBindIntakeForm(form, { isNew: true });
+  });
   scope.querySelectorAll('[data-intake-results-form]').forEach(flowershowBindIntakeResultsForm);
   scope.querySelectorAll('[data-corrections-media-form]').forEach(flowershowBindCorrectionsMediaForm);
   scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);

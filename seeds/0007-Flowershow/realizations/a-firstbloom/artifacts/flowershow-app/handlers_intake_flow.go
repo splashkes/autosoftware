@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -76,9 +77,12 @@ func (a *app) handleIntakeSequentialPhotos(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	classes := a.store.classesByShowID(show.ID)
+	classes := orderedIntakeClasses(a.store.classesByShowID(show.ID))
 	classNavs := make([]*intakeClassNav, 0, len(classes))
 	for _, cls := range classes {
+		if cls == nil {
+			continue
+		}
 		classNavs = append(classNavs, &intakeClassNav{
 			ID:          cls.ID,
 			ClassNumber: cls.ClassNumber,
@@ -141,6 +145,56 @@ func (a *app) handleIntakeSequentialPhotos(w http.ResponseWriter, r *http.Reques
 		AnonEntryURL:  intakeBase + "/anon-entry",
 	}
 	a.render(w, r, "admin_intake_photos.html", data)
+}
+
+func orderedIntakeClasses(classes []*ShowClass) []*ShowClass {
+	out := make([]*ShowClass, 0, len(classes))
+	for _, cls := range classes {
+		if cls != nil {
+			out = append(out, cls)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		leftNumber, leftSuffix, leftHasNumber := classNumberParts(out[i].ClassNumber)
+		rightNumber, rightSuffix, rightHasNumber := classNumberParts(out[j].ClassNumber)
+		if leftHasNumber && rightHasNumber {
+			if leftNumber != rightNumber {
+				return leftNumber < rightNumber
+			}
+			if leftSuffix != rightSuffix {
+				return leftSuffix < rightSuffix
+			}
+		}
+		if leftHasNumber != rightHasNumber {
+			return leftHasNumber
+		}
+		left := strings.ToLower(strings.TrimSpace(out[i].ClassNumber))
+		right := strings.ToLower(strings.TrimSpace(out[j].ClassNumber))
+		if left != right {
+			return left < right
+		}
+		return strings.ToLower(strings.TrimSpace(out[i].Title)) < strings.ToLower(strings.TrimSpace(out[j].Title))
+	})
+	return out
+}
+
+func classNumberParts(value string) (int, string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, "", false
+	}
+	end := 0
+	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0, strings.ToLower(value), false
+	}
+	number, err := strconv.Atoi(value[:end])
+	if err != nil {
+		return 0, strings.ToLower(value), false
+	}
+	return number, strings.ToLower(strings.TrimSpace(value[end:])), true
 }
 
 type intakeAnonEntryResponse struct {
