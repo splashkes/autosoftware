@@ -100,6 +100,12 @@ The canonical expectation now is not merely “writes survive restart,” but al
 ### Leaderboard
 - **Season leaderboard** → `TestLeaderboard`, Playwright: "leaderboard"
 
+### Reports & Exports
+- **Admin tally workbook download** → `TestShowTallyWorkbookExport`
+- **Normalized XLS workbook download** → `TestShowWorkbookExport`
+- **CSV export download** → `TestAdminEntriesCSVExport`
+- **Service-token export URL auth** → `TestAPIShowExportRequiresAuth`
+
 ### Show Admin
 - **Login/auth** → `TestAdminLoginFlow`, `TestAdminRequiresAuth`, Playwright: "admin login"
 - **SSE real-time** → `sse.go` broker with per-show channels, SSE stream endpoint
@@ -120,5 +126,6 @@ The canonical expectation now is not merely “writes survive restart,” but al
 ### API Surface
 - **Projections return JSON** → `TestProjectionsReturnJSON`
 - **Ledger projection (auth required)** → `TestLedgerProjection`
+- **Export projections (auth required)** → `TestAPIShowExportRequiresAuth`
 - **Full CRUD via API** → `TestFullAPIFlow`
 - **Structured authenticated errors** → `TestCommandEndpointsRequireAuth`, `TestCommandEndpointsReturnUsefulStructuredErrorsForAuthenticatedCallers`

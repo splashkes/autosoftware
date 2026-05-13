@@ -25,6 +25,8 @@ capabilities:
     summary: Searchable projections for shows, entries, taxonomy.
   - name: uploads
     summary: Media file uploads for entry photos and videos.
+  - name: publications
+    summary: Downloadable CSV/XLS reports for operators and service-token agents.
 domain_objects:
   - kind: show
     summary: A single flower show competition event hosted by an organization.
@@ -1470,6 +1472,98 @@ projections:
           - private_payload
           - runtime_only
         summary: Authenticated operators and agents can inspect the full show board, including class-grouped entries, photo gaps, and live floor workflow status.
+  - name: shows.export.tally
+    summary: Operator-style XLS workbook matching show-night tally sheets, with class grid, placement markers, point summary, participation, and results tabs.
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/tally.xls
+    object_kinds:
+      - show
+      - entry
+      - show_class
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+        summary: Authenticated operators and agents can download the operator tally workbook generated from current show state.
+  - name: shows.export.workbook
+    summary: "Multi-sheet XLS workbook for normalized show data: entries, schedule, leaderboard, and scorecards."
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/workbook.xls
+    object_kinds:
+      - show
+      - entry
+      - show_class
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
+    data_views:
+      - auth_modes:
+          - session
+          - service_token
+        sections:
+          - shared_metadata
+          - private_payload
+        summary: Authenticated operators and agents can download a normalized multi-sheet data workbook.
+  - name: shows.export.entries_csv
+    summary: CSV of show entries with class, exhibitor, placement, points, notes, and taxon references.
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/entries.csv
+    object_kinds:
+      - entry
+      - person
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
+  - name: shows.export.schedule_csv
+    summary: CSV of the show schedule hierarchy from division to section to class.
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/schedule.csv
+    object_kinds:
+      - show_class
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
+  - name: shows.export.leaderboard_csv
+    summary: CSV of season leaderboard standings for the show's organization and season.
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/leaderboard.csv
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
+  - name: shows.export.scorecards_csv
+    summary: CSV of scorecards and criterion scores for entries in the show.
+    path: /v1/projections/0007-Flowershow/shows/{id}/exports/scorecards.csv
+    object_kinds:
+      - entry
+      - person
+    auth_modes:
+      - session
+      - service_token
+    capabilities:
+      - publications
+    freshness: direct
   - name: entries.list
     summary: Entries for a show or class.
     path: /v1/projections/0007-Flowershow/entries

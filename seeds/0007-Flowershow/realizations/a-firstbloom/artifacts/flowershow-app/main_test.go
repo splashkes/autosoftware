@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -1615,6 +1617,151 @@ func TestLedgerProjection(t *testing.T) {
 
 	// With service token
 	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/ledger/show_spring2025", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestAdminEntriesCSVExport(t *testing.T) {
+	a := testApp()
+	_, err := a.store.createEntry(EntryInput{
+		ShowID:   "show_spring2025",
+		ClassID:  "class_01",
+		PersonID: "person_01",
+		Name:     "=SUM(1,2)",
+		Notes:    "contains, comma",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.handleAdminShowExport)
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025/exports/entries.csv", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+		t.Fatalf("expected CSV content-type, got %s", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "spring-rose-show-2025-entries.csv") {
+		t.Fatalf("unexpected content-disposition: %s", cd)
+	}
+
+	reader := csv.NewReader(strings.NewReader(strings.TrimPrefix(w.Body.String(), "\ufeff")))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) < 2 {
+		t.Fatal("expected header and data rows")
+	}
+	if records[0][0] != "Entry ID" || records[0][10] != "Email" {
+		t.Fatalf("unexpected headers: %#v", records[0])
+	}
+	foundFormulaSafe := false
+	foundFullName := false
+	for _, record := range records[1:] {
+		if record[6] == "'=SUM(1,2)" {
+			foundFormulaSafe = true
+		}
+		if record[7] == "Margaret" && record[8] == "Chen" {
+			foundFullName = true
+		}
+	}
+	if !foundFormulaSafe {
+		t.Fatal("expected spreadsheet formula cell to be escaped")
+	}
+	if !foundFullName {
+		t.Fatal("expected admin export to include full exhibitor name")
+	}
+}
+
+func TestShowWorkbookExport(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.handleAdminShowExport)
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025/exports/workbook.xls", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/vnd.ms-excel") {
+		t.Fatalf("expected Excel content-type, got %s", ct)
+	}
+	body := w.Body.String()
+	for _, sheet := range []string{`ss:Name="entries"`, `ss:Name="schedule"`, `ss:Name="leaderboard"`, `ss:Name="scorecards"`} {
+		if !strings.Contains(body, sheet) {
+			t.Fatalf("workbook missing sheet %s", sheet)
+		}
+	}
+	if !strings.Contains(body, "Spring Rose Show 2025") {
+		t.Fatal("workbook missing show data")
+	}
+}
+
+func TestShowTallyWorkbookExport(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.handleAdminShowExport)
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025/exports/tally.xls", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "spring-rose-show-2025-tally.xls") {
+		t.Fatalf("unexpected content-disposition: %s", cd)
+	}
+	body := w.Body.String()
+	var root struct {
+		XMLName xml.Name
+	}
+	if err := xml.Unmarshal([]byte(body), &root); err != nil {
+		t.Fatalf("tally workbook is not well-formed XML: %v", err)
+	}
+	for _, needle := range []string{
+		`ss:Name="Show Tally"`,
+		`ss:Name="Point Summary"`,
+		`ss:Name="Participation"`,
+		`ss:Name="Results"`,
+		"Class No.",
+		"#1s    #2s    #3s",
+		"FLOWER SHOW TALLY SHEET",
+		"Design and Special Exhibits",
+		"Chen, Margaret",
+		"101",
+		"2 x 4 = 8",
+		"1 x 12 = 12",
+	} {
+		if !strings.Contains(body, needle) {
+			t.Fatalf("tally workbook missing %q", needle)
+		}
+	}
+}
+
+func TestAPIShowExportRequiresAuth(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/exports/{file}", a.requireAuth(a.handleAPIShowExport))
+
+	req := httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/exports/schedule.csv", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/v1/projections/0007-Flowershow/shows/show_spring2025/exports/schedule.csv", nil)
 	req.Header.Set("Authorization", "Bearer test-token")
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4495,8 +4642,8 @@ func TestPublicShowEntriesPageRenders(t *testing.T) {
 	body := w.Body.String()
 	for _, want := range []string{
 		"Entries — Spring Rose Show 2025",
-		"Peace",        // entry 1st place
-		"Mr. Lincoln",  // entry 2nd place
+		"Peace",       // entry 1st place
+		"Mr. Lincoln", // entry 2nd place
 		"Iceberg Spray",
 	} {
 		if !strings.Contains(body, want) {

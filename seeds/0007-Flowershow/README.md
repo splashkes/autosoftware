@@ -43,6 +43,7 @@ The current canonical implementation is the `a-firstbloom` realization.
 
 - API-first authoring and review from humans and remote agents carrying cited
   source material
+- Agent-accessible report exports via service-token URLs
 - Standards and provenance as first-class structural layers
 - Graph-like taxonomy over rigid schemas
 - Append-only with suppression (no deletion)

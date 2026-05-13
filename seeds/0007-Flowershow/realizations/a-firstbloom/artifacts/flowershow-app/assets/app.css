@@ -457,6 +457,7 @@ a:hover {
 .show-meta a:hover,
 .card-meta a:hover { text-decoration: underline; }
 .show-actions { display: flex; gap: .5rem; margin-top: .75rem; }
+.export-bar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: -1rem 0 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--gray-200); }
 
 .event-workspace-intro {
   margin-bottom: 1rem;
@@ -3941,4 +3942,3 @@ body[data-mode="update"] [data-mode-fast-only] {
   line-height: 1.4;
 }
 /* === /Fix: people roster modal modes + help text === */
-

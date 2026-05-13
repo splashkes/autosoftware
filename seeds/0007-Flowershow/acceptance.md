@@ -44,6 +44,7 @@ The system is complete when:
 ## Show Admin
 - Control panel for live show operations
 - Manage judges, classes, entries, media, and winners per class
+- Download tally and data exports for a show
 - The same operator workspace is used for show setup and live event admin
 - The operator workspace clearly supports setup, intake, floor correction,
   scoring, and board inspection as one coherent event flow
