@@ -248,6 +248,44 @@ func TestMediaVariantCacheLimitsConcurrentGeneration(t *testing.T) {
 	}
 }
 
+func TestMediaVariantCacheTryDoDoesNotQueueWhenWorkersBusy(t *testing.T) {
+	cache := newMediaVariantCache(1)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := cache.tryDo(context.Background(), "entries/e1/media_01_thumb.jpg", func() error {
+			close(started)
+			<-release
+			return nil
+		})
+		done <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first variant generator")
+	}
+
+	generated, err := cache.tryDo(context.Background(), "entries/e1/media_02_thumb.jpg", func() error {
+		t.Fatal("second variant should not run while worker is busy")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("tryDo returned error: %v", err)
+	}
+	if generated {
+		t.Fatal("expected tryDo to report busy instead of queueing a distinct variant")
+	}
+
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("first variant returned error: %v", err)
+	}
+}
+
 func TestMediaSetCoverIsExclusive(t *testing.T) {
 	a := testApp()
 	uploads := make([]*Media, 0, 3)
