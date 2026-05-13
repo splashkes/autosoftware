@@ -55,7 +55,7 @@
     data-intake-entry-href="{{$ctx.BasePath}}/entries/{{$entry.Entry.ID}}">
     <span class="intake-entry-visual">
       {{with primaryMedia $entry.Media}}
-      <img src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image" loading="lazy" decoding="async">
       {{else}}
       <span class="intake-entry-initials">{{if $entry.Person}}{{$entry.Person.Initials}}{{else}}?{{end}}</span>
       {{end}}
@@ -420,7 +420,7 @@
               <button type="button" class="btn btn-primary intake-capture-button" data-intake-media-button="capture">Capture</button>
               <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
             </div>
-            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 4096px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
+            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 1000px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
             <div class="intake-upload-queue" data-intake-upload-queue></div>
@@ -431,6 +431,7 @@
               type="text"
               class="form-input"
               placeholder="Start typing a full name, or leave blank for now"
+              name="entrant_name"
               data-intake-entrant-list="intake-entrant-options"
               data-intake-entrant-input
               autocomplete="off">
@@ -475,6 +476,7 @@
               type="text"
               class="form-input"
               placeholder="Start typing a full name"
+              name="entrant_name"
               data-intake-entrant-list="intake-entrant-options-existing"
               data-intake-entrant-input
               autocomplete="off"
@@ -528,7 +530,7 @@
               <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
               <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
             </div>
-            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 4096px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
+            <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 1000px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
             <div class="intake-upload-queue" data-intake-upload-queue></div>
@@ -603,7 +605,7 @@
                 <div class="board-entry-card {{placementClass .Entry.Placement}}">
                   <div class="board-entry-thumb">
                     {{with primaryMedia .Media}}
-                    <img src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="board-entry-image">
+                    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="board-entry-image" loading="lazy" decoding="async">
                     {{else}}
                     <div class="board-entry-placeholder">No photo</div>
                     {{end}}
@@ -908,7 +910,7 @@
 <div class="card">
   <div class="card-body">
     <h3 class="card-title">Add Entry</h3>
-    <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries" hx-post="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries" hx-target="#admin-intake-panel" hx-swap="innerHTML" class="form form-compact">
+    <form method="POST" action="{{$.BasePath}}/admin/shows/{{.Show.ID}}/entries" enctype="multipart/form-data" class="form form-compact" data-target="#admin-intake-panel" data-intake-entry-form>
       <div class="form-row">
         <div class="form-group">
           <label>Class</label>
@@ -919,11 +921,12 @@
         </div>
         <div class="form-group">
           <label>Entrant</label>
-          <input type="text" class="form-input form-sm" placeholder="Filter members / guests" data-person-filter-input data-filter-target="#entry-create-person-select">
-          <select id="entry-create-person-select" name="person_id" class="form-input" required>
-            <option value="">Select entrant...</option>
-            {{range .EntrantCandidates}}<option value="{{.Person.ID}}">{{.Label}}</option>{{end}}
-          </select>
+          <input type="text" name="entrant_name" class="form-input" placeholder="Start typing a full name" data-intake-entrant-list="entry-create-entrant-options" data-intake-entrant-input autocomplete="off">
+          <input type="hidden" name="person_id" value="" data-intake-person-id-input>
+          <div class="intake-autocomplete-results" data-intake-person-results hidden></div>
+          <datalist id="entry-create-entrant-options">
+            {{range .EntrantCandidates}}<option value="{{.Label}}" data-person-id="{{.Person.ID}}"></option>{{end}}
+          </datalist>
         </div>
       </div>
       <div class="form-row">
@@ -935,6 +938,17 @@
           <label>Notes</label>
           <input type="text" name="notes" class="form-input" placeholder="Optional notes">
         </div>
+      </div>
+      <div class="form-group">
+        <label>Add media</label>
+        <div class="intake-capture-actions admin-entry-media-actions">
+          <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="capture">Capture</button>
+          <button type="button" class="btn btn-outline intake-capture-button" data-intake-media-button="upload">Upload</button>
+        </div>
+        <p class="card-meta intake-media-rules">JPEG, PNG, or WebP preferred. Photos are normalized up to 1000px. Video supports MP4, WebM, or MOV up to 50 MB. HEIC is not supported; on iPhone use Most Compatible.</p>
+        <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
+        <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
+        <div class="intake-upload-queue admin-entry-media-queue" data-intake-upload-queue></div>
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Add Entry</button>
     </form>
@@ -956,7 +970,7 @@
             {{if .Media}}
               {{with index .Media 0}}
                 {{if eq .MediaType "photo"}}
-                <img src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$.Entry.Name}}" class="media-add-thumb">
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$.Entry.Name}}" class="media-add-thumb" loading="lazy" decoding="async">
                 {{else}}
                 <span class="media-add-plus">+</span>
                 {{end}}

@@ -4,14 +4,77 @@ const FLOWERSHOW_MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 const FLOWERSHOW_MAX_PHOTO_EDGE = 1000;
 const FLOWERSHOW_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
+const FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY = 4;
 const flowershowIntakeUploadStates = new WeakMap();
 const flowershowIntakeAutosaveTimers = new WeakMap();
+const flowershowDeferredMediaQueue = [];
+let flowershowDeferredMediaActive = 0;
 
 function flowershowQueryScope(root) {
   if (root && typeof root.querySelectorAll === 'function') {
     return root;
   }
   return document;
+}
+
+function flowershowDeferredMediaSrc(img) {
+  return img && img.dataset ? (img.dataset.deferredMediaSrc || '').trim() : '';
+}
+
+function flowershowQueueDeferredMediaImage(img) {
+  const src = flowershowDeferredMediaSrc(img);
+  if (!src || !img.isConnected) return;
+  if (img.dataset.deferredMediaState === 'queued' || img.dataset.deferredMediaState === 'loading' || img.dataset.deferredMediaState === 'loaded') return;
+  img.dataset.deferredMediaState = 'queued';
+  flowershowDeferredMediaQueue.push(img);
+  flowershowPumpDeferredMediaQueue();
+}
+
+function flowershowPumpDeferredMediaQueue() {
+  while (flowershowDeferredMediaActive < FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY && flowershowDeferredMediaQueue.length > 0) {
+    const img = flowershowDeferredMediaQueue.shift();
+    const src = flowershowDeferredMediaSrc(img);
+    if (!src || !img.isConnected) {
+      continue;
+    }
+    flowershowDeferredMediaActive += 1;
+    img.dataset.deferredMediaState = 'loading';
+
+    const finish = function(state) {
+      img.removeEventListener('load', onLoad);
+      img.removeEventListener('error', onError);
+      if (img.isConnected) {
+        img.dataset.deferredMediaState = state;
+      }
+      flowershowDeferredMediaActive -= 1;
+      flowershowPumpDeferredMediaQueue();
+    };
+    const onLoad = function() {
+      finish('loaded');
+    };
+    const onError = function() {
+      const attempts = parseInt(img.dataset.deferredMediaAttempts || '0', 10) + 1;
+      img.dataset.deferredMediaAttempts = String(attempts);
+      finish('error');
+      if (attempts < 3) {
+        setTimeout(function() {
+          if (!img.isConnected) return;
+          img.dataset.deferredMediaState = '';
+          flowershowQueueDeferredMediaImage(img);
+        }, 1200 * attempts);
+      }
+    };
+
+    img.addEventListener('load', onLoad, { once: true });
+    img.addEventListener('error', onError, { once: true });
+    img.src = src;
+  }
+}
+
+function flowershowBindDeferredMediaImage(img) {
+  if (!flowershowDeferredMediaSrc(img) || img.dataset.deferredMediaBound === 'true') return;
+  img.dataset.deferredMediaBound = 'true';
+  flowershowQueueDeferredMediaImage(img);
 }
 
 function flowershowActivateShowAdminTab(shell, name) {
@@ -487,38 +550,7 @@ function flowershowBindIntakeModal(modal) {
     }
   });
 
-  modal.querySelectorAll('[data-intake-entrant-input]').forEach(function(entrantInput) {
-    entrantInput.addEventListener('input', function() {
-      flowershowSyncEntrantLookup(entrantInput);
-      flowershowRenderEntrantResults(entrantInput);
-      const form = entrantInput.closest('form');
-      if (form) {
-        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
-        flowershowRefreshResultButtons(form);
-      }
-    });
-    entrantInput.addEventListener('change', function() {
-      flowershowSyncEntrantLookup(entrantInput);
-      flowershowRenderEntrantResults(entrantInput);
-      const form = entrantInput.closest('form');
-      if (form) {
-        form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
-        flowershowRefreshResultButtons(form);
-      }
-    });
-    entrantInput.addEventListener('focus', function() {
-      flowershowRenderEntrantResults(entrantInput);
-    });
-    entrantInput.addEventListener('blur', function() {
-      window.setTimeout(function() {
-        const formGroup = entrantInput.closest('.form-group');
-        const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
-        if (results) {
-          results.hidden = true;
-        }
-      }, 120);
-    });
-  });
+  modal.querySelectorAll('[data-intake-entrant-input]').forEach(flowershowBindIntakeEntrantInput);
   modal.querySelectorAll('[data-intake-existing-class-select]').forEach(function(classSelect) {
     classSelect.addEventListener('change', function() {
       const form = classSelect.closest('form');
@@ -538,6 +570,41 @@ function flowershowBindIntakeTrigger(button) {
   button.dataset.bound = 'true';
   button.addEventListener('click', function() {
     flowershowOpenIntakeModal(document.querySelector('[data-intake-modal]'), button);
+  });
+}
+
+function flowershowBindIntakeEntrantInput(entrantInput) {
+  if (!entrantInput || entrantInput.dataset.intakeEntrantBound === 'true') return;
+  entrantInput.dataset.intakeEntrantBound = 'true';
+  entrantInput.addEventListener('input', function() {
+    flowershowSyncEntrantLookup(entrantInput);
+    flowershowRenderEntrantResults(entrantInput);
+    const form = entrantInput.closest('form');
+    if (form) {
+      form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+      flowershowRefreshResultButtons(form);
+    }
+  });
+  entrantInput.addEventListener('change', function() {
+    flowershowSyncEntrantLookup(entrantInput);
+    flowershowRenderEntrantResults(entrantInput);
+    const form = entrantInput.closest('form');
+    if (form) {
+      form.dataset.intakeEntrantDisplay = flowershowIntakeInitials(entrantInput.value);
+      flowershowRefreshResultButtons(form);
+    }
+  });
+  entrantInput.addEventListener('focus', function() {
+    flowershowRenderEntrantResults(entrantInput);
+  });
+  entrantInput.addEventListener('blur', function() {
+    window.setTimeout(function() {
+      const formGroup = entrantInput.closest('.form-group');
+      const results = formGroup ? formGroup.querySelector('[data-intake-person-results]') : null;
+      if (results) {
+        results.hidden = true;
+      }
+    }, 120);
   });
 }
 
@@ -914,6 +981,12 @@ function flowershowSwapAdminTarget(targetSelector, html) {
   flowershowInit(target);
 }
 
+function flowershowEntryClassValue(form) {
+  if (!form) return '';
+  const classInput = form.querySelector('[name="class_id"]');
+  return classInput ? (classInput.value || '').trim() : '';
+}
+
 function flowershowSubmitIntakeForm(form, options) {
   const closeModal = !options || options.closeModal !== false;
   const onSuccess = options && typeof options.onSuccess === 'function' ? options.onSuccess : null;
@@ -1034,11 +1107,12 @@ function flowershowBindIntakeCaptureInput(input) {
       } else if (form && form.hasAttribute('data-corrections-media-form') && hasReadyItems) {
         await flowershowSubmitQueuedMediaForm(form);
       } else if (form && form.hasAttribute('data-intake-entry-form') && hasReadyItems) {
-        const entrantInput = form.querySelector('[data-intake-entrant-input]');
-        if (!flowershowSyncEntrantLookup(entrantInput)) {
-          flowershowToast('Choose an entrant first, then media will upload immediately.', true);
+        if (!flowershowEntryClassValue(form)) {
+          flowershowToast('Choose a class first, then media will upload immediately.', true);
           return;
         }
+        const entrantInput = form.querySelector('[data-intake-entrant-input]');
+        flowershowSyncEntrantLookup(entrantInput);
         await new Promise(function(resolve, reject) {
           flowershowSubmitIntakeForm(form, {
             closeModal: false,
@@ -1047,6 +1121,9 @@ function flowershowBindIntakeCaptureInput(input) {
               const createdTrigger = flowershowFindExistingIntakeTrigger(form);
               if (modal && createdTrigger) {
                 flowershowOpenIntakeModal(modal, createdTrigger);
+              } else if (modal) {
+                modal.hidden = true;
+                document.body.classList.remove('body-lightbox-open');
               }
               resolve();
             },
@@ -1193,10 +1270,7 @@ async function flowershowSubmitAutosaveForm(form, options) {
   const closeModal = !!(options && options.closeModal);
   const keepMessage = !!(options && options.keepMessage);
   const entrantInput = form.querySelector('[data-intake-entrant-input]');
-  if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
-    flowershowSetAutosaveStatus(form, 'Choose an entrant from the suggestions.', true);
-    return;
-  }
+  flowershowSyncEntrantLookup(entrantInput);
   flowershowClearAutosaveTimer(form);
   flowershowSetAutosaveStatus(form, 'Saving…', false);
   try {
@@ -1242,13 +1316,15 @@ function flowershowBindIntakeForm(form, options) {
   if (!form || form.dataset.intakeFormBound === 'true') return;
   form.dataset.intakeFormBound = 'true';
   flowershowRenderIntakeUploadQueue(form);
+  form.querySelectorAll('[data-intake-entrant-input]').forEach(flowershowBindIntakeEntrantInput);
   form.querySelectorAll('[data-intake-media-button]').forEach(flowershowBindIntakeCaptureButton);
   form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
   form.addEventListener('submit', function(event) {
     event.preventDefault();
     const entrantInput = form.querySelector('[data-intake-entrant-input]');
-    if (entrantInput && !flowershowSyncEntrantLookup(entrantInput)) {
-      flowershowToast('Choose an entrant from the full-name suggestions before saving.', true);
+    flowershowSyncEntrantLookup(entrantInput);
+    if (form.hasAttribute('data-intake-entry-form') && !flowershowEntryClassValue(form)) {
+      flowershowToast('Choose a class before saving.', true);
       return;
     }
     flowershowSubmitIntakeForm(form, options);
@@ -1767,6 +1843,9 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-corrections-filter-input]').forEach(flowershowBindCorrectionsFilter);
   scope.querySelectorAll('[data-intake-modal-open]').forEach(flowershowBindIntakeTrigger);
   scope.querySelectorAll('[data-intake-modal]').forEach(flowershowBindIntakeModal);
+  scope.querySelectorAll('[data-intake-entry-form]').forEach(function(form) {
+    flowershowBindIntakeForm(form, { isNew: true });
+  });
   scope.querySelectorAll('[data-intake-results-form]').forEach(flowershowBindIntakeResultsForm);
   scope.querySelectorAll('[data-corrections-media-form]').forEach(flowershowBindCorrectionsMediaForm);
   scope.querySelectorAll('[data-show-rotator]').forEach(flowershowBindShowRotator);
@@ -1774,6 +1853,7 @@ function flowershowInit(root) {
   scope.querySelectorAll('[data-media-open]').forEach(flowershowBindMediaTrigger);
   scope.querySelectorAll('[data-media-lightbox]').forEach(flowershowBindLightbox);
   scope.querySelectorAll('[data-show-admin-shell]').forEach(flowershowBindShowAdminShell);
+  scope.querySelectorAll('img[data-deferred-media-src]').forEach(flowershowBindDeferredMediaImage);
   const select = document.querySelector('#scorecard-form select[name="rubric_id"]');
   if (select) flowershowToggleRubricCriteria(select);
   document.querySelectorAll('[data-agent-current-path]').forEach(function(el) {

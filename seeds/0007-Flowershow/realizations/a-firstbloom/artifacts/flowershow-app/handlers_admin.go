@@ -1221,10 +1221,15 @@ func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	personID, err := a.resolveEntryPersonIDFromForm(showID, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	entry, err := a.store.createEntry(EntryInput{
 		ShowID:   showID,
 		ClassID:  r.FormValue("class_id"),
-		PersonID: r.FormValue("person_id"),
+		PersonID: personID,
 		Name:     name,
 		Notes:    r.FormValue("notes"),
 	})
@@ -1276,10 +1281,15 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	personID, err := a.resolveEntryPersonIDFromForm(entry.ShowID, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	updated, err := a.store.updateEntry(entryID, EntryInput{
 		ShowID:    entry.ShowID,
 		ClassID:   r.FormValue("class_id"),
-		PersonID:  r.FormValue("person_id"),
+		PersonID:  personID,
 		Name:      name,
 		Notes:     r.FormValue("notes"),
 		TaxonRefs: append([]string(nil), entry.TaxonRefs...),
@@ -1320,6 +1330,53 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		section = "intake"
 	}
 	a.respondAdminSectionOrRedirect(w, r, updated.ShowID, section)
+}
+
+func (a *app) resolveEntryPersonIDFromForm(showID string, r *http.Request) (string, error) {
+	personID := strings.TrimSpace(r.FormValue("person_id"))
+	if personID != "" {
+		return personID, nil
+	}
+	entrantName := strings.TrimSpace(r.FormValue("entrant_name"))
+	if entrantName == "" {
+		return "", nil
+	}
+	for _, candidate := range a.personLookupViewsForShow(showID, "") {
+		if candidate == nil || candidate.Person == nil {
+			continue
+		}
+		fullName := strings.TrimSpace(strings.TrimSpace(candidate.Person.FirstName) + " " + strings.TrimSpace(candidate.Person.LastName))
+		if strings.EqualFold(strings.TrimSpace(candidate.Label), entrantName) || strings.EqualFold(fullName, entrantName) {
+			return candidate.Person.ID, nil
+		}
+	}
+	firstName, lastName := entryEntrantNameParts(entrantName)
+	show, _ := a.store.showByID(showID)
+	orgID := ""
+	if show != nil {
+		orgID = show.OrganizationID
+	}
+	person, err := a.store.createPerson(PersonInput{
+		FirstName:        firstName,
+		LastName:         lastName,
+		OrganizationID:   orgID,
+		OrganizationRole: "guest",
+	})
+	if err != nil {
+		return "", err
+	}
+	return person.ID, nil
+}
+
+func entryEntrantNameParts(name string) (string, string) {
+	parts := strings.Fields(strings.TrimSpace(name))
+	if len(parts) == 0 {
+		return "", ""
+	}
+	if len(parts) == 1 {
+		return parts[0], ""
+	}
+	return strings.Join(parts[:len(parts)-1], " "), parts[len(parts)-1]
 }
 
 func (a *app) handleAdminEntryMove(w http.ResponseWriter, r *http.Request) {

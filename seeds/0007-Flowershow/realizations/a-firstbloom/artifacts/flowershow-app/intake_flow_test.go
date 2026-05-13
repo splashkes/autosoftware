@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,64 @@ func TestIntakePhotosPageHonoursClassQueryParam(t *testing.T) {
 	}
 }
 
+func TestIntakePhotosPageUsesClassNumberNavigationOrder(t *testing.T) {
+	a := testApp()
+	org, err := a.store.createOrganization(Organization{Name: "Class Order Society", Level: "society"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	show, err := a.store.createShow(ShowInput{OrganizationID: org.ID, Name: "Class Order Show", Date: "2026-06-01", Season: "2026"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sched, err := a.store.createSchedule(ShowSchedule{ShowID: show.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	div, err := a.store.createDivision(DivisionInput{ShowScheduleID: sched.ID, Title: "Horticulture", Domain: "horticulture", SortOrder: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec, err := a.store.createSection(SectionInput{DivisionID: div.ID, Title: "Specimens", SortOrder: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	classOne, err := a.store.createClass(ShowClassInput{SectionID: sec.ID, ClassNumber: "1", SortOrder: 20, Title: "Class One"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	classTwo, err := a.store.createClass(ShowClassInput{SectionID: sec.ID, ClassNumber: "2", SortOrder: 10, Title: "Class Two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	classThree, err := a.store.createClass(ShowClassInput{SectionID: sec.ID, ClassNumber: "3", SortOrder: 30, Title: "Class Three"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/admin/shows/"+show.ID+"/intake/photos?class="+classTwo.ID, nil)
+	addAdminSession(t, a, req)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/intake/photos", a.requireCapabilityPage("entries.manage", a.handleIntakeSequentialPhotos))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `data-intake-prev-href="/admin/shows/`+show.ID+`/intake/photos?class=`+classOne.ID+`"`) {
+		t.Fatalf("expected previous class to be class 1, body=%s", body)
+	}
+	if !strings.Contains(body, `data-intake-next-href="/admin/shows/`+show.ID+`/intake/photos?class=`+classThree.ID+`"`) {
+		t.Fatalf("expected next class to be class 3, body=%s", body)
+	}
+	if !strings.Contains(body, `Class 2 · 2 of 3`) {
+		t.Fatalf("expected class 2 to render as second in class-number order, body=%s", body)
+	}
+}
+
 // TestIntakeAnonymousEntryCreation verifies the POST endpoint creates an
 // anonymous entry with empty PersonID and returns the expected JSON shape.
 func TestIntakeAnonymousEntryCreation(t *testing.T) {
@@ -115,6 +174,60 @@ func TestIntakeAnonymousEntryCreation(t *testing.T) {
 
 	if got := len(a.store.entriesByShow("show_spring2025")); got != before+1 {
 		t.Fatalf("expected one new entry, before=%d after=%d", before, got)
+	}
+}
+
+func TestAdminEntryCreateCreatesFreeFormEntrant(t *testing.T) {
+	a := testApp()
+	beforeEntries := a.store.entriesByShow("show_spring2025")
+	beforeIDs := make(map[string]struct{}, len(beforeEntries))
+	for _, entry := range beforeEntries {
+		beforeIDs[entry.ID] = struct{}{}
+	}
+	form := url.Values{}
+	form.Set("class_id", "class_01")
+	form.Set("entrant_name", "New Exhibitor")
+	form.Set("name", "Peace")
+	req := httptest.NewRequest("POST", "/admin/shows/show_spring2025/entries", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	addAdminSession(t, a, req)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireCapabilityPage("entries.manage", a.handleAdminEntryCreate))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	entries := a.store.entriesByShow("show_spring2025")
+	if len(entries) != len(beforeEntries)+1 {
+		t.Fatalf("expected one new entry, before=%d after=%d", len(beforeEntries), len(entries))
+	}
+	var created *Entry
+	for _, entry := range entries {
+		if _, existed := beforeIDs[entry.ID]; !existed {
+			created = entry
+			break
+		}
+	}
+	if created == nil {
+		t.Fatal("expected created entry")
+	}
+	if created.Name != "Peace" || created.ClassID != "class_01" {
+		t.Fatalf("unexpected created entry: %#v", created)
+	}
+	person, ok := a.store.personByID(created.PersonID)
+	if !ok {
+		t.Fatalf("created entry person not found: %q", created.PersonID)
+	}
+	if person.FirstName != "New" || person.LastName != "Exhibitor" {
+		t.Fatalf("expected free-form entrant to become New Exhibitor, got %#v", person)
+	}
+	links := a.store.personOrganizationsByPerson(person.ID)
+	if len(links) == 0 || links[0].Role != "guest" {
+		t.Fatalf("expected new free-form entrant to be linked as guest, got %#v", links)
 	}
 }
 
