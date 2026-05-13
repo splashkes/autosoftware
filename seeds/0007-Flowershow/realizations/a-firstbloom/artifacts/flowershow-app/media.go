@@ -29,27 +29,96 @@ import (
 const (
 	thumbnailMaxEdge     = 512
 	thumbnailJPEGQuality = 80
-	rotatedJPEGQuality   = 90
+	displayMaxEdge       = 1000
+	displayJPEGQuality   = 86
 	thumbnailContentType = "image/jpeg"
 )
 
-// normalizeImageOrientation reads JPEG bytes that may carry EXIF orientation
-// metadata, applies the rotation/flip, and returns re-encoded JPEG bytes with
-// orientation reset. For non-JPEG inputs or any decode failure the original
-// bytes are returned unchanged so an upload is never failed by this step.
-func normalizeImageOrientation(data []byte, contentType string) ([]byte, error) {
-	if !strings.EqualFold(strings.TrimSpace(contentType), "image/jpeg") {
-		return data, nil
+// preparePhotoForStorage normalizes image orientation and caps the stored
+// display image to 1000px on its longest edge. Decode failures fall back to
+// the original bytes so a bad client-side transform does not block upload.
+func preparePhotoForStorage(data []byte, contentType string) ([]byte, string) {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	if !strings.HasPrefix(contentType, "image/") {
+		return data, contentType
+	}
+	prepared, err := generateDisplayPhoto(data, contentType)
+	if err != nil {
+		log.Printf("media: skip display normalization, decode failed: %v", err)
+		return data, contentType
+	}
+	return prepared, thumbnailContentType
+}
+
+func generateDisplayPhoto(data []byte, contentType string) ([]byte, error) {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, errors.New("display image unavailable for non-image media")
 	}
 	img, err := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
 	if err != nil {
-		log.Printf("media: skip EXIF auto-rotate, decode failed: %v", err)
-		return data, nil
+		return nil, err
 	}
+	img = fitImageMaxEdge(img, displayMaxEdge)
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: rotatedJPEGQuality}); err != nil {
-		log.Printf("media: skip EXIF auto-rotate, encode failed: %v", err)
-		return data, nil
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: displayJPEGQuality}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func fitImageMaxEdge(img image.Image, maxEdge int) image.Image {
+	if img == nil || maxEdge <= 0 {
+		return img
+	}
+	bounds := img.Bounds()
+	if bounds.Dx() <= maxEdge && bounds.Dy() <= maxEdge {
+		return img
+	}
+	return imaging.Fit(img, maxEdge, maxEdge, imaging.Lanczos)
+}
+
+func displayPhotoFileName(name string) string {
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	if strings.TrimSpace(base) == "" {
+		base = "image"
+	}
+	return base + ".jpg"
+}
+
+func mediaMaxEdge(media *Media) int {
+	if media == nil {
+		return 0
+	}
+	if media.Width > media.Height {
+		return media.Width
+	}
+	return media.Height
+}
+
+func isPhotoMedia(media *Media) bool {
+	if media == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(media.MediaType), "photo") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(media.ContentType)), "image/")
+}
+
+func shouldServeDisplayVariant(media *Media) bool {
+	if !isPhotoMedia(media) {
+		return false
+	}
+	maxEdge := mediaMaxEdge(media)
+	return maxEdge == 0 || maxEdge > displayMaxEdge
+}
+
+func encodeImageJPEG(img image.Image, quality int) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, err
 	}
 	return buf.Bytes(), nil
 }
@@ -66,12 +135,8 @@ func generateThumbnail(data []byte, contentType string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	thumb := imaging.Fit(img, thumbnailMaxEdge, thumbnailMaxEdge, imaging.Lanczos)
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, thumb, &jpeg.Options{Quality: thumbnailJPEGQuality}); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	thumb := fitImageMaxEdge(img, thumbnailMaxEdge)
+	return encodeImageJPEG(thumb, thumbnailJPEGQuality)
 }
 
 // imageDimensions returns width and height of the supplied image bytes.
@@ -254,20 +319,20 @@ func (m *localMediaStore) Store(_ context.Context, entryID string, header *multi
 		return nil, err
 	}
 
-	rotated, err := normalizeImageOrientation(body, contentType)
-	if err != nil {
-		log.Printf("media: orientation normalize error for %s: %v", header.Filename, err)
-		rotated = body
-	}
+	prepared, storedContentType := preparePhotoForStorage(body, contentType)
+	contentType = storedContentType
 
 	id := newID("media")
 	name := sanitizeFileName(header.Filename)
+	if mediaType == "photo" && strings.EqualFold(contentType, thumbnailContentType) {
+		name = displayPhotoFileName(name)
+	}
 	path := filepath.Join(m.dir, id+"_"+name)
-	if err := os.WriteFile(path, rotated, 0644); err != nil {
+	if err := os.WriteFile(path, prepared, 0644); err != nil {
 		return nil, err
 	}
 
-	width, height := imageDimensions(rotated)
+	width, height := imageDimensions(prepared)
 
 	media := &Media{
 		ID:          id,
@@ -278,13 +343,13 @@ func (m *localMediaStore) Store(_ context.Context, entryID string, header *multi
 		ContentType: contentType,
 		FileName:    name,
 		StorageKey:  path,
-		FileSize:    int64(len(rotated)),
+		FileSize:    int64(len(prepared)),
 		Width:       width,
 		Height:      height,
 		CreatedAt:   time.Now().UTC(),
 	}
 
-	if thumb, err := generateThumbnail(rotated, contentType); err == nil && len(thumb) > 0 {
+	if thumb, err := generateThumbnail(prepared, contentType); err == nil && len(thumb) > 0 {
 		thumbPath := filepath.Join(m.dir, id+"_thumb.jpg")
 		if werr := os.WriteFile(thumbPath, thumb, 0644); werr == nil {
 			media.ThumbnailURL = globalBasePath + "/media/" + id + "?thumb=1"
@@ -362,19 +427,19 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 		return nil, err
 	}
 
-	rotated, err := normalizeImageOrientation(body, contentType)
-	if err != nil {
-		log.Printf("media: orientation normalize error for %s: %v", header.Filename, err)
-		rotated = body
-	}
+	prepared, storedContentType := preparePhotoForStorage(body, contentType)
+	contentType = storedContentType
 
 	id := newID("media")
 	name := sanitizeFileName(header.Filename)
+	if mediaType == "photo" && strings.EqualFold(contentType, thumbnailContentType) {
+		name = displayPhotoFileName(name)
+	}
 	key := fmt.Sprintf("entries/%s/%s_%s", entryID, id, name)
 	_, err = m.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      &m.bucket,
 		Key:         &key,
-		Body:        bytes.NewReader(rotated),
+		Body:        bytes.NewReader(prepared),
 		ContentType: &contentType,
 		ACL:         types.ObjectCannedACLPrivate,
 	})
@@ -382,7 +447,7 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 		return nil, err
 	}
 
-	width, height := imageDimensions(rotated)
+	width, height := imageDimensions(prepared)
 
 	media := &Media{
 		ID:          id,
@@ -393,13 +458,13 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 		ContentType: contentType,
 		FileName:    name,
 		StorageKey:  key,
-		FileSize:    int64(len(rotated)),
+		FileSize:    int64(len(prepared)),
 		Width:       width,
 		Height:      height,
 		CreatedAt:   time.Now().UTC(),
 	}
 
-	if thumb, terr := generateThumbnail(rotated, contentType); terr == nil && len(thumb) > 0 {
+	if thumb, terr := generateThumbnail(prepared, contentType); terr == nil && len(thumb) > 0 {
 		thumbKey := key + "_thumb.jpg"
 		thumbType := thumbnailContentType
 		_, uerr := m.uploader.Upload(ctx, &s3.PutObjectInput{
@@ -422,11 +487,22 @@ func (m *s3MediaStore) Store(ctx context.Context, entryID string, header *multip
 }
 
 func (m *s3MediaStore) GetURL(ctx context.Context, media *Media) (string, error) {
+	if shouldServeDisplayVariant(media) {
+		if url, err := m.displayURL(ctx, media); err == nil {
+			return url, nil
+		} else {
+			log.Printf("media: display variant unavailable for %s: %v", media.ID, err)
+		}
+	}
+	return m.presignMediaObject(ctx, media.StorageKey, media.ContentType, media.FileName)
+}
+
+func (m *s3MediaStore) presignMediaObject(ctx context.Context, key, contentType, fileName string) (string, error) {
 	out, err := m.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket:                     &m.bucket,
-		Key:                        &media.StorageKey,
-		ResponseContentType:        &media.ContentType,
-		ResponseContentDisposition: awsString(`inline; filename="` + media.FileName + `"`),
+		Key:                        &key,
+		ResponseContentType:        &contentType,
+		ResponseContentDisposition: awsString(`inline; filename="` + fileName + `"`),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = 15 * time.Minute
 	})
@@ -459,28 +535,31 @@ func (m *s3MediaStore) thumbnailURL(ctx context.Context, media *Media) (string, 
 	if mediaType := strings.TrimSpace(media.MediaType); mediaType != "" && !strings.EqualFold(mediaType, "photo") {
 		return "", errors.New("thumbnail unavailable for non-photo media")
 	}
-	if strings.TrimSpace(media.ThumbnailURL) == "" {
-		if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
-			Bucket: &m.bucket,
-			Key:    &thumbKey,
-		}); err != nil {
-			if err := m.generateAndStoreThumbnail(ctx, media, thumbKey); err != nil {
-				return "", err
-			}
+	if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &m.bucket,
+		Key:    &thumbKey,
+	}); err != nil {
+		if err := m.generateAndStoreThumbnail(ctx, media, thumbKey); err != nil {
+			return "", err
 		}
 	}
-	thumbType := thumbnailContentType
-	out, err := m.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket:              &m.bucket,
-		Key:                 &thumbKey,
-		ResponseContentType: &thumbType,
-	}, func(opts *s3.PresignOptions) {
-		opts.Expires = 15 * time.Minute
-	})
-	if err != nil {
-		return "", err
+	return m.presignMediaObject(ctx, thumbKey, thumbnailContentType, displayPhotoFileName(media.FileName))
+}
+
+func (m *s3MediaStore) displayURL(ctx context.Context, media *Media) (string, error) {
+	displayKey := strings.TrimSpace(media.StorageKey) + "_display.jpg"
+	if strings.TrimSpace(media.StorageKey) == "" {
+		return "", errors.New("missing media storage key")
 	}
-	return out.URL, nil
+	if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &m.bucket,
+		Key:    &displayKey,
+	}); err != nil {
+		if err := m.generateAndStoreDisplay(ctx, media, displayKey); err != nil {
+			return "", err
+		}
+	}
+	return m.presignMediaObject(ctx, displayKey, thumbnailContentType, displayPhotoFileName(media.FileName))
 }
 
 func (m *s3MediaStore) generateAndStoreThumbnail(ctx context.Context, media *Media, thumbKey string) error {
@@ -511,6 +590,34 @@ func (m *s3MediaStore) generateAndStoreThumbnail(ctx context.Context, media *Med
 	return err
 }
 
+func (m *s3MediaStore) generateAndStoreDisplay(ctx context.Context, media *Media, displayKey string) error {
+	body, contentType, err := m.Open(ctx, media)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	display, err := generateDisplayPhoto(data, contentType)
+	if err != nil {
+		return err
+	}
+	if len(display) == 0 {
+		return errors.New("display image unavailable for media")
+	}
+	displayType := thumbnailContentType
+	_, err = m.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket:      &m.bucket,
+		Key:         &displayKey,
+		Body:        bytes.NewReader(display),
+		ContentType: &displayType,
+		ACL:         types.ObjectCannedACLPrivate,
+	})
+	return err
+}
+
 func (m *s3MediaStore) Delete(ctx context.Context, media *Media) error {
 	_, err := m.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: &m.bucket,
@@ -525,6 +632,13 @@ func (m *s3MediaStore) Delete(ctx context.Context, media *Media) error {
 		Key:    &thumbKey,
 	}); derr != nil {
 		log.Printf("media: s3 thumbnail delete failed for %s: %v", media.ID, derr)
+	}
+	displayKey := media.StorageKey + "_display.jpg"
+	if _, derr := m.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &m.bucket,
+		Key:    &displayKey,
+	}); derr != nil {
+		log.Printf("media: s3 display variant delete failed for %s: %v", media.ID, derr)
 	}
 	return nil
 }
