@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -31,6 +32,8 @@ const (
 	thumbnailJPEGQuality = 80
 	displayMaxEdge       = 1000
 	displayJPEGQuality   = 86
+	displayVariantSuffix = "_display.jpg"
+	mediaVariantWorkers  = 2
 	thumbnailContentType = "image/jpeg"
 )
 
@@ -187,15 +190,83 @@ type mediaStore interface {
 }
 
 type s3MediaStore struct {
-	bucket    string
-	region    string
-	client    *s3.Client
-	uploader  *manager.Uploader
-	presigner *s3.PresignClient
+	bucket       string
+	region       string
+	client       *s3.Client
+	uploader     *manager.Uploader
+	presigner    *s3.PresignClient
+	variantCache *mediaVariantCache
 }
 
 type localMediaStore struct {
 	dir string
+}
+
+type mediaVariantCache struct {
+	mu       sync.Mutex
+	inFlight map[string]*mediaVariantCall
+	sem      chan struct{}
+}
+
+type mediaVariantCall struct {
+	done chan struct{}
+	err  error
+}
+
+func newMediaVariantCache(limit int) *mediaVariantCache {
+	if limit <= 0 {
+		limit = 1
+	}
+	return &mediaVariantCache{
+		inFlight: make(map[string]*mediaVariantCall),
+		sem:      make(chan struct{}, limit),
+	}
+}
+
+func (c *mediaVariantCache) do(ctx context.Context, key string, fn func() error) error {
+	if c == nil {
+		return fn()
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("media variant key is required")
+	}
+
+	c.mu.Lock()
+	if existing := c.inFlight[key]; existing != nil {
+		c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-existing.done:
+			return existing.err
+		}
+	}
+	call := &mediaVariantCall{done: make(chan struct{})}
+	c.inFlight[key] = call
+	c.mu.Unlock()
+
+	select {
+	case c.sem <- struct{}{}:
+		defer func() { <-c.sem }()
+	case <-ctx.Done():
+		c.finish(key, call, ctx.Err())
+		return ctx.Err()
+	}
+
+	err := fn()
+	c.finish(key, call, err)
+	return err
+}
+
+func (c *mediaVariantCache) finish(key string, call *mediaVariantCall, err error) {
+	c.mu.Lock()
+	if c.inFlight[key] == call {
+		delete(c.inFlight, key)
+	}
+	call.err = err
+	close(call.done)
+	c.mu.Unlock()
 }
 
 func newMediaStore() (mediaStore, error) {
@@ -215,11 +286,12 @@ func newMediaStore() (mediaStore, error) {
 		}
 		client := s3.NewFromConfig(cfg)
 		return &s3MediaStore{
-			bucket:    bucket,
-			region:    region,
-			client:    client,
-			uploader:  manager.NewUploader(client),
-			presigner: s3.NewPresignClient(client),
+			bucket:       bucket,
+			region:       region,
+			client:       client,
+			uploader:     manager.NewUploader(client),
+			presigner:    s3.NewPresignClient(client),
+			variantCache: newMediaVariantCache(mediaVariantWorkers),
 		}, nil
 	}
 
@@ -539,7 +611,9 @@ func (m *s3MediaStore) thumbnailURL(ctx context.Context, media *Media) (string, 
 		Bucket: &m.bucket,
 		Key:    &thumbKey,
 	}); err != nil {
-		if err := m.generateAndStoreThumbnail(ctx, media, thumbKey); err != nil {
+		if err := m.ensureGeneratedVariant(ctx, thumbKey, func() error {
+			return m.generateAndStoreThumbnail(ctx, media, thumbKey)
+		}); err != nil {
 			return "", err
 		}
 	}
@@ -547,7 +621,7 @@ func (m *s3MediaStore) thumbnailURL(ctx context.Context, media *Media) (string, 
 }
 
 func (m *s3MediaStore) displayURL(ctx context.Context, media *Media) (string, error) {
-	displayKey := strings.TrimSpace(media.StorageKey) + "_display.jpg"
+	displayKey := strings.TrimSpace(media.StorageKey) + displayVariantSuffix
 	if strings.TrimSpace(media.StorageKey) == "" {
 		return "", errors.New("missing media storage key")
 	}
@@ -555,11 +629,29 @@ func (m *s3MediaStore) displayURL(ctx context.Context, media *Media) (string, er
 		Bucket: &m.bucket,
 		Key:    &displayKey,
 	}); err != nil {
-		if err := m.generateAndStoreDisplay(ctx, media, displayKey); err != nil {
+		if err := m.ensureGeneratedVariant(ctx, displayKey, func() error {
+			return m.generateAndStoreDisplay(ctx, media, displayKey)
+		}); err != nil {
 			return "", err
 		}
 	}
 	return m.presignMediaObject(ctx, displayKey, thumbnailContentType, displayPhotoFileName(media.FileName))
+}
+
+func (m *s3MediaStore) ensureGeneratedVariant(ctx context.Context, key string, generate func() error) error {
+	cache := m.variantCache
+	if cache == nil {
+		return generate()
+	}
+	return cache.do(ctx, key, func() error {
+		if _, err := m.client.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: &m.bucket,
+			Key:    &key,
+		}); err == nil {
+			return nil
+		}
+		return generate()
+	})
 }
 
 func (m *s3MediaStore) generateAndStoreThumbnail(ctx context.Context, media *Media, thumbKey string) error {
@@ -633,7 +725,7 @@ func (m *s3MediaStore) Delete(ctx context.Context, media *Media) error {
 	}); derr != nil {
 		log.Printf("media: s3 thumbnail delete failed for %s: %v", media.ID, derr)
 	}
-	displayKey := media.StorageKey + "_display.jpg"
+	displayKey := media.StorageKey + displayVariantSuffix
 	if _, derr := m.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: &m.bucket,
 		Key:    &displayKey,
