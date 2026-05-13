@@ -164,6 +164,7 @@ func main() {
 	mux.HandleFunc("POST /admin/shows/{showID}", a.requireCapabilityPage("shows.manage", a.handleAdminShowUpdate))
 	mux.HandleFunc("POST /admin/shows/{showID}/judges", a.requireCapabilityPage("judges.manage", a.handleAdminJudgeAssign))
 	mux.HandleFunc("GET /admin/shows/{showID}/stream", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowStream))
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.requireCapabilityPage("shows.workspace.read", a.handleAdminShowExport))
 
 	// Admin show helpers (PR 7 share-link onboarding)
 	mux.HandleFunc("GET /admin/shows/{showID}/helpers", a.requireCapabilityPage("entries.manage", a.handleAdminShowHelpers))
@@ -226,6 +227,7 @@ func main() {
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/clubs/{id}/workspace", a.handleAPIClubWorkspace)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows", a.handleAPIShowsDirectory)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}", a.handleAPIShowDetail)
+	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/exports/{file}", a.requireAuth(a.handleAPIShowExport))
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/workspace", a.handleAPIShowWorkspace)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/board", a.handleAPIShowBoard)
 	mux.HandleFunc("GET /v1/projections/0007-Flowershow/shows/{id}/people.lookup", a.handleAPIShowPeopleLookup)

@@ -1,5 +1,38 @@
 # a-firstbloom Development Log
 
+## Session: 2026-05-13
+
+### Work Completed
+
+**Operator exports**
+- Added `handlers_exports.go` with protected show export endpoints for admin sessions and service-token agents.
+- Added normalized CSV exports for entries, schedule hierarchy, leaderboard, and scorecards.
+- Added normalized `workbook.xls` export with entries, schedule, leaderboard, and scorecards sheets.
+- Added operator-style `tally.xls` export modeled after existing show-night tally workbooks:
+  - `Show Tally` grid with class numbers across columns and exhibitors down rows
+  - repeated `#1s #2s #3s` tally columns
+  - `Point Summary` using local operator scoring conventions
+  - `Participation` and `Results` tabs
+- Added admin show-page download controls: `Tally XLS`, `Data XLS`, and CSV export links.
+- Added API projection export URLs under `/v1/projections/0007-Flowershow/shows/{id}/exports/{file}`.
+
+**Documentation and contract updates**
+- Added `exports` capability and export projections to `interaction_contract.yaml`.
+- Updated seed design, acceptance criteria, seed README, realization README, and validation evidence for tally/data exports.
+
+### Decisions Made
+
+1. **Two export shapes** — Keep normalized exports for agents/data pipelines and a separate operator workbook for show-night workflows.
+2. **Generated-on-request reports** — Export files are generated from current store state rather than persisted artifacts.
+3. **Service-token access for agents** — Agent/API export URLs require `Authorization: Bearer $AS_SERVICE_TOKEN`; admin downloads use session auth.
+4. **Operator scoring convention** — Tally workbook point summary follows the provided sheets: horticulture/flowers/vegetables use 4/3/2 and design/special use 12/9/6.
+
+### Validation
+
+- `go test ./...` in `artifacts/flowershow-app`
+- `./scripts/ci-seed-go-tests.sh`
+- Local smoke test confirmed admin export controls render and `tally.xls` returns an Excel attachment.
+
 ## Session: 2026-03-17
 
 ### Work Completed

@@ -427,7 +427,35 @@ Examples:
 
 ---
 
-### 13. Media
+### 13. Operator Reports & Exports
+
+Flower show operators often run the event from print-style tally sheets rather
+than normalized tables. The system therefore supports both structured data
+exports and operator workbook exports.
+
+#### Normalized exports
+- entries with show, class, person, placement, points, notes, and taxon refs
+- schedule hierarchy from division → section → class
+- leaderboard by organization and season
+- scorecards with per-criterion scores
+
+#### Operator tally workbook
+- class numbers across columns
+- exhibitors down rows
+- placement markers in the class grid
+- repeated `#1s #2s #3s` tally columns
+- point summary using local show-night scoring conventions:
+  - horticulture / flowers / vegetables: 1st = 4, 2nd = 3, 3rd = 2
+  - design / special exhibits: 1st = 12, 2nd = 9, 3rd = 6
+- participation and results tabs for season rollups and show-night reporting
+
+Reports are generated on request from current show, entry, class, and person
+state. Admin UI downloads use session auth; agent/API downloads use service
+token auth.
+
+---
+
+### 14. Media
 
 Media is a first-class declared `domain_objects` kind. Each row carries `id`, `entity_kind`, the relevant entity foreign key, MIME type, dimensions, duration (for video), original filename, and `is_cover`.
 
@@ -449,7 +477,7 @@ A 512px-max-edge JPEG thumbnail is generated server-side at upload. The public r
 
 ---
 
-### 14. Privacy & Suppression
+### 15. Privacy & Suppression
 
 - System is append-only
 - Content can be suppressed (hidden)
@@ -459,7 +487,7 @@ A 512px-max-edge JPEG thumbnail is generated server-side at upload. The public r
 
 ---
 
-### 15. Show Admin
+### 16. Show Admin
 
 Rich control panel for show-night operations:
 - Set judge info per class
@@ -467,6 +495,7 @@ Rich control panel for show-night operations:
 - Assign people to entries
 - Upload photos/videos
 - Set winners per class
+- Download operator tally workbooks and normalized data exports
 - Multiple operators work simultaneously via SSE push (no reload)
 
 Current working workspace model:
@@ -515,7 +544,7 @@ Class- and entry-level cover photos (see §13) drive the imagery on the landing 
 
 ---
 
-### 16. Real-Time & Frontend
+### 17. Real-Time & Frontend
 
 - HTMX for partial page updates and SSE integration
 - Server-Sent Events push live changes to all connected operators
@@ -523,7 +552,7 @@ Class- and entry-level cover photos (see §13) drive the imagery on the landing 
 
 ---
 
-### 17. Authentication
+### 18. Authentication
 
 - Cognito handles identity only (login, signup, token validation)
 - Roles (admin, judge, entrant, public) are managed in-app, not in Cognito
@@ -602,6 +631,7 @@ The `schedules.upsert` command uses upsert semantics: if a schedule already exis
 - Schedule hierarchy (division → section → class) over flat categories
 - Rule inheritance with local overrides
 - Rubric-capable scoring, not just placement
+- Operator tally workbooks alongside normalized CSV/XLS exports
 - Graph-like taxonomy over rigid schema
 - Separate structured domains (horticulture vs design)
 - Organization-scoped everything

@@ -154,6 +154,30 @@ Useful environment/config inputs in deployed mode include:
 - Flowershow S3 credentials for media upload
 - the normal production/runtime secret injection paths used by `webd`
 
+## Exports
+
+Admin users can download show exports from a show admin page:
+
+- `Tally XLS` — operator-style workbook with show tally grid, point summary,
+  participation, and results tabs
+- `Data XLS` — normalized multi-sheet workbook for entries, schedule,
+  leaderboard, and scorecards
+- CSV exports — entries, schedule, leaderboard, and scorecards
+
+Service-token agents can download the same generated files through projection
+URLs:
+
+```text
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/tally.xls
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/workbook.xls
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/entries.csv
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/schedule.csv
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/leaderboard.csv
+GET /v1/projections/0007-Flowershow/shows/{id}/exports/scorecards.csv
+```
+
+Agent/API requests require `Authorization: Bearer $AS_SERVICE_TOKEN`.
+
 ## Testing
 
 ```bash

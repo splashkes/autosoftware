@@ -9,8 +9,18 @@
       <h1>{{.Show.Name}}</h1>
     </div>
     <div class="show-actions">
+      <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/tally.xls" class="btn btn-primary btn-sm">Tally XLS</a>
+      <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/workbook.xls" class="btn btn-outline btn-sm">Data XLS</a>
       <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="btn btn-outline btn-sm" target="_blank">View Public</a>
     </div>
+  </div>
+
+  <div class="export-bar">
+    <span class="card-meta">CSV exports</span>
+    <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/entries.csv" class="btn btn-outline btn-sm">Entries</a>
+    <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/schedule.csv" class="btn btn-outline btn-sm">Schedule</a>
+    <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/leaderboard.csv" class="btn btn-outline btn-sm">Leaderboard</a>
+    <a href="{{$.BasePath}}/admin/shows/{{.Show.ID}}/exports/scorecards.csv" class="btn btn-outline btn-sm">Scorecards</a>
   </div>
 
   <div id="sse-toasts" sse-swap="show-updated,schedule-created,division-created,section-created,class-created,entry-created,placement-set,scorecard-submitted" hx-swap="beforeend settle:3s" class="toast-container"></div>
