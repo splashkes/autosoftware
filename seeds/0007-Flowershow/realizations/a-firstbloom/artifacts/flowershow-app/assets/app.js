@@ -7,6 +7,7 @@ const FLOWERSHOW_MAX_VIDEO_EDGE = 1920;
 const FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY = 4;
 const flowershowIntakeUploadStates = new WeakMap();
 const flowershowIntakeAutosaveTimers = new WeakMap();
+const flowershowIntakeCloseTimers = new WeakMap();
 const flowershowDeferredMediaQueue = [];
 const flowershowDeferredMediaActiveImages = new Set();
 let flowershowDeferredMediaActive = 0;
@@ -196,11 +197,20 @@ function flowershowCloseIntakeModal(modal) {
   if (!modal) return;
   modal.querySelectorAll('[data-intake-entry-form], [data-intake-edit-form]').forEach(function(form) {
     flowershowClearAutosaveTimer(form);
+    flowershowClearIntakeCloseTimer(form);
     flowershowSetAutosaveStatus(form, '', false);
     flowershowResetIntakeUploadState(form);
   });
   modal.hidden = true;
   document.body.classList.remove('body-lightbox-open');
+}
+
+function flowershowClearIntakeCloseTimer(form) {
+  const timer = flowershowIntakeCloseTimers.get(form);
+  if (timer) {
+    clearTimeout(timer);
+    flowershowIntakeCloseTimers.delete(form);
+  }
 }
 
 function flowershowSyncEntrantLookup(input) {
@@ -520,6 +530,58 @@ function flowershowPopulateIntakeExistingMediaPreview(modal, trigger) {
   }
 }
 
+function flowershowSetIntakePostUploadClose(form, visible) {
+  if (!form) return;
+  const button = form.querySelector('[data-intake-post-upload-close]');
+  if (!button) return;
+  button.hidden = !visible;
+}
+
+function flowershowArmIntakeAutoClose(form) {
+  if (!form) return;
+  flowershowClearIntakeCloseTimer(form);
+  flowershowSetIntakePostUploadClose(form, true);
+  const timer = window.setTimeout(function() {
+    const modal = form.closest('[data-intake-modal]');
+    if (modal && !modal.hidden) {
+      flowershowCloseIntakeModal(modal);
+    }
+  }, 1000);
+  flowershowIntakeCloseTimers.set(form, timer);
+}
+
+function flowershowRefreshIntakeExistingPreviewFromList(form) {
+  if (!form) return null;
+  const entryID = form.dataset.intakeEntryId || '';
+  const modal = form.closest('[data-intake-modal]');
+  if (!entryID || !modal) return null;
+  const trigger = document.querySelector('[data-intake-modal-open][data-intake-entry-id="' + entryID + '"]');
+  if (trigger) {
+    flowershowPopulateIntakeExistingMediaPreview(modal, trigger);
+    form.dataset.intakeSuppressed = trigger.dataset.intakeSuppressed || '';
+  }
+  return trigger;
+}
+
+function flowershowResetIntakeEntryActionButtons(form) {
+  if (!form) return;
+  const suppressed = form.dataset.intakeSuppressed === 'true';
+  form.dataset.intakePendingEntryAction = '';
+  form.querySelectorAll('[data-intake-entry-action]').forEach(function(button) {
+    const action = button.dataset.intakeEntryAction || '';
+    if (action === 'suppress') {
+      button.textContent = suppressed ? 'Restore entry' : 'Suppress entry';
+    } else if (action === 'delete') {
+      button.textContent = 'Delete entry';
+    }
+  });
+  const status = form.querySelector('[data-intake-entry-action-status]');
+  if (status) {
+    status.textContent = 'First click arms an action; second click confirms.';
+    status.classList.remove('is-error');
+  }
+}
+
 function flowershowOpenIntakeModal(modal, trigger) {
   if (!modal || !trigger) return;
   const mode = trigger.dataset.intakeMode || 'new';
@@ -567,6 +629,10 @@ function flowershowOpenIntakeModal(modal, trigger) {
       const notesInput = editForm.querySelector('[data-intake-existing-notes-input]');
       editForm.reset();
       editForm.action = trigger.dataset.intakeUpdateAction || '';
+      editForm.dataset.intakeEntryId = trigger.dataset.intakeEntryId || '';
+      editForm.dataset.intakeVisibilityAction = trigger.dataset.intakeVisibilityAction || '';
+      editForm.dataset.intakeDeleteAction = trigger.dataset.intakeDeleteAction || '';
+      editForm.dataset.intakeSuppressed = trigger.dataset.intakeSuppressed || '';
       if (placementInput) {
         placementInput.value = trigger.dataset.intakePlacement || '0';
       }
@@ -605,7 +671,9 @@ function flowershowOpenIntakeModal(modal, trigger) {
       }
       editForm.dataset.intakePendingConfirm = '';
       flowershowResetIntakeUploadState(editForm);
+      flowershowSetIntakePostUploadClose(editForm, false);
       flowershowSetAutosaveStatus(editForm, '', false);
+      flowershowResetIntakeEntryActionButtons(editForm);
       flowershowRefreshPlacementButtons(editForm);
       flowershowRefreshAwardState(editForm);
     }
@@ -644,6 +712,92 @@ function flowershowBindIntakeModal(modal) {
   flowershowBindIntakeForm(modal.querySelector('[data-intake-entry-form]'), { isNew: true });
   flowershowBindIntakeForm(modal.querySelector('[data-intake-edit-form]'), { isNew: false });
   flowershowBindIntakeResultsForm(modal.querySelector('[data-intake-results-form]'));
+}
+
+async function flowershowSubmitIntakeEntryAction(form, action) {
+  if (!form || !action) return;
+  const status = form.querySelector('[data-intake-entry-action-status]');
+  const buttons = Array.from(form.querySelectorAll('[data-intake-entry-action]'));
+  const formData = new FormData();
+  formData.set('section', 'intake');
+  let url = '';
+  let successMessage = '';
+  if (action === 'suppress') {
+    url = form.dataset.intakeVisibilityAction || '';
+    const nextSuppressed = form.dataset.intakeSuppressed !== 'true';
+    formData.set('suppressed', nextSuppressed ? 'true' : 'false');
+    successMessage = nextSuppressed ? 'Entry suppressed.' : 'Entry restored.';
+  } else if (action === 'delete') {
+    url = form.dataset.intakeDeleteAction || '';
+    successMessage = 'Entry deleted.';
+  }
+  buttons.forEach(function(button) {
+    button.disabled = true;
+  });
+  if (status) {
+    status.textContent = 'Saving…';
+    status.classList.remove('is-error');
+  }
+  try {
+    if (!url) {
+      throw new Error('Entry action URL is missing.');
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+      headers: { 'HX-Request': 'true' }
+    });
+    const html = await response.text();
+    if (!response.ok) {
+      throw new Error(flowershowFriendlyErrorMessage(html, 'Could not update entry.'));
+    }
+    const modal = form.closest('[data-intake-modal]');
+    if (modal) {
+      flowershowCloseIntakeModal(modal);
+    }
+    flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', html || '');
+    flowershowToast(successMessage, false);
+  } catch (error) {
+    const message = flowershowFriendlyErrorMessage(error && error.message, 'Could not update entry.');
+    if (status) {
+      status.textContent = message;
+      status.classList.add('is-error');
+    }
+    flowershowToast(message, true);
+  } finally {
+    buttons.forEach(function(button) {
+      button.disabled = false;
+    });
+    flowershowResetIntakeEntryActionButtons(form);
+  }
+}
+
+function flowershowBindIntakeEntryActionButton(button) {
+  if (!button || button.dataset.intakeEntryActionBound === 'true') return;
+  button.dataset.intakeEntryActionBound = 'true';
+  button.addEventListener('click', function() {
+    const form = button.closest('form');
+    if (!form) return;
+    const action = button.dataset.intakeEntryAction || '';
+    const pending = form.dataset.intakePendingEntryAction || '';
+    if (pending !== action) {
+      flowershowResetIntakeEntryActionButtons(form);
+      form.dataset.intakePendingEntryAction = action;
+      if (action === 'suppress') {
+        button.textContent = form.dataset.intakeSuppressed === 'true' ? 'Confirm restore entry' : 'Confirm suppress entry';
+      } else if (action === 'delete') {
+        button.textContent = 'Confirm delete entry';
+      }
+      const status = form.querySelector('[data-intake-entry-action-status]');
+      if (status) {
+        status.textContent = action === 'delete' ? 'Confirming will permanently delete this entry.' : 'Confirming changes public visibility for this entry.';
+        status.classList.remove('is-error');
+      }
+      return;
+    }
+    flowershowSubmitIntakeEntryAction(form, action);
+  });
 }
 
 function flowershowBindIntakeTrigger(button) {
@@ -1259,7 +1413,9 @@ function flowershowBindIntakeCaptureInput(input) {
           target: form.dataset.target || '#admin-intake-panel',
           section: 'intake'
         });
+        flowershowRefreshIntakeExistingPreviewFromList(form);
         flowershowSetAutosaveStatus(form, 'Media saved.', false);
+        flowershowArmIntakeAutoClose(form);
       } else if (form && form.dataset.intakeAutosave === 'true' && hasReadyItems) {
         await flowershowSubmitAutosaveForm(form, { keepMessage: true, closeModal: false });
       } else if (form && form.hasAttribute('data-corrections-media-form') && hasReadyItems) {
@@ -1481,6 +1637,18 @@ function flowershowBindIntakeForm(form, options) {
   form.querySelectorAll('[data-intake-entrant-input]').forEach(flowershowBindIntakeEntrantInput);
   form.querySelectorAll('[data-intake-media-button]').forEach(flowershowBindIntakeCaptureButton);
   form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
+  form.querySelectorAll('[data-intake-entry-action]').forEach(flowershowBindIntakeEntryActionButton);
+  form.querySelectorAll('[data-intake-post-upload-close]').forEach(function(button) {
+    if (button.dataset.intakePostUploadCloseBound === 'true') return;
+    button.dataset.intakePostUploadCloseBound = 'true';
+    button.addEventListener('click', function() {
+      flowershowClearIntakeCloseTimer(form);
+      const modal = form.closest('[data-intake-modal]');
+      if (modal) {
+        flowershowCloseIntakeModal(modal);
+      }
+    });
+  });
   form.addEventListener('submit', function(event) {
     event.preventDefault();
     if (flowershowGetIntakeUploadState(form).uploading) {

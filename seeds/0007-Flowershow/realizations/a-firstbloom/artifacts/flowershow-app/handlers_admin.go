@@ -1553,6 +1553,7 @@ func (a *app) handleAdminEntryDelete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	_ = r.ParseForm()
 	if err := a.store.deleteEntry(entryID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1560,7 +1561,11 @@ func (a *app) handleAdminEntryDelete(w http.ResponseWriter, r *http.Request) {
 	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry deleted</div>`)
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
 	a.publishShowSummary(entry.ShowID)
-	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "floor")
+	section := strings.TrimSpace(r.FormValue("section"))
+	if section == "" {
+		section = "floor"
+	}
+	a.respondAdminSectionOrRedirect(w, r, entry.ShowID, section)
 }
 
 func (a *app) handleAdminEntryResults(w http.ResponseWriter, r *http.Request) {
@@ -1645,7 +1650,11 @@ func (a *app) handleAdminEntryVisibility(w http.ResponseWriter, r *http.Request)
 		a.sseBroker.publish(entry.ShowID, "placement-set", fmt.Sprintf(`<div class="toast">%s</div>`, label))
 		a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
 		a.publishShowSummary(entry.ShowID)
-		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, "floor")
+		section := strings.TrimSpace(r.FormValue("section"))
+		if section == "" {
+			section = "floor"
+		}
+		a.respondAdminSectionOrRedirect(w, r, entry.ShowID, section)
 		return
 	}
 	redirect(w, r)
