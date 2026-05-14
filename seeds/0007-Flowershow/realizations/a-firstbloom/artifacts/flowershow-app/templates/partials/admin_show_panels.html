@@ -49,10 +49,13 @@
     data-intake-notes="{{$entry.Entry.Notes}}"
     data-intake-placement="{{$entry.Entry.Placement}}"
     data-intake-special-status="{{if $entry.Entry.SpecialStatus}}true{{else}}false{{end}}"
+    data-intake-suppressed="{{if $entry.Entry.Suppressed}}true{{else}}false{{end}}"
     data-intake-award-id="{{if $entry.SpecialAward}}{{$entry.SpecialAward.ID}}{{end}}"
     data-intake-upload-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/media"
     data-intake-update-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}"
     data-intake-results-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/results"
+    data-intake-visibility-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/visibility"
+    data-intake-delete-action="{{$ctx.BasePath}}/admin/entries/{{$entry.Entry.ID}}/delete"
     data-intake-entry-href="{{$ctx.BasePath}}/entries/{{$entry.Entry.ID}}"
     {{with $primaryMedia}}
     data-intake-thumbnail-src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1"
@@ -551,8 +554,14 @@
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" capture="environment" multiple data-intake-media-input="capture">
             <input type="file" hidden aria-hidden="true" tabindex="-1" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple data-intake-media-input="upload">
             <div class="intake-upload-queue" data-intake-upload-queue></div>
+            <button type="button" class="btn btn-primary intake-upload-close" data-intake-post-upload-close hidden>Close</button>
           </div>
           <p class="card-meta intake-autosave-status" data-intake-autosave-status aria-live="polite"></p>
+          <div class="intake-danger-zone" data-intake-danger-zone>
+            <button type="button" class="btn btn-outline btn-sm" data-intake-entry-action="suppress">Suppress entry</button>
+            <button type="button" class="btn btn-outline btn-sm danger" data-intake-entry-action="delete">Delete entry</button>
+            <p class="card-meta" data-intake-entry-action-status>First click arms an action; second click confirms.</p>
+          </div>
         </form>
       </div>
     </div>

@@ -228,8 +228,14 @@ test.describe('Flowershow Admin Local', () => {
     await editForm.locator('[data-intake-media-input="upload"]').setInputFiles(fixtureImage);
     await uploadResponse;
     await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Media saved.');
+    await expect(editForm.locator('[data-intake-existing-media-preview]')).toBeVisible();
+    await expect(editForm.locator('[data-intake-existing-media-image]')).toHaveAttribute(
+      'src',
+      /\/media\/[^"]+\?thumb=1/,
+    );
+    await expect(editForm.getByRole('button', { name: 'Close' })).toBeVisible();
+    await expect(page.locator('[data-intake-modal]')).toBeHidden({ timeout: 2500 });
 
-    await page.getByRole('button', { name: 'Close intake editor' }).click();
     const refreshedTile = page.locator(`[data-intake-modal-open][data-intake-entry-id="${entryID}"]`);
     await expect(refreshedTile).toHaveClass(/has-photo/);
     await expect(refreshedTile).not.toContainText('needs photo');
@@ -241,6 +247,46 @@ test.describe('Flowershow Admin Local', () => {
       'src',
       /\/media\/[^"]+\?thumb=1/,
     );
+  });
+
+  test('existing intake modal guards suppress and restore actions', async ({ page }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin/shows/show_spring2025');
+
+    await page.getByRole('button', { name: 'Entries', exact: true }).click();
+    const entryTile = page
+      .locator('[data-intake-modal-open][data-intake-mode="existing"][data-intake-suppressed="false"]')
+      .first();
+    await expect(entryTile).toBeVisible();
+    const entryID = await entryTile.getAttribute('data-intake-entry-id');
+    expect(entryID).toBeTruthy();
+
+    await entryTile.click();
+    let editForm = page.locator('[data-intake-edit-form]');
+    await expect(editForm).toBeVisible();
+    await editForm.getByRole('button', { name: 'Delete entry' }).click();
+    await expect(editForm.getByRole('button', { name: 'Confirm delete entry' })).toBeVisible();
+    await editForm.getByRole('button', { name: 'Suppress entry' }).click();
+    await expect(editForm.getByRole('button', { name: 'Confirm suppress entry' })).toBeVisible();
+
+    const suppressResponse = page.waitForResponse((response) => {
+      return response.request().method() === 'POST' &&
+        response.url().includes(`/admin/entries/${entryID}/visibility`) &&
+        response.ok();
+    });
+    await editForm.getByRole('button', { name: 'Confirm suppress entry' }).click();
+    await suppressResponse;
+    await expect(page.locator('[data-intake-modal]')).toBeHidden();
+    const suppressedTile = page.locator(`[data-intake-modal-open][data-intake-entry-id="${entryID}"]`);
+    await expect(suppressedTile).toHaveCount(0);
+
+    const restoreResponse = await page.request.post(`/admin/entries/${entryID}/visibility`, {
+      form: {
+        section: 'intake',
+        suppressed: 'false',
+      },
+    });
+    expect(restoreResponse.ok()).toBeTruthy();
   });
 
   test('corrections uses compact capture and upload controls without a visible file chooser', async ({ page }) => {
