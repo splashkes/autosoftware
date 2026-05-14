@@ -464,8 +464,8 @@ function flowershowOpenIntakeModal(modal, trigger) {
     const personIDInput = modal.querySelector('[data-intake-person-id-input]');
     if (form) {
       form.reset();
-      form.action = trigger.dataset.intakeCreateAction || form.action;
-      form.setAttribute('hx-post', trigger.dataset.intakeCreateAction || form.action);
+      flowershowClearIntakeDraftEntry(form);
+      flowershowSetIntakeFormAction(form, trigger.dataset.intakeCreateAction || form.action);
       flowershowResetIntakeUploadState(form);
       flowershowSetAutosaveStatus(form, '', false);
     }
@@ -987,14 +987,56 @@ function flowershowEntryClassValue(form) {
   return classInput ? (classInput.value || '').trim() : '';
 }
 
+function flowershowSetIntakeFormAction(form, action) {
+  if (!form || !action) return;
+  form.action = action;
+  form.setAttribute('action', action);
+  form.setAttribute('hx-post', action);
+}
+
+function flowershowEnsureHiddenFormValue(form, name, value) {
+  if (!form || !name) return;
+  let input = form.querySelector('input[type="hidden"][name="' + name + '"]');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    form.appendChild(input);
+  }
+  input.value = value || '';
+}
+
+function flowershowMarkIntakeDraftEntry(form, payload) {
+  if (!form || !payload) return;
+  const entryID = payload.entry_id || '';
+  const updateURL = payload.update_url || '';
+  if (!entryID || !updateURL) return;
+  form.dataset.intakeDraftEntryId = entryID;
+  form.dataset.intakeCreatedEntryId = entryID;
+  form.setAttribute('data-intake-draft-entry', entryID);
+  flowershowSetIntakeFormAction(form, updateURL);
+  flowershowEnsureHiddenFormValue(form, 'section', 'intake');
+}
+
+function flowershowClearIntakeDraftEntry(form) {
+  if (!form) return;
+  delete form.dataset.intakeDraftEntryId;
+  delete form.dataset.intakeCreatedEntryId;
+  form.removeAttribute('data-intake-draft-entry');
+}
+
 function flowershowSubmitIntakeForm(form, options) {
   const closeModal = !options || options.closeModal !== false;
   const onSuccess = options && typeof options.onSuccess === 'function' ? options.onSuccess : null;
   const onError = options && typeof options.onError === 'function' ? options.onError : null;
   const skipSwap = !!(options && options.skipSwap);
+  const jsonResponse = !!(options && options.jsonResponse);
   const state = flowershowGetIntakeUploadState(form);
   const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
   const formData = new FormData(form);
+  if (jsonResponse) {
+    formData.set('response', 'json');
+  }
   state.items.forEach(function(item) {
     formData.append('media', item.file, item.file.name);
   });
@@ -1011,6 +1053,9 @@ function flowershowSubmitIntakeForm(form, options) {
   const xhr = new XMLHttpRequest();
   xhr.open('POST', form.action);
   xhr.setRequestHeader('HX-Request', 'true');
+  if (jsonResponse) {
+    xhr.setRequestHeader('Accept', 'application/json');
+  }
   xhr.upload.addEventListener('progress', function(event) {
     flowershowDistributeUploadProgress(state.items, event.loaded, event.total);
     state.items.forEach(function(item) {
@@ -1044,6 +1089,25 @@ function flowershowSubmitIntakeForm(form, options) {
       }
       return;
     }
+    let responsePayload = null;
+    if (jsonResponse) {
+      try {
+        responsePayload = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+      } catch (error) {
+        const message = 'Entry saved, but the server returned an unexpected response.';
+        state.items.forEach(function(item) {
+          item.status = 'error';
+          item.error = message;
+        });
+        flowershowRenderIntakeUploadQueue(form);
+        flowershowToast(message, true);
+        if (onError) {
+          onError(new Error(message));
+        }
+        return;
+      }
+      flowershowMarkIntakeDraftEntry(form, responsePayload);
+    }
     state.items.forEach(function(item) {
       item.progress = 100;
       item.status = 'done';
@@ -1059,11 +1123,11 @@ function flowershowSubmitIntakeForm(form, options) {
       }
     }
     flowershowResetIntakeUploadState(form);
-    if (!skipSwap) {
+    if (!skipSwap && !jsonResponse) {
       flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', xhr.responseText || '');
     }
     if (onSuccess) {
-      onSuccess();
+      onSuccess(responsePayload);
     }
     document.body.dispatchEvent(new CustomEvent('flowershow:media-ready'));
   });
@@ -1116,15 +1180,10 @@ function flowershowBindIntakeCaptureInput(input) {
         await new Promise(function(resolve, reject) {
           flowershowSubmitIntakeForm(form, {
             closeModal: false,
-            onSuccess: function() {
-              const modal = form.closest('[data-intake-modal]');
-              const createdTrigger = flowershowFindExistingIntakeTrigger(form);
-              if (modal && createdTrigger) {
-                flowershowOpenIntakeModal(modal, createdTrigger);
-              } else if (modal) {
-                modal.hidden = true;
-                document.body.classList.remove('body-lightbox-open');
-              }
+            skipSwap: true,
+            jsonResponse: true,
+            onSuccess: function(payload) {
+              flowershowMarkIntakeDraftEntry(form, payload);
               resolve();
             },
             onError: reject
@@ -1236,28 +1295,6 @@ function flowershowSetAutosaveStatus(form, message, isError) {
   node.classList.toggle('is-success', !!(!isError && message));
 }
 
-function flowershowFindExistingIntakeTrigger(form) {
-  if (!form) return null;
-  const classIDInput = form.querySelector('[data-intake-class-id-input]');
-  const personIDInput = form.querySelector('[data-intake-person-id-input]');
-  const nameInput = form.querySelector('input[name="name"]');
-  const classID = classIDInput ? classIDInput.value : '';
-  const personID = personIDInput ? personIDInput.value : '';
-  const entryName = nameInput ? nameInput.value.trim() : '';
-  if (!classID || !personID) return null;
-  const candidates = Array.from(document.querySelectorAll('[data-intake-modal-open][data-intake-mode="existing"]')).filter(function(node) {
-    return node.dataset.intakeClassId === classID && node.dataset.intakePersonId === personID;
-  });
-  if (candidates.length === 0) return null;
-  if (entryName !== '') {
-    const exact = candidates.find(function(node) {
-      return (node.dataset.intakeEntryName || '').trim() === entryName;
-    });
-    if (exact) return exact;
-  }
-  return candidates[candidates.length - 1];
-}
-
 function flowershowClearAutosaveTimer(form) {
   const timer = flowershowIntakeAutosaveTimers.get(form);
   if (timer) {
@@ -1321,6 +1358,10 @@ function flowershowBindIntakeForm(form, options) {
   form.querySelectorAll('[data-intake-media-input]').forEach(flowershowBindIntakeCaptureInput);
   form.addEventListener('submit', function(event) {
     event.preventDefault();
+    if (flowershowGetIntakeUploadState(form).uploading) {
+      flowershowToast('Wait for the current media upload to finish before saving.', true);
+      return;
+    }
     const entrantInput = form.querySelector('[data-intake-entrant-input]');
     flowershowSyncEntrantLookup(entrantInput);
     if (form.hasAttribute('data-intake-entry-form') && !flowershowEntryClassValue(form)) {
