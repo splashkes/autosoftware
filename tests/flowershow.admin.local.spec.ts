@@ -203,6 +203,42 @@ test.describe('Flowershow Admin Local', () => {
     await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
   });
 
+  test('existing intake entry with no picture uploads media and refreshes the long list tile', async ({ page }) => {
+    await loginLocalAdmin(page);
+    await page.goto('/admin/shows/show_spring2025');
+
+    await page.getByRole('button', { name: 'Entries', exact: true }).click();
+    const missingPhotoTile = page
+      .locator('[data-intake-modal-open][data-intake-mode="existing"].needs-photo')
+      .first();
+    await expect(missingPhotoTile).toBeVisible();
+    const entryID = await missingPhotoTile.getAttribute('data-intake-entry-id');
+    expect(entryID).toBeTruthy();
+    await expect(missingPhotoTile).toContainText('needs photo');
+
+    await missingPhotoTile.click();
+    const editForm = page.locator('[data-intake-edit-form]');
+    await expect(editForm).toBeVisible();
+
+    const uploadResponse = page.waitForResponse((response) => {
+      return response.request().method() === 'POST' &&
+        response.url().includes(`/admin/entries/${entryID}/media`) &&
+        response.ok();
+    });
+    await editForm.locator('[data-intake-media-input="upload"]').setInputFiles(fixtureImage);
+    await uploadResponse;
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Media saved.');
+
+    await page.getByRole('button', { name: 'Close intake editor' }).click();
+    const refreshedTile = page.locator(`[data-intake-modal-open][data-intake-entry-id="${entryID}"]`);
+    await expect(refreshedTile).toHaveClass(/has-photo/);
+    await expect(refreshedTile).not.toContainText('needs photo');
+    await expect(refreshedTile.locator('img.intake-entry-image')).toHaveAttribute(
+      'data-deferred-media-src',
+      /\/media\/[^"]+\?thumb=1/,
+    );
+  });
+
   test('corrections uses compact capture and upload controls without a visible file chooser', async ({ page }) => {
     await loginLocalAdmin(page);
     await page.goto('/admin/shows/show_spring2025#corrections');
