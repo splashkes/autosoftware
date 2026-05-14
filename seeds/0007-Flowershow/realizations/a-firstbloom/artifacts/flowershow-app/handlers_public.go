@@ -815,6 +815,7 @@ func (a *app) handleHome(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "home.html", homeData{
 		Title:         "Flowershow",
 		CurrentPath:   "/",
+		RecentShows:   past,
 		UpcomingShows: upcoming,
 		PastShows:     past,
 		Clubs:         a.clubCards(time.Now()),
@@ -854,28 +855,28 @@ func (a *app) handleClassesIndex(w http.ResponseWriter, r *http.Request) {
 // --- Show Detail ---
 
 type showDetailData struct {
-	Title             string
-	CurrentPath       string
-	ShowID            string
-	Show              *Show
-	Schedule          *ShowSchedule
-	Divisions         []*divisionView
-	Entries           []*entryView
-	Awards            []*AwardDefinition
-	ShowCredits       []*showCreditView
-	Org               *Organization
-	StatusLabel       string
-	HeroSubtitle      string
-	HeroCoverPath     string
-	HeroImagePath     string
-	HeroImageAlt      string
-	Highlights        []*highlightView
-	WinnersByClass    []*classWinnersView
-	NavTiles          []*showNavTile
-	EntryCount        int
-	ExhibitorCount    int
-	ClassCount        int
-	ClassWithEntries  int
+	Title            string
+	CurrentPath      string
+	ShowID           string
+	Show             *Show
+	Schedule         *ShowSchedule
+	Divisions        []*divisionView
+	Entries          []*entryView
+	Awards           []*AwardDefinition
+	ShowCredits      []*showCreditView
+	Org              *Organization
+	StatusLabel      string
+	HeroSubtitle     string
+	HeroCoverPath    string
+	HeroImagePath    string
+	HeroImageAlt     string
+	Highlights       []*highlightView
+	WinnersByClass   []*classWinnersView
+	NavTiles         []*showNavTile
+	EntryCount       int
+	ExhibitorCount   int
+	ClassCount       int
+	ClassWithEntries int
 }
 
 type classWinnersView struct {
@@ -1482,17 +1483,17 @@ func buildShowHighlights(entries []*entryView, awardLookup map[string]*AwardDefi
 // --- Public Show Entries (per-show entries listing) ---
 
 type showEntriesData struct {
-	Title          string
-	CurrentPath    string
-	ShowID         string
-	Show           *Show
-	Org            *Organization
-	Entries        []*entryView
-	ClassFilters   []*entryClassFilter
-	SelectedClass  string
-	OnlyPlaced     bool
-	EntryCount     int
-	FilteredCount  int
+	Title         string
+	CurrentPath   string
+	ShowID        string
+	Show          *Show
+	Org           *Organization
+	Entries       []*entryView
+	ClassFilters  []*entryClassFilter
+	SelectedClass string
+	OnlyPlaced    bool
+	EntryCount    int
+	FilteredCount int
 }
 
 type entryClassFilter struct {
@@ -1644,16 +1645,16 @@ func (a *app) handlePublicShowEntries(w http.ResponseWriter, r *http.Request) {
 // --- Public Show Exhibitors (per-show exhibitors listing) ---
 
 type showExhibitorsData struct {
-	Title             string
-	CurrentPath       string
-	ShowID            string
-	Show              *Show
-	Org               *Organization
-	Exhibitors        []*exhibitorCardView
-	Anonymous         *exhibitorCardView
-	TotalExhibitors   int
-	TotalEntryCount   int
-	TotalPlacedCount  int
+	Title            string
+	CurrentPath      string
+	ShowID           string
+	Show             *Show
+	Org              *Organization
+	Exhibitors       []*exhibitorCardView
+	Anonymous        *exhibitorCardView
+	TotalExhibitors  int
+	TotalEntryCount  int
+	TotalPlacedCount int
 }
 
 type exhibitorCardView struct {

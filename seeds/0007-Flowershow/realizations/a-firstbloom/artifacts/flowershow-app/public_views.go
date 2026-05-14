@@ -90,6 +90,7 @@ type clubCardView struct {
 type homeData struct {
 	Title         string
 	CurrentPath   string
+	RecentShows   []*homeShowCard
 	UpcomingShows []*homeShowCard
 	PastShows     []*homeShowCard
 	Clubs         []*clubCardView

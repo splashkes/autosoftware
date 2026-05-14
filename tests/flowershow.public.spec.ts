@@ -5,6 +5,8 @@ test.describe('Flowershow Public', () => {
   test('home page loads with seeded shows and agent widget', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('h1')).toContainText('Flowershow');
+    await expect(page.getByRole('heading', { name: 'Recent Shows' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upcoming Shows' })).toHaveCount(0);
     await expect(page.locator('text=Spring Rose Show 2025')).toBeVisible();
     await expect(page.locator('text=Fall Garden Festival 2025')).toBeVisible();
     await expectAgentPath(page, '/');
@@ -24,8 +26,8 @@ test.describe('Flowershow Public', () => {
   test('show detail page displays schedule and entries', async ({ page }) => {
     await page.goto('/shows/spring-rose-show-2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
-    await expect(page.locator('text=Horticulture Specimens')).toBeVisible();
-    await expect(page.locator('text=Floral Design')).toBeVisible();
+    await expect(page.getByText('Horticulture Specimens').first()).toBeVisible();
+    await expect(page.getByText('Floral Design').first()).toBeVisible();
     await expect(page.locator('text=Peace')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Metro Rose Society' }).first()).toHaveAttribute(
       'href',

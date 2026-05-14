@@ -83,7 +83,19 @@
               <p class="card-meta">Start a show and move directly into schedule and intake setup.</p>
             </div>
           </a>
-          {{range .Shows}}
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Active</h2>
+            <p class="section-desc">Shows happening in the next or last 48 hours.</p>
+          </div>
+        </div>
+        {{if .ActiveShows}}
+        <div class="card-grid">
+          {{range .ActiveShows}}
           <a href="{{$.BasePath}}/admin/shows/{{.ID}}" class="card show-card">
             <div class="card-body">
               <h3 class="card-title">{{.Name}}</h3>
@@ -93,6 +105,57 @@
           </a>
           {{end}}
         </div>
+        {{else}}
+        <p class="empty-state">No active shows.</p>
+        {{end}}
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Past</h2>
+            <p class="section-desc">Shows older than the active 48-hour window.</p>
+          </div>
+        </div>
+        {{if .PastShows}}
+        <div class="card-grid">
+          {{range .PastShows}}
+          <a href="{{$.BasePath}}/admin/shows/{{.ID}}" class="card show-card">
+            <div class="card-body">
+              <h3 class="card-title">{{.Name}}</h3>
+              <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
+              <p class="card-meta">{{statusBadge .Status}}</p>
+            </div>
+          </a>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="empty-state">No past shows.</p>
+        {{end}}
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Upcoming</h2>
+            <p class="section-desc">Shows scheduled beyond the next 48 hours.</p>
+          </div>
+        </div>
+        {{if .UpcomingShows}}
+        <div class="card-grid">
+          {{range .UpcomingShows}}
+          <a href="{{$.BasePath}}/admin/shows/{{.ID}}" class="card show-card">
+            <div class="card-body">
+              <h3 class="card-title">{{.Name}}</h3>
+              <p class="card-meta">{{.Date}} &middot; {{.Location}}</p>
+              <p class="card-meta">{{statusBadge .Status}}</p>
+            </div>
+          </a>
+          {{end}}
+        </div>
+        {{else}}
+        <p class="empty-state">No upcoming shows.</p>
+        {{end}}
       </section>
       {{end}}
 
