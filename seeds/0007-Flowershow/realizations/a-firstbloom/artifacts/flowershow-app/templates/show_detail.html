@@ -28,6 +28,25 @@
       <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/classes" class="btn btn-outline show-hero-action-secondary">Browse classes</a>
       <a href="{{$.BasePath}}/shows/{{.Show.Slug}}/rules" class="btn btn-outline show-hero-action-secondary">Show rules</a>
     </div>
+    <section class="show-hero-leaderboard" aria-labelledby="show-hero-leaderboard-title">
+      <div class="show-hero-leaderboard-head">
+        <h2 id="show-hero-leaderboard-title">Leaderboard</h2>
+        <a href="{{$.BasePath}}/leaderboard?org={{.Show.OrganizationID}}&season={{.Show.Season}}">View all</a>
+      </div>
+      {{if .HeroLeaderboard}}
+      <ol class="show-hero-leaderboard-list" role="list">
+        {{range .HeroLeaderboard}}
+        <li class="show-hero-leaderboard-row">
+          <span class="show-hero-leaderboard-rank">{{.Rank}}</span>
+          {{if .PersonID}}<a class="show-hero-leaderboard-name" href="{{$.BasePath}}/people/{{.PersonID}}">{{.Initials}}</a>{{else}}<span class="show-hero-leaderboard-name">{{.Initials}}</span>{{end}}
+          <span class="show-hero-leaderboard-points">{{.PointsLabel}}</span>
+        </li>
+        {{end}}
+      </ol>
+      {{else}}
+      <p class="show-hero-leaderboard-empty">Leaderboard appears as entries are placed.</p>
+      {{end}}
+    </section>
   </div>
 </section>
 

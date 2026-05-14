@@ -400,6 +400,12 @@ func TestShowDetailBySlug(t *testing.T) {
 	if !strings.Contains(body, "Horticulture Specimens") {
 		t.Fatal("show detail missing division")
 	}
+	if !strings.Contains(body, "show-hero-leaderboard") {
+		t.Fatal("show detail missing hero leaderboard")
+	}
+	if !strings.Contains(body, "/leaderboard?org=org_demo1&season=2025") {
+		t.Fatal("show detail missing hero leaderboard link")
+	}
 }
 
 func TestShowSummaryPage(t *testing.T) {
