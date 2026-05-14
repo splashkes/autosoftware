@@ -442,6 +442,55 @@ function flowershowEntrantLabelForPerson(input, personID) {
   return match ? (match.value || '').trim() : '';
 }
 
+function flowershowPopulateIntakeExistingMediaPreview(modal, trigger) {
+  if (!modal) return;
+  const preview = modal.querySelector('[data-intake-existing-media-preview]');
+  if (!preview) return;
+  const image = preview.querySelector('[data-intake-existing-media-image]');
+  const fallback = preview.querySelector('[data-intake-existing-media-fallback]');
+  const title = preview.querySelector('[data-intake-existing-media-title]');
+  const meta = preview.querySelector('[data-intake-existing-media-meta]');
+  const src = trigger && trigger.dataset ? (trigger.dataset.intakeThumbnailSrc || '').trim() : '';
+  const mediaType = trigger && trigger.dataset ? (trigger.dataset.intakeThumbnailType || '').trim().toLowerCase() : '';
+  const fileName = trigger && trigger.dataset ? (trigger.dataset.intakeThumbnailFile || '').trim() : '';
+  const mediaCount = trigger && trigger.dataset ? parseInt(trigger.dataset.intakeMediaCount || '0', 10) || 0 : 0;
+  if (!src) {
+    preview.hidden = true;
+    if (image) {
+      image.hidden = true;
+      image.removeAttribute('src');
+    }
+    if (fallback) fallback.hidden = true;
+    if (title) title.textContent = '';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  preview.hidden = false;
+  if (title) {
+    title.textContent = trigger.dataset.intakeEntryName || trigger.dataset.intakeEntrant || 'Entry media';
+  }
+  if (meta) {
+    meta.textContent = mediaCount > 1 ? mediaCount + ' media items' : (fileName || 'Photo attached');
+  }
+  if (mediaType === 'video') {
+    if (image) {
+      image.hidden = true;
+      image.removeAttribute('src');
+    }
+    if (fallback) {
+      fallback.textContent = 'Video';
+      fallback.hidden = false;
+    }
+    return;
+  }
+  if (fallback) fallback.hidden = true;
+  if (image) {
+    image.alt = trigger.dataset.intakeEntryName || trigger.dataset.intakeEntrant || 'Entry media';
+    image.src = src;
+    image.hidden = false;
+  }
+}
+
 function flowershowOpenIntakeModal(modal, trigger) {
   if (!modal || !trigger) return;
   const mode = trigger.dataset.intakeMode || 'new';
@@ -469,11 +518,13 @@ function flowershowOpenIntakeModal(modal, trigger) {
       flowershowResetIntakeUploadState(form);
       flowershowSetAutosaveStatus(form, '', false);
     }
+    flowershowPopulateIntakeExistingMediaPreview(modal, null);
     if (classIDInput) classIDInput.value = trigger.dataset.intakeClassId || '';
     if (entrantInput) entrantInput.value = '';
     if (personIDInput) personIDInput.value = '';
     flowershowRenderEntrantResults(entrantInput);
   } else {
+    flowershowPopulateIntakeExistingMediaPreview(modal, trigger);
     const editForm = modal.querySelector('[data-intake-edit-form]');
     if (editForm) {
       const placementInput = editForm.querySelector('[data-intake-placement-input]');
