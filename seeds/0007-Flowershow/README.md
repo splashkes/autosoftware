@@ -30,10 +30,10 @@ The current canonical implementation is the `a-firstbloom` realization.
 - **Standards & Editions** — governing rulebooks (OJES, Publication 34) with edition tracking
 - **Source Provenance** — every structured record traces back to a source document and page
 - **Rule Inheritance** — local schedules inherit from standards and can override class rules
-- **Entries** are submissions into a class within a show, with media, placements, and taxonomy
+- **Entries** are submissions into a class within a show, with media, placements, fixed prizes, and taxonomy
 - **Rubric Scoring** — criterion-level judging with score provenance, not just placement
 - **Taxonomy** — flexible graph-like tagging (botanical names, design types, skill levels)
-- **Awards** — organization-scoped, taxonomy-filtered, computed from scores
+- **Results & Awards** — placements earn judging points; best-of and special awards can carry fixed cash prizes without affecting point leaderboards
 - **Media** — multiple photos/videos per entry, client-optimized uploads to S3
 - **Privacy** — public display of initials; private identity mapping; append-only suppression
 - **Authority & Delegation** — system-native club and show control with

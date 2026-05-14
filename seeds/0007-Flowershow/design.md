@@ -271,6 +271,7 @@ Each Entry:
 - belongs to a Person (optional — see anonymous entries below)
 - optionally belongs to a class_split via `split_id`
 - has placement and points
+- can carry a fixed prize amount in cents from a linked special/best-of award
 - has media (multiple photos/videos)
 - has taxonomy references
 
@@ -325,9 +326,17 @@ When a class has splits, placements are scoped per `(show_class_id, split_id)`: 
 
 Placements and awards are computed from scorecards when present.
 
-#### Special status
+#### Results, awards, and payouts
 
 Entries can carry a special status (e.g. award winner, honorable mention) independently of their numeric placement, optionally linked to a special award. The canonical command for setting or clearing this is `entries.set_special_status`. The admin "results" form is a UI convenience that fires both `entries.set_placement` and `entries.set_special_status` against the same entry; the contract surface remains the two separate semantic commands.
+
+Results deliberately separate:
+
+- judging points, stored on `entry.points` and used by seasonal leaderboards
+- fixed cash prizes, stored on `entry.fixed_prize_cents` when a linked award has a fixed prize
+- seasonal point payout policy, applied later by multiplying point totals by the organization's cents-per-point value or by allocating a prize pool
+
+This means a result such as `Best Design` can be modeled as a `best_of` award with `default_points = 0` and `default_prize_cents = 500`. It appears in public results and prize reports but does not distort the points leaderboard.
 
 ---
 
@@ -418,12 +427,18 @@ Awards are defined per organization and season.
 Each award:
 - defines filters (taxonomy-based)
 - defines scoring rules (sum, max, custom)
+- can define a result kind (`placement`, `honorable_mention`, `special_award`, `best_of`, `points_award`)
+- can define scope (`show`, `division`, `section`, `class_group`, `class`) and optional scope id
+- can define default judging points and default fixed prize cents independently
 
 Examples:
 - High Points
 - Best Rose
 - High Points Novice
 - Memorial awards
+- Best Flowering Bulb
+- Best Special Exhibit
+- Best Design
 
 ---
 

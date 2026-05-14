@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -207,8 +208,8 @@ type flowershowStore interface {
 	deleteEntry(entryID string) error
 	setEntrySuppressed(entryID string, suppressed bool) error
 	setPlacement(entryID string, placement int, points float64) error
-	setEntrySpecialStatus(entryID string, special bool, awardID string) error
-	setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error
+	setEntrySpecialStatus(entryID string, special bool, awardID string, fixedPrizeCents *int) error
+	setEntryResults(entryID string, placement int, points float64, special bool, awardID string, fixedPrizeCents *int) error
 	archiveEntry(entryID string) error
 	restoreEntry(entryID string) error
 	entryByID(id string) (*Entry, bool)
@@ -1244,7 +1245,7 @@ func (s *memoryStore) setPlacement(entryID string, placement int, points float64
 	return nil
 }
 
-func (s *memoryStore) setEntrySpecialStatus(entryID string, special bool, awardID string) error {
+func (s *memoryStore) setEntrySpecialStatus(entryID string, special bool, awardID string, fixedPrizeCents *int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.entries[entryID]
@@ -1252,24 +1253,35 @@ func (s *memoryStore) setEntrySpecialStatus(entryID string, special bool, awardI
 		return errors.New("entry not found")
 	}
 	awardID = strings.TrimSpace(awardID)
+	var award *AwardDefinition
 	if awardID != "" {
-		if _, ok := s.awards[awardID]; !ok {
+		var ok bool
+		award, ok = s.awards[awardID]
+		if !ok {
 			return errors.New("award not found")
 		}
 	}
 	if !special {
 		awardID = ""
+		e.FixedPrizeCents = 0
+	} else if fixedPrizeCents != nil {
+		e.FixedPrizeCents = *fixedPrizeCents
+	} else if award != nil {
+		e.FixedPrizeCents = award.DefaultPrizeCents
+	} else {
+		e.FixedPrizeCents = 0
 	}
 	e.SpecialStatus = special
 	e.SpecialAwardID = awardID
 	s.appendClaim(e.ID, "entry", "entry.special_status_set", map[string]any{
-		"special_status": special,
-		"award_id":       awardID,
+		"special_status":    special,
+		"award_id":          awardID,
+		"fixed_prize_cents": e.FixedPrizeCents,
 	})
 	return nil
 }
 
-func (s *memoryStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error {
+func (s *memoryStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string, fixedPrizeCents *int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.entries[entryID]
@@ -1277,13 +1289,23 @@ func (s *memoryStore) setEntryResults(entryID string, placement int, points floa
 		return errors.New("entry not found")
 	}
 	awardID = strings.TrimSpace(awardID)
+	var award *AwardDefinition
 	if awardID != "" {
-		if _, ok := s.awards[awardID]; !ok {
+		var ok bool
+		award, ok = s.awards[awardID]
+		if !ok {
 			return errors.New("award not found")
 		}
 	}
 	if !special {
 		awardID = ""
+		e.FixedPrizeCents = 0
+	} else if fixedPrizeCents != nil {
+		e.FixedPrizeCents = *fixedPrizeCents
+	} else if award != nil {
+		e.FixedPrizeCents = award.DefaultPrizeCents
+	} else {
+		e.FixedPrizeCents = 0
 	}
 	e.Placement = placement
 	e.Points = points
@@ -1293,8 +1315,9 @@ func (s *memoryStore) setEntryResults(entryID string, placement int, points floa
 		"placement": placement, "points": points,
 	})
 	s.appendClaim(e.ID, "entry", "entry.special_status_set", map[string]any{
-		"special_status": special,
-		"award_id":       awardID,
+		"special_status":    special,
+		"award_id":          awardID,
+		"fixed_prize_cents": e.FixedPrizeCents,
 	})
 	return nil
 }
@@ -1790,19 +1813,47 @@ func (s *memoryStore) taxonsByType(taxonType string) []*Taxon {
 func (s *memoryStore) createAward(input AwardInput) (*AwardDefinition, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defaultPrizeCents := input.DefaultPrizeCents
+	if defaultPrizeCents == 0 && input.DefaultPrizeAmount > 0 {
+		defaultPrizeCents = int(math.Round(input.DefaultPrizeAmount * 100))
+	}
 	a := &AwardDefinition{
-		ID:             newID("award"),
-		OrganizationID: input.OrganizationID,
-		Name:           input.Name,
-		Description:    input.Description,
-		Season:         input.Season,
-		TaxonFilters:   input.TaxonFilters,
-		ScoringRule:    input.ScoringRule,
-		MinEntries:     input.MinEntries,
+		ID:                newID("award"),
+		OrganizationID:    input.OrganizationID,
+		Name:              input.Name,
+		Description:       input.Description,
+		Season:            input.Season,
+		TaxonFilters:      input.TaxonFilters,
+		ScoringRule:       defaultAwardScoringRule(input.ScoringRule),
+		MinEntries:        input.MinEntries,
+		Kind:              defaultAwardKind(input.Kind),
+		ScopeType:         strings.TrimSpace(input.ScopeType),
+		ScopeID:           strings.TrimSpace(input.ScopeID),
+		PlacementRank:     input.PlacementRank,
+		DefaultPoints:     input.DefaultPoints,
+		DefaultPrizeCents: defaultPrizeCents,
+		RibbonLabel:       strings.TrimSpace(input.RibbonLabel),
+		SortOrder:         input.SortOrder,
 	}
 	s.awards[a.ID] = a
 	s.appendClaim(a.ID, "award", "award.created", a)
 	return a, nil
+}
+
+func defaultAwardScoringRule(rule string) string {
+	rule = strings.TrimSpace(rule)
+	if rule == "" {
+		return "sum"
+	}
+	return rule
+}
+
+func defaultAwardKind(kind string) string {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return "points_award"
+	}
+	return kind
 }
 
 func (s *memoryStore) awardByID(id string) (*AwardDefinition, bool) {
@@ -2943,6 +2994,7 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_entries (
   points DOUBLE PRECISION NOT NULL DEFAULT 0,
   special_status BOOLEAN NOT NULL DEFAULT FALSE,
   special_award_id TEXT NOT NULL DEFAULT '',
+  fixed_prize_cents INTEGER NOT NULL DEFAULT 0,
   taxon_refs TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2993,7 +3045,15 @@ CREATE TABLE IF NOT EXISTS as_flowershow_m_awards (
   season TEXT NOT NULL DEFAULT '',
   taxon_filters TEXT[] NOT NULL DEFAULT '{}',
   scoring_rule TEXT NOT NULL DEFAULT 'sum',
-  min_entries INTEGER NOT NULL DEFAULT 0
+  min_entries INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'points_award',
+  scope_type TEXT NOT NULL DEFAULT '',
+  scope_id TEXT NOT NULL DEFAULT '',
+  placement_rank INTEGER NOT NULL DEFAULT 0,
+  default_points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  default_prize_cents INTEGER NOT NULL DEFAULT 0,
+  ribbon_label TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS as_flowershow_m_standard_documents (
@@ -3246,6 +3306,7 @@ ALTER TABLE as_flowershow_m_entries
   ADD COLUMN IF NOT EXISTS points DOUBLE PRECISION NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS special_status BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS special_award_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS fixed_prize_cents INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS taxon_refs TEXT[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -3293,7 +3354,15 @@ ALTER TABLE as_flowershow_m_awards
   ADD COLUMN IF NOT EXISTS season TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS taxon_filters TEXT[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS scoring_rule TEXT NOT NULL DEFAULT 'sum',
-  ADD COLUMN IF NOT EXISTS min_entries INTEGER NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS min_entries INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'points_award',
+  ADD COLUMN IF NOT EXISTS scope_type TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS scope_id TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS placement_rank INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS default_points DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS default_prize_cents INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS ribbon_label TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE as_flowershow_m_standard_documents
   ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
@@ -3423,8 +3492,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			c.ID, c.SectionID, c.ClassNumber, c.SortOrder, c.Title, c.Domain, c.Description, c.SpecimenCount, c.TaxonRefs)
 	}
 	for _, e := range mem.entries {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
-			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.SpecialStatus, e.SpecialAwardID, e.TaxonRefs, e.CreatedAt)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, person_id, name, suppressed, placement, points, special_status, special_award_id, fixed_prize_cents, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT DO NOTHING`,
+			e.ID, e.ShowID, e.ClassID, e.PersonID, e.Name, e.Suppressed, e.Placement, e.Points, e.SpecialStatus, e.SpecialAwardID, e.FixedPrizeCents, e.TaxonRefs, e.CreatedAt)
 	}
 	for _, credit := range mem.showCredits {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_show_credits (id, show_id, person_id, display_name, credit_label, notes, sort_order, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
@@ -3444,8 +3513,8 @@ func (s *postgresFlowershowStore) seedIfEmpty(ctx context.Context) error {
 			t.ID, t.TaxonType, t.Name, t.ScientificName, t.Description, t.ParentID)
 	}
 	for _, a := range mem.awards {
-		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, season, taxon_filters, scoring_rule) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
-			a.ID, a.OrganizationID, a.Name, a.Season, a.TaxonFilters, a.ScoringRule)
+		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries, kind, scope_type, scope_id, placement_rank, default_points, default_prize_cents, ribbon_label, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT DO NOTHING`,
+			a.ID, a.OrganizationID, a.Name, a.Description, a.Season, a.TaxonFilters, a.ScoringRule, a.MinEntries, defaultAwardKind(a.Kind), a.ScopeType, a.ScopeID, a.PlacementRank, a.DefaultPoints, a.DefaultPrizeCents, a.RibbonLabel, a.SortOrder)
 	}
 	for _, std := range mem.stdDocs {
 		_, _ = s.pool.Exec(ctx, `INSERT INTO as_flowershow_m_standard_documents (id, name, issuing_org_id, domain_scope, description) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
@@ -4063,27 +4132,27 @@ func (s *postgresFlowershowStore) setPlacement(entryID string, placement int, po
 	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 
-func (s *postgresFlowershowStore) setEntrySpecialStatus(entryID string, special bool, awardID string) error {
+func (s *postgresFlowershowStore) setEntrySpecialStatus(entryID string, special bool, awardID string, fixedPrizeCents *int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return err
 	}
-	if err := mem.setEntrySpecialStatus(entryID, special, awardID); err != nil {
+	if err := mem.setEntrySpecialStatus(entryID, special, awardID, fixedPrizeCents); err != nil {
 		return err
 	}
 	return s.commitDomainMutation(ctx, mem, claimStart)
 }
 
-func (s *postgresFlowershowStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string) error {
+func (s *postgresFlowershowStore) setEntryResults(entryID string, placement int, points float64, special bool, awardID string, fixedPrizeCents *int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	mem, claimStart, err := s.prepareMutation(ctx)
 	if err != nil {
 		return err
 	}
-	if err := mem.setEntryResults(entryID, placement, points, special, awardID); err != nil {
+	if err := mem.setEntryResults(entryID, placement, points, special, awardID, fixedPrizeCents); err != nil {
 		return err
 	}
 	return s.commitDomainMutation(ctx, mem, claimStart)

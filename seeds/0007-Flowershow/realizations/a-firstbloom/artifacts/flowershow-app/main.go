@@ -405,6 +405,12 @@ var templateFuncMap = template.FuncMap{
 			return ""
 		}
 	},
+	"formatCents": func(cents int) string {
+		if cents == 0 {
+			return ""
+		}
+		return fmt.Sprintf("$%.2f", float64(cents)/100)
+	},
 	"divisionDisplay": func(d *Division) string {
 		if d == nil {
 			return ""

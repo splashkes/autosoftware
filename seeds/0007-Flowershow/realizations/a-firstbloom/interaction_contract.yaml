@@ -97,6 +97,9 @@ domain_objects:
           - name: points
             type: number
             summary: Public points tally when available.
+          - name: fixed_prize_cents
+            type: number
+            summary: Fixed cash prize attached to a linked special/best-of award; excluded from point leaderboards.
           - name: taxon_refs
             type: array<string>
             summary: Referenced taxonomy ids for the entry.
@@ -317,11 +320,45 @@ domain_objects:
     capabilities:
       - search_documents
   - kind: award_definition
-    summary: An award defined per organization and season with scoring rules.
+    summary: An award/result definition per organization and season, including point-scored awards and fixed-prize best-of awards.
     schema_ref: ../../design.md#9-judging--rubric-scoring
     capabilities:
       - state_transitions
       - activity_events
+    data_layout:
+      shared_metadata:
+        summary: Stable award identity and scope.
+        fields:
+          - name: id
+            type: string
+            summary: Stable award definition id.
+          - name: organization_id
+            type: string
+            summary: Organization that owns the award definition.
+          - name: season
+            type: string
+            summary: Season the award definition applies to.
+          - name: kind
+            type: string
+            summary: placement, honorable_mention, special_award, best_of, or points_award.
+          - name: scope_type
+            type: string
+            summary: show, division, section, class_group, or class.
+      public_payload:
+        summary: Display and payout defaults.
+        fields:
+          - name: name
+            type: string
+            summary: Display label, such as Best Design or Best Flowering Bulb.
+          - name: default_points
+            type: number
+            summary: Judging points assigned by default when this award is linked.
+          - name: default_prize_cents
+            type: number
+            summary: Fixed prize value in cents assigned by default when this award is linked.
+          - name: ribbon_label
+            type: string
+            summary: Optional ribbon or rosette label for display and exports.
   - kind: show_helper_invite
     summary: A show-scoped, low-privilege share-link record. The plaintext token is shown once at creation; only its sha256 hash is persisted.
     schema_ref: ../../design.md#7-people
@@ -665,7 +702,7 @@ commands:
     projection: entries.detail
     consistency: read_your_writes
   - name: entries.set_special_status
-    summary: Mark or clear an entry's special status, optionally linking to a special award.
+    summary: Mark or clear an entry's special status, optionally linking to a special/best-of award and fixed prize amount.
     path: /v1/commands/0007-Flowershow/entries.set_special_status
     object_kinds:
       - entry
@@ -852,7 +889,7 @@ commands:
     projection: admin.dashboard
     consistency: read_your_writes
   - name: awards.create
-    summary: Define a new award for an organization.
+    summary: Define a new award/result definition for an organization, including best-of awards with fixed prizes.
     path: /v1/commands/0007-Flowershow/awards.create
     object_kinds:
       - award_definition
@@ -1517,7 +1554,7 @@ projections:
           - private_payload
         summary: Authenticated operators and agents can download a normalized multi-sheet data workbook.
   - name: shows.export.entries_csv
-    summary: CSV of show entries with class, exhibitor, placement, points, notes, and taxon references.
+    summary: CSV of show entries with class, exhibitor, placement, points, fixed prize amount, notes, and taxon references.
     path: /v1/projections/0007-Flowershow/shows/{id}/exports/entries.csv
     object_kinds:
       - entry

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 )
@@ -623,18 +624,30 @@ func (a *app) handleAPICommand(w http.ResponseWriter, r *http.Request) {
 
 	case "entries.set_special_status":
 		var req struct {
-			ID            string `json:"id"`
-			SpecialStatus bool   `json:"special_status"`
-			AwardID       string `json:"award_id"`
+			ID               string   `json:"id"`
+			SpecialStatus    bool     `json:"special_status"`
+			AwardID          string   `json:"award_id"`
+			FixedPrizeCents  *int     `json:"fixed_prize_cents"`
+			FixedPrizeAmount *float64 `json:"fixed_prize_amount"`
 		}
 		if !a.decodeAPIJSON(w, r, &req) {
 			return
 		}
-		if err := a.store.setEntrySpecialStatus(req.ID, req.SpecialStatus, req.AwardID); err != nil {
+		fixedPrizeCents := req.FixedPrizeCents
+		if fixedPrizeCents == nil && req.FixedPrizeAmount != nil {
+			cents := int(math.Round(*req.FixedPrizeAmount * 100))
+			fixedPrizeCents = &cents
+		}
+		if err := a.store.setEntrySpecialStatus(req.ID, req.SpecialStatus, req.AwardID, fixedPrizeCents); err != nil {
 			a.writeAPIError(w, r, http.StatusBadRequest, "entry_special_status_failed", err.Error(), "Pass a stable entry id and the desired special_status boolean; award_id is optional and cleared when special_status is false.", []apiFieldError{{Field: "id", Message: "required stable entry id"}})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "special_status": req.SpecialStatus, "award_id": req.AwardID})
+		entry, _ := a.store.entryByID(req.ID)
+		var fixedPrizeCentsOut int
+		if entry != nil {
+			fixedPrizeCentsOut = entry.FixedPrizeCents
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "special_status": req.SpecialStatus, "award_id": req.AwardID, "fixed_prize_cents": fixedPrizeCentsOut})
 
 	case "entries.archive":
 		var req struct {

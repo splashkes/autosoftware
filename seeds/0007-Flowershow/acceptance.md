@@ -37,9 +37,14 @@ The system is complete when:
 ## Awards
 - Awards can be defined per organization
 - Awards correctly compute results from taxonomy filters and scoring rules
+- Award definitions can represent show-specific best-of awards such as Best Flowering Bulb, Best Special Exhibit, and Best Design
+- Fixed prize amounts are stored separately from judging points
+- Best-of awards with fixed prizes and zero points do not affect seasonal point leaderboards
+- Seasonal payouts can be reconciled as point total times cents-per-point plus fixed prizes
 
 ## Leaderboards
 - Current season leaderboard visible per organization
+- Leaderboards sum judging points only, not fixed prize dollars
 
 ## Show Admin
 - Control panel for live show operations

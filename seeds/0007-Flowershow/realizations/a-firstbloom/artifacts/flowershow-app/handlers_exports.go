@@ -149,6 +149,7 @@ func (a *app) entriesExportSheet(show *Show) exportSheet {
 			personField(person, "email"),
 			placementText(entry.Placement),
 			formatFloat(entry.Points),
+			formatCentsAmount(entry.FixedPrizeCents),
 			entry.Notes,
 			strings.Join(entry.TaxonRefs, "; "),
 			entry.CreatedAt.UTC().Format(time.RFC3339),
@@ -164,7 +165,7 @@ func (a *app) entriesExportSheet(show *Show) exportSheet {
 		Headers: []string{
 			"Entry ID", "Show", "Class Number", "Class Title", "Division", "Section", "Entry Name",
 			"Exhibitor First Name", "Exhibitor Last Name", "Initials", "Email", "Placement",
-			"Points", "Notes", "Taxon References", "Created At",
+			"Points", "Fixed Prize Amount", "Notes", "Taxon References", "Created At",
 		},
 		Rows: rows,
 	}
@@ -963,6 +964,13 @@ func formatFloat(v float64) string {
 		return ""
 	}
 	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+func formatCentsAmount(cents int) string {
+	if cents == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(float64(cents)/100, 'f', 2, 64)
 }
 
 func intOrEmpty(v int) string {
