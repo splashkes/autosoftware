@@ -29,6 +29,10 @@ test.describe('Flowershow Public', () => {
     await expect(page.getByText('Horticulture Specimens').first()).toBeVisible();
     await expect(page.getByText('Floral Design').first()).toBeVisible();
     await expect(page.locator('text=Peace')).toBeVisible();
+    await expect(page.locator('.show-hero-leaderboard')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Leaderboard' })).toBeVisible();
+    await expect(page.locator('.show-hero-leaderboard').getByRole('link', { name: 'View all' }))
+      .toHaveAttribute('href', '/leaderboard?org=org_demo1&season=2025');
     await expect(page.getByRole('link', { name: 'Metro Rose Society' }).first()).toHaveAttribute(
       'href',
       '/clubs/org_demo1',

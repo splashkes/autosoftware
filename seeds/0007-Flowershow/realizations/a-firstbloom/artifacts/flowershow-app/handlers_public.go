@@ -870,6 +870,7 @@ type showDetailData struct {
 	HeroCoverPath    string
 	HeroImagePath    string
 	HeroImageAlt     string
+	HeroLeaderboard  []showHeroLeaderboardEntry
 	Highlights       []*highlightView
 	WinnersByClass   []*classWinnersView
 	NavTiles         []*showNavTile
@@ -877,6 +878,13 @@ type showDetailData struct {
 	ExhibitorCount   int
 	ClassCount       int
 	ClassWithEntries int
+}
+
+type showHeroLeaderboardEntry struct {
+	Rank        int
+	PersonID    string
+	Initials    string
+	PointsLabel string
 }
 
 type classWinnersView struct {
@@ -1073,6 +1081,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	entryCount := len(entries)
 	navTiles := buildShowNavTiles(slug, entryCount, classCount, exhibitorCount)
+	heroLeaderboard := topLeaderboardEntries(a.store.leaderboard(show.OrganizationID, show.Season), 5)
 
 	a.render(w, r, "show_detail.html", showDetailData{
 		Title:            show.Name,
@@ -1090,6 +1099,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		HeroCoverPath:    heroCoverPath,
 		HeroImagePath:    heroImagePath,
 		HeroImageAlt:     show.Name + " — featured photo",
+		HeroLeaderboard:  heroLeaderboard,
 		Highlights:       highlights,
 		WinnersByClass:   winnersByClass,
 		NavTiles:         navTiles,
@@ -1098,6 +1108,25 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 		ClassCount:       classCount,
 		ClassWithEntries: classWithEntries,
 	})
+}
+
+func topLeaderboardEntries(entries []LeaderboardEntry, limit int) []showHeroLeaderboardEntry {
+	if limit <= 0 || len(entries) == 0 {
+		return nil
+	}
+	if len(entries) <= limit {
+		limit = len(entries)
+	}
+	out := make([]showHeroLeaderboardEntry, 0, limit)
+	for _, entry := range entries[:limit] {
+		out = append(out, showHeroLeaderboardEntry{
+			Rank:        entry.Rank,
+			PersonID:    entry.PersonID,
+			Initials:    entry.Initials,
+			PointsLabel: strconv.FormatFloat(entry.TotalPoints, 'f', -1, 64) + " pts",
+		})
+	}
+	return out
 }
 
 type showHeroFields struct {
