@@ -237,6 +237,10 @@ test.describe('Flowershow Admin Local', () => {
       'data-deferred-media-src',
       /\/media\/[^"]+\?thumb=1/,
     );
+    await expect(refreshedTile.locator('img.intake-entry-image')).toHaveAttribute(
+      'src',
+      /\/media\/[^"]+\?thumb=1/,
+    );
   });
 
   test('corrections uses compact capture and upload controls without a visible file chooser', async ({ page }) => {
