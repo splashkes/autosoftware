@@ -1449,6 +1449,12 @@ func TestAdminShowDetailIncludesGovernanceAndScoringControls(t *testing.T) {
 	if !strings.Contains(body, `/media/`+media.ID+`?thumb=1`) {
 		t.Fatal("admin show should render entry preview images through the thumbnail route")
 	}
+	if !strings.Contains(body, `data-intake-thumbnail-src="/media/`+media.ID+`?thumb=1"`) {
+		t.Fatal("admin intake tile should pass thumbnail src into the reopen modal")
+	}
+	if !strings.Contains(body, `data-intake-existing-media-preview`) {
+		t.Fatal("admin intake modal missing existing media preview")
+	}
 	if !strings.Contains(body, `data-corrections-media-form`) {
 		t.Fatal("admin show missing corrections media form")
 	}

@@ -1906,6 +1906,50 @@ textarea.form-input { min-height: 5rem; resize: vertical; }
   display: grid;
   gap: .45rem;
 }
+.intake-existing-media-preview {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: .75rem;
+  align-items: center;
+  padding: .6rem;
+  border: 1px solid rgba(45, 106, 79, .16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(216, 243, 220, .28), rgba(255, 255, 255, .92));
+}
+.intake-existing-media-preview[hidden] {
+  display: none;
+}
+.intake-existing-media-frame {
+  width: 76px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--gray-100), var(--green-pale));
+  display: grid;
+  place-items: center;
+}
+.intake-existing-media-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.intake-existing-media-fallback {
+  color: var(--green-deep);
+  font-weight: 700;
+  font-size: .85rem;
+}
+.intake-existing-media-copy {
+  display: grid;
+  gap: .15rem;
+  min-width: 0;
+}
+.intake-existing-media-copy strong,
+.intake-existing-media-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .intake-class-detail-display {
   display: flex;
   flex-wrap: wrap;
