@@ -579,6 +579,7 @@ function flowershowOpenIntakeModal(modal, trigger) {
         classSelect.value = trigger.dataset.intakeClassId || '';
       }
       editForm.dataset.intakeClassNumber = trigger.dataset.intakeClassNumber || '';
+      editForm.dataset.intakeUploadAction = trigger.dataset.intakeUploadAction || '';
       if (nameInput) {
         nameInput.value = trigger.dataset.intakeEntryName || '';
       }
@@ -1239,7 +1240,14 @@ function flowershowBindIntakeCaptureInput(input) {
       const hasReadyItems = !!(state && state.items.some(function(item) {
         return item.status === 'ready';
       }));
-      if (form && form.dataset.intakeAutosave === 'true' && hasReadyItems) {
+      if (form && form.hasAttribute('data-intake-edit-form') && hasReadyItems) {
+        await flowershowSubmitQueuedMediaForm(form, {
+          action: form.dataset.intakeUploadAction || '',
+          target: form.dataset.target || '#admin-intake-panel',
+          section: 'intake'
+        });
+        flowershowSetAutosaveStatus(form, 'Media saved.', false);
+      } else if (form && form.dataset.intakeAutosave === 'true' && hasReadyItems) {
         await flowershowSubmitAutosaveForm(form, { keepMessage: true, closeModal: false });
       } else if (form && form.hasAttribute('data-corrections-media-form') && hasReadyItems) {
         await flowershowSubmitQueuedMediaForm(form);
@@ -1276,7 +1284,7 @@ function flowershowBindIntakeCaptureInput(input) {
   });
 }
 
-function flowershowSubmitQueuedMediaForm(form) {
+function flowershowSubmitQueuedMediaForm(form, options) {
   const state = flowershowGetIntakeUploadState(form);
   const items = state.items.filter(function(item) {
     return item && item.status === 'ready' && item.file;
@@ -1285,7 +1293,20 @@ function flowershowSubmitQueuedMediaForm(form) {
     return Promise.resolve();
   }
   const buttons = Array.from(form.querySelectorAll('[data-intake-media-button]'));
+  const action = options && options.action ? String(options.action) : form.action;
+  if (!action) {
+    return Promise.reject(new Error('Media upload URL is missing.'));
+  }
   const formData = new FormData();
+  const section = options && options.section ? String(options.section) : '';
+  if (section) {
+    formData.set('section', section);
+  } else {
+    const sectionInput = form.querySelector('[name="section"]');
+    if (sectionInput && sectionInput.value) {
+      formData.set('section', sectionInput.value);
+    }
+  }
   items.forEach(function(item) {
     formData.append('media', item.file, item.file.name);
     item.status = 'uploading';
@@ -1299,7 +1320,7 @@ function flowershowSubmitQueuedMediaForm(form) {
   });
   return new Promise(function(resolve, reject) {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', form.action);
+    xhr.open('POST', action);
     xhr.setRequestHeader('HX-Request', 'true');
     xhr.upload.addEventListener('progress', function(event) {
       flowershowDistributeUploadProgress(items, event.loaded, event.total);
@@ -1340,7 +1361,8 @@ function flowershowSubmitQueuedMediaForm(form) {
       });
       flowershowRenderIntakeUploadQueue(form);
       flowershowResetIntakeUploadState(form);
-      flowershowSwapAdminTarget(form.dataset.target || '#admin-floor-panel', xhr.responseText || '');
+      const target = options && options.target ? String(options.target) : (form.dataset.target || '#admin-floor-panel');
+      flowershowSwapAdminTarget(target, xhr.responseText || '');
       document.body.dispatchEvent(new CustomEvent('flowershow:media-ready'));
       resolve();
     });
