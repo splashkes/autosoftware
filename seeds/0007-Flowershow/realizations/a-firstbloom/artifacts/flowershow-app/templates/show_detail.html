@@ -260,7 +260,7 @@
     <div class="card award-card">
       <div class="card-body">
         <h3 class="card-title">{{.Name}}</h3>
-        <p class="card-meta">{{.ScoringRule}} scoring &middot; Season {{.Season}}</p>
+        <p class="card-meta">{{.ScoringRule}} scoring &middot; Season {{.Season}}{{if .DefaultPrizeCents}} &middot; {{formatCents .DefaultPrizeCents}}{{end}}</p>
       </div>
     </div>
     {{end}}

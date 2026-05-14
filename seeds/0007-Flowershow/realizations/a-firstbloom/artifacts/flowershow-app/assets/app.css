@@ -310,6 +310,18 @@ a:hover {
     linear-gradient(135deg, #8b6914, #c9a227 50%, #fdf8e1);
 }
 .award-card { border-left: 4px solid var(--gold); }
+.award-definition-list { display: grid; gap: .65rem; margin: .85rem 0; }
+.award-definition-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+}
+.award-definition-values { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .taxon-card { border-left: 4px solid var(--pink); }
 .scorecard-card { border-left: 4px solid var(--green-light); }
 .class-card { border-left: 3px solid var(--green-light); }

@@ -1812,6 +1812,11 @@ func (a *app) handleAdminAwardCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if showID := r.FormValue("show_id"); showID != "" {
+		a.publishAdminSections(showID, "scoring", "intake", "floor", "board")
+		a.respondAdminSectionOrRedirect(w, r, showID, "scoring")
+		return
+	}
 	referer := r.Header.Get("Referer")
 	if referer == "" {
 		referer = "/admin"
