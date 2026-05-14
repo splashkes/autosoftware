@@ -1175,6 +1175,84 @@
 
 {{define "admin_scoring_panel"}}
 <div class="admin-show-stack">
+  <section class="card admin-show-card" id="scoring-awards">
+    <div class="card-body">
+      <h3 class="card-title">Awards</h3>
+      {{if .Awards}}
+      <div class="award-definition-list">
+        {{range .Awards}}
+        <div class="award-definition-row">
+          <div>
+            <strong>{{.Name}}</strong>
+            <p class="card-meta">
+              {{.Kind}}{{if .ScopeType}} · {{.ScopeType}}{{end}}{{if .Season}} · Season {{.Season}}{{end}}
+            </p>
+          </div>
+          <div class="award-definition-values">
+            <span class="badge badge-muted">{{printf "%.1f" .DefaultPoints}} pts</span>
+            {{if .DefaultPrizeCents}}<span class="badge badge-green">{{formatCents .DefaultPrizeCents}}</span>{{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="empty-state">No awards are defined for this show yet.</p>
+      {{end}}
+
+      <details class="account-collapsible compact admin-show-disclosure">
+        <summary>Create award</summary>
+        <form method="POST" action="{{$.BasePath}}/admin/awards" hx-post="{{$.BasePath}}/admin/awards" hx-target="#admin-scoring-panel" hx-swap="innerHTML" class="form" style="margin-top:1rem;">
+          <input type="hidden" name="show_id" value="{{.Show.ID}}">
+          <input type="hidden" name="organization_id" value="{{.Show.OrganizationID}}">
+          <input type="hidden" name="season" value="{{.Show.Season}}">
+          <input type="hidden" name="scope_type" value="show">
+          <input type="hidden" name="scope_id" value="{{.Show.ID}}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Award name</label>
+              <input type="text" name="name" class="form-input" placeholder="Best Flowering Bulb" required>
+            </div>
+            <div class="form-group">
+              <label>Kind</label>
+              <select name="kind" class="form-input">
+                <option value="best_of">Best of</option>
+                <option value="special_award">Special award</option>
+                <option value="honorable_mention">Honorable mention</option>
+                <option value="placement">Placement</option>
+                <option value="points_award">Points award</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Default points</label>
+              <input type="number" name="default_points" class="form-input" value="0" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+              <label>Fixed prize amount</label>
+              <input type="number" name="default_prize_amount" class="form-input" value="5.00" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label>Sort order</label>
+              <input type="number" name="sort_order" class="form-input" value="10" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Ribbon label</label>
+              <input type="text" name="ribbon_label" class="form-input" placeholder="Best in Show">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" name="description" class="form-input" placeholder="Optional judging note">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Create Award</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
   <section class="card admin-show-card" id="scoring-rubrics">
     <div class="card-body">
       <h3 class="card-title">Rubrics</h3>
