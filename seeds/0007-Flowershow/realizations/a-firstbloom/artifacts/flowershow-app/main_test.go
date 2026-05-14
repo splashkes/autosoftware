@@ -485,6 +485,9 @@ func TestClassBrowse(t *testing.T) {
 	if strings.Contains(body, `url('/media/`) {
 		t.Fatal("class browse should not render root-relative media paths when mounted under /flowershow")
 	}
+	if strings.Contains(body, `classes/class_02" class="card class-card class-card-illustrated"`) {
+		t.Fatal("class browse should not reuse unrelated show imagery for classes without their own photos")
+	}
 }
 
 func TestPersonHistoryPage(t *testing.T) {

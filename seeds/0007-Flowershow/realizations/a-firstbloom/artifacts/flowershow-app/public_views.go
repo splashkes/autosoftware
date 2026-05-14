@@ -633,10 +633,6 @@ func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
 			MediaPath: "/media/" + cover.ID + "?thumb=1",
 		}
 	}
-	frames := a.showVisualFrames(show)
-	if len(frames) > 0 {
-		return frames[0]
-	}
 	return showVisualFrame{Label: "Class highlights", Theme: "rose"}
 }
 
