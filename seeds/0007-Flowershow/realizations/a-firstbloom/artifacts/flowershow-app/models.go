@@ -259,21 +259,22 @@ type ClassSplitInput struct {
 // --- Entries ---
 
 type Entry struct {
-	ID             string     `json:"id"`
-	ShowID         string     `json:"show_id"`
-	ClassID        string     `json:"class_id"`
-	SplitID        string     `json:"split_id,omitempty"`
-	PersonID       string     `json:"person_id"`
-	Name           string     `json:"name"`
-	Notes          string     `json:"notes,omitempty"`
-	Suppressed     bool       `json:"suppressed,omitempty"`
-	ArchivedAt     *time.Time `json:"archived_at,omitempty"`
-	Placement      int        `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
-	Points         float64    `json:"points,omitempty"`
-	SpecialStatus  bool       `json:"special_status,omitempty"`
-	SpecialAwardID string     `json:"special_award_id,omitempty"`
-	TaxonRefs      []string   `json:"taxon_refs,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID              string     `json:"id"`
+	ShowID          string     `json:"show_id"`
+	ClassID         string     `json:"class_id"`
+	SplitID         string     `json:"split_id,omitempty"`
+	PersonID        string     `json:"person_id"`
+	Name            string     `json:"name"`
+	Notes           string     `json:"notes,omitempty"`
+	Suppressed      bool       `json:"suppressed,omitempty"`
+	ArchivedAt      *time.Time `json:"archived_at,omitempty"`
+	Placement       int        `json:"placement,omitempty"` // 1=first, 2=second, 3=third, 0=unplaced
+	Points          float64    `json:"points,omitempty"`
+	SpecialStatus   bool       `json:"special_status,omitempty"`
+	SpecialAwardID  string     `json:"special_award_id,omitempty"`
+	FixedPrizeCents int        `json:"fixed_prize_cents,omitempty"`
+	TaxonRefs       []string   `json:"taxon_refs,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type EntryInput struct {
@@ -370,24 +371,41 @@ type TaxonRelation struct {
 // --- Awards ---
 
 type AwardDefinition struct {
-	ID             string   `json:"id"`
-	OrganizationID string   `json:"organization_id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description,omitempty"`
-	Season         string   `json:"season"`
-	TaxonFilters   []string `json:"taxon_filters,omitempty"`
-	ScoringRule    string   `json:"scoring_rule"` // sum, max, count
-	MinEntries     int      `json:"min_entries,omitempty"`
+	ID                string   `json:"id"`
+	OrganizationID    string   `json:"organization_id"`
+	Name              string   `json:"name"`
+	Description       string   `json:"description,omitempty"`
+	Season            string   `json:"season"`
+	TaxonFilters      []string `json:"taxon_filters,omitempty"`
+	ScoringRule       string   `json:"scoring_rule"` // sum, max, count
+	MinEntries        int      `json:"min_entries,omitempty"`
+	Kind              string   `json:"kind,omitempty"`       // placement, honorable_mention, special_award, best_of, points_award
+	ScopeType         string   `json:"scope_type,omitempty"` // show, division, section, class_group, class
+	ScopeID           string   `json:"scope_id,omitempty"`
+	PlacementRank     int      `json:"placement_rank,omitempty"`
+	DefaultPoints     float64  `json:"default_points,omitempty"`
+	DefaultPrizeCents int      `json:"default_prize_cents,omitempty"`
+	RibbonLabel       string   `json:"ribbon_label,omitempty"`
+	SortOrder         int      `json:"sort_order,omitempty"`
 }
 
 type AwardInput struct {
-	OrganizationID string   `json:"organization_id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description,omitempty"`
-	Season         string   `json:"season"`
-	TaxonFilters   []string `json:"taxon_filters,omitempty"`
-	ScoringRule    string   `json:"scoring_rule"`
-	MinEntries     int      `json:"min_entries,omitempty"`
+	OrganizationID     string   `json:"organization_id"`
+	Name               string   `json:"name"`
+	Description        string   `json:"description,omitempty"`
+	Season             string   `json:"season"`
+	TaxonFilters       []string `json:"taxon_filters,omitempty"`
+	ScoringRule        string   `json:"scoring_rule"`
+	MinEntries         int      `json:"min_entries,omitempty"`
+	Kind               string   `json:"kind,omitempty"`
+	ScopeType          string   `json:"scope_type,omitempty"`
+	ScopeID            string   `json:"scope_id,omitempty"`
+	PlacementRank      int      `json:"placement_rank,omitempty"`
+	DefaultPoints      float64  `json:"default_points,omitempty"`
+	DefaultPrizeCents  int      `json:"default_prize_cents,omitempty"`
+	DefaultPrizeAmount float64  `json:"default_prize_amount,omitempty"`
+	RibbonLabel        string   `json:"ribbon_label,omitempty"`
+	SortOrder          int      `json:"sort_order,omitempty"`
 }
 
 type AwardResult struct {

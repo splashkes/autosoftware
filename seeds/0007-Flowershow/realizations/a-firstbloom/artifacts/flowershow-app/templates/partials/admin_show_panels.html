@@ -534,7 +534,7 @@
               {{if .Awards}}
               <select class="form-input" data-intake-award-select>
                 <option value="">Keep as star only</option>
-                {{range .Awards}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                {{range .Awards}}<option value="{{.ID}}">{{.Name}}{{if .DefaultPrizeCents}} · {{formatCents .DefaultPrizeCents}}{{end}}</option>{{end}}
               </select>
               {{else}}
               <p class="card-meta">No awards are defined for this show yet.</p>
@@ -1045,7 +1045,7 @@
             {{if $.Awards}}
             <select class="form-input" data-intake-award-select>
               <option value="">Keep as star only</option>
-              {{range $.Awards}}<option value="{{.ID}}" {{if and $currentEntry.SpecialAwardID (eq .ID $currentEntry.SpecialAwardID)}}selected{{end}}>{{.Name}}</option>{{end}}
+              {{range $.Awards}}<option value="{{.ID}}" {{if and $currentEntry.SpecialAwardID (eq .ID $currentEntry.SpecialAwardID)}}selected{{end}}>{{.Name}}{{if .DefaultPrizeCents}} · {{formatCents .DefaultPrizeCents}}{{end}}</option>{{end}}
             </select>
             {{else}}
             <p class="card-meta">No awards are defined for this show yet.</p>

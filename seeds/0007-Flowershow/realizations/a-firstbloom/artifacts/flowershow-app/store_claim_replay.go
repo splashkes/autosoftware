@@ -276,8 +276,9 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 			}
 		case "entry.special_status_set":
 			payload, err := decodeFlowershowClaimPayload[struct {
-				SpecialStatus bool   `json:"special_status"`
-				AwardID       string `json:"award_id"`
+				SpecialStatus   bool   `json:"special_status"`
+				AwardID         string `json:"award_id"`
+				FixedPrizeCents int    `json:"fixed_prize_cents"`
 			}](claim)
 			if err != nil {
 				return nil, err
@@ -285,6 +286,7 @@ func replayFlowershowSnapshotFromClaims(objects map[string]*FlowershowObject, cl
 			if item, ok := fresh.entries[claim.ObjectID]; ok {
 				item.SpecialStatus = payload.SpecialStatus
 				item.SpecialAwardID = payload.AwardID
+				item.FixedPrizeCents = payload.FixedPrizeCents
 			}
 		case "entry.archived":
 			payload, err := decodeFlowershowClaimPayload[struct {

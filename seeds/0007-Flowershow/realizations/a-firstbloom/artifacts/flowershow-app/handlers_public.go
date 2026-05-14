@@ -1350,7 +1350,7 @@ func buildClassWinnersViews(divisions []*divisionView, entries []*entryView) []*
 					if entry.Entry.SpecialStatus || strings.TrimSpace(entry.Entry.SpecialAwardID) != "" {
 						special := *cell
 						if entry.SpecialAward != nil && strings.TrimSpace(entry.SpecialAward.Name) != "" {
-							special.AwardName = strings.TrimSpace(entry.SpecialAward.Name)
+							special.AwardName = awardDisplayName(entry.SpecialAward)
 							special.BadgeLabel = "Special"
 							special.BadgeClass = "placement-badge-special"
 						} else {
@@ -1369,6 +1369,17 @@ func buildClassWinnersViews(divisions []*divisionView, entries []*entryView) []*
 		}
 	}
 	return out
+}
+
+func awardDisplayName(award *AwardDefinition) string {
+	if award == nil {
+		return ""
+	}
+	name := strings.TrimSpace(award.Name)
+	if award.DefaultPrizeCents <= 0 {
+		return name
+	}
+	return fmt.Sprintf("%s · $%.2f", name, float64(award.DefaultPrizeCents)/100)
 }
 
 func buildWinnerCell(entry *entryView) *winnerCellView {

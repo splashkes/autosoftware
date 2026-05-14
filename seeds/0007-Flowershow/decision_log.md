@@ -87,3 +87,10 @@ Badge-session creation does NOT emit a claim (high-volume, not auditable). Only 
 Beta-test feedback suggested separate roles for "fast entry adder", "name matcher", "ranking setter", etc. Implementing those as authority bundles would require permission tuning, role management UI, and operator switching ceremony. Instead, the admin show workspace exposes a single client-side `Fast add` / `Update entries` segmented toggle persisted in `localStorage` under `as.flowershow.workspace.mode`. The same operator can self-switch contexts mid-event with one tap, and there is no permission proliferation.
 
 In Update mode, four collapsible sub-sections appear under each entry: Name match, Ranking, Comment, Photo detail. The open/closed state of each section is persisted PER SECTION TYPE (not per entry) under `as.flowershow.section.{name}`. Operators tend to batch by task ("today I am doing rankings") rather than by entry, so flipping Comment open should open it for every entry at once.
+
+## 25. Results Separate Judging Points, Fixed Prizes, and Seasonal Payout
+Result modeling must not collapse every judged outcome into leaderboard points. Placements earn judging points, best-of/special awards can carry fixed prize amounts, and seasonal point payouts are a later organization policy that converts summed points into cents.
+
+The implementation keeps `entry.points` as the leaderboard value and adds `entry.fixed_prize_cents` for linked special/best-of awards. Award definitions now carry `kind`, `scope_type`, `scope_id`, `placement_rank`, `default_points`, `default_prize_cents`, `ribbon_label`, and `sort_order`. A May show can therefore define `Best Flowering Bulb`, `Best Special Exhibit`, and `Best Design` as `best_of` awards with `default_points = 0` and `default_prize_cents = 500`.
+
+Final payout reconciliation is: seasonal points times cents-per-point, plus fixed prizes. The cents-per-point rate is policy, not judging data.

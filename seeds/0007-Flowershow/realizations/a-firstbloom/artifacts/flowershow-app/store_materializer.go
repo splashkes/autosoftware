@@ -258,8 +258,8 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 		if item.ArchivedAt != nil {
 			archivedAt = *item.ArchivedAt
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, split_id, person_id, name, notes, suppressed, archived_at, placement, points, special_status, special_award_id, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-			item.ID, item.ShowID, item.ClassID, nullableString(item.SplitID), item.PersonID, item.Name, item.Notes, item.Suppressed, archivedAt, item.Placement, item.Points, item.SpecialStatus, item.SpecialAwardID, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_entries (id, show_id, class_id, split_id, person_id, name, notes, suppressed, archived_at, placement, points, special_status, special_award_id, fixed_prize_cents, taxon_refs, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+			item.ID, item.ShowID, item.ClassID, nullableString(item.SplitID), item.PersonID, item.Name, item.Notes, item.Suppressed, archivedAt, item.Placement, item.Points, item.SpecialStatus, item.SpecialAwardID, item.FixedPrizeCents, stringSliceOrEmpty(item.TaxonRefs), item.CreatedAt); err != nil {
 			return fmt.Errorf("insert entry projection %s: %w", item.ID, err)
 		}
 	}
@@ -290,8 +290,8 @@ func (s *postgresFlowershowStore) rebuildProjectionTablesFromSnapshotTx(ctx cont
 	}
 	for _, id := range sortedMapKeys(mem.awards) {
 		item := mem.awards[id]
-		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-			item.ID, item.OrganizationID, item.Name, item.Description, item.Season, stringSliceOrEmpty(item.TaxonFilters), item.ScoringRule, item.MinEntries); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO as_flowershow_m_awards (id, organization_id, name, description, season, taxon_filters, scoring_rule, min_entries, kind, scope_type, scope_id, placement_rank, default_points, default_prize_cents, ribbon_label, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+			item.ID, item.OrganizationID, item.Name, item.Description, item.Season, stringSliceOrEmpty(item.TaxonFilters), item.ScoringRule, item.MinEntries, defaultAwardKind(item.Kind), item.ScopeType, item.ScopeID, item.PlacementRank, item.DefaultPoints, item.DefaultPrizeCents, item.RibbonLabel, item.SortOrder); err != nil {
 			return fmt.Errorf("insert award projection %s: %w", item.ID, err)
 		}
 	}

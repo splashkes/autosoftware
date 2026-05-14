@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -1100,6 +1101,9 @@ func (a *app) awardsForShow(show *Show) []*AwardDefinition {
 		out = append(out, award)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder != out[j].SortOrder {
+			return out[i].SortOrder < out[j].SortOrder
+		}
 		return out[i].Name < out[j].Name
 	})
 	return out
@@ -1371,7 +1375,8 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 			pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
 			points = pointsMap[placement]
 		}
-		if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
+		fixedPrizeCents := optionalFormCents(r, "fixed_prize_cents", "fixed_prize_amount")
+		if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id")), fixedPrizeCents); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -1438,12 +1443,33 @@ func adminEntryJSONPayload(r *http.Request, entry *Entry) map[string]any {
 }
 
 func adminEntryResultsSubmitted(r *http.Request) bool {
-	for _, key := range []string{"placement", "points", "special_status", "award_id"} {
+	for _, key := range []string{"placement", "points", "special_status", "award_id", "fixed_prize_cents", "fixed_prize_amount"} {
 		if _, ok := r.Form[key]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+func optionalFormCents(r *http.Request, centsKey, amountKey string) *int {
+	raw := strings.TrimSpace(r.FormValue(centsKey))
+	if raw == "" {
+		amountRaw := strings.TrimSpace(r.FormValue(amountKey))
+		if amountRaw == "" {
+			return nil
+		}
+		amount, err := strconv.ParseFloat(amountRaw, 64)
+		if err != nil {
+			return nil
+		}
+		cents := int(math.Round(amount * 100))
+		return &cents
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &value
 }
 
 func (a *app) resolveEntryPersonIDFromForm(showID string, r *http.Request) (string, error) {
@@ -1555,7 +1581,8 @@ func (a *app) handleAdminEntryResults(w http.ResponseWriter, r *http.Request) {
 		pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
 		points = pointsMap[placement]
 	}
-	if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
+	fixedPrizeCents := optionalFormCents(r, "fixed_prize_cents", "fixed_prize_amount")
+	if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id")), fixedPrizeCents); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1759,13 +1786,27 @@ func (a *app) handleAdminPersonCreate(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleAdminAwardCreate(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	minEntries, _ := strconv.Atoi(r.FormValue("min_entries"))
+	placementRank, _ := strconv.Atoi(r.FormValue("placement_rank"))
+	defaultPoints, _ := strconv.ParseFloat(r.FormValue("default_points"), 64)
+	defaultPrizeCents, _ := strconv.Atoi(r.FormValue("default_prize_cents"))
+	defaultPrizeAmount, _ := strconv.ParseFloat(r.FormValue("default_prize_amount"), 64)
+	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
 	_, err := a.store.createAward(AwardInput{
-		OrganizationID: r.FormValue("organization_id"),
-		Name:           r.FormValue("name"),
-		Description:    r.FormValue("description"),
-		Season:         r.FormValue("season"),
-		ScoringRule:    r.FormValue("scoring_rule"),
-		MinEntries:     minEntries,
+		OrganizationID:     r.FormValue("organization_id"),
+		Name:               r.FormValue("name"),
+		Description:        r.FormValue("description"),
+		Season:             r.FormValue("season"),
+		ScoringRule:        r.FormValue("scoring_rule"),
+		MinEntries:         minEntries,
+		Kind:               r.FormValue("kind"),
+		ScopeType:          r.FormValue("scope_type"),
+		ScopeID:            r.FormValue("scope_id"),
+		PlacementRank:      placementRank,
+		DefaultPoints:      defaultPoints,
+		DefaultPrizeCents:  defaultPrizeCents,
+		DefaultPrizeAmount: defaultPrizeAmount,
+		RibbonLabel:        r.FormValue("ribbon_label"),
+		SortOrder:          sortOrder,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

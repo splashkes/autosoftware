@@ -194,6 +194,7 @@ Replaces the earlier generic `category` concept.
 - person_id
 - placement
 - points
+- fixed_prize_cents
 - media_ids[]
 
 ---
@@ -293,6 +294,12 @@ Placements and awards computed from scorecards when present.
 ## AwardDefinition
 - name
 - organization_id
+- kind (placement, honorable_mention, special_award, best_of, points_award)
+- scope_type (show, division, section, class_group, class)
+- scope_id
+- default_points
+- default_prize_cents
+- ribbon_label
 - criteria:
     - includes_taxons[]
     - excludes_taxons[]
@@ -302,6 +309,9 @@ Examples:
 - High Points
 - High Points Novice
 - Best Rose
+- Best Flowering Bulb
+- Best Special Exhibit
+- Best Design
 
 ---
 

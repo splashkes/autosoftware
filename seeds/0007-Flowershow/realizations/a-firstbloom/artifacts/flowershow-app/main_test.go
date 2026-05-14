@@ -3048,6 +3048,70 @@ func TestStoreMemoryBasics(t *testing.T) {
 	}
 }
 
+func TestBestOfAwardFixedPrizeDoesNotAffectLeaderboardPoints(t *testing.T) {
+	s := newMemoryStore()
+	before := leaderboardPointsForPerson(s.leaderboard("org_demo1", "2025"), "person_02")
+	award, err := s.createAward(AwardInput{
+		OrganizationID:    "org_demo1",
+		Name:              "Best Design",
+		Description:       "Best design in the show",
+		Season:            "2025",
+		ScoringRule:       "sum",
+		Kind:              "best_of",
+		ScopeType:         "show",
+		DefaultPoints:     0,
+		DefaultPrizeCents: 500,
+		RibbonLabel:       "Rosette",
+		SortOrder:         10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := s.createEntry(EntryInput{
+		ShowID:   "show_spring2025",
+		ClassID:  "class_09",
+		PersonID: "person_02",
+		Name:     "Prize Without Points",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.setEntryResults(entry.ID, 0, 0, true, award.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := s.entryByID(entry.ID)
+	if !ok {
+		t.Fatal("entry not found after result assignment")
+	}
+	if got.Points != 0 {
+		t.Fatalf("best-of award should not add leaderboard points, got %v", got.Points)
+	}
+	if got.FixedPrizeCents != 500 {
+		t.Fatalf("best-of award should apply default fixed prize, got %v", got.FixedPrizeCents)
+	}
+	after := leaderboardPointsForPerson(s.leaderboard("org_demo1", "2025"), "person_02")
+	if after != before {
+		t.Fatalf("fixed prize changed leaderboard points: before=%v after=%v", before, after)
+	}
+	replayed, err := replayFlowershowSnapshotFromClaims(s.objects, s.claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedEntry, ok := replayed.entryByID(entry.ID)
+	if !ok || replayedEntry.FixedPrizeCents != 500 || replayedEntry.Points != 0 {
+		t.Fatalf("replay did not preserve fixed prize without points: %+v", replayedEntry)
+	}
+}
+
+func leaderboardPointsForPerson(entries []LeaderboardEntry, personID string) float64 {
+	for _, entry := range entries {
+		if entry.PersonID == personID {
+			return entry.TotalPoints
+		}
+	}
+	return 0
+}
+
 func TestReplayFlowershowSnapshotFromClaimsRebuildsCurrentState(t *testing.T) {
 	s := newMemoryStore()
 
