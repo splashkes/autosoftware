@@ -397,12 +397,14 @@ func (a *app) showVisualFrames(show *Show) []showVisualFrame {
 	labels := []string{"Featured blooms", "Show highlights", "Class favorites"}
 	for _, entry := range entries {
 		media := a.store.mediaByEntry(entry.ID)
-		frame := showVisualFrame{
-			Label: labels[len(frames)%len(labels)],
-			Theme: themes[len(frames)%len(themes)],
+		cover := pickEntryCoverMedia(media)
+		if cover == nil {
+			continue
 		}
-		if len(media) > 0 {
-			frame.MediaPath = "/media/" + media[0].ID
+		frame := showVisualFrame{
+			Label:     labels[len(frames)%len(labels)],
+			Theme:     themes[len(frames)%len(themes)],
+			MediaPath: "/media/" + cover.ID + "?thumb=1",
 		}
 		frames = append(frames, frame)
 		if len(frames) == 3 {
@@ -620,15 +622,16 @@ func (a *app) classVisualFrame(show *Show, classID string) showVisualFrame {
 		if entry.ClassID != classID {
 			continue
 		}
-		frame := showVisualFrame{
-			Label: classLabel,
-			Theme: themes[idx%len(themes)],
-		}
 		media := a.store.mediaByEntry(entry.ID)
-		if len(media) > 0 {
-			frame.MediaPath = "/media/" + media[0].ID
+		cover := pickEntryCoverMedia(media)
+		if cover == nil {
+			continue
 		}
-		return frame
+		return showVisualFrame{
+			Label:     classLabel,
+			Theme:     themes[idx%len(themes)],
+			MediaPath: "/media/" + cover.ID + "?thumb=1",
+		}
 	}
 	frames := a.showVisualFrames(show)
 	if len(frames) > 0 {
