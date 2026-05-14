@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/csv"
 	"encoding/xml"
@@ -76,8 +77,17 @@ func (a *app) handleShowExport(w http.ResponseWriter, r *http.Request, showID, f
 			a.leaderboardExportSheet(show),
 			a.scorecardsExportSheet(show),
 		})
+	case "workbook.xlsx":
+		a.writeWorkbookXLSXExport(w, show, []exportSheet{
+			a.entriesExportSheet(show),
+			a.scheduleExportSheet(show),
+			a.leaderboardExportSheet(show),
+			a.scorecardsExportSheet(show),
+		})
 	case "tally.xls":
 		a.writeTallyWorkbookExport(w, show)
+	case "tally.xlsx":
+		a.writeTallyWorkbookXLSXExport(w, show)
 	default:
 		http.NotFound(w, r)
 	}
@@ -113,6 +123,16 @@ func (a *app) writeWorkbookExport(w http.ResponseWriter, show *Show, sheets []ex
 	_, _ = w.Write(b.Bytes())
 }
 
+func (a *app) writeWorkbookXLSXExport(w http.ResponseWriter, show *Show, sheets []exportSheet) {
+	var b bytes.Buffer
+	writeWorkbookStart(&b)
+	for _, sheet := range sheets {
+		writeExcelSheet(&b, sheet)
+	}
+	writeWorkbookEnd(&b)
+	writeXLSXExport(w, show, "workbook", b.Bytes())
+}
+
 func (a *app) writeTallyWorkbookExport(w http.ResponseWriter, show *Show) {
 	filename := exportFilename(show, "tally", "xls")
 	w.Header().Set("Content-Type", "application/vnd.ms-excel; charset=utf-8")
@@ -127,6 +147,30 @@ func (a *app) writeTallyWorkbookExport(w http.ResponseWriter, show *Show) {
 	a.writeResultsSheet(&b, show)
 	writeWorkbookEnd(&b)
 	_, _ = w.Write(b.Bytes())
+}
+
+func (a *app) writeTallyWorkbookXLSXExport(w http.ResponseWriter, show *Show) {
+	var b bytes.Buffer
+	writeWorkbookStart(&b)
+	a.writeShowTallySheet(&b, show)
+	a.writePointSummarySheet(&b, show)
+	a.writeParticipationSheet(&b, show)
+	a.writeResultsSheet(&b, show)
+	writeWorkbookEnd(&b)
+	writeXLSXExport(w, show, "tally", b.Bytes())
+}
+
+func writeXLSXExport(w http.ResponseWriter, show *Show, name string, spreadsheetML []byte) {
+	data, err := spreadsheetMLToXLSX(spreadsheetML)
+	if err != nil {
+		http.Error(w, "failed to build xlsx export", http.StatusInternalServerError)
+		return
+	}
+	filename := exportFilename(show, name, "xlsx")
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func (a *app) entriesExportSheet(show *Show) exportSheet {
@@ -761,6 +805,41 @@ type excelCell struct {
 	MergeAcross int
 }
 
+type spreadsheetMLWorkbook struct {
+	Worksheets []spreadsheetMLWorksheet `xml:"Worksheet"`
+}
+
+type spreadsheetMLWorksheet struct {
+	Name    string                         `xml:"Name,attr"`
+	Table   spreadsheetMLTable             `xml:"Table"`
+	Options *spreadsheetMLWorksheetOptions `xml:"WorksheetOptions"`
+}
+
+type spreadsheetMLWorksheetOptions struct{}
+
+type spreadsheetMLTable struct {
+	Columns []spreadsheetMLColumn `xml:"Column"`
+	Rows    []spreadsheetMLRow    `xml:"Row"`
+}
+
+type spreadsheetMLColumn struct {
+	Width string `xml:"Width,attr"`
+}
+
+type spreadsheetMLRow struct {
+	Cells []spreadsheetMLCell `xml:"Cell"`
+}
+
+type spreadsheetMLCell struct {
+	StyleID     string            `xml:"StyleID,attr"`
+	MergeAcross int               `xml:"MergeAcross,attr"`
+	Data        spreadsheetMLData `xml:"Data"`
+}
+
+type spreadsheetMLData struct {
+	Value string `xml:",chardata"`
+}
+
 func writeWorksheetStart(b *bytes.Buffer, name string) {
 	b.WriteString(`<Worksheet ss:Name="`)
 	xml.EscapeText(b, []byte(excelSheetName(name)))
@@ -829,6 +908,273 @@ func writeExcelRow(b *bytes.Buffer, row []string, header bool) {
 		b.WriteString("</Data></Cell>")
 	}
 	b.WriteString("</Row>\n")
+}
+
+func spreadsheetMLToXLSX(src []byte) ([]byte, error) {
+	var workbook spreadsheetMLWorkbook
+	if err := xml.Unmarshal(src, &workbook); err != nil {
+		return nil, err
+	}
+	if len(workbook.Worksheets) == 0 {
+		return nil, fmt.Errorf("workbook has no worksheets")
+	}
+
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	add := func(name, body string) error {
+		f, err := zw.Create(name)
+		if err != nil {
+			return err
+		}
+		_, err = f.Write([]byte(body))
+		return err
+	}
+
+	if err := add("[Content_Types].xml", xlsxContentTypes(len(workbook.Worksheets))); err != nil {
+		return nil, err
+	}
+	if err := add("_rels/.rels", xlsxRootRelationships()); err != nil {
+		return nil, err
+	}
+	if err := add("xl/workbook.xml", xlsxWorkbookXML(workbook.Worksheets)); err != nil {
+		return nil, err
+	}
+	if err := add("xl/_rels/workbook.xml.rels", xlsxWorkbookRelationships(len(workbook.Worksheets))); err != nil {
+		return nil, err
+	}
+	if err := add("xl/styles.xml", xlsxStylesXML()); err != nil {
+		return nil, err
+	}
+	for i, sheet := range workbook.Worksheets {
+		if err := add(fmt.Sprintf("xl/worksheets/sheet%d.xml", i+1), xlsxWorksheetXML(sheet)); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+func xlsxContentTypes(sheetCount int) string {
+	var b bytes.Buffer
+	b.WriteString(xml.Header)
+	b.WriteString(`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`)
+	b.WriteString(`<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`)
+	b.WriteString(`<Default Extension="xml" ContentType="application/xml"/>`)
+	b.WriteString(`<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`)
+	b.WriteString(`<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`)
+	for i := 1; i <= sheetCount; i++ {
+		b.WriteString(`<Override PartName="/xl/worksheets/sheet`)
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(`.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+	}
+	b.WriteString(`</Types>`)
+	return b.String()
+}
+
+func xlsxRootRelationships() string {
+	return xml.Header + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`
+}
+
+func xlsxWorkbookXML(sheets []spreadsheetMLWorksheet) string {
+	var b bytes.Buffer
+	b.WriteString(xml.Header)
+	b.WriteString(`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>`)
+	for i, sheet := range sheets {
+		b.WriteString(`<sheet name="`)
+		writeXMLAttr(&b, excelSheetName(sheet.Name))
+		b.WriteString(`" sheetId="`)
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(`" r:id="rId`)
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(`"/>`)
+	}
+	b.WriteString(`</sheets></workbook>`)
+	return b.String()
+}
+
+func xlsxWorkbookRelationships(sheetCount int) string {
+	var b bytes.Buffer
+	b.WriteString(xml.Header)
+	b.WriteString(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`)
+	for i := 1; i <= sheetCount; i++ {
+		b.WriteString(`<Relationship Id="rId`)
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet`)
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(`.xml"/>`)
+	}
+	b.WriteString(`<Relationship Id="rId`)
+	b.WriteString(strconv.Itoa(sheetCount + 1))
+	b.WriteString(`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`)
+	b.WriteString(`</Relationships>`)
+	return b.String()
+}
+
+func xlsxWorksheetXML(sheet spreadsheetMLWorksheet) string {
+	var b bytes.Buffer
+	b.WriteString(xml.Header)
+	b.WriteString(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`)
+	if sheet.Options != nil {
+		b.WriteString(`<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="2" topLeftCell="B3" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="B3" sqref="B3"/></sheetView></sheetViews>`)
+	}
+	writeXLSXColumns(&b, sheet.Table.Columns)
+	b.WriteString(`<sheetData>`)
+	for rowIndex, row := range sheet.Table.Rows {
+		writeXLSXRow(&b, row, rowIndex+1)
+	}
+	b.WriteString(`</sheetData>`)
+	writeXLSXMerges(&b, sheet.Table.Rows)
+	b.WriteString(`</worksheet>`)
+	return b.String()
+}
+
+func writeXLSXColumns(b *bytes.Buffer, columns []spreadsheetMLColumn) {
+	if len(columns) == 0 {
+		return
+	}
+	b.WriteString(`<cols>`)
+	for i, col := range columns {
+		width := xlsxColumnWidth(col.Width)
+		b.WriteString(`<col min="`)
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(`" max="`)
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(`" width="`)
+		b.WriteString(strconv.FormatFloat(width, 'f', 2, 64))
+		b.WriteString(`" customWidth="1"/>`)
+	}
+	b.WriteString(`</cols>`)
+}
+
+func writeXLSXRow(b *bytes.Buffer, row spreadsheetMLRow, rowIndex int) {
+	b.WriteString(`<row r="`)
+	b.WriteString(strconv.Itoa(rowIndex))
+	b.WriteString(`">`)
+	colIndex := 1
+	for _, cell := range row.Cells {
+		ref := xlsxCellRef(colIndex, rowIndex)
+		b.WriteString(`<c r="`)
+		b.WriteString(ref)
+		b.WriteString(`"`)
+		if style := xlsxStyleIndex(cell.StyleID); style > 0 {
+			b.WriteString(` s="`)
+			b.WriteString(strconv.Itoa(style))
+			b.WriteString(`"`)
+		}
+		b.WriteString(` t="inlineStr"><is><t xml:space="preserve">`)
+		xml.EscapeText(b, []byte(cell.Data.Value))
+		b.WriteString(`</t></is></c>`)
+		colIndex += cell.MergeAcross + 1
+	}
+	b.WriteString(`</row>`)
+}
+
+func writeXLSXMerges(b *bytes.Buffer, rows []spreadsheetMLRow) {
+	var refs []string
+	for rowIndex, row := range rows {
+		colIndex := 1
+		for _, cell := range row.Cells {
+			if cell.MergeAcross > 0 {
+				refs = append(refs, xlsxCellRef(colIndex, rowIndex+1)+":"+xlsxCellRef(colIndex+cell.MergeAcross, rowIndex+1))
+			}
+			colIndex += cell.MergeAcross + 1
+		}
+	}
+	if len(refs) == 0 {
+		return
+	}
+	b.WriteString(`<mergeCells count="`)
+	b.WriteString(strconv.Itoa(len(refs)))
+	b.WriteString(`">`)
+	for _, ref := range refs {
+		b.WriteString(`<mergeCell ref="`)
+		b.WriteString(ref)
+		b.WriteString(`"/>`)
+	}
+	b.WriteString(`</mergeCells>`)
+}
+
+func xlsxStylesXML() string {
+	return xml.Header + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+		`<fonts count="3">` +
+		`<font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>` +
+		`<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>` +
+		`<font><b/><sz val="14"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>` +
+		`</fonts>` +
+		`<fills count="5">` +
+		`<fill><patternFill patternType="none"/></fill>` +
+		`<fill><patternFill patternType="gray125"/></fill>` +
+		`<fill><patternFill patternType="solid"><fgColor rgb="FFD8F3DC"/><bgColor indexed="64"/></patternFill></fill>` +
+		`<fill><patternFill patternType="solid"><fgColor rgb="FFFDF8E1"/><bgColor indexed="64"/></patternFill></fill>` +
+		`<fill><patternFill patternType="solid"><fgColor rgb="FFF5F5F4"/><bgColor indexed="64"/></patternFill></fill>` +
+		`</fills>` +
+		`<borders count="3">` +
+		`<border><left/><right/><top/><bottom/><diagonal/></border>` +
+		`<border><left/><right/><top/><bottom style="thin"><color rgb="FFE7E5E4"/></bottom/><diagonal/></border>` +
+		`<border><left/><right/><top/><bottom style="thin"><color rgb="FFD6D3D1"/></bottom/><diagonal/></border>` +
+		`</borders>` +
+		`<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+		`<cellXfs count="7">` +
+		`<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="center"/></xf>` +
+		`<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>` +
+		`<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>` +
+		`<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>` +
+		`<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>` +
+		`<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>` +
+		`<xf numFmtId="0" fontId="1" fillId="4" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>` +
+		`</cellXfs>` +
+		`<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
+		`</styleSheet>`
+}
+
+func xlsxStyleIndex(styleID string) int {
+	switch styleID {
+	case "title":
+		return 1
+	case "header":
+		return 2
+	case "subheader":
+		return 3
+	case "name":
+		return 4
+	case "center":
+		return 5
+	case "tally":
+		return 6
+	default:
+		return 0
+	}
+}
+
+func xlsxColumnWidth(width string) float64 {
+	v, err := strconv.ParseFloat(width, 64)
+	if err != nil || v <= 0 {
+		return 10
+	}
+	return v / 7
+}
+
+func xlsxCellRef(col, row int) string {
+	var letters []byte
+	for col > 0 {
+		col--
+		letters = append([]byte{byte('A' + col%26)}, letters...)
+		col /= 26
+	}
+	return string(letters) + strconv.Itoa(row)
+}
+
+func writeXMLAttr(b *bytes.Buffer, value string) {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&apos;",
+	)
+	b.WriteString(replacer.Replace(value))
 }
 
 func safeCSVRecord(row []string) []string {

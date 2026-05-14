@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/csv"
@@ -1785,6 +1786,42 @@ func TestShowWorkbookExport(t *testing.T) {
 	}
 }
 
+func TestShowWorkbookXLSXExport(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.handleAdminShowExport)
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025/exports/workbook.xlsx", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Fatalf("expected xlsx content-type, got %s", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "spring-rose-show-2025-workbook.xlsx") {
+		t.Fatalf("unexpected content-disposition: %s", cd)
+	}
+	body := w.Body.Bytes()
+	if !bytes.HasPrefix(body, []byte("PK")) {
+		t.Fatal("workbook xlsx is not a zip package")
+	}
+	workbookXML := zipMemberString(t, body, "xl/workbook.xml")
+	for _, sheet := range []string{`name="entries"`, `name="schedule"`, `name="leaderboard"`, `name="scorecards"`} {
+		if !strings.Contains(workbookXML, sheet) {
+			t.Fatalf("workbook xlsx missing sheet %s", sheet)
+		}
+	}
+	sheetXML := zipMemberString(t, body, "xl/worksheets/sheet1.xml")
+	if !strings.Contains(sheetXML, "Spring Rose Show 2025") {
+		t.Fatal("workbook xlsx missing show data")
+	}
+	if strings.Contains(sheetXML, "<?mso-application") {
+		t.Fatal("workbook xlsx contains legacy SpreadsheetML")
+	}
+}
+
 func TestShowTallyWorkbookExport(t *testing.T) {
 	a := testApp()
 	mux := http.NewServeMux()
@@ -1824,6 +1861,68 @@ func TestShowTallyWorkbookExport(t *testing.T) {
 			t.Fatalf("tally workbook missing %q", needle)
 		}
 	}
+}
+
+func TestShowTallyXLSXExport(t *testing.T) {
+	a := testApp()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/shows/{showID}/exports/{file}", a.handleAdminShowExport)
+
+	req := httptest.NewRequest("GET", "/admin/shows/show_spring2025/exports/tally.xlsx", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "spring-rose-show-2025-tally.xlsx") {
+		t.Fatalf("unexpected content-disposition: %s", cd)
+	}
+	body := w.Body.Bytes()
+	if !bytes.HasPrefix(body, []byte("PK")) {
+		t.Fatal("tally xlsx is not a zip package")
+	}
+	workbookXML := zipMemberString(t, body, "xl/workbook.xml")
+	for _, sheet := range []string{`name="Show Tally"`, `name="Point Summary"`, `name="Participation"`, `name="Results"`} {
+		if !strings.Contains(workbookXML, sheet) {
+			t.Fatalf("tally xlsx missing sheet %s", sheet)
+		}
+	}
+	for _, needle := range []string{
+		"FLOWER SHOW TALLY SHEET",
+		"Design and Special Exhibits",
+		"Chen, Margaret",
+		"2 x 4 = 8",
+	} {
+		if !strings.Contains(zipMemberString(t, body, "xl/worksheets/sheet2.xml"), needle) &&
+			!strings.Contains(zipMemberString(t, body, "xl/worksheets/sheet1.xml"), needle) {
+			t.Fatalf("tally xlsx missing %q", needle)
+		}
+	}
+}
+
+func zipMemberString(t *testing.T, data []byte, name string) string {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("open zip: %v", err)
+	}
+	for _, file := range zr.File {
+		if file.Name != name {
+			continue
+		}
+		rc, err := file.Open()
+		if err != nil {
+			t.Fatalf("open zip member %s: %v", name, err)
+		}
+		defer rc.Close()
+		contents, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("read zip member %s: %v", name, err)
+		}
+		return string(contents)
+	}
+	t.Fatalf("zip member %s not found", name)
+	return ""
 }
 
 func TestAPIShowExportRequiresAuth(t *testing.T) {
@@ -4934,6 +5033,9 @@ func TestShowDetailRendersImagery(t *testing.T) {
 		t.Fatalf("hero image src does not reference any seeded media; body excerpt:\n%s",
 			bodyExcerptAround(body, "show-hero-photo-img"))
 	}
+	if strings.Contains(bodyExcerptAround(body, "show-hero-photo-img"), "/media/"+lincolnImplicit.ID+"?thumb=1") {
+		t.Fatal("hero should prefer first-place photos over second-place photos")
+	}
 
 	// Each placed winner row must lead with a thumbnail <img>.
 	if !strings.Contains(body, "winners-cell-thumb") {
@@ -4959,6 +5061,107 @@ func TestShowDetailRendersImagery(t *testing.T) {
 	count := strings.Count(body, "?thumb=1")
 	if count < 3 {
 		t.Fatalf("expected >=3 thumb=1 references for image-led layout, got %d", count)
+	}
+}
+
+func TestShowHeroRotatesFirstPlacePhotosPerEntrant(t *testing.T) {
+	a := testApp()
+	show, ok := a.store.showByID("show_spring2025")
+	if !ok {
+		t.Fatal("seed show missing")
+	}
+
+	peaceCover, err := a.store.attachMedia(Media{
+		EntryID:   "entry_01",
+		MediaType: "photo",
+		URL:       "https://example.com/peace.jpg",
+		FileName:  "peace.jpg",
+		IsCover:   true,
+	})
+	if err != nil {
+		t.Fatalf("attach peace cover: %v", err)
+	}
+	lincolnSecondPlace, err := a.store.attachMedia(Media{
+		EntryID:   "entry_02",
+		MediaType: "photo",
+		URL:       "https://example.com/lincoln.jpg",
+		FileName:  "lincoln.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach lincoln photo: %v", err)
+	}
+	sameEntrant, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  "class_02",
+		PersonID: "person_01",
+		Name:     "Same entrant first",
+	})
+	if err != nil {
+		t.Fatalf("create same entrant entry: %v", err)
+	}
+	if err := a.store.setPlacement(sameEntrant.ID, 1, 4); err != nil {
+		t.Fatalf("place same entrant entry: %v", err)
+	}
+	sameEntrantPhoto, err := a.store.attachMedia(Media{
+		EntryID:   sameEntrant.ID,
+		MediaType: "photo",
+		URL:       "https://example.com/same-entrant.jpg",
+		FileName:  "same-entrant.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach same entrant photo: %v", err)
+	}
+	otherEntrant, err := a.store.createEntry(EntryInput{
+		ShowID:   show.ID,
+		ClassID:  "class_02",
+		PersonID: "person_02",
+		Name:     "Other entrant first",
+	})
+	if err != nil {
+		t.Fatalf("create other entrant entry: %v", err)
+	}
+	if err := a.store.setPlacement(otherEntrant.ID, 1, 4); err != nil {
+		t.Fatalf("place other entrant entry: %v", err)
+	}
+	otherEntrantPhoto, err := a.store.attachMedia(Media{
+		EntryID:   otherEntrant.ID,
+		MediaType: "photo",
+		URL:       "https://example.com/other-entrant.jpg",
+		FileName:  "other-entrant.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach other entrant photo: %v", err)
+	}
+
+	divisions := testShowDivisions(t, a, show)
+	candidates := a.firstPlaceHeroCandidates(show, divisions)
+	if len(candidates) != 2 {
+		t.Fatalf("expected one first-place candidate per entrant, got %#v", candidates)
+	}
+	candidatePaths := map[string]bool{}
+	for _, candidate := range candidates {
+		candidatePaths[candidate.Path] = true
+	}
+	if !candidatePaths["/media/"+peaceCover.ID] {
+		t.Fatal("expected first entrant to be represented by their earliest scheduled first-place photo")
+	}
+	if !candidatePaths["/media/"+otherEntrantPhoto.ID] {
+		t.Fatal("expected other first-place entrant in hero rotation")
+	}
+	if candidatePaths["/media/"+sameEntrantPhoto.ID] {
+		t.Fatal("expected only one first-place candidate per entrant")
+	}
+	if candidatePaths["/media/"+lincolnSecondPlace.ID] {
+		t.Fatal("expected second-place photos to be excluded from hero rotation")
+	}
+
+	firstDay := a.showHeroCoverImagePath(show, divisions, time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC))
+	secondDay := a.showHeroCoverImagePath(show, divisions, time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC))
+	if firstDay == secondDay {
+		t.Fatalf("expected daily hero rotation across first-place entrants, got %s both days", firstDay)
+	}
+	if !candidatePaths[firstDay] || !candidatePaths[secondDay] {
+		t.Fatalf("rotation picked non-candidate paths: %s, %s", firstDay, secondDay)
 	}
 }
 
@@ -5004,6 +5207,27 @@ func bodyExcerptAround(body, needle string) string {
 		end = len(body)
 	}
 	return body[start:end]
+}
+
+func testShowDivisions(t *testing.T, a *app, show *Show) []*divisionView {
+	t.Helper()
+	sched, ok := a.store.scheduleByShowID(show.ID)
+	if !ok {
+		t.Fatal("seed schedule missing")
+	}
+	var divisions []*divisionView
+	for _, div := range a.store.divisionsBySchedule(sched.ID) {
+		dv := &divisionView{Division: div}
+		for _, sec := range a.store.sectionsByDivision(div.ID) {
+			sv := &sectionView{Section: sec}
+			for _, class := range a.store.classesBySection(sec.ID) {
+				sv.ClassCards = append(sv.ClassCards, &publicClassListItem{Class: class})
+			}
+			dv.Sections = append(dv.Sections, sv)
+		}
+		divisions = append(divisions, dv)
+	}
+	return divisions
 }
 
 // TestClassSplitsLifecycle exercises split creation, the entries-blocking

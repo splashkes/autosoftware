@@ -1066,7 +1066,7 @@ func (a *app) handleShowDetail(w http.ResponseWriter, r *http.Request) {
 
 	winnersByClass := buildClassWinnersViews(divisions, entries)
 	hero := buildShowHeroFields(show, org)
-	heroCoverPath := a.classCoverImagePath(show, divisions)
+	heroCoverPath := a.showHeroCoverImagePath(show, divisions, time.Now())
 	heroImagePath := ""
 	if heroCoverPath != "" {
 		// Use the thumbnail-served route so the hero image is fetched at a
@@ -1204,14 +1204,88 @@ func entryThumbPath(media []*Media) string {
 	return "/media/" + cover.ID + "?thumb=1"
 }
 
-// classCoverImagePath defensively surfaces a cover image attached to a class
-// in this show, if a future feature provides one. Today this is best-effort:
-// it walks media on entries within scheduled classes and returns the first
-// usable image. If nothing is found, it returns an empty string and the
-// template falls back to the gradient hero.
-func (a *app) classCoverImagePath(show *Show, divisions []*divisionView) string {
+type showHeroCandidate struct {
+	EntryID   string
+	PersonKey string
+	Path      string
+}
+
+func (a *app) showHeroCoverImagePath(show *Show, divisions []*divisionView, now time.Time) string {
+	candidates := a.firstPlaceHeroCandidates(show, divisions)
+	if len(candidates) > 0 {
+		return candidates[showHeroRotationIndex(show, now, len(candidates))].Path
+	}
+	return a.fallbackHeroImagePath(show, divisions)
+}
+
+func (a *app) firstPlaceHeroCandidates(show *Show, divisions []*divisionView) []showHeroCandidate {
 	if show == nil {
-		return ""
+		return nil
+	}
+	seenEntrants := map[string]struct{}{}
+	var candidates []showHeroCandidate
+	a.walkScheduledShowEntries(show, divisions, func(entry *Entry, media []*Media) bool {
+		if entry.Placement != 1 {
+			return true
+		}
+		cover := pickEntryCoverMedia(media)
+		if cover == nil {
+			return true
+		}
+		personKey := strings.TrimSpace(entry.PersonID)
+		if personKey == "" {
+			personKey = "entry:" + entry.ID
+		}
+		if _, seen := seenEntrants[personKey]; seen {
+			return true
+		}
+		seenEntrants[personKey] = struct{}{}
+		candidates = append(candidates, showHeroCandidate{
+			EntryID:   entry.ID,
+			PersonKey: personKey,
+			Path:      "/media/" + cover.ID,
+		})
+		return true
+	})
+	return candidates
+}
+
+func showHeroRotationIndex(show *Show, now time.Time, count int) int {
+	if count <= 0 {
+		return 0
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	showID := ""
+	if show != nil {
+		showID = show.ID
+	}
+	showOffset := 0
+	for _, r := range showID {
+		showOffset += int(r)
+	}
+	year, month, day := now.Date()
+	dayNumber := int(time.Date(year, month, day, 0, 0, 0, 0, now.Location()).Unix() / 86400)
+	return (showOffset + dayNumber) % count
+}
+
+func (a *app) fallbackHeroImagePath(show *Show, divisions []*divisionView) string {
+	var out string
+	a.walkScheduledShowEntries(show, divisions, func(entry *Entry, media []*Media) bool {
+		cover := pickEntryCoverMedia(media)
+		if cover == nil {
+			return true
+		}
+		out = "/media/" + cover.ID
+		return false
+	})
+	return out
+}
+
+func (a *app) walkScheduledShowEntries(show *Show, divisions []*divisionView, visit func(*Entry, []*Media) bool) {
+	if show == nil {
+		return
 	}
 	for _, div := range divisions {
 		for _, sec := range div.Sections {
@@ -1224,19 +1298,13 @@ func (a *app) classCoverImagePath(show *Show, divisions []*divisionView) string 
 						continue
 					}
 					media := a.store.mediaByEntry(entry.ID)
-					for _, item := range media {
-						if item == nil {
-							continue
-						}
-						if strings.TrimSpace(item.MediaType) == "" || strings.EqualFold(item.MediaType, "photo") {
-							return "/media/" + item.ID
-						}
+					if !visit(entry, media) {
+						return
 					}
 				}
 			}
 		}
 	}
-	return ""
 }
 
 func buildShowNavTiles(slug string, entryCount, classCount, exhibitorCount int) []*showNavTile {
