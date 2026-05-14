@@ -310,6 +310,12 @@ func TestHomePageLoads(t *testing.T) {
 	if !strings.Contains(body, "Spring Rose Show") {
 		t.Fatal("home page missing seeded show")
 	}
+	if !strings.Contains(body, "Recent Shows") {
+		t.Fatal("home page missing recent shows section")
+	}
+	if strings.Contains(body, "Upcoming Shows") {
+		t.Fatal("home page should not label the lead show section as upcoming")
+	}
 	if !strings.Contains(body, "/v1/contracts/0007-Flowershow/a-firstbloom") {
 		t.Fatal("home page missing shared agent access widget")
 	}
@@ -1231,6 +1237,53 @@ func TestAdminAllowsCognitoSessionWithAdminRole(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+}
+
+func TestAdminShowGroupsSplitActivePastAndUpcoming(t *testing.T) {
+	now := time.Date(2026, 5, 13, 15, 0, 0, 0, time.UTC)
+	shows := []*Show{
+		{ID: "past_old", Name: "Older Past", Date: "2026-05-10"},
+		{ID: "active_last", Name: "Active Last", Date: "2026-05-11"},
+		{ID: "active_today", Name: "Active Today", Date: "2026-05-13"},
+		{ID: "active_next", Name: "Active Next", Date: "2026-05-15"},
+		{ID: "upcoming_later", Name: "Upcoming Later", Date: "2026-05-16"},
+		{ID: "upcoming_unscheduled", Name: "Unscheduled", Date: ""},
+	}
+
+	active, past, upcoming := adminShowGroups(shows, now)
+	if got := showIDs(active); strings.Join(got, ",") != "active_last,active_today,active_next" {
+		t.Fatalf("active shows = %v", got)
+	}
+	if got := showIDs(past); strings.Join(got, ",") != "past_old" {
+		t.Fatalf("past shows = %v", got)
+	}
+	if got := showIDs(upcoming); strings.Join(got, ",") != "upcoming_later,upcoming_unscheduled" {
+		t.Fatalf("upcoming shows = %v", got)
+	}
+}
+
+func TestAdminShowsSectionRendersGroupedShows(t *testing.T) {
+	a := testApp()
+	req := httptest.NewRequest("GET", "/admin?section=shows", nil)
+	w := httptest.NewRecorder()
+	a.handleAdminDashboard(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	for _, want := range []string{"Active", "Past", "Upcoming", "Spring Rose Show 2025", "Fall Garden Festival 2025"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("admin shows section missing %q", want)
+		}
+	}
+}
+
+func showIDs(shows []*Show) []string {
+	ids := make([]string, 0, len(shows))
+	for _, show := range shows {
+		ids = append(ids, show.ID)
+	}
+	return ids
 }
 
 func TestShowIntakeOperatorCanAccessScopedWorkspaceAndEntryMoveButNotGlobalAdmin(t *testing.T) {

@@ -25,6 +25,9 @@ type adminDashboardData struct {
 	ActiveSection string
 	Sections      []accountSectionView
 	Shows         []*Show
+	ActiveShows   []*Show
+	PastShows     []*Show
+	UpcomingShows []*Show
 	Persons       []*Person
 	Orgs          []*Organization
 	Judges        []adminJudgePersonView
@@ -137,6 +140,8 @@ type adminClubCreateData struct {
 
 func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	orgs := a.store.allOrganizations()
+	shows := a.store.allShows()
+	activeShows, pastShows, upcomingShows := adminShowGroups(shows, time.Now())
 	section := adminDashboardSection(r.URL.Query().Get("section"))
 	var awards []*AwardDefinition
 	for _, org := range orgs {
@@ -148,7 +153,10 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		CurrentPath:   "/admin",
 		ActiveSection: section,
 		Sections:      adminDashboardSections(section),
-		Shows:         a.store.allShows(),
+		Shows:         shows,
+		ActiveShows:   activeShows,
+		PastShows:     pastShows,
+		UpcomingShows: upcomingShows,
 		Persons:       a.store.allPersons(),
 		Orgs:          orgs,
 		Judges:        a.adminJudgePersonViews(),
@@ -157,6 +165,59 @@ func (a *app) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		Rubrics:       a.store.allRubrics(),
 		SearchQuery:   searchQuery,
 		SearchHits:    a.adminSearchHits(searchQuery),
+	})
+}
+
+func adminShowGroups(shows []*Show, now time.Time) (active []*Show, past []*Show, upcoming []*Show) {
+	today := dateOnly(now)
+	activeStart := today.AddDate(0, 0, -2)
+	activeEnd := today.AddDate(0, 0, 2)
+	for _, show := range shows {
+		showDate, ok := parseShowDate(show.Date)
+		if !ok {
+			upcoming = append(upcoming, show)
+			continue
+		}
+		switch {
+		case showDate.Before(activeStart):
+			past = append(past, show)
+		case showDate.After(activeEnd):
+			upcoming = append(upcoming, show)
+		default:
+			active = append(active, show)
+		}
+	}
+	sortShowsByDateAsc(active)
+	sortShowsByDateDesc(past)
+	sortShowsByDateAsc(upcoming)
+	return active, past, upcoming
+}
+
+func sortShowsByDateAsc(shows []*Show) {
+	sort.SliceStable(shows, func(i, j int) bool {
+		left, leftOK := parseShowDate(shows[i].Date)
+		right, rightOK := parseShowDate(shows[j].Date)
+		if leftOK != rightOK {
+			return leftOK
+		}
+		if leftOK && !left.Equal(right) {
+			return left.Before(right)
+		}
+		return shows[i].Name < shows[j].Name
+	})
+}
+
+func sortShowsByDateDesc(shows []*Show) {
+	sort.SliceStable(shows, func(i, j int) bool {
+		left, leftOK := parseShowDate(shows[i].Date)
+		right, rightOK := parseShowDate(shows[j].Date)
+		if leftOK != rightOK {
+			return leftOK
+		}
+		if leftOK && !left.Equal(right) {
+			return left.After(right)
+		}
+		return shows[i].Name < shows[j].Name
 	})
 }
 

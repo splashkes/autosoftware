@@ -3,7 +3,7 @@
   <div class="hero-copy">
     <div class="workflow-kicker">Flower shows, clubs, and public results</div>
     <h1>Flowershow</h1>
-    <p class="hero-sub">Follow upcoming shows, revisit past blooms, browse classes and entries, and move through the public flower-show surface without getting buried in admin detail.</p>
+    <p class="hero-sub">Review recent shows, revisit blooms, browse classes and entries, and move through the public flower-show surface without getting buried in admin detail.</p>
     <div class="show-actions">
       <a href="{{$.BasePath}}/browse" class="btn btn-primary">Browse Entries</a>
       <a href="{{$.BasePath}}/clubs" class="btn btn-outline">View Clubs</a>
@@ -29,13 +29,13 @@
 <section class="section">
   <div class="section-header">
     <div>
-      <h2>Upcoming Shows</h2>
-      <p class="section-desc">Shows that are still ahead, open for planning, or otherwise current.</p>
+      <h2>Recent Shows</h2>
+      <p class="section-desc">Recently passed shows stay close at hand for browsing results, classes, entries, and exhibitor history.</p>
     </div>
   </div>
-  {{if .UpcomingShows}}
+  {{if .RecentShows}}
   <div class="show-card-stack">
-    {{range .UpcomingShows}}
+    {{range .RecentShows}}
     <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich">
       <div class="show-card-media" data-show-rotator>
         {{range $index, $frame := .Featured}}
@@ -57,7 +57,7 @@
     {{end}}
   </div>
   {{else}}
-  <p class="empty-state">No upcoming shows yet.</p>
+  <p class="empty-state">No recent shows yet.</p>
   {{end}}
 </section>
 
@@ -76,7 +76,7 @@
       <div class="card-body">
         <h3 class="card-title">{{.Org.Name}}</h3>
         <p class="card-meta">{{if .Parent}}Part of {{.Parent.Name}}{{else}}Independent club context{{end}}</p>
-        <p class="card-meta">{{len .UpcomingShows}} upcoming · {{len .PastShows}} past shows</p>
+        <p class="card-meta">{{len .PastShows}} recent shows</p>
         {{if .TopPeople}}
         <div class="club-top-people">
           {{range .TopPeople}}
@@ -90,41 +90,6 @@
   </div>
   {{else}}
   <p class="empty-state">No active clubs yet.</p>
-  {{end}}
-</section>
-
-<section class="section">
-  <div class="section-header">
-    <div>
-      <h2>Past Shows</h2>
-      <p class="section-desc">Completed or older shows stay available for browsing, classes, entries, and exhibitor history.</p>
-    </div>
-  </div>
-  {{if .PastShows}}
-  <div class="show-card-stack">
-    {{range .PastShows}}
-    <a href="{{$.BasePath}}/shows/{{.Show.Slug}}" class="card show-card-rich is-compact">
-      <div class="show-card-media" data-show-rotator>
-        {{range $index, $frame := .Featured}}
-        <div class="show-visual-frame {{if eq $index 0}}is-active{{end}} theme-{{$frame.Theme}}" {{if $frame.MediaPath}}style="background-image:url('{{$.BasePath}}{{$frame.MediaPath}}');"{{end}}>
-          <span>{{$frame.Label}}</span>
-        </div>
-        {{end}}
-      </div>
-      <div class="card-body show-card-body">
-        <div class="show-card-meta-line">
-          <span class="badge badge-muted">{{.RelativeLabel}}</span>
-          <span class="badge badge-muted">{{.SeasonLabel}}</span>
-        </div>
-        <h3 class="card-title">{{.Show.Name}}</h3>
-        {{with showContextMeta .Show .Org}}<p class="card-meta">{{.}}</p>{{end}}
-        <p class="card-meta">{{showSummaryMeta .EntryCount .ClassCount .StatusLabel}}</p>
-      </div>
-    </a>
-    {{end}}
-  </div>
-  {{else}}
-  <p class="empty-state">No past shows yet.</p>
   {{end}}
 </section>
 {{end}}

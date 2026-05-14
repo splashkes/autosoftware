@@ -18,6 +18,11 @@ test.describe('Flowershow Admin Local', () => {
     await expect(page.locator('body')).not.toContainText('Bootstrap Override');
 
     await loginLocalAdmin(page);
+
+    await page.goto('/admin?section=shows');
+    await expect(page.getByRole('heading', { name: 'Active' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Past' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upcoming' })).toBeVisible();
   });
 
   test('admin reaches the shared account token manager and can issue a scoped agent token', async ({
@@ -152,25 +157,49 @@ test.describe('Flowershow Admin Local', () => {
     await loginLocalAdmin(page);
     await page.goto('/admin/shows/show_spring2025');
 
-    await page.getByRole('button', { name: 'Entries' }).click();
-    const firstEntryTile = page.locator('[data-intake-modal-open][data-intake-mode="existing"]').first();
-    await firstEntryTile.click();
-    const editForm = page.locator('[data-intake-edit-form]');
+    await page.getByRole('button', { name: 'Entries', exact: true }).click();
+    const firstEntryID = await page
+      .locator('[data-intake-modal-open][data-intake-mode="existing"]')
+      .first()
+      .getAttribute('data-intake-entry-id');
+    expect(firstEntryID).toBeTruthy();
+    let editForm = page.locator('[data-intake-edit-form]');
+    const openFirstExistingEntry = async () => {
+      await page
+        .locator(`[data-intake-modal-open][data-intake-entry-id="${firstEntryID}"]`)
+        .click();
+      editForm = page.locator('[data-intake-edit-form]');
+      await expect(editForm).toBeVisible();
+    };
+    await openFirstExistingEntry();
 
     await expect(page.locator('[data-intake-class-number-display]')).not.toBeEmpty();
     await editForm.getByRole('button', { name: '#3 Third' }).click();
     await editForm.getByRole('button', { name: 'Confirm #3 Third' }).click();
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
+
+    await openFirstExistingEntry();
     await editForm.getByRole('button', { name: '★ Special' }).click();
     await editForm.getByRole('button', { name: 'Confirm ★ Special' }).click();
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
 
+    await openFirstExistingEntry();
     await expect(editForm.getByRole('button', { name: '#3 Third' })).toHaveAttribute('aria-pressed', 'true');
     await expect(editForm.getByRole('button', { name: '★ Special' })).toHaveAttribute('aria-pressed', 'true');
 
     await editForm.getByRole('button', { name: '#3 Third' }).click();
     await editForm.getByRole('button', { name: 'Confirm remove #3 Third' }).click();
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
+
+    await openFirstExistingEntry();
     await editForm.getByRole('button', { name: '★ Special' }).click();
     await editForm.getByRole('button', { name: 'Confirm remove ★ Special' }).click();
 
+    await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
+
+    await openFirstExistingEntry();
+    await editForm.getByRole('button', { name: '#1 First' }).click();
+    await editForm.getByRole('button', { name: 'Confirm #1 First' }).click();
     await expect(editForm.locator('[data-intake-autosave-status]')).toContainText('Saved.');
   });
 
@@ -245,7 +274,7 @@ test.describe('Flowershow Admin Local', () => {
       'Playwright Bloom Class',
     );
 
-    await page.getByRole('button', { name: 'Entries' }).click();
+    await page.getByRole('button', { name: 'Entries', exact: true }).click();
     await page
       .locator('.intake-class-card')
       .filter({ hasText: 'Playwright Bloom Class' })
@@ -272,9 +301,9 @@ test.describe('Flowershow Admin Local', () => {
     await page.getByRole('button', { name: 'Board' }).click();
     await expect(page.locator('#admin-board-panel')).toContainText('Playwright Peace');
 
-    await page.goto(publicPath!);
+    await page.goto(`${publicPath!}/entries`);
     await expect(page.locator('body')).toContainText('Playwright Peace');
-    await expectAgentPath(page, publicPath!);
+    await expectAgentPath(page, `${publicPath!}/entries`);
 
     await page.goto(adminShowPath);
     await page.getByRole('button', { name: 'Corrections' }).click();
@@ -283,7 +312,7 @@ test.describe('Flowershow Admin Local', () => {
     await entryCard.locator('button:has-text("Suppress")').click();
     await expect(page.locator('#admin-floor-panel')).toContainText('suppressed');
 
-    await page.goto(publicPath!);
+    await page.goto(`${publicPath!}/entries`);
     await expect(page.locator('body')).not.toContainText('Playwright Peace');
   });
 
@@ -295,7 +324,7 @@ test.describe('Flowershow Admin Local', () => {
     await page.goto('/admin/shows/show_spring2025');
     await expect(page.locator('h1')).toContainText('Spring Rose Show 2025');
 
-    await page.getByRole('button', { name: 'Entries' }).click();
+    await page.getByRole('button', { name: 'Entries', exact: true }).click();
     await page.locator('[data-intake-modal-open][data-intake-mode="new"]').first().click();
     const entrantInput = page.locator('[data-intake-entry-form] [data-intake-entrant-input]');
     await expect(entrantInput).toBeVisible();
