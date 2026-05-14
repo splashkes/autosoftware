@@ -81,6 +81,10 @@ func (s *postgresFlowershowStore) migrateLegacyClaimsToKernelRegistry(ctx contex
 }
 
 func (s *postgresFlowershowStore) loadSnapshotFromKernelRegistry(ctx context.Context) (*memoryStore, error) {
+	return s.loadSnapshotFromKernelRegistryClaims(ctx)
+}
+
+func (s *postgresFlowershowStore) loadSnapshotFromKernelRegistryClaims(ctx context.Context) (*memoryStore, error) {
 	var (
 		after int64
 		all   []registryRowRecord
@@ -126,15 +130,6 @@ func (s *postgresFlowershowStore) loadSnapshotFromKernelRegistry(ctx context.Con
 	replayed, err := replayFlowershowSnapshotFromClaims(objects, claims)
 	if err != nil {
 		return nil, fmt.Errorf("replay kernel registry claims: %w", err)
-	}
-	needsRebuild, err := s.projectionsNeedRebuild(ctx, replayed)
-	if err != nil {
-		return nil, fmt.Errorf("check projection rebuild necessity: %w", err)
-	}
-	if needsRebuild {
-		if err := s.rebuildProjectionTablesFromSnapshot(ctx, replayed); err != nil {
-			return nil, fmt.Errorf("rebuild projections from kernel registry: %w", err)
-		}
 	}
 	return replayed, nil
 }

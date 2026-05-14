@@ -112,6 +112,22 @@ function flowershowToast(message, isError) {
   setTimeout(() => toast.remove(), 4000);
 }
 
+function flowershowFriendlyErrorMessage(message, fallback) {
+  const raw = String(message || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const lower = raw.toLowerCase();
+  const looksLikeProjectionLag = lower.indexOf('context deadline exceeded') !== -1 && (
+    lower.indexOf('projection') !== -1 ||
+    lower.indexOf('as_flowershow_m_') !== -1 ||
+    lower.indexOf('truncate flowershow') !== -1 ||
+    lower.indexOf('insert class projection') !== -1 ||
+    lower.indexOf('check projection rebuild') !== -1
+  );
+  if (looksLikeProjectionLag) {
+    return 'The edit was accepted, but the live refresh is still catching up. Refresh in a moment if it does not appear.';
+  }
+  return raw || fallback || 'Something went wrong.';
+}
+
 function flowershowToggleRubricCriteria(select) {
   var rubricID = select.value;
   document.querySelectorAll('.criteria-group').forEach(function(el) {
@@ -1082,11 +1098,15 @@ function flowershowSubmitIntakeForm(form, options) {
   const onError = options && typeof options.onError === 'function' ? options.onError : null;
   const skipSwap = !!(options && options.skipSwap);
   const jsonResponse = !!(options && options.jsonResponse);
+  const silent = !!(options && options.silent);
   const state = flowershowGetIntakeUploadState(form);
   const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
   const formData = new FormData(form);
   if (jsonResponse) {
     formData.set('response', 'json');
+  }
+  if (silent) {
+    formData.set('_silent', '1');
   }
   state.items.forEach(function(item) {
     formData.append('media', item.file, item.file.name);
@@ -1104,6 +1124,9 @@ function flowershowSubmitIntakeForm(form, options) {
   const xhr = new XMLHttpRequest();
   xhr.open('POST', form.action);
   xhr.setRequestHeader('HX-Request', 'true');
+  if (silent) {
+    xhr.setRequestHeader('X-Flowershow-Silent', 'true');
+  }
   if (jsonResponse) {
     xhr.setRequestHeader('Accept', 'application/json');
   }
@@ -1128,10 +1151,10 @@ function flowershowSubmitIntakeForm(form, options) {
       button.disabled = false;
     });
     if (xhr.status < 200 || xhr.status >= 300) {
-      const message = (xhr.responseText || 'Upload failed.').replace(/<[^>]+>/g, '');
+      const message = flowershowFriendlyErrorMessage(xhr.responseText, 'Upload failed.');
       state.items.forEach(function(item) {
         item.status = 'error';
-        item.error = xhr.responseText || 'Upload failed';
+        item.error = message;
       });
       flowershowRenderIntakeUploadQueue(form);
       flowershowToast(message, true);
@@ -1169,8 +1192,7 @@ function flowershowSubmitIntakeForm(form, options) {
     if (closeModal) {
       const modal = form.closest('[data-intake-modal]');
       if (modal) {
-        modal.hidden = true;
-        document.body.classList.remove('body-lightbox-open');
+        flowershowCloseIntakeModal(modal);
       }
     }
     flowershowResetIntakeUploadState(form);
@@ -1233,6 +1255,7 @@ function flowershowBindIntakeCaptureInput(input) {
             closeModal: false,
             skipSwap: true,
             jsonResponse: true,
+            silent: true,
             onSuccess: function(payload) {
               flowershowMarkIntakeDraftEntry(form, payload);
               resolve();
@@ -1242,9 +1265,10 @@ function flowershowBindIntakeCaptureInput(input) {
         });
       }
     } catch (error) {
-      flowershowToast(error && error.message ? error.message : 'Could not prepare media.', true);
+      const message = flowershowFriendlyErrorMessage(error && error.message, 'Could not prepare media.');
+      flowershowToast(message, true);
       if (form && form.dataset.intakeAutosave === 'true') {
-        flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not prepare media.', true);
+        flowershowSetAutosaveStatus(form, message, true);
       }
     } finally {
       input.value = '';
@@ -1298,10 +1322,10 @@ function flowershowSubmitQueuedMediaForm(form) {
         button.disabled = false;
       });
       if (xhr.status < 200 || xhr.status >= 300) {
-        const message = (xhr.responseText || 'Media upload failed.').replace(/<[^>]+>/g, '');
+        const message = flowershowFriendlyErrorMessage(xhr.responseText, 'Media upload failed.');
         items.forEach(function(item) {
           item.status = 'error';
-          item.error = xhr.responseText || 'Media upload failed.';
+          item.error = message;
         });
         flowershowRenderIntakeUploadQueue(form);
         flowershowToast(message, true);
@@ -1357,6 +1381,8 @@ function flowershowClearAutosaveTimer(form) {
 async function flowershowSubmitAutosaveForm(form, options) {
   const closeModal = !!(options && options.closeModal);
   const keepMessage = !!(options && options.keepMessage);
+  const silent = !options || options.silent !== false;
+  const successMessage = options && options.successMessage ? String(options.successMessage) : '';
   const entrantInput = form.querySelector('[data-intake-entrant-input]');
   flowershowSyncEntrantLookup(entrantInput);
   flowershowClearAutosaveTimer(form);
@@ -1367,14 +1393,19 @@ async function flowershowSubmitAutosaveForm(form, options) {
       flowershowSubmitIntakeForm(form, {
         closeModal: closeModal,
         skipSwap: !!modal,
+        silent: silent,
         onSuccess: resolve,
         onError: reject
       });
     });
     flowershowSetAutosaveStatus(form, keepMessage ? 'Saved.' : '', false);
+    if (successMessage) {
+      flowershowToast(successMessage, false);
+    }
   } catch (error) {
-    flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not save.', true);
-    flowershowToast(error && error.message ? error.message : 'Could not save.', true);
+    const message = flowershowFriendlyErrorMessage(error && error.message, 'Could not save.');
+    flowershowSetAutosaveStatus(form, message, true);
+    flowershowToast(message, true);
   }
 }
 
@@ -1385,6 +1416,14 @@ function flowershowScheduleAutosave(form, delay) {
     flowershowSubmitAutosaveForm(form, { keepMessage: true });
   }, Math.max(0, delay || 0));
   flowershowIntakeAutosaveTimers.set(form, timeout);
+}
+
+function flowershowSubmitConfirmedResultEdit(form) {
+  flowershowSubmitAutosaveForm(form, {
+    keepMessage: true,
+    closeModal: true,
+    successMessage: 'Saved.'
+  });
 }
 
 function flowershowBindIntakeCaptureButton(button) {
@@ -1484,7 +1523,7 @@ function flowershowBindIntakeResultsForm(form) {
         flowershowRefreshAwardState(form);
         setPendingConfirm('');
         if (form.dataset.intakeAutosave === 'true') {
-          flowershowSubmitAutosaveForm(form, { keepMessage: true });
+          flowershowSubmitConfirmedResultEdit(form);
         } else {
           form.requestSubmit();
         }
@@ -1497,7 +1536,7 @@ function flowershowBindIntakeResultsForm(form) {
           flowershowRefreshAwardState(form);
           setPendingConfirm('');
           if (form.dataset.intakeAutosave === 'true') {
-            flowershowSubmitAutosaveForm(form, { keepMessage: true });
+            flowershowSubmitConfirmedResultEdit(form);
           } else {
             form.requestSubmit();
           }
@@ -1529,7 +1568,7 @@ function flowershowBindIntakeResultsForm(form) {
         flowershowRefreshAwardState(form);
         setPendingConfirm('');
         if (form.dataset.intakeAutosave === 'true') {
-          flowershowSubmitAutosaveForm(form, { keepMessage: true });
+          flowershowSubmitConfirmedResultEdit(form);
         } else {
           form.requestSubmit();
         }
@@ -1546,7 +1585,7 @@ function flowershowBindIntakeResultsForm(form) {
           flowershowRefreshAwardState(form);
           setPendingConfirm('');
           if (form.dataset.intakeAutosave === 'true') {
-            flowershowSubmitAutosaveForm(form, { keepMessage: true });
+            flowershowSubmitConfirmedResultEdit(form);
           } else {
             form.requestSubmit();
           }
@@ -1581,7 +1620,7 @@ function flowershowBindIntakeResultsForm(form) {
       flowershowRefreshAwardState(form);
       setPendingConfirm('');
       if (form.dataset.intakeAutosave === 'true') {
-        flowershowScheduleAutosave(form, 0);
+        flowershowSubmitConfirmedResultEdit(form);
       } else {
         form.requestSubmit();
       }
@@ -1593,30 +1632,31 @@ function flowershowBindIntakeResultsForm(form) {
   form.addEventListener('submit', async function(event) {
     event.preventDefault();
     try {
+      const formData = new FormData(form);
+      formData.set('_silent', '1');
       const response = await fetch(form.action, {
         method: 'POST',
-        body: new FormData(form),
+        body: formData,
         credentials: 'same-origin',
-        headers: { 'HX-Request': 'true' }
+        headers: { 'HX-Request': 'true', 'X-Flowershow-Silent': 'true' }
       });
       const html = await response.text();
       if (!response.ok) {
-        throw new Error((html || 'Could not save result.').replace(/<[^>]+>/g, ''));
+        throw new Error(flowershowFriendlyErrorMessage(html, 'Could not save result.'));
       }
       setPendingConfirm('');
       const modal = form.closest('[data-intake-modal]');
       if (modal) {
-        if (form.dataset.intakeAutosave !== 'true') {
-          modal.hidden = true;
-          document.body.classList.remove('body-lightbox-open');
-        }
+        flowershowCloseIntakeModal(modal);
       }
       flowershowSetAutosaveStatus(form, form.dataset.intakeAutosave === 'true' ? 'Saved.' : '', false);
+      flowershowToast('Saved.', false);
       flowershowSwapAdminTarget(form.dataset.target || '#admin-intake-panel', html || '');
     } catch (error) {
       setPendingConfirm('');
-      flowershowSetAutosaveStatus(form, error && error.message ? error.message : 'Could not save result.', true);
-      flowershowToast(error && error.message ? error.message : 'Could not save result.', true);
+      const message = flowershowFriendlyErrorMessage(error && error.message, 'Could not save result.');
+      flowershowSetAutosaveStatus(form, message, true);
+      flowershowToast(message, true);
     }
   });
 }
