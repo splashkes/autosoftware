@@ -275,6 +275,7 @@ func TestFlowershowProjectionTablesRebuildFromClaimsAfterTruncate(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("create source citation: %v", err)
 	}
+	waitForProjectionQueueIdle(t, store)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -308,9 +309,19 @@ func TestFlowershowProjectionTablesRebuildFromClaimsAfterTruncate(t *testing.T) 
 	if got, ok := reopened.entryByID(entry.ID); !ok || got.ClassID != classPrimary.ID {
 		t.Fatalf("reopened entry mismatch: %#v", got)
 	}
-	rebuiltCounts, err := reopened.projectionCounts(ctx)
-	if err != nil {
-		t.Fatalf("projection counts after rebuild: %v", err)
+	var rebuiltCounts map[string]int
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		countCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		rebuiltCounts, err = reopened.projectionCounts(countCtx)
+		cancel()
+		if err == nil && rebuiltCounts["as_flowershow_m_entries"] > 0 && rebuiltCounts["as_flowershow_m_classes"] > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("projection counts after rebuild: counts=%#v err=%v", rebuiltCounts, err)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if rebuiltCounts["as_flowershow_m_entries"] == 0 || rebuiltCounts["as_flowershow_m_classes"] == 0 {
 		t.Fatalf("expected rebuilt projection counts, got %#v", rebuiltCounts)
@@ -322,5 +333,23 @@ func TestFlowershowProjectionTablesRebuildFromClaimsAfterTruncate(t *testing.T) 
 	moved, ok := reopened.entryByID(entry.ID)
 	if !ok || moved.ClassID != classSecondary.ID {
 		t.Fatalf("moved entry mismatch after rebuild: %#v", moved)
+	}
+}
+
+func waitForProjectionQueueIdle(t *testing.T, store *postgresFlowershowStore) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		store.projectionMu.Lock()
+		running := store.projectionRunning
+		queued := store.projectionQueued
+		store.projectionMu.Unlock()
+		if !running && !queued {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("projection rebuild queue did not go idle")
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }

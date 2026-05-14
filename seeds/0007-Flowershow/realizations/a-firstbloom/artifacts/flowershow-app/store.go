@@ -315,31 +315,31 @@ type memoryStore struct {
 	showHelperInvites map[string]*ShowHelperInvite
 	showBadgeSessions map[string]*ShowBadgeSession
 	showJudges        map[string]*ShowJudgeAssignment
-	schedules      map[string]*ShowSchedule
-	divisions      map[string]*Division
-	sections       map[string]*Section
-	classes        map[string]*ShowClass
-	classSplits    map[string]*ClassSplit
-	entries        map[string]*Entry
-	showCredits    map[string]*ShowCredit
-	media          map[string]*Media
-	taxons         map[string]*Taxon
-	awards         map[string]*AwardDefinition
-	stdDocs        map[string]*StandardDocument
-	stdEditions    map[string]*StandardEdition
-	srcDocs        map[string]*SourceDocument
-	srcCitations   map[string]*SourceCitation
-	stdRules       map[string]*StandardRule
-	classOverrides map[string]*ClassRuleOverride
-	rubrics        map[string]*JudgingRubric
-	criteria       map[string]*JudgingCriterion
-	scorecards     map[string]*EntryScorecard
-	critScores     map[string]*EntryCriterionScore
-	agentTokens    map[string]*AgentToken
-	agentTokenHash map[string]string
-	objects        map[string]*FlowershowObject
-	claims         []FlowershowClaim
-	claimSeq       int64
+	schedules         map[string]*ShowSchedule
+	divisions         map[string]*Division
+	sections          map[string]*Section
+	classes           map[string]*ShowClass
+	classSplits       map[string]*ClassSplit
+	entries           map[string]*Entry
+	showCredits       map[string]*ShowCredit
+	media             map[string]*Media
+	taxons            map[string]*Taxon
+	awards            map[string]*AwardDefinition
+	stdDocs           map[string]*StandardDocument
+	stdEditions       map[string]*StandardEdition
+	srcDocs           map[string]*SourceDocument
+	srcCitations      map[string]*SourceCitation
+	stdRules          map[string]*StandardRule
+	classOverrides    map[string]*ClassRuleOverride
+	rubrics           map[string]*JudgingRubric
+	criteria          map[string]*JudgingCriterion
+	scorecards        map[string]*EntryScorecard
+	critScores        map[string]*EntryCriterionScore
+	agentTokens       map[string]*AgentToken
+	agentTokenHash    map[string]string
+	objects           map[string]*FlowershowObject
+	claims            []FlowershowClaim
+	claimSeq          int64
 }
 
 func newMemoryStore() *memoryStore {
@@ -358,29 +358,29 @@ func newEmptyMemoryStore() *memoryStore {
 		showHelperInvites: make(map[string]*ShowHelperInvite),
 		showBadgeSessions: make(map[string]*ShowBadgeSession),
 		showJudges:        make(map[string]*ShowJudgeAssignment),
-		schedules:      make(map[string]*ShowSchedule),
-		divisions:      make(map[string]*Division),
-		sections:       make(map[string]*Section),
-		classes:        make(map[string]*ShowClass),
-		classSplits:    make(map[string]*ClassSplit),
-		entries:        make(map[string]*Entry),
-		showCredits:    make(map[string]*ShowCredit),
-		media:          make(map[string]*Media),
-		taxons:         make(map[string]*Taxon),
-		awards:         make(map[string]*AwardDefinition),
-		stdDocs:        make(map[string]*StandardDocument),
-		stdEditions:    make(map[string]*StandardEdition),
-		srcDocs:        make(map[string]*SourceDocument),
-		srcCitations:   make(map[string]*SourceCitation),
-		stdRules:       make(map[string]*StandardRule),
-		classOverrides: make(map[string]*ClassRuleOverride),
-		rubrics:        make(map[string]*JudgingRubric),
-		criteria:       make(map[string]*JudgingCriterion),
-		scorecards:     make(map[string]*EntryScorecard),
-		critScores:     make(map[string]*EntryCriterionScore),
-		agentTokens:    make(map[string]*AgentToken),
-		agentTokenHash: make(map[string]string),
-		objects:        make(map[string]*FlowershowObject),
+		schedules:         make(map[string]*ShowSchedule),
+		divisions:         make(map[string]*Division),
+		sections:          make(map[string]*Section),
+		classes:           make(map[string]*ShowClass),
+		classSplits:       make(map[string]*ClassSplit),
+		entries:           make(map[string]*Entry),
+		showCredits:       make(map[string]*ShowCredit),
+		media:             make(map[string]*Media),
+		taxons:            make(map[string]*Taxon),
+		awards:            make(map[string]*AwardDefinition),
+		stdDocs:           make(map[string]*StandardDocument),
+		stdEditions:       make(map[string]*StandardEdition),
+		srcDocs:           make(map[string]*SourceDocument),
+		srcCitations:      make(map[string]*SourceCitation),
+		stdRules:          make(map[string]*StandardRule),
+		classOverrides:    make(map[string]*ClassRuleOverride),
+		rubrics:           make(map[string]*JudgingRubric),
+		criteria:          make(map[string]*JudgingCriterion),
+		scorecards:        make(map[string]*EntryScorecard),
+		critScores:        make(map[string]*EntryCriterionScore),
+		agentTokens:       make(map[string]*AgentToken),
+		agentTokenHash:    make(map[string]string),
+		objects:           make(map[string]*FlowershowObject),
 	}
 	return s
 }
@@ -2635,13 +2635,17 @@ func (s *memoryStore) seedDemoData() {
 // ============================================================================
 
 type postgresFlowershowStore struct {
-	pool          *pgxpool.Pool
-	registry      registryBoundary
-	seedID        string
-	realizationID string
-	mu            sync.RWMutex
-	mem           *memoryStore // rebuildable read-through cache backed by SQL
-	lastRefreshAt time.Time
+	pool              *pgxpool.Pool
+	registry          registryBoundary
+	seedID            string
+	realizationID     string
+	mu                sync.RWMutex
+	mem               *memoryStore // rebuildable read-through cache backed by SQL
+	lastRefreshAt     time.Time
+	projectionMu      sync.Mutex
+	projectionRunning bool
+	projectionQueued  bool
+	projectionReason  string
 }
 
 func newFlowershowStore(databaseURL, internalAPIURL, internalAPIToken, seedID, realizationID string) (flowershowStore, error) {
@@ -2694,6 +2698,7 @@ func newFlowershowStore(databaseURL, internalAPIURL, internalAPIToken, seedID, r
 		pool.Close()
 		return nil, err
 	}
+	store.scheduleProjectionRebuild("startup")
 	return store, nil
 }
 
@@ -3492,15 +3497,92 @@ func (s *postgresFlowershowStore) currentMem() *memoryStore {
 	return s.mem
 }
 
+func (s *postgresFlowershowStore) storeCache(mem *memoryStore) {
+	s.mu.Lock()
+	s.mem = mem
+	s.lastRefreshAt = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+func (s *postgresFlowershowStore) storeCacheIfNotOlder(mem *memoryStore) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.mem != nil && mem != nil && len(mem.claims) < len(s.mem.claims) {
+		return false
+	}
+	s.mem = mem
+	s.lastRefreshAt = time.Now().UTC()
+	return true
+}
+
+const flowershowProjectionRebuildTimeout = 60 * time.Second
+
+func (s *postgresFlowershowStore) scheduleProjectionRebuild(reason string) {
+	if s == nil || s.pool == nil || s.registry == nil {
+		return
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "requested"
+	}
+	s.projectionMu.Lock()
+	if s.projectionRunning {
+		s.projectionQueued = true
+		s.projectionReason = reason
+		s.projectionMu.Unlock()
+		return
+	}
+	s.projectionRunning = true
+	s.projectionReason = reason
+	s.projectionMu.Unlock()
+
+	go s.runProjectionRebuildQueue(reason)
+}
+
+func (s *postgresFlowershowStore) runProjectionRebuildQueue(reason string) {
+	for {
+		s.runProjectionRebuild(reason)
+
+		s.projectionMu.Lock()
+		if !s.projectionQueued {
+			s.projectionRunning = false
+			s.projectionReason = ""
+			s.projectionMu.Unlock()
+			return
+		}
+		reason = s.projectionReason
+		s.projectionQueued = false
+		s.projectionReason = ""
+		s.projectionMu.Unlock()
+	}
+}
+
+func (s *postgresFlowershowStore) runProjectionRebuild(reason string) {
+	ctx, cancel := context.WithTimeout(context.Background(), flowershowProjectionRebuildTimeout)
+	defer cancel()
+
+	fresh, err := s.loadSnapshotFromKernelRegistryClaims(ctx)
+	if err != nil {
+		log.Printf("flowershow: projection rebuild snapshot load failed (%s): %v", reason, err)
+		return
+	}
+	if err := s.rebuildProjectionTablesFromSnapshot(ctx, fresh); err != nil {
+		log.Printf("flowershow: projection rebuild failed (%s): %v", reason, err)
+		return
+	}
+	if s.storeCacheIfNotOlder(fresh) {
+		log.Printf("flowershow: projection rebuild completed (%s)", reason)
+		return
+	}
+	log.Printf("flowershow: projection rebuild completed with older snapshot; cache left unchanged (%s)", reason)
+}
+
 func (s *postgresFlowershowStore) refreshCache(ctx context.Context) error {
 	fresh, err := s.loadSnapshot(ctx)
 	if err != nil {
 		return err
 	}
-	s.mu.Lock()
-	s.mem = fresh
-	s.lastRefreshAt = time.Now().UTC()
-	s.mu.Unlock()
+	s.storeCache(fresh)
 	return nil
 }
 
@@ -3541,22 +3623,10 @@ func (s *postgresFlowershowStore) commitDomainMutation(ctx context.Context, mem 
 	if err := s.appendClaimsToKernelRegistry(ctx, mem, claimStart); err != nil {
 		return err
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin mutation tx: %w", err)
+	s.storeCache(mem)
+	if claimStart < len(mem.claims) {
+		s.scheduleProjectionRebuild("mutation")
 	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-	if err := s.rebuildProjectionTablesFromSnapshotTx(ctx, tx, mem); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit mutation tx: %w", err)
-	}
-	s.mu.Lock()
-	s.mem = mem
-	s.mu.Unlock()
 	return nil
 }
 

@@ -1332,7 +1332,9 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, adminEntryJSONPayload(r, updated))
 		return
 	}
-	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry updated</div>`)
+	if !silentAdminRequest(r) {
+		a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry updated</div>`)
+	}
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
 	a.publishShowSummary(entry.ShowID)
 	section := strings.TrimSpace(r.FormValue("section"))
@@ -1347,6 +1349,15 @@ func wantsAdminEntryJSONResponse(r *http.Request) bool {
 		return true
 	}
 	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
+}
+
+func silentAdminRequest(r *http.Request) bool {
+	header := strings.TrimSpace(r.Header.Get("X-Flowershow-Silent"))
+	if header == "1" || strings.EqualFold(header, "true") || strings.EqualFold(header, "yes") {
+		return true
+	}
+	value := strings.TrimSpace(r.FormValue("_silent"))
+	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
 }
 
 func adminEntryJSONPayload(r *http.Request, entry *Entry) map[string]any {
@@ -1487,7 +1498,9 @@ func (a *app) handleAdminEntryResults(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.sseBroker.publish(entry.ShowID, "placement-set", `<div class="toast">Entry result updated</div>`)
+	if !silentAdminRequest(r) {
+		a.sseBroker.publish(entry.ShowID, "placement-set", `<div class="toast">Entry result updated</div>`)
+	}
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring")
 	a.publishShowSummary(entry.ShowID)
 	section := strings.TrimSpace(r.FormValue("section"))

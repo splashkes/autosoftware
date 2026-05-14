@@ -313,6 +313,71 @@ func TestAdminEntryJSONDraftCanBeUpdatedWithNames(t *testing.T) {
 	}
 }
 
+func TestAdminEntrySilentRequestsSkipToastEvents(t *testing.T) {
+	a := testApp()
+	entry, err := a.store.createEntry(EntryInput{
+		ShowID:  "show_spring2025",
+		ClassID: "class_01",
+		Name:    "Before",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch := a.sseBroker.subscribe("show_spring2025")
+	defer a.sseBroker.unsubscribe("show_spring2025", ch)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/entries/{entryID}", a.requireCapabilityPage("entries.manage", a.handleAdminEntryUpdate))
+	mux.HandleFunc("POST /admin/entries/{entryID}/results", a.requireCapabilityPage("entries.manage", a.handleAdminEntryResults))
+
+	updateForm := url.Values{}
+	updateForm.Set("class_id", "class_01")
+	updateForm.Set("name", "After")
+	updateForm.Set("_silent", "1")
+	updateReq := httptest.NewRequest("POST", "/admin/entries/"+entry.ID, strings.NewReader(updateForm.Encode()))
+	updateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	updateReq.Header.Set("HX-Request", "true")
+	addAdminSession(t, a, updateReq)
+	updateW := httptest.NewRecorder()
+	mux.ServeHTTP(updateW, updateReq)
+	if updateW.Code != http.StatusOK {
+		t.Fatalf("expected update 200, got %d body=%s", updateW.Code, updateW.Body.String())
+	}
+	assertNoSSEMessageContains(t, ch, "event: show-updated\n", "Entry updated")
+
+	resultsForm := url.Values{}
+	resultsForm.Set("placement", "1")
+	resultsForm.Set("_silent", "1")
+	resultsReq := httptest.NewRequest("POST", "/admin/entries/"+entry.ID+"/results", strings.NewReader(resultsForm.Encode()))
+	resultsReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resultsReq.Header.Set("HX-Request", "true")
+	addAdminSession(t, a, resultsReq)
+	resultsW := httptest.NewRecorder()
+	mux.ServeHTTP(resultsW, resultsReq)
+	if resultsW.Code != http.StatusOK {
+		t.Fatalf("expected results 200, got %d body=%s", resultsW.Code, resultsW.Body.String())
+	}
+	assertNoSSEMessageContains(t, ch, "event: placement-set\n", "Entry result updated")
+}
+
+func assertNoSSEMessageContains(t *testing.T, ch <-chan string, needles ...string) {
+	t.Helper()
+	deadline := time.After(50 * time.Millisecond)
+	for {
+		select {
+		case msg := <-ch:
+			for _, needle := range needles {
+				if strings.Contains(msg, needle) {
+					t.Fatalf("unexpected SSE message containing %q: %s", needle, msg)
+				}
+			}
+		case <-deadline:
+			return
+		}
+	}
+}
+
 // TestIntakeAnonymousEntryRejectsUnknownClass verifies the handler refuses
 // requests for classes that do not exist.
 func TestIntakeAnonymousEntryRejectsUnknownClass(t *testing.T) {
