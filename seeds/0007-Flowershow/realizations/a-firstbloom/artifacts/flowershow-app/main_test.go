@@ -446,7 +446,23 @@ func TestShowDetailNotFound(t *testing.T) {
 }
 
 func TestClassBrowse(t *testing.T) {
+	prevBasePath := globalBasePath
+	globalBasePath = "/flowershow"
+	defer func() {
+		globalBasePath = prevBasePath
+	}()
+
 	a := testApp()
+	lincolnPhoto, err := a.store.attachMedia(Media{
+		EntryID:   "entry_02",
+		MediaType: "photo",
+		URL:       "https://example.com/lincoln-class.jpg",
+		FileName:  "lincoln-class.jpg",
+	})
+	if err != nil {
+		t.Fatalf("attach class photo: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /shows/{slug}/classes", a.handleClassBrowse)
 
@@ -459,6 +475,15 @@ func TestClassBrowse(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "Hybrid Tea") {
 		t.Fatal("class browse missing section")
+	}
+	if !strings.Contains(body, `class-card-illustrated`) {
+		t.Fatal("class browse should illustrate classes when entry photos are available")
+	}
+	if !strings.Contains(body, `/flowershow/media/`+lincolnPhoto.ID+`?thumb=1`) {
+		t.Fatal("class browse should prefix class media paths with the mounted base path")
+	}
+	if strings.Contains(body, `url('/media/`) {
+		t.Fatal("class browse should not render root-relative media paths when mounted under /flowershow")
 	}
 }
 
