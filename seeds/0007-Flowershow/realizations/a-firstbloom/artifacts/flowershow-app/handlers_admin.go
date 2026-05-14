@@ -1250,6 +1250,10 @@ func (a *app) handleAdminEntryCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if wantsAdminEntryJSONResponse(r) {
+		writeJSON(w, http.StatusCreated, adminEntryJSONPayload(r, entry))
+		return
+	}
 	a.sseBroker.publish(showID, "entry-created", `<div class="toast">Entry added</div>`)
 	a.publishAdminSections(showID, "intake", "floor", "board", "scoring", "governance")
 	a.publishShowSummary(showID)
@@ -1298,16 +1302,18 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	placement, _ := strconv.Atoi(r.FormValue("placement"))
-	points, _ := strconv.ParseFloat(r.FormValue("points"), 64)
-	specialStatus := r.FormValue("special_status") == "true" || r.FormValue("special_status") == "on"
-	if points == 0 {
-		pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
-		points = pointsMap[placement]
-	}
-	if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if adminEntryResultsSubmitted(r) {
+		placement, _ := strconv.Atoi(r.FormValue("placement"))
+		points, _ := strconv.ParseFloat(r.FormValue("points"), 64)
+		specialStatus := r.FormValue("special_status") == "true" || r.FormValue("special_status") == "on"
+		if points == 0 {
+			pointsMap := map[int]float64{1: 6, 2: 4, 3: 2}
+			points = pointsMap[placement]
+		}
+		if err := a.store.setEntryResults(entryID, placement, points, specialStatus, strings.TrimSpace(r.FormValue("award_id"))); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if r.MultipartForm != nil {
 		for _, header := range r.MultipartForm.File["media"] {
@@ -1322,6 +1328,10 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if wantsAdminEntryJSONResponse(r) {
+		writeJSON(w, http.StatusOK, adminEntryJSONPayload(r, updated))
+		return
+	}
 	a.sseBroker.publish(entry.ShowID, "show-updated", `<div class="toast">Entry updated</div>`)
 	a.publishAdminSections(entry.ShowID, "intake", "floor", "board", "scoring", "governance")
 	a.publishShowSummary(entry.ShowID)
@@ -1330,6 +1340,38 @@ func (a *app) handleAdminEntryUpdate(w http.ResponseWriter, r *http.Request) {
 		section = "intake"
 	}
 	a.respondAdminSectionOrRedirect(w, r, updated.ShowID, section)
+}
+
+func wantsAdminEntryJSONResponse(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(r.FormValue("response")), "json") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
+}
+
+func adminEntryJSONPayload(r *http.Request, entry *Entry) map[string]any {
+	if entry == nil {
+		return map[string]any{"entry_id": ""}
+	}
+	basePath := requestBasePath(r)
+	return map[string]any{
+		"entry_id":         entry.ID,
+		"show_id":          entry.ShowID,
+		"class_id":         entry.ClassID,
+		"person_id":        entry.PersonID,
+		"name":             entry.Name,
+		"update_url":       basePath + "/admin/entries/" + entry.ID,
+		"media_upload_url": basePath + "/admin/entries/" + entry.ID + "/media",
+	}
+}
+
+func adminEntryResultsSubmitted(r *http.Request) bool {
+	for _, key := range []string{"placement", "points", "special_status", "award_id"} {
+		if _, ok := r.Form[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) resolveEntryPersonIDFromForm(showID string, r *http.Request) (string, error) {

@@ -231,6 +231,88 @@ func TestAdminEntryCreateCreatesFreeFormEntrant(t *testing.T) {
 	}
 }
 
+func TestAdminEntryJSONDraftCanBeUpdatedWithNames(t *testing.T) {
+	a := testApp()
+	beforeEntries := a.store.entriesByShow("show_spring2025")
+	form := url.Values{}
+	form.Set("class_id", "class_01")
+	form.Set("response", "json")
+	req := httptest.NewRequest("POST", "/admin/shows/show_spring2025/entries", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("HX-Request", "true")
+	addAdminSession(t, a, req)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /admin/shows/{showID}/entries", a.requireCapabilityPage("entries.manage", a.handleAdminEntryCreate))
+	mux.HandleFunc("POST /admin/entries/{entryID}", a.requireCapabilityPage("entries.manage", a.handleAdminEntryUpdate))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	var created struct {
+		EntryID   string `json:"entry_id"`
+		UpdateURL string `json:"update_url"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.EntryID == "" {
+		t.Fatal("expected draft entry id")
+	}
+	if created.UpdateURL != "/admin/entries/"+created.EntryID {
+		t.Fatalf("unexpected update url %q", created.UpdateURL)
+	}
+
+	updateForm := url.Values{}
+	updateForm.Set("class_id", "class_01")
+	updateForm.Set("entrant_name", "Later Exhibitor")
+	updateForm.Set("name", "Peace")
+	updateForm.Set("notes", "Added after photo upload")
+	updateForm.Set("response", "json")
+	updateReq := httptest.NewRequest("POST", created.UpdateURL, strings.NewReader(updateForm.Encode()))
+	updateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	updateReq.Header.Set("Accept", "application/json")
+	updateReq.Header.Set("HX-Request", "true")
+	addAdminSession(t, a, updateReq)
+
+	updateW := httptest.NewRecorder()
+	mux.ServeHTTP(updateW, updateReq)
+	if updateW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", updateW.Code, updateW.Body.String())
+	}
+	var updatedPayload struct {
+		EntryID string `json:"entry_id"`
+	}
+	if err := json.NewDecoder(updateW.Body).Decode(&updatedPayload); err != nil {
+		t.Fatal(err)
+	}
+	if updatedPayload.EntryID != created.EntryID {
+		t.Fatalf("expected update to keep entry %q, got %q", created.EntryID, updatedPayload.EntryID)
+	}
+
+	entries := a.store.entriesByShow("show_spring2025")
+	if len(entries) != len(beforeEntries)+1 {
+		t.Fatalf("expected one draft entry to be updated, before=%d after=%d", len(beforeEntries), len(entries))
+	}
+	updated, ok := a.store.entryByID(created.EntryID)
+	if !ok {
+		t.Fatalf("updated draft entry not found: %q", created.EntryID)
+	}
+	if updated.Name != "Peace" || updated.Notes != "Added after photo upload" || updated.ClassID != "class_01" {
+		t.Fatalf("unexpected updated entry: %#v", updated)
+	}
+	person, ok := a.store.personByID(updated.PersonID)
+	if !ok {
+		t.Fatalf("updated entry person not found: %q", updated.PersonID)
+	}
+	if person.FirstName != "Later" || person.LastName != "Exhibitor" {
+		t.Fatalf("expected later free-form entrant to be saved, got %#v", person)
+	}
+}
+
 // TestIntakeAnonymousEntryRejectsUnknownClass verifies the handler refuses
 // requests for classes that do not exist.
 func TestIntakeAnonymousEntryRejectsUnknownClass(t *testing.T) {
