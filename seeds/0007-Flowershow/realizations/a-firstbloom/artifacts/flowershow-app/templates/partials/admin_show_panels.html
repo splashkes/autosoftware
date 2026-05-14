@@ -62,7 +62,7 @@
     {{end}}>
     <span class="intake-entry-visual">
       {{with $primaryMedia}}
-      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-deferred-media-src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image" loading="lazy" decoding="async">
+      <img src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" data-deferred-media-src="{{$ctx.BasePath}}/media/{{.ID}}?thumb=1" alt="{{$entry.Entry.Name}}" class="intake-entry-image" loading="lazy" decoding="async">
       {{else}}
       <span class="intake-entry-initials">{{if $entry.Person}}{{$entry.Person.Initials}}{{else}}?{{end}}</span>
       {{end}}

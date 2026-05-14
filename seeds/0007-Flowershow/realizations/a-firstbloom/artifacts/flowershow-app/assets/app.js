@@ -8,6 +8,7 @@ const FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY = 4;
 const flowershowIntakeUploadStates = new WeakMap();
 const flowershowIntakeAutosaveTimers = new WeakMap();
 const flowershowDeferredMediaQueue = [];
+const flowershowDeferredMediaActiveImages = new Set();
 let flowershowDeferredMediaActive = 0;
 
 function flowershowQueryScope(root) {
@@ -24,6 +25,10 @@ function flowershowDeferredMediaSrc(img) {
 function flowershowQueueDeferredMediaImage(img) {
   const src = flowershowDeferredMediaSrc(img);
   if (!src || !img.isConnected) return;
+  if (img.getAttribute('src') === src) {
+    img.dataset.deferredMediaState = 'loaded';
+    return;
+  }
   if (img.dataset.deferredMediaState === 'queued' || img.dataset.deferredMediaState === 'loading' || img.dataset.deferredMediaState === 'loaded') return;
   img.dataset.deferredMediaState = 'queued';
   flowershowDeferredMediaQueue.push(img);
@@ -31,6 +36,12 @@ function flowershowQueueDeferredMediaImage(img) {
 }
 
 function flowershowPumpDeferredMediaQueue() {
+  flowershowDeferredMediaActiveImages.forEach(function(img) {
+    if (!img.isConnected) {
+      flowershowDeferredMediaActiveImages.delete(img);
+      flowershowDeferredMediaActive = Math.max(0, flowershowDeferredMediaActive - 1);
+    }
+  });
   while (flowershowDeferredMediaActive < FLOWERSHOW_DEFERRED_MEDIA_CONCURRENCY && flowershowDeferredMediaQueue.length > 0) {
     const img = flowershowDeferredMediaQueue.shift();
     const src = flowershowDeferredMediaSrc(img);
@@ -38,11 +49,13 @@ function flowershowPumpDeferredMediaQueue() {
       continue;
     }
     flowershowDeferredMediaActive += 1;
+    flowershowDeferredMediaActiveImages.add(img);
     img.dataset.deferredMediaState = 'loading';
 
     const finish = function(state) {
       img.removeEventListener('load', onLoad);
       img.removeEventListener('error', onError);
+      flowershowDeferredMediaActiveImages.delete(img);
       if (img.isConnected) {
         img.dataset.deferredMediaState = state;
       }
